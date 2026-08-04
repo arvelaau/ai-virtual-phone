@@ -30,9 +30,9 @@ type SteamEntry =
   | (CheckPhoneSteamLibraryGame & { section: "library" });
 
 const STEAM_TABS: Array<{ id: SteamTabId; label: string }> = [
-  { id: "recent", label: "最近在玩" },
-  { id: "wishlist", label: "愿望单" },
-  { id: "library", label: "游戏库" },
+  { id: "recent", label: "Recently Played" },
+  { id: "wishlist", label: "Wishlist" },
+  { id: "library", label: "Library" },
 ];
 
 const GAME_LIBRARY_ACCENTS = ["#f5a25b", "#e96b8f", "#5b9eff", "#5fd4a4", "#ef6c5b", "#a584ff"];
@@ -49,8 +49,8 @@ function formatSteamRelativeTime(iso: string): string {
     minute: "2-digit",
     hour12: false,
   });
-  if (value >= todayStart) return `今天 ${hhmm}`;
-  if (value >= yesterdayStart) return `昨天 ${hhmm}`;
+  if (value >= todayStart) return `Today ${hhmm}`;
+  if (value >= yesterdayStart) return `Yesterday ${hhmm}`;
   return value.toLocaleDateString("zh-CN", {
     month: "2-digit",
     day: "2-digit",
@@ -64,15 +64,15 @@ function formatSteamDaysAgo(iso: string): string {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const valueStart = new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
   const diffDays = Math.max(0, Math.floor((todayStart - valueStart) / 86400000));
-  return `${diffDays}天前`;
+  return `${diffDays}d ago`;
 }
 
 function formatHours(value: number): string {
-  return `${Number.isInteger(value) ? value : value.toFixed(1).replace(/\.0$/, "")} 小时`;
+  return `${Number.isInteger(value) ? value : value.toFixed(1).replace(/\.0$/, "")} hrs`;
 }
 
 function formatPrice(value: number): string {
-  return value <= 0 ? "免费" : `¥${Number.isInteger(value) ? value : value.toFixed(2).replace(/\.00$/, "")}`;
+  return value <= 0 ? "Free" : `¥${Number.isInteger(value) ? value : value.toFixed(2).replace(/\.00$/, "")}`;
 }
 
 function formatCompactHours(value: number): string {
@@ -89,7 +89,7 @@ function getTabEntries(payload: CheckPhoneSteamPayload | null, tab: SteamTabId):
 
 function formatGameLibraryHeaderTitle(title: string | undefined): string {
   const trimmed = title?.trim();
-  return !trimmed || trimmed === "Steam" ? "游戏库" : trimmed;
+  return !trimmed || trimmed === "Steam" ? "Library" : trimmed;
 }
 
 function getEntryAccent(entry: SteamEntry, index: number): string {
@@ -117,7 +117,7 @@ function getEntrySideMetric(entry: SteamEntry): string {
 
 function getEntrySubMetric(entry: SteamEntry): string | null {
   if (entry.section === "wishlist") return null;
-  if (entry.section === "recent") return `总计 ${formatCompactHours(entry.totalHours)}`;
+  if (entry.section === "recent") return `Total ${formatCompactHours(entry.totalHours)}`;
   return formatSteamDaysAgo(entry.lastPlayedAt);
 }
 
@@ -244,7 +244,7 @@ export function CheckPhoneSteamPage({ character, onBack }: CheckPhoneSteamPagePr
     ? payload.recentlyPlayed.reduce((sum, item) => sum + item.recentHours, 0)
     : 0;
 
-  const subtitle = "游玩记录与收藏状态概览";
+  const subtitle = "Overview of play history and wishlist status";
 
   return (
     <div className="cp-steam-module">
@@ -268,7 +268,7 @@ export function CheckPhoneSteamPage({ character, onBack }: CheckPhoneSteamPagePr
 
       {loading && (
         <div className="cp-refresh-indicator cp-refresh-indicator--floating" aria-live="polite">
-          <span className="cp-refresh-indicator-text">正在刷新游戏库</span>
+          <span className="cp-refresh-indicator-text">Refreshing game library</span>
           <span className="cp-refresh-indicator-dots" aria-hidden="true">
             <i></i><i></i><i></i>
           </span>
@@ -276,18 +276,18 @@ export function CheckPhoneSteamPage({ character, onBack }: CheckPhoneSteamPagePr
       )}
 
       <div className="cp-steam-body">
-        {!loaded && <div className="cp-steam-status">正在同步游戏库档案...</div>}
+        {!loaded && <div className="cp-steam-status">Syncing game library data...</div>}
 
         {loaded && !payload && !loading && (
           <div className="cp-steam-status cp-empty-copy">
-            <p>暂无游戏库内容</p>
-            <span className="cp-steam-hint">点刷新同步最近在玩愿望单和游戏库</span>
+            <p>No game library content yet</p>
+            <span className="cp-steam-hint">Tap refresh to sync recently played, wishlist, and library</span>
           </div>
         )}
 
         {error ? (
           <CheckPhoneDebugErrorCard
-            title="暂时无法解析游戏库内容。"
+            title="Unable to parse game library content right now."
             error={error}
             debugParseMode={debugParseMode}
             debugParseError={debugParseError}
@@ -314,23 +314,23 @@ export function CheckPhoneSteamPage({ character, onBack }: CheckPhoneSteamPagePr
                   <p><CheckPhoneBilingualText text={payload.profile.bio} tone="steam" /></p>
                 </div>
               </div>
-              <div className="cp-steam-profile-stats" aria-label="游戏库统计">
+              <div className="cp-steam-profile-stats" aria-label="Game library stats">
                 <div>
                   <strong>{totalOwnedCount}</strong>
-                  <span>游戏数</span>
+                  <span>Games</span>
                 </div>
                 <div>
                   <strong>{formatCompactHours(totalHours)}</strong>
-                  <span>总时长</span>
+                  <span>Total Hours</span>
                 </div>
                 <div>
                   <strong>{formatCompactHours(recentHours)}</strong>
-                  <span>两周内</span>
+                  <span>Past 2 Weeks</span>
                 </div>
               </div>
             </section>
 
-            <div className="cp-steam-tabs" role="tablist" aria-label="游戏库分类">
+            <div className="cp-steam-tabs" role="tablist" aria-label="Game library categories">
               {STEAM_TABS.map((tab) => (
                 <button
                   key={tab.id}
@@ -347,8 +347,8 @@ export function CheckPhoneSteamPage({ character, onBack }: CheckPhoneSteamPagePr
 
             {currentEntries.length === 0 ? (
               <div className="cp-steam-status">
-                <p>这个分区暂时没有内容</p>
-                <span className="cp-steam-hint">切换上方分区或刷新同步新的游戏记录</span>
+                <p>This section has no content yet</p>
+                <span className="cp-steam-hint">Switch tabs above or refresh to sync new game records</span>
               </div>
             ) : (
               <div className="cp-steam-list">
@@ -378,7 +378,7 @@ export function CheckPhoneSteamPage({ character, onBack }: CheckPhoneSteamPagePr
                         </div>
                         {progress !== null ? (
                           <div className="cp-steam-card-meta">
-                            <span>{`进度 ${progress}%`}</span>
+                            <span>{`Progress ${progress}%`}</span>
                           </div>
                         ) : null}
                         <p><CheckPhoneBilingualText text={getEntryMetaLine(entry)} tone="steam" /></p>
@@ -391,7 +391,7 @@ export function CheckPhoneSteamPage({ character, onBack }: CheckPhoneSteamPagePr
                         <div
                           className="cp-steam-card-progress"
                           role="progressbar"
-                          aria-label={`${entry.title}进度`}
+                          aria-label={`${entry.title} progress`}
                           aria-valuemin={0}
                           aria-valuemax={100}
                           aria-valuenow={progress}
@@ -435,37 +435,37 @@ export function CheckPhoneSteamPage({ character, onBack }: CheckPhoneSteamPagePr
 
               {activeEntry.section !== "wishlist" ? (
                 <section className="cp-steam-section">
-                  <div className="cp-steam-section-title">游玩记录</div>
+                  <div className="cp-steam-section-title">Play History</div>
                   <div className="cp-steam-detail-progress" aria-hidden="true">
                     <span />
                   </div>
                   <div className="cp-steam-stats">
                     <div>
                       <strong>{formatHours(activeEntry.totalHours)}</strong>
-                      <span>总时长</span>
+                      <span>Total Hours</span>
                     </div>
                     {"recentHours" in activeEntry ? (
                       <div>
                         <strong>{formatHours(activeEntry.recentHours)}</strong>
-                        <span>近两周</span>
+                        <span>Past 2 Weeks</span>
                       </div>
                     ) : null}
                   </div>
                 </section>
               ) : (
                 <section className="cp-steam-section">
-                  <div className="cp-steam-section-title">价格</div>
+                  <div className="cp-steam-section-title">Price</div>
                   <p>{formatPrice(activeEntry.price)}</p>
                 </section>
               )}
 
               <section className="cp-steam-section">
-                <div className="cp-steam-section-title">{activeEntry.section === "wishlist" ? "想玩原因" : "状态"}</div>
+                <div className="cp-steam-section-title">{activeEntry.section === "wishlist" ? "Reason to Play" : "Status"}</div>
                 <p><CheckPhoneBilingualText text={activeEntry.section === "wishlist" ? activeEntry.reason : activeEntry.status} tone="steam" /></p>
               </section>
 
               <section className="cp-steam-section">
-                <div className="cp-steam-section-title">{activeEntry.section === "wishlist" ? "类型" : "感想"}</div>
+                <div className="cp-steam-section-title">{activeEntry.section === "wishlist" ? "Genre" : "Thoughts"}</div>
                 <p>{activeEntry.section === "wishlist" ? activeEntry.genre : <CheckPhoneBilingualText text={activeEntry.note} tone="steam" />}</p>
               </section>
             </div>
@@ -475,11 +475,11 @@ export function CheckPhoneSteamPage({ character, onBack }: CheckPhoneSteamPagePr
 
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空游戏库内容？"
-          message="确认后会清空这位角色已生成的游戏库缓存。之后重新刷新时，不会再带入旧内容。"
+          title="Clear game library content?"
+          message="Confirming will clear this character's generated game library cache. Refreshing again afterward won't bring back the old content."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Confirm Clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

@@ -54,18 +54,18 @@ type SubPage =
     | "about";
 
 const SETTINGS_MENU = [
-    { id: "api", icon: HardDrive, label: "API 设置", desc: "大模型接口", iconColor: BINDING_ACCENTS.api },
-    { id: "voice", icon: Mic, label: "语音 API", desc: "语音合成", iconColor: BINDING_ACCENTS.voice },
-    { id: "imageGeneration", icon: Image, label: "图像生成 API", desc: "模型、参考图与提示词", iconColor: CONTENT_APP_ACCENTS.moments },
-    { id: "presets", icon: Fingerprint, label: "预设", desc: "角色预设", iconColor: BINDING_ACCENTS.preset },
-    { id: "worldbook", icon: Globe, label: "世界书", desc: "世界观设定", iconColor: BINDING_ACCENTS.worldBook },
-    { id: "regex", icon: Database, label: "正则规则", desc: "文本替换", iconColor: BINDING_ACCENTS.regex },
-    { id: "data", icon: Layers, label: "数据管理", desc: "导入导出", iconColor: BINDING_ACCENTS.api },
-    { id: "binding", icon: Link2, label: "配置绑定", desc: "管理全局默认、角色与应用的配置绑定关系", iconColor: BINDING_ACCENTS.identity },
-    { id: "weixin", icon: MessageSquare, label: "微信接入", desc: "iLink Bot", iconColor: CONTENT_APP_ACCENTS.chat },
-    { id: "toolbox", icon: Wrench, label: "聊天工具箱", desc: "外部工具调用", iconColor: BINDING_ACCENTS.voice },
-    { id: "identity", icon: UserCircle, label: "用户身份", desc: "个人信息", iconColor: BINDING_ACCENTS.identity },
-    { id: "about", icon: Info, label: "关于与声明", desc: "版本与协议", iconColor: BINDING_ACCENTS.memory },
+    { id: "api", icon: HardDrive, label: "API Settings", desc: "LLM interface", iconColor: BINDING_ACCENTS.api },
+    { id: "voice", icon: Mic, label: "Voice API", desc: "Voice synthesis", iconColor: BINDING_ACCENTS.voice },
+    { id: "imageGeneration", icon: Image, label: "Image Generation API", desc: "Model, reference images & prompts", iconColor: CONTENT_APP_ACCENTS.moments },
+    { id: "presets", icon: Fingerprint, label: "Presets", desc: "Character presets", iconColor: BINDING_ACCENTS.preset },
+    { id: "worldbook", icon: Globe, label: "Worldbook", desc: "Worldview settings", iconColor: BINDING_ACCENTS.worldBook },
+    { id: "regex", icon: Database, label: "Regex Rules", desc: "Text replacement", iconColor: BINDING_ACCENTS.regex },
+    { id: "data", icon: Layers, label: "Data Management", desc: "Import & export", iconColor: BINDING_ACCENTS.api },
+    { id: "binding", icon: Link2, label: "Config Bindings", desc: "Manage config binding relationships across global defaults, characters, and apps", iconColor: BINDING_ACCENTS.identity },
+    { id: "weixin", icon: MessageSquare, label: "WeChat Integration", desc: "iLink Bot", iconColor: CONTENT_APP_ACCENTS.chat },
+    { id: "toolbox", icon: Wrench, label: "Chat Toolbox", desc: "External tool calls", iconColor: BINDING_ACCENTS.voice },
+    { id: "identity", icon: UserCircle, label: "User Identity", desc: "Personal info", iconColor: BINDING_ACCENTS.identity },
+    { id: "about", icon: Info, label: "About & Disclaimer", desc: "Version & terms", iconColor: BINDING_ACCENTS.memory },
 ] as const;
 
 const realtimeIconStyle = {
@@ -134,19 +134,19 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
 
     const handleChangePassword = async () => {
         if (pwdBusy) return;
-        if (!oldPwd || !newPwd) { setPwdError("请填写当前密码和新密码。"); return; }
-        if (newPwd.length < 6) { setPwdError("新密码至少需要 6 位。"); return; }
-        if (newPwd !== confirmPwd) { setPwdError("两次输入的新密码不一致。"); return; }
+        if (!oldPwd || !newPwd) { setPwdError("Please enter your current and new password."); return; }
+        if (newPwd.length < 6) { setPwdError("New password must be at least 6 characters."); return; }
+        if (newPwd !== confirmPwd) { setPwdError("The new passwords you entered don't match."); return; }
         setPwdBusy(true);
         setPwdError("");
         try {
             const result = await changeAccountPassword({ oldPassword: oldPwd, newPassword: newPwd });
-            if (!result.ok) { setPwdError(result.error || "修改失败。"); return; }
+            if (!result.ok) { setPwdError(result.error || "Failed to change password."); return; }
             setPwdModalOpen(false);
             setOldPwd("");
             setNewPwd("");
             setConfirmPwd("");
-            onNotice("密码已修改");
+            onNotice("Password changed");
         } finally {
             setPwdBusy(false);
         }
@@ -154,19 +154,19 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
 
     const handleCopyUsername = () => {
         if (navigator.clipboard?.writeText) {
-            void navigator.clipboard.writeText(account.username).then(() => onNotice("用户名已复制"));
+            void navigator.clipboard.writeText(account.username).then(() => onNotice("Username copied"));
         } else {
-            onNotice(`用户名：${account.username}`);
+            onNotice(`Username: ${account.username}`);
         }
     };
 
     const defaultTitle = currentPage === "main"
-        ? "设置"
+        ? "Settings"
         : currentPage === "api" || currentPage === "voice" || currentPage === "imageGeneration" || currentPage === "presets" || currentPage === "worldbook" || currentPage === "regex" || currentPage === "identity"
             ? ""
             : currentPage === "moderation"
-                ? "管理中心"
-                : SETTINGS_MENU.find(m => m.id === currentPage)?.label || "设置";
+                ? "Moderation Center"
+                : SETTINGS_MENU.find(m => m.id === currentPage)?.label || "Settings";
     const title = subpageTitle || defaultTitle;
 
     const setSubpageRightAction = useCallback((page: string, action: ReactNode | null) => {
@@ -204,19 +204,19 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
     const handleTimeAwareChange = useCallback((next: boolean) => {
         setTimeAware(next);
         saveChatAppSettings({ ...loadChatAppSettings(), timeAware: next });
-        onNotice(next ? "已开启全局真实时间感知" : "已关闭全局真实时间感知");
+        onNotice(next ? "Global real-time awareness enabled" : "Global real-time awareness disabled");
     }, [onNotice]);
 
     const handlePromptViewerChange = useCallback((next: boolean) => {
         setPromptViewerEnabled(next);
         saveChatAppSettings({ ...loadChatAppSettings(), promptViewerEnabled: next });
-        onNotice(next ? "已开启提示词查看器" : "已关闭提示词查看器");
+        onNotice(next ? "Prompt viewer enabled" : "Prompt viewer disabled");
     }, [onNotice]);
 
     const handleQuickActionChange = useCallback((next: boolean) => {
         setQuickActionEnabled(next);
         saveChatAppSettings({ ...loadChatAppSettings(), quickActionEnabled: next });
-        onNotice(next ? "已开启快捷操作" : "已关闭快捷操作");
+        onNotice(next ? "Quick actions enabled" : "Quick actions disabled");
     }, [onNotice]);
 
     const imageGenerationItem = SETTINGS_MENU.find(i => i.id === "imageGeneration")!;
@@ -326,7 +326,7 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                 <span className="settings-account-avatar">{account.username.slice(0, 1).toUpperCase()}</span>
                                 <span className="settings-account-copy">
                                     <span className="settings-account-name">{account.displayName || account.username}</span>
-                                    <span className="settings-account-sub">账号、密码与登录</span>
+                                    <span className="settings-account-sub">Account, password & login</span>
                                 </span>
                                 <ChevronRight size={18} className="settings-account-chevron" />
                             </button>
@@ -363,8 +363,8 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                     <Clock size={22} strokeWidth={1.75} />
                                 </span>
                                 <div className="card-featured-body">
-                                    <div className="card-featured-label">真实时间感知</div>
-                                    <div className="card-featured-desc">控制全局历史事件流中是否注入时间戳</div>
+                                    <div className="card-featured-label">Real-Time Awareness</div>
+                                    <div className="card-featured-desc">Controls whether timestamps are injected into the global history event stream</div>
                                 </div>
                                 <Toggle checked={timeAware} onChange={handleTimeAwareChange} className="settings-toggle-control" />
                             </div>
@@ -377,8 +377,8 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                         <SlidersHorizontal size={22} strokeWidth={1.75} />
                                     </span>
                                     <div className="card-featured-body">
-                                        <div className="card-featured-label">管理中心</div>
-                                        <div className="card-featured-desc">举报队列、应用审核与用户封禁</div>
+                                        <div className="card-featured-label">Moderation Center</div>
+                                        <div className="card-featured-desc">Report queue, app review & user bans</div>
                                     </div>
                                     <ChevronRight size={18} className="settings-account-chevron" />
                                 </div>
@@ -392,8 +392,8 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                         <FileText size={22} strokeWidth={1.75} />
                                     </span>
                                     <span className="settings-tools-menu-copy">
-                                        <span className="menu-label appearance-menu-item-label">提示词查看器</span>
-                                        <span className="menu-desc settings-tools-menu-desc">开启后显示悬浮按钮，可查看当前提示词</span>
+                                        <span className="menu-label appearance-menu-item-label">Prompt Viewer</span>
+                                        <span className="menu-desc settings-tools-menu-desc">Shows a floating button to view the current prompt when enabled</span>
                                     </span>
                                     <span className="menu-right settings-tools-menu-toggle">
                                         <Toggle checked={promptViewerEnabled} onChange={handlePromptViewerChange} className="settings-toggle-control" />
@@ -404,8 +404,8 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                         <SlidersHorizontal size={22} strokeWidth={1.75} />
                                     </span>
                                     <span className="settings-tools-menu-copy">
-                                        <span className="menu-label appearance-menu-item-label">快捷操作</span>
-                                        <span className="menu-desc settings-tools-menu-desc">快速切换 API 与世界书</span>
+                                        <span className="menu-label appearance-menu-item-label">Quick Actions</span>
+                                        <span className="menu-desc settings-tools-menu-desc">Quickly switch API and worldbook</span>
                                     </span>
                                     <span className="menu-right settings-tools-menu-toggle">
                                         <Toggle checked={quickActionEnabled} onChange={handleQuickActionChange} className="settings-toggle-control" />
@@ -423,7 +423,7 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                 <div className="modal-sheet" data-ui="modal-sheet" onClick={event => event.stopPropagation()}>
                                     <div className="modal-header" data-ui="modal-header">
                                         <button className="modal-header-btn modal-header-btn-muted" onClick={() => setAccountSheetOpen(false)}><X size={18} /></button>
-                                        <h3 className="modal-title">账号</h3>
+                                        <h3 className="modal-title">Account</h3>
                                         <span style={{ width: 44 }} />
                                     </div>
                                     <div className="modal-body modal-body-tight" data-ui="modal-body">
@@ -433,11 +433,11 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                                     <UserCircle size={22} strokeWidth={1.75} />
                                                 </span>
                                                 <span className="settings-tools-menu-copy">
-                                                    <span className="menu-label appearance-menu-item-label">当前账号</span>
+                                                    <span className="menu-label appearance-menu-item-label">Current Account</span>
                                                     <span className="menu-desc settings-tools-menu-desc">@{account.username}</span>
                                                 </span>
                                                 <span className="menu-right">
-                                                    <button className="ui-btn ui-btn-outline py-1 px-3 ts-12" style={{ whiteSpace: "nowrap" }} onClick={handleCopyUsername}>复制</button>
+                                                    <button className="ui-btn ui-btn-outline py-1 px-3 ts-12" style={{ whiteSpace: "nowrap" }} onClick={handleCopyUsername}>Copy</button>
                                                 </span>
                                             </div>
                                             <button type="button" className="menu-item settings-tools-menu-item w-full text-left" onClick={() => { setAccountSheetOpen(false); setPwdModalOpen(true); }}>
@@ -445,8 +445,8 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                                     <KeyRound size={22} strokeWidth={1.75} />
                                                 </span>
                                                 <span className="settings-tools-menu-copy">
-                                                    <span className="menu-label appearance-menu-item-label">修改密码</span>
-                                                    <span className="menu-desc settings-tools-menu-desc">需验证当前密码</span>
+                                                    <span className="menu-label appearance-menu-item-label">Change Password</span>
+                                                    <span className="menu-desc settings-tools-menu-desc">Requires verifying your current password</span>
                                                 </span>
                                                 <span className="menu-right"><ChevronRight size={17} className="settings-account-chevron" /></span>
                                             </button>
@@ -455,8 +455,8 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                                     <LogOut size={22} strokeWidth={1.75} />
                                                 </span>
                                                 <span className="settings-tools-menu-copy">
-                                                    <span className="menu-label appearance-menu-item-label" style={{ color: "var(--c-danger)" }}>退出登录</span>
-                                                    <span className="menu-desc settings-tools-menu-desc">退出后需重新输入用户名和密码</span>
+                                                    <span className="menu-label appearance-menu-item-label" style={{ color: "var(--c-danger)" }}>Log Out</span>
+                                                    <span className="menu-desc settings-tools-menu-desc">You'll need to re-enter your username and password after logging out</span>
                                                 </span>
                                                 <span className="menu-right"><ChevronRight size={17} className="settings-account-chevron" /></span>
                                             </button>
@@ -471,18 +471,18 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                 <div className="modal-sheet" data-ui="modal-sheet" onClick={event => event.stopPropagation()}>
                                     <div className="modal-header" data-ui="modal-header">
                                         <button className="modal-header-btn modal-header-btn-muted" onClick={closePwdModal} disabled={pwdBusy}><X size={18} /></button>
-                                        <h3 className="modal-title">修改密码</h3>
+                                        <h3 className="modal-title">Change Password</h3>
                                         <button className="modal-header-btn modal-header-btn-action" onClick={() => void handleChangePassword()} disabled={pwdBusy}>
                                             {pwdBusy ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
                                         </button>
                                     </div>
                                     <div className="modal-body" data-ui="modal-body">
                                         <div className="flex flex-col gap-3 px-1">
-                                            <input type="password" className="ui-input" placeholder="当前密码" autoComplete="current-password"
+                                            <input type="password" className="ui-input" placeholder="Current password" autoComplete="current-password"
                                                 value={oldPwd} onChange={event => setOldPwd(event.target.value)} />
-                                            <input type="password" className="ui-input" placeholder="新密码（至少 6 位）" autoComplete="new-password"
+                                            <input type="password" className="ui-input" placeholder="New password (at least 6 characters)" autoComplete="new-password"
                                                 value={newPwd} onChange={event => setNewPwd(event.target.value)} />
-                                            <input type="password" className="ui-input" placeholder="确认新密码" autoComplete="new-password"
+                                            <input type="password" className="ui-input" placeholder="Confirm new password" autoComplete="new-password"
                                                 value={confirmPwd} onChange={event => setConfirmPwd(event.target.value)} />
                                             {pwdError ? <p className="ts-12" style={{ color: "var(--c-danger)" }}>{pwdError}</p> : null}
                                         </div>
@@ -493,11 +493,11 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
 
                         {confirmLogout && (
                             <ConfirmDialog
-                                title="退出登录"
-                                message={`当前账号 @${account.username}。退出后需要重新输入用户名和密码才能登录，密码无法找回，请确认已牢记。`}
+                                title="Log Out"
+                                message={`Current account: @${account.username}. You'll need to re-enter your username and password to log back in. Passwords cannot be recovered, so make sure you remember it.`}
                                 icon={LogOut}
                                 variant="danger"
-                                confirmLabel="退出登录"
+                                confirmLabel="Log Out"
                                 onConfirm={() => { setConfirmLogout(false); void logout(); }}
                                 onCancel={() => setConfirmLogout(false)}
                             />

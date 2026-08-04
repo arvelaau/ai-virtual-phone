@@ -83,7 +83,29 @@ export const DEFAULT_ADVENTURE_BILINGUAL_PROMPT = [
   "- **json结构不变**：必须严格保持 JSON 结构和字段名不变",
 ].join("\n");
 
+/**
+ * KILL SWITCH — bilingual injection is disabled app-wide (user decision, 2026-07-29).
+ *
+ * Every bilingual prompt in this file is built around Chinese being the base
+ * language: the rules literally say non-Chinese output must be written as
+ * "original|Simplified Chinese translation", and that Chinese output needs no
+ * annotation. That is the exact opposite of what an English-first build wants,
+ * and it actively fought the "respond in English" instruction now injected by
+ * lib/builtin-preset.ts (`output_language_rule`).
+ *
+ * This is the single choke point for all bilingual paths (chat, group, offline,
+ * moments, xiaohongshu, checkphone, adventure), so forcing it off here disables
+ * every one of them, including any user-saved custom bilingual prompt.
+ *
+ * To restore the old behaviour, set this back to true — nothing else was
+ * deleted. The prompt constants below are intentionally kept.
+ * If bilingual output is ever wanted again alongside English, it needs to be
+ * rewritten so the *target* language is a parameter instead of hardcoded Chinese.
+ */
+const BILINGUAL_INJECTION_ENABLED = false;
+
 export function resolveBilingualPrompt(enabled: boolean, customPrompt: string | undefined, defaultPrompt: string): string {
+  if (!BILINGUAL_INJECTION_ENABLED) return "";
   if (!enabled) return "";
   const prompt = customPrompt?.trim();
   return prompt || defaultPrompt;

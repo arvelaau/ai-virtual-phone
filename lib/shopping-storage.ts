@@ -1,6 +1,12 @@
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
 import type { ShoppingCategory, ShoppingSearchResult, ShoppingShippingEvent, ShoppingState } from "./shopping-types";
-import { DEFAULT_SHOPPING_REFRESH_PROMPT, DEFAULT_SHOPPING_SEARCH_PROMPT, SHOPPING_RECOMMENDATION_CATEGORIES } from "./shopping-engine";
+import {
+  DEFAULT_SHOPPING_REFRESH_PROMPT,
+  DEFAULT_SHOPPING_SEARCH_PROMPT,
+  SHOPPING_CN_DEFAULT_REFRESH_PROMPT,
+  SHOPPING_CN_DEFAULT_SEARCH_PROMPT,
+  findShoppingCategoryByTitle,
+} from "./shopping-engine";
 
 const SHOPPING_STATE_KEY = "ai_phone_shopping_state_v1";
 export const SHOPPING_STATE_UPDATED_EVENT = "shopping-state-updated";
@@ -17,17 +23,35 @@ function normalizeArray<T>(value: unknown, guard: (item: unknown) => T | null): 
   return Array.isArray(value) ? value.map(guard).filter((item): item is T => Boolean(item)) : [];
 }
 
+// Both shopping prompts are STORED in KV: createDefaultShoppingState() writes the current
+// defaults into the saved state, so anyone who has ever opened the shopping app is pinned
+// to whatever default was current then. Translating the constants in shopping-engine.ts is
+// therefore only half the change — the superseded literal has to be recognised here and
+// upgraded, or the app keeps sending the old Chinese prompt forever. Same mechanism as
+// loadInterviewHostPrompt()'s recognition list; see CLAUDE.md.
+//
+// Only ever ADD to these lists. Removing an entry re-strands whoever still has it stored.
+const SUPERSEDED_REFRESH_PROMPTS = [SHOPPING_CN_DEFAULT_REFRESH_PROMPT];
+const SUPERSEDED_SEARCH_PROMPTS = [SHOPPING_CN_DEFAULT_SEARCH_PROMPT];
+
 function normalizeRefreshPrompt(value: unknown): string {
   const prompt = cleanText(value, 12000);
   if (!prompt) return DEFAULT_SHOPPING_REFRESH_PROMPT;
   if (prompt.includes("#最近浏览1") || prompt.includes("生成 8 到 12 条最近浏览")) {
     return DEFAULT_SHOPPING_REFRESH_PROMPT;
   }
+  if (SUPERSEDED_REFRESH_PROMPTS.includes(prompt)) return DEFAULT_SHOPPING_REFRESH_PROMPT;
   return prompt;
 }
 
 function normalizeSearchPrompt(value: unknown): string {
-  return cleanText(value, 12000) || DEFAULT_SHOPPING_SEARCH_PROMPT;
+  const prompt = cleanText(value, 12000);
+  if (!prompt) return DEFAULT_SHOPPING_SEARCH_PROMPT;
+  // This function had no recognition list at all before the migration — the same gap
+  // loadInterviewMemoryPrompt() had, and the reason a stored search prompt could never
+  // be upgraded.
+  if (SUPERSEDED_SEARCH_PROMPTS.includes(prompt)) return DEFAULT_SHOPPING_SEARCH_PROMPT;
+  return prompt;
 }
 
 function normalizeDeliveryMinutes(value: unknown, fallback: number): number {
@@ -66,7 +90,12 @@ function normalizeCategory(value: unknown): ShoppingCategory | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
   const title = cleanText(record.title, 80);
-  const template = SHOPPING_RECOMMENDATION_CATEGORIES.find(category => category.title === title);
+  // Bilingual: a catalog saved before the migration carries the Chinese category titles,
+  // and this is the only place they are matched outside shopping-engine.ts. Shared
+  // resolver rather than a second copy of the list — that copy is exactly how the two
+  // sides desync. `title` itself is deliberately left as stored, so an old catalog keeps
+  // rendering the way it was generated until the user refreshes it.
+  const template = findShoppingCategoryByTitle(title);
   const items = normalizeArray(record.items, normalizeProduct).slice(0, 12);
   if (!title || items.length === 0) return null;
   return {

@@ -64,27 +64,27 @@ const EMPTY_DRAFT: NoteDraft = {
 
 const PAPER_OPTIONS = ["plain", "cream", "pink", "blue", "kraft"];
 const TAPE_OPTIONS = ["none", "masking", "stripe", "flower"];
-// 字体ID huangyou/shangshangqian 是历史遗留标识（已写入用户便签数据和LLM工具协议，改名会破坏兼容）。
-// 实际字体早已换为可商用字体：喜脉=「字制区喜脉喜欢体」(OFL 1.1)，小纸条=「鸿雷小纸条青春体」，见 NOTICE。
+// Font IDs huangyou/shangshangqian are legacy identifiers (already written into user note data and the LLM tool protocol; renaming would break compatibility).
+// The actual fonts were long ago swapped for commercially licensed ones: Ximai = "Zizhiqu Ximai Xihuan Ti" (OFL 1.1), Xiaozhitiao = "Honglei Xiaozhitiao Qingchun Ti". See NOTICE.
 const FONT_OPTIONS = ["default", "huangyou", "shangshangqian", "huiwen"];
 const PAPER_LABELS: Record<string, string> = {
-  plain: "原色",
-  cream: "米色",
-  pink: "粉色",
-  blue: "蓝色",
-  kraft: "牛皮",
+  plain: "Natural",
+  cream: "Cream",
+  pink: "Pink",
+  blue: "Blue",
+  kraft: "Kraft",
 };
 const TAPE_LABELS: Record<string, string> = {
-  none: "透明",
-  masking: "和纸",
-  stripe: "条纹",
-  flower: "小花",
+  none: "Clear",
+  masking: "Washi",
+  stripe: "Stripe",
+  flower: "Floral",
 };
 const FONT_LABELS: Record<string, string> = {
-  default: "默认",
-  huangyou: "喜脉",
-  shangshangqian: "小纸条",
-  huiwen: "汇文",
+  default: "Default",
+  huangyou: "Ximai",
+  shangshangqian: "Xiaozhitiao",
+  huiwen: "Huiwen",
 };
 const FONT_FAMILIES: Record<string, string> = {
   huangyou: '"NoteWall Ximai", var(--app-font-family)',
@@ -92,10 +92,10 @@ const FONT_FAMILIES: Record<string, string> = {
   huiwen: '"NoteWall Huiwen", var(--app-font-family)',
 };
 const FILTERS = [
-  { id: "all", label: "全部" },
-  { id: "latest", label: "最新" },
-  { id: "hot", label: "热门" },
-  { id: "my", label: "我的" },
+  { id: "all", label: "All" },
+  { id: "latest", label: "Latest" },
+  { id: "hot", label: "Hot" },
+  { id: "my", label: "Mine" },
 ] as const;
 
 type NoteFilter = typeof FILTERS[number]["id"];
@@ -148,7 +148,7 @@ function selectReplyCandidateNotes(notes: NoteWallNote[]): NoteWallNote[] {
 }
 
 function estimateNoteCardHeight(note: NoteWallNote): number {
-  const text = note.summary || note.body || "便签";
+  const text = note.summary || note.body || "Note";
   const charsPerLine = note.font === "shangshangqian" ? 7 : 8;
   const lines = text
     .split(/\n+/)
@@ -170,7 +170,7 @@ function buildNoteColumns(notes: NoteWallNote[]): [NoteWallNote[], NoteWallNote[
 
 function formatCharacterTimerStatus(settings: NoteWallTimerSettings, characterId: string): string {
   const stamp = settings.lastRunAtByCharacter[characterId];
-  return stamp ? `上次 ${formatTime(stamp)}` : "未运行";
+  return stamp ? `Last ${formatTime(stamp)}` : "Not run yet";
 }
 
 function formatTime(value: string): string {
@@ -242,7 +242,7 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
   const { account } = useAccount();
   const accountId = account.id;
   const userIdentity = useMemo(() => resolveUserIdentity(undefined, "diary"), []);
-  const userName = userIdentity?.name || "你";
+  const userName = userIdentity?.name || "You";
   const ownedCharacterIds = useMemo(() => new Set(characters.map(character => character.id)), [characters]);
   const activeNotes = useMemo(
     () => notes
@@ -349,7 +349,7 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
       const list = await fetchMyNoteWallComments();
       setMyComments(list);
     } catch (err) {
-      onNotice?.(err instanceof Error ? err.message : "评论加载失败。");
+      onNotice?.(err instanceof Error ? err.message : "Failed to load comments.");
     } finally {
       if (showIndicator) setMyCommentsLoading(false);
     }
@@ -409,7 +409,7 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
   const handleSubmitDraft = async () => {
     if (submittingDraft) return;
     if (!draft.summary.trim() && !draft.body.trim()) {
-      notify("便签需要摘要或全文。");
+      notify("The note needs a summary or body text.");
       return;
     }
     setSubmittingDraft(true);
@@ -419,9 +419,9 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
         setNotes(prev => prev.map(note => note.id === updated.id ? updated : note));
         setActiveNote(updated);
         setComposerOpen(false);
-        notify("便签已更新。");
+        notify("Note updated.");
       } catch (err) {
-        notify(err instanceof Error ? err.message : "更新失败。");
+        notify(err instanceof Error ? err.message : "Update failed.");
       } finally {
         setSubmittingDraft(false);
       }
@@ -449,9 +449,9 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
       setNotes(prev => [...prev, created]);
       setComposerOpen(false);
       refresh();
-      notify("便签已写入。");
+      notify("Note posted.");
     } catch (err) {
-      notify(err instanceof Error ? err.message : "便签创建失败。");
+      notify(err instanceof Error ? err.message : "Failed to create note.");
     } finally {
       setSubmittingDraft(false);
     }
@@ -465,9 +465,9 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
       setNotes(prev => prev.filter(item => item.id !== note.id));
       setActiveNote(null);
       setDeleteCandidateNote(null);
-      notify("便签已删除。");
+      notify("Note deleted.");
     } catch (err) {
-      notify(err instanceof Error ? err.message : "删除失败。");
+      notify(err instanceof Error ? err.message : "Delete failed.");
     } finally {
       setDeletingNoteId(null);
     }
@@ -480,10 +480,10 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
       await deleteNoteWallComment(comment.id, actorId);
       setMyComments(prev => prev.filter(item => item.id !== comment.id));
       setDeleteCandidateComment(null);
-      notify("评论已删除。");
+      notify("Comment deleted.");
       void refresh();
     } catch (err) {
-      notify(err instanceof Error ? err.message : "删除失败。");
+      notify(err instanceof Error ? err.message : "Delete failed.");
     } finally {
       setDeletingCommentId(null);
     }
@@ -733,7 +733,7 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
       .map(characterId => characters.find(item => item.id === characterId) ?? storedCharacters.find(item => item.id === characterId))
       .filter(Boolean) as Character[];
     if (targets.length === 0) {
-      notify("找不到角色。");
+      notify("Character not found.");
       return;
     }
     const targetIds = targets.map(character => character.id);
@@ -800,12 +800,12 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
       }
 
       if (createdNotes.length === 1 && failedNames.length === 0) {
-        const characterName = targets.find(character => character.id === createdNotes[0]?.authorId)?.name ?? createdNotes[0]?.authorName ?? "角色";
-        notify(`${characterName} 已写入便签。`);
+        const characterName = targets.find(character => character.id === createdNotes[0]?.authorId)?.name ?? createdNotes[0]?.authorName ?? "Character";
+        notify(`${characterName} posted a note.`);
       } else if (createdNotes.length > 0) {
-        notify(`已让 ${createdNotes.length} 个角色写入便签${failedNames.length ? `，${failedNames.length} 个失败` : ""}。`);
+        notify(`${createdNotes.length} character(s) posted notes${failedNames.length ? `, ${failedNames.length} failed` : ""}.`);
       } else {
-        notify(failedNames.length ? `角色便签生成失败：${failedNames.join("、")}` : "角色便签生成失败。");
+        notify(failedNames.length ? `Failed to generate character notes: ${failedNames.join(", ")}` : "Failed to generate character notes.");
       }
     } finally {
       setGeneratingCharacterIds(prev => prev.filter(id => !targetIds.includes(id)));
@@ -824,7 +824,7 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
       .map(characterId => characters.find(item => item.id === characterId) ?? storedCharacters.find(item => item.id === characterId))
       .filter(Boolean) as Character[];
     if (targets.length === 0) {
-      notify("找不到角色。");
+      notify("Character not found.");
       return;
     }
     const targetIds = targets.map(character => character.id);
@@ -833,7 +833,7 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
       const latest = await fetchNoteWall().catch(() => ({ board, notes }));
       const candidateNotes = selectReplyCandidateNotes(latest.notes);
       if (candidateNotes.length === 0) {
-        notify("暂无可回复的便签。");
+        notify("No notes available to reply to right now.");
         return;
       }
       const candidates = await Promise.all(candidateNotes.map(async note => ({
@@ -891,13 +891,13 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
       if (createdCommentCount > 0) await refresh();
 
       if (targets.length === 1 && createdCommentCount > 0 && failedNames.length === 0) {
-        notify(`${targets[0].name} 已回复 ${createdCommentCount} 条便签。`);
+        notify(`${targets[0].name} replied to ${createdCommentCount} note(s).`);
       } else if (createdCommentCount > 0) {
-        notify(`已让 ${repliedCharacterCount} 个角色回复 ${createdCommentCount} 条便签${failedNames.length ? `，${failedNames.length} 个失败` : ""}。`);
+        notify(`${repliedCharacterCount} character(s) replied to ${createdCommentCount} note(s)${failedNames.length ? `, ${failedNames.length} failed` : ""}.`);
       } else if (failedNames.length > 0) {
-        notify(`角色回复生成失败：${failedNames.join("、")}`);
+        notify(`Failed to generate character replies: ${failedNames.join(", ")}`);
       } else {
-        notify("这次没有生成可发布的评论。");
+        notify("No comments were generated this time.");
       }
     } finally {
       setReplyingCharacterIds(prev => prev.filter(id => !targetIds.includes(id)));
@@ -944,14 +944,14 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
   return (
     <section className={`note-wall-app ${noteDrag ? "is-note-dragging" : ""}`}>
       <header className="note-wall-header">
-        <button type="button" className="page-back-btn" onClick={onBack} aria-label="返回">
+        <button type="button" className="page-back-btn" onClick={onBack} aria-label="Back">
           <ChevronLeft size={24} strokeWidth={1.5} />
         </button>
         <div className="note-wall-title">
-          <h1>便签墙</h1>
+          <h1>Note Wall</h1>
         </div>
         <div className="note-wall-actions">
-          <button type="button" className="note-wall-menu-btn" onClick={() => setSettingsOpen(true)} aria-label="设置">
+          <button type="button" className="note-wall-menu-btn" onClick={() => setSettingsOpen(true)} aria-label="Settings">
             <DotsThree size={28} weight="bold" />
           </button>
         </div>
@@ -959,8 +959,8 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
 
       {error ? (
         <div className="note-wall-error">
-          <strong>便签墙暂不可用</strong>
-          <p>{error === "missing_supabase_env" ? "需要配置 Supabase 环境变量并执行建表 SQL。" : error}</p>
+          <strong>Note Wall is currently unavailable</strong>
+          <p>{error === "missing_supabase_env" ? "Supabase environment variables need to be configured and the setup SQL run." : error}</p>
         </div>
       ) : null}
 
@@ -980,7 +980,7 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
           <span><RotateCw size={18} strokeWidth={1.8} /></span>
         </div>
         {noteFilter === "my" ? (
-          <div className="note-wall-my-toggle" role="tablist" aria-label="我的内容" data-active-index={mySection === "comments" ? 1 : 0}>
+          <div className="note-wall-my-toggle" role="tablist" aria-label="My content" data-active-index={mySection === "comments" ? 1 : 0}>
             <button
               type="button"
               role="tab"
@@ -988,7 +988,7 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
               className={mySection === "notes" ? "is-active" : ""}
               onClick={() => setMySection("notes")}
             >
-              便签
+              Notes
             </button>
             <button
               type="button"
@@ -997,7 +997,7 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
               className={mySection === "comments" ? "is-active" : ""}
               onClick={() => setMySection("comments")}
             >
-              评论
+              Comments
             </button>
           </div>
         ) : null}
@@ -1006,10 +1006,10 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
             {myCommentsLoading ? (
               <div className="note-card-loading" role="status" aria-live="polite">
                 <span className="note-card-loading-spinner" aria-hidden="true" />
-                <span>评论加载中</span>
+                <span>Loading comments</span>
               </div>
             ) : null}
-            {!myCommentsLoading && myCommentGroups.length === 0 ? <div className="note-card-empty">暂无我的评论</div> : null}
+            {!myCommentsLoading && myCommentGroups.length === 0 ? <div className="note-card-empty">No comments yet</div> : null}
             <div className="nw-my-comments" aria-live="polite">
               {myCommentGroups.map(group => (
                 <section className="nw-my-comment-group" key={group.key}>
@@ -1029,16 +1029,16 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
                             onClick={() => setActiveNote(sourceNote)}
                           >
                             <p>{comment.body}</p>
-                            <span className="nw-my-comment-source">来自便签：{sourceNote.summary || sourceNote.body || "便签"}</span>
+                            <span className="nw-my-comment-source">From note: {sourceNote.summary || sourceNote.body || "Note"}</span>
                             <span className="nw-my-comment-meta">
-                              {comment.isAnonymous ? <em>匿名</em> : null}
+                              {comment.isAnonymous ? <em>Anonymous</em> : null}
                               <time>{formatTime(comment.createdAt)}</time>
                             </span>
                           </button>
                           <button
                             type="button"
                             className="nw-my-comment-delete"
-                            aria-label="删除评论"
+                            aria-label="Delete comment"
                             onClick={() => setDeleteCandidateComment(comment)}
                           >
                             <Trash2 size={16} strokeWidth={1.8} />
@@ -1056,7 +1056,7 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
             {loading ? (
               <div className="note-card-loading" role="status" aria-live="polite">
                 <span className="note-card-loading-spinner" aria-hidden="true" />
-                <span>便签墙加载中</span>
+                <span>Loading note wall</span>
                 <span className="note-card-loading-dots" aria-hidden="true">
                   <span />
                   <span />
@@ -1064,7 +1064,7 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
                 </span>
               </div>
             ) : null}
-            {!loading && visibleNotes.length === 0 ? <div className="note-card-empty">{noteFilter === "my" ? "暂无我的便签" : "暂无便签"}</div> : null}
+            {!loading && visibleNotes.length === 0 ? <div className="note-card-empty">{noteFilter === "my" ? "You have no notes yet" : "No notes yet"}</div> : null}
             <div className="note-card-grid" aria-live="polite">
               {noteColumns.map((column, columnIndex) => (
                 <div className="note-card-column" key={columnIndex}>
@@ -1130,13 +1130,13 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
         </div>
       ) : null}
 
-      <button type="button" className="note-wall-compose-fab" onClick={handleOpenComposer} aria-label="写便签">
+      <button type="button" className="note-wall-compose-fab" onClick={handleOpenComposer} aria-label="Write note">
         <PenLine size={22} strokeWidth={1.8} />
       </button>
 
       <nav
         className="note-wall-tabbar"
-        aria-label="便签筛选"
+        aria-label="Note filter"
         data-active-index={Math.max(0, FILTERS.findIndex(item => item.id === noteFilter))}
       >
         {FILTERS.map(item => (
@@ -1192,10 +1192,10 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
             <div className="nw-delete-confirm-icon">
               <Trash2 size={24} strokeWidth={1.8} />
             </div>
-            <h2>删除便签</h2>
-            <p>这张便签会从便签墙移除。</p>
+            <h2>Delete Note</h2>
+            <p>This note will be removed from the note wall.</p>
             <div>
-              <button type="button" className="nw-secondary-btn" disabled={!!deletingNoteId} onClick={() => setDeleteCandidateNote(null)}>取消</button>
+              <button type="button" className="nw-secondary-btn" disabled={!!deletingNoteId} onClick={() => setDeleteCandidateNote(null)}>Cancel</button>
               <button
                 type="button"
                 className={`nw-danger-btn ${deletingNoteId === deleteCandidateNote.id ? "is-loading" : ""}`}
@@ -1205,7 +1205,7 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
               >
                 <span className="note-wall-primary-content">
                   {deletingNoteId === deleteCandidateNote.id ? <span className="note-wall-primary-spinner" aria-hidden="true" /> : null}
-                  <span>{deletingNoteId === deleteCandidateNote.id ? "删除中" : "删除"}</span>
+                  <span>{deletingNoteId === deleteCandidateNote.id ? "Deleting" : "Delete"}</span>
                 </span>
               </button>
             </div>
@@ -1226,10 +1226,10 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
             <div className="nw-delete-confirm-icon">
               <Trash2 size={24} strokeWidth={1.8} />
             </div>
-            <h2>删除评论</h2>
-            <p>这条评论会从便签下移除。</p>
+            <h2>Delete Comment</h2>
+            <p>This comment will be removed from the note.</p>
             <div>
-              <button type="button" className="nw-secondary-btn" disabled={!!deletingCommentId} onClick={() => setDeleteCandidateComment(null)}>取消</button>
+              <button type="button" className="nw-secondary-btn" disabled={!!deletingCommentId} onClick={() => setDeleteCandidateComment(null)}>Cancel</button>
               <button
                 type="button"
                 className={`nw-danger-btn ${deletingCommentId === deleteCandidateComment.id ? "is-loading" : ""}`}
@@ -1239,7 +1239,7 @@ export function NoteWallApp({ onBack, onNotice }: NoteWallAppProps) {
               >
                 <span className="note-wall-primary-content">
                   {deletingCommentId === deleteCandidateComment.id ? <span className="note-wall-primary-spinner" aria-hidden="true" /> : null}
-                  <span>{deletingCommentId === deleteCandidateComment.id ? "删除中" : "删除"}</span>
+                  <span>{deletingCommentId === deleteCandidateComment.id ? "Deleting" : "Delete"}</span>
                 </span>
               </button>
             </div>
@@ -1350,22 +1350,22 @@ function NoteComposer({ draft, userName, submitting, onChange, onClose, onSubmit
   onSubmit: () => void;
 }) {
   const previewStyle = styleFromSafeStyle(sanitizeNoteWallCss(draft.rawCss));
-  const previewAuthorName = draft.isAnonymous ? "匿名" : draft.signature.trim() || userName;
+  const previewAuthorName = draft.isAnonymous ? "Anonymous" : draft.signature.trim() || userName;
   const previewDate = formatCardDate(new Date().toISOString());
 
   return (
     <div className="nw-modal-backdrop" role="dialog" aria-modal="true">
       <section className="nw-composer">
         <header>
-          <h2>{draft.id ? "编辑便签" : "写新便签"}</h2>
-          <button type="button" className="diary-icon-btn" onClick={onClose} aria-label="关闭">
+          <h2>{draft.id ? "Edit Note" : "Write New Note"}</h2>
+          <button type="button" className="diary-icon-btn" onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
         </header>
         <div className="nw-composer-body">
           <div className="nw-form">
             <label className="nw-field nw-text-field">
-              <span>标题</span>
+              <span>Title</span>
               <AutoResizeTextarea
                 className="nw-summary-input"
                 value={draft.summary}
@@ -1376,7 +1376,7 @@ function NoteComposer({ draft, userName, submitting, onChange, onClose, onSubmit
               />
             </label>
             <label className="nw-field nw-text-field">
-              <span>正文</span>
+              <span>Body</span>
               <AutoResizeTextarea
                 className="nw-body-input"
                 value={draft.body}
@@ -1389,7 +1389,7 @@ function NoteComposer({ draft, userName, submitting, onChange, onClose, onSubmit
             {!draft.id ? (
               <div className="nw-field nw-signature-field">
                 <label className="nw-signature-input">
-                  <span>署名</span>
+                  <span>Signature</span>
                   <input
                     value={draft.signature}
                     maxLength={40}
@@ -1399,7 +1399,7 @@ function NoteComposer({ draft, userName, submitting, onChange, onClose, onSubmit
                   />
                 </label>
                 <label className="nw-switch-row nw-signature-switch">
-                  <span>匿名发布</span>
+                  <span>Post anonymously</span>
                   <input
                     type="checkbox"
                     checked={draft.isAnonymous}
@@ -1411,11 +1411,11 @@ function NoteComposer({ draft, userName, submitting, onChange, onClose, onSubmit
                 </label>
               </div>
             ) : null}
-            <SegmentedOptions label="纸张" value={draft.paper} options={PAPER_OPTIONS} labels={PAPER_LABELS} onChange={value => onChange({ ...draft, paper: value })} />
-            <SegmentedOptions label="胶带" value={draft.tape} options={TAPE_OPTIONS} labels={TAPE_LABELS} onChange={value => onChange({ ...draft, tape: value })} />
-            <SegmentedOptions label="字体" value={draft.font} options={FONT_OPTIONS} labels={FONT_LABELS} onChange={value => onChange({ ...draft, font: value })} />
+            <SegmentedOptions label="Paper" value={draft.paper} options={PAPER_OPTIONS} labels={PAPER_LABELS} onChange={value => onChange({ ...draft, paper: value })} />
+            <SegmentedOptions label="Tape" value={draft.tape} options={TAPE_OPTIONS} labels={TAPE_LABELS} onChange={value => onChange({ ...draft, tape: value })} />
+            <SegmentedOptions label="Font" value={draft.font} options={FONT_OPTIONS} labels={FONT_LABELS} onChange={value => onChange({ ...draft, font: value })} />
             <label className="nw-field nw-text-field">
-              <span>自定义 CSS</span>
+              <span>Custom CSS</span>
               <AutoResizeTextarea
                 className="nw-css-input"
                 value={draft.rawCss}
@@ -1437,8 +1437,8 @@ function NoteComposer({ draft, userName, submitting, onChange, onClose, onSubmit
             >
               <span className="note-card-pin" />
               <span className="note-card-copy" style={{ ...previewStyle, ...fontStyle(draft.font) }}>
-                <strong>{draft.summary || "标题"}</strong>
-                <span>{draft.body || "正文"}</span>
+                <strong>{draft.summary || "Title"}</strong>
+                <span>{draft.body || "Body"}</span>
               </span>
               <span className="note-card-meta">
                 <span>{previewAuthorName}</span>
@@ -1448,7 +1448,7 @@ function NoteComposer({ draft, userName, submitting, onChange, onClose, onSubmit
           </aside>
         </div>
         <footer>
-          <button type="button" className="nw-secondary-btn" onClick={onClose} disabled={submitting}>取消</button>
+          <button type="button" className="nw-secondary-btn" onClick={onClose} disabled={submitting}>Cancel</button>
           <button
             type="button"
             className={`note-wall-primary-btn ${submitting ? "is-loading" : ""}`}
@@ -1458,7 +1458,7 @@ function NoteComposer({ draft, userName, submitting, onChange, onClose, onSubmit
           >
             <span className="note-wall-primary-content">
               {submitting ? <span className="note-wall-primary-spinner" aria-hidden="true" /> : null}
-              <span>{submitting ? "写入中" : draft.id ? "保存" : "写入便签墙"}</span>
+              <span>{submitting ? "Posting" : draft.id ? "Save" : "Post to Note Wall"}</span>
             </span>
           </button>
         </footer>
@@ -1485,7 +1485,7 @@ function NoteDetail({ note, actorId, userName, onNotice, onClose }: {
       const nextComments = await fetchNoteWallComments(note.id);
       setComments(nextComments);
     } catch (err) {
-      onNotice(err instanceof Error ? err.message : "评论加载失败。");
+      onNotice(err instanceof Error ? err.message : "Failed to load comments.");
     }
   }, [note.id, onNotice]);
 
@@ -1521,9 +1521,9 @@ function NoteDetail({ note, actorId, userName, onNotice, onClose }: {
       });
       setComments(prev => prev.some(comment => comment.id === created.id) ? prev : [...prev, created]);
       setCommentBody("");
-      onNotice("评论已发送。");
+      onNotice("Comment posted.");
     } catch (err) {
-      onNotice(err instanceof Error ? err.message : "评论发送失败。");
+      onNotice(err instanceof Error ? err.message : "Failed to post comment.");
     } finally {
       setSubmittingComment(false);
     }
@@ -1534,8 +1534,8 @@ function NoteDetail({ note, actorId, userName, onNotice, onClose }: {
     <div className="nw-modal-backdrop nw-detail-backdrop" role="dialog" aria-modal="true" onClick={onClose}>
       <article className="nw-detail" data-font={note.font} style={fontStyle(note.font)} onClick={event => event.stopPropagation()}>
         <header>
-          <span>{note.authorType === "character" ? "角色便签" : "用户便签"}</span>
-          <button type="button" className="nw-detail-close-btn" onClick={onClose}>关闭</button>
+          <span>{note.authorType === "character" ? "Character Note" : "User Note"}</span>
+          <button type="button" className="nw-detail-close-btn" onClick={onClose}>Close</button>
         </header>
         <div className="nw-detail-content">
           <section className="nw-letter-paper" style={fontStyle(note.font)}>
@@ -1549,11 +1549,11 @@ function NoteDetail({ note, actorId, userName, onNotice, onClose }: {
             </footer>
           </section>
 
-          <section className={`nw-comments ${hasComments ? "has-comments" : "is-empty"}`} aria-label="评论">
+          <section className={`nw-comments ${hasComments ? "has-comments" : "is-empty"}`} aria-label="Comments">
             {hasComments ? (
               <>
                 <div className="nw-comments-header">
-                  <strong>评论</strong>
+                  <strong>Comments</strong>
                   <span>{comments.length}</span>
                 </div>
                 <div className="nw-comment-list">
@@ -1573,7 +1573,7 @@ function NoteDetail({ note, actorId, userName, onNotice, onClose }: {
               <input
                 value={commentBody}
                 maxLength={500}
-                placeholder="写评论"
+                placeholder="Write a comment"
                 onChange={event => setCommentBody(event.target.value)}
               />
               <label>
@@ -1582,10 +1582,10 @@ function NoteDetail({ note, actorId, userName, onNotice, onClose }: {
                   checked={commentAnonymous}
                   onChange={event => setCommentAnonymous(event.target.checked)}
                 />
-                匿名
+                Anonymous
               </label>
               <button type="submit" disabled={submittingComment || !commentBody.trim()}>
-                {submittingComment ? "发送中" : "发送"}
+                {submittingComment ? "Sending" : "Send"}
               </button>
             </form>
           </section>
@@ -1660,10 +1660,10 @@ function TimerSettingsPanel({ characters, settings, generatingCharacterIds, repl
       <section className="nw-timer-panel" onClick={event => event.stopPropagation()}>
         <header>
           <div>
-            <h2>角色便签设置</h2>
-            <p>开启后，角色会按同一间隔写便签并回复便签。</p>
+            <h2>Character Note Settings</h2>
+            <p>When enabled, characters will write and reply to notes on the same interval.</p>
           </div>
-          <button type="button" className="diary-icon-btn" onClick={onClose} aria-label="关闭">
+          <button type="button" className="diary-icon-btn" onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
         </header>
@@ -1672,7 +1672,7 @@ function TimerSettingsPanel({ characters, settings, generatingCharacterIds, repl
             <label className="nw-toggle-row">
               <span>
                 <Clock3 size={17} />
-                定时生成
+                Auto-generate
               </span>
               <input
                 type="checkbox"
@@ -1681,7 +1681,7 @@ function TimerSettingsPanel({ characters, settings, generatingCharacterIds, repl
               />
             </label>
             <label className="nw-field nw-interval-field">
-              <span>间隔分钟</span>
+              <span>Interval (minutes)</span>
               <input
                 type="number"
                 min={5}
@@ -1691,7 +1691,7 @@ function TimerSettingsPanel({ characters, settings, generatingCharacterIds, repl
               />
             </label>
           </div>
-          <p className="nw-timer-hint">到点后会先写便签，再查看候选便签并选择 5 条回复。</p>
+          <p className="nw-timer-hint">When triggered, notes are written first, then candidate notes are reviewed and up to 5 replies are chosen.</p>
         </div>
         <div className="nw-character-action-panel">
           <div className="nw-character-action-buttons">
@@ -1701,7 +1701,7 @@ function TimerSettingsPanel({ characters, settings, generatingCharacterIds, repl
               onClick={() => setOpenAction(openAction === "post" ? null : "post")}
             >
               <WandSparkles size={17} />
-              让TA发帖
+              Have Them Post
             </button>
             <button
               type="button"
@@ -1709,12 +1709,12 @@ function TimerSettingsPanel({ characters, settings, generatingCharacterIds, repl
               onClick={() => setOpenAction(openAction === "comment" ? null : "comment")}
             >
               <MessageCircle size={17} />
-              让TA评论
+              Have Them Comment
             </button>
           </div>
           {openAction ? (
             <div className="nw-character-picker">
-              {characters.length === 0 ? <p className="nw-empty">暂无角色。</p> : null}
+              {characters.length === 0 ? <p className="nw-empty">No characters yet.</p> : null}
               {characters.map(character => {
                 const isGenerating = generatingCharacterIds.includes(character.id);
                 const isReplying = replyingCharacterIds.includes(character.id);
@@ -1740,7 +1740,7 @@ function TimerSettingsPanel({ characters, settings, generatingCharacterIds, repl
                     </span>
                     <span>
                       <strong>{character.name}</strong>
-                      {isGenerating || isReplying ? <em>{isGenerating ? "发帖中" : "评论中"}</em> : null}
+                      {isGenerating || isReplying ? <em>{isGenerating ? "Posting" : "Commenting"}</em> : null}
                     </span>
                   </button>
                 );
@@ -1754,7 +1754,7 @@ function TimerSettingsPanel({ characters, settings, generatingCharacterIds, repl
               disabled={busy}
               onClick={handleConfirmPosts}
             >
-              {confirmingPosts ? "发帖中" : `确认让 ${selectedPostCharacterIds.length} 个角色发帖`}
+              {confirmingPosts ? "Posting" : `Confirm: have ${selectedPostCharacterIds.length} character(s) post`}
             </button>
           ) : null}
           {openAction === "comment" && selectedCommentCharacterIds.length > 0 ? (
@@ -1764,7 +1764,7 @@ function TimerSettingsPanel({ characters, settings, generatingCharacterIds, repl
               disabled={busy}
               onClick={handleConfirmComments}
             >
-              {confirmingComments ? "评论中" : `确认让 ${selectedCommentCharacterIds.length} 个角色评论`}
+              {confirmingComments ? "Commenting" : `Confirm: have ${selectedCommentCharacterIds.length} character(s) comment`}
             </button>
           ) : null}
         </div>

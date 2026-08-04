@@ -20,8 +20,8 @@ export function PromptModal({
     initialValue = "",
     onConfirm,
     onCancel,
-    confirmText = "确定",
-    cancelText = "取消"
+    confirmText = "Confirm",
+    cancelText = "Cancel"
 }: PromptModalProps) {
     const [value, setValue] = useState(initialValue);
 

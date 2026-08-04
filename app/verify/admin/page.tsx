@@ -64,7 +64,7 @@ function AdminImage({ id, adminKey }: { id: string; adminKey: string }) {
         });
         if (!response.ok) {
           const data = await response.json().catch(() => ({}));
-          throw new Error(data.error || `图片加载失败（${response.status}）`);
+          throw new Error(data.error || `Image failed to load (${response.status})`);
         }
         const blob = await response.blob();
         if (controller.signal.aborted) return;
@@ -72,7 +72,7 @@ function AdminImage({ id, adminKey }: { id: string; adminKey: string }) {
         setSrc(objectUrl);
       } catch (err) {
         if (!controller.signal.aborted) {
-          setError(err instanceof Error ? err.message : "图片加载失败");
+          setError(err instanceof Error ? err.message : "Image failed to load");
         }
       }
     })();
@@ -85,9 +85,9 @@ function AdminImage({ id, adminKey }: { id: string; adminKey: string }) {
 
   return (
     <div ref={hostRef}>
-      {error ? <div className="vr-error" style={{ marginTop: 8 }}>审核图片加载失败：{error}</div> : null}
-      {!error && !src ? <div className="vr-admin-time" style={{ marginTop: 8 }}>审核图片加载中…</div> : null}
-      {src ? <img className="vr-admin-img" src={src} alt="审核图片" /> : null}
+      {error ? <div className="vr-error" style={{ marginTop: 8 }}>Failed to load review image: {error}</div> : null}
+      {!error && !src ? <div className="vr-admin-time" style={{ marginTop: 8 }}>Loading review image…</div> : null}
+      {src ? <img className="vr-admin-img" src={src} alt="Review image" /> : null}
     </div>
   );
 }
@@ -107,12 +107,12 @@ export default function VerifyAdminPage() {
     try {
       const response = await fetch(`/api/verify/admin?view=${which}`, { headers: { "x-verify-admin-key": adminKey } });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.ok) throw new Error(data.error || "加载失败");
+      if (!response.ok || !data.ok) throw new Error(data.error || "Failed to load");
       setItems(data.items as AdminItem[]);
       setUnlocked(true);
       try { window.localStorage.setItem(ADMIN_KEY_STORAGE, adminKey); } catch { /* ignore */ }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "加载失败");
+      setError(err instanceof Error ? err.message : "Failed to load");
       if (!unlocked) setUnlocked(false);
     } finally {
       setLoading(false);
@@ -120,7 +120,7 @@ export default function VerifyAdminPage() {
   }, [unlocked]);
 
   useEffect(() => {
-    document.title = "Float · 审核台";
+    document.title = "Float · Review Console";
     try {
       const saved = window.localStorage.getItem(ADMIN_KEY_STORAGE) || "";
       if (saved) { setKey(saved); void refresh(saved, "pending"); }
@@ -131,8 +131,8 @@ export default function VerifyAdminPage() {
   async function decide(id: string, action: "approve" | "reject") {
     if (busyId) return;
     let note = "";
-    if (action === "reject") note = window.prompt("拒绝原因（会展示给申请者，可留空）：") ?? "";
-    else if (!window.confirm("确认通过并自动发放一个激活码？")) return;
+    if (action === "reject") note = window.prompt("Rejection reason (shown to the applicant, may be left blank):") ?? "";
+    else if (!window.confirm("Confirm approval and automatically issue an activation code?")) return;
     setBusyId(id);
     setError("");
     try {
@@ -142,10 +142,10 @@ export default function VerifyAdminPage() {
         body: JSON.stringify({ id, action, note }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.ok) throw new Error(data.error || "操作失败");
+      if (!response.ok || !data.ok) throw new Error(data.error || "Action failed");
       await refresh(key, view);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "操作失败");
+      setError(err instanceof Error ? err.message : "Action failed");
     } finally {
       setBusyId("");
     }
@@ -154,47 +154,47 @@ export default function VerifyAdminPage() {
   return (
     <main className="vr-root">
       <div className="vr-brand">Float</div>
-      <div className="vr-brand-sub">内测审核台 · Admin</div>
+      <div className="vr-brand-sub">Beta Review Console · Admin</div>
 
       <section className="vr-card" style={{ maxWidth: 560 }}>
         {!unlocked ? (
           <div>
             <label className="vr-field">
-              <span>管理密钥（VERIFY_ADMIN_KEY）</span>
-              <input type="text" value={key} onChange={event => setKey(event.target.value)} placeholder="输入后进入审核台" />
+              <span>Admin Key (VERIFY_ADMIN_KEY)</span>
+              <input type="text" value={key} onChange={event => setKey(event.target.value)} placeholder="Enter key to access the review console" />
             </label>
             {error ? <div className="vr-error">{error}</div> : null}
             <button type="button" className="vr-btn" disabled={loading || !key.trim()} onClick={() => refresh(key.trim(), view)}>
-              {loading ? "验证中…" : "进入审核台"}
+              {loading ? "Verifying…" : "Enter Review Console"}
             </button>
           </div>
         ) : (
           <div>
             <div className="vr-tabs">
-              <button type="button" className={`vr-tab${view === "pending" ? " on" : ""}`} onClick={() => { setView("pending"); void refresh(key, "pending"); }}>待审核</button>
-              <button type="button" className={`vr-tab${view === "all" ? " on" : ""}`} onClick={() => { setView("all"); void refresh(key, "all"); }}>全部记录</button>
+              <button type="button" className={`vr-tab${view === "pending" ? " on" : ""}`} onClick={() => { setView("pending"); void refresh(key, "pending"); }}>Pending</button>
+              <button type="button" className={`vr-tab${view === "all" ? " on" : ""}`} onClick={() => { setView("all"); void refresh(key, "all"); }}>All Records</button>
             </div>
             {error ? <div className="vr-error">{error}</div> : null}
             <button type="button" className="vr-btn ghost" style={{ marginTop: 0 }} disabled={loading} onClick={() => refresh(key, view)}>
-              {loading ? "刷新中…" : "刷新列表"}
+              {loading ? "Refreshing…" : "Refresh List"}
             </button>
 
             <div className="vr-admin-list">
-              {items.length === 0 && !loading ? <div className="vr-status pending">{view === "pending" ? "暂无待审核的申请。" : "暂无记录。"}</div> : null}
+              {items.length === 0 && !loading ? <div className="vr-status pending">{view === "pending" ? "No pending applications." : "No records."}</div> : null}
               {items.map(item => (
                 <div key={item.id} className="vr-admin-item">
                   <div className="vr-admin-meta">
                     <span className="vr-admin-contact">{item.contact}</span>
-                    <span className={`vr-admin-tag ${item.status}`}>{item.status === "pending" ? "待审核" : item.status === "approved" ? "已通过" : "已拒绝"}</span>
+                    <span className={`vr-admin-tag ${item.status}`}>{item.status === "pending" ? "Pending" : item.status === "approved" ? "Approved" : "Rejected"}</span>
                   </div>
-                  <div className="vr-admin-time">提交 {formatTime(item.createdAt)} · 查询码 {item.queryCode}{item.reviewedAt ? ` · 审核 ${formatTime(item.reviewedAt)}` : ""}</div>
-                  {item.status === "approved" && item.activationCode ? <div className="vr-admin-time">发放激活码：<span className="vr-admin-code">{item.activationCode}</span></div> : null}
-                  {item.status === "rejected" && item.note ? <div className="vr-admin-time">拒绝原因：{item.note}</div> : null}
-                  {item.hasImage ? <AdminImage id={item.id} adminKey={key} /> : <div className="vr-admin-time" style={{ marginTop: 8 }}>（图片已删除）</div>}
+                  <div className="vr-admin-time">Submitted {formatTime(item.createdAt)} · Query code {item.queryCode}{item.reviewedAt ? ` · Reviewed ${formatTime(item.reviewedAt)}` : ""}</div>
+                  {item.status === "approved" && item.activationCode ? <div className="vr-admin-time">Activation code issued: <span className="vr-admin-code">{item.activationCode}</span></div> : null}
+                  {item.status === "rejected" && item.note ? <div className="vr-admin-time">Rejection reason: {item.note}</div> : null}
+                  {item.hasImage ? <AdminImage id={item.id} adminKey={key} /> : <div className="vr-admin-time" style={{ marginTop: 8 }}>(Image deleted)</div>}
                   {item.status === "pending" ? (
                     <div className="vr-admin-actions">
-                      <button type="button" className="vr-admin-approve" disabled={busyId === item.id} onClick={() => decide(item.id, "approve")}>{busyId === item.id ? "处理中…" : "通过并发码"}</button>
-                      <button type="button" className="vr-admin-reject" disabled={busyId === item.id} onClick={() => decide(item.id, "reject")}>拒绝</button>
+                      <button type="button" className="vr-admin-approve" disabled={busyId === item.id} onClick={() => decide(item.id, "approve")}>{busyId === item.id ? "Processing…" : "Approve & Issue Code"}</button>
+                      <button type="button" className="vr-admin-reject" disabled={busyId === item.id} onClick={() => decide(item.id, "reject")}>Reject</button>
                     </div>
                   ) : null}
                 </div>

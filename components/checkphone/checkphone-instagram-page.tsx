@@ -225,7 +225,7 @@ export function CheckPhoneInstagramPage({ character, onBack }: CheckPhoneInstagr
 
       {loading && (
         <div className="cp-refresh-indicator cp-refresh-indicator--floating" aria-live="polite">
-          <span className="cp-refresh-indicator-text">正在刷新 Instagram</span>
+          <span className="cp-refresh-indicator-text">Refreshing Instagram</span>
           <span className="cp-refresh-indicator-dots" aria-hidden="true">
             <i></i><i></i><i></i>
           </span>
@@ -233,18 +233,18 @@ export function CheckPhoneInstagramPage({ character, onBack }: CheckPhoneInstagr
       )}
 
       <div className={`cp-instagram-body ${activePost ? "cp-instagram-body--feed" : ""}`}>
-        {!loaded && <div className="cp-instagram-status">正在同步主页...</div>}
+        {!loaded && <div className="cp-instagram-status">Syncing profile...</div>}
 
         {loaded && !payload && !loading && (
           <div className="cp-instagram-status cp-empty-copy">
-            <p>暂无Instagram内容</p>
-            <span className="cp-instagram-hint">点刷新同步主页和帖子</span>
+            <p>No Instagram content yet</p>
+            <span className="cp-instagram-hint">Tap refresh to sync profile and posts</span>
           </div>
         )}
 
         {error ? (
           <CheckPhoneDebugErrorCard
-            title="暂时无法解析 Instagram 内容。"
+            title="Unable to parse Instagram content."
             error={error}
             debugParseMode={debugParseMode}
             debugParseError={debugParseError}
@@ -409,11 +409,11 @@ export function CheckPhoneInstagramPage({ character, onBack }: CheckPhoneInstagr
 
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空 Instagram 内容？"
-          message="确认后会清空当前 Instagram 缓存。之后重新刷新时，不会再带入旧 Instagram 内容。"
+          title="Clear Instagram content?"
+          message="This clears the current Instagram cache. The next refresh will not reuse old Instagram content."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

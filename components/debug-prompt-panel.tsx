@@ -80,7 +80,7 @@ type FloatingDragState = FloatingPosition & {
 
 function stringifyContent(content: UnifiedMessage["content"]): string {
     if (typeof content === "string") return content;
-    return content.map(p => p.type === "text" ? p.text : "[图片]").join("\n");
+    return content.map(p => p.type === "text" ? p.text : "[Image]").join("\n");
 }
 
 function splitMarkerBadges(marker?: string): string[] {
@@ -154,9 +154,9 @@ export function DebugPromptPanel() {
     const [xiaohongshuMode, setXiaohongshuMode] = useState<"activity" | "reaction" | "comment" | "mention">("activity");
     const [coCreateMode, setCoCreateMode] = useState<CoCreateMode>("write");
     const [shoppingMode, setShoppingMode] = useState<"catalog" | "search">("catalog");
-    const [shoppingQuery, setShoppingQuery] = useState("礼物");
+    const [shoppingQuery, setShoppingQuery] = useState("gift");
     const [interviewMode, setInterviewMode] = useState<"opening" | "host" | "answer" | "article">("opening");
-    const [interviewTheme, setInterviewTheme] = useState("一次关于在场的采访");
+    const [interviewTheme, setInterviewTheme] = useState("An interview about being present");
     const [adventureWorldId, setAdventureWorldId] = useState<string>("");
     const [adventureStorageVersion, setAdventureStorageVersion] = useState(0);
     const [adventureInstructionMode, setAdventureInstructionMode] = useState<"turn" | "exit">("turn");
@@ -179,7 +179,7 @@ export function DebugPromptPanel() {
                     .join("、");
                 return {
                     session,
-                    label: `群聊 · ${session.groupName || fallbackName || "未命名群聊"}`,
+                    label: `Group Chat · ${session.groupName || fallbackName || "Unnamed Group Chat"}`,
                 };
             }
             return {
@@ -409,7 +409,7 @@ export function DebugPromptPanel() {
                 result = await previewMomentsPostPrompt(selectedCharId);
             } else {
                 if (!selectedPostId) {
-                    setError("请先选择一条帖子");
+                    setError("Please select a post first");
                     setLoading(false);
                     return;
                 }
@@ -422,7 +422,7 @@ export function DebugPromptPanel() {
                 }
             }
             if (!result) {
-                setError("无法生成预览，请检查角色是否绑定了API和预设");
+                setError("Unable to generate preview. Please check if the character has an API and preset bound");
                 setLoading(false);
                 return;
             }
@@ -449,16 +449,16 @@ export function DebugPromptPanel() {
             } else if (extraAppId === "reading") {
                 const book = loadBooks().find(item => item.id === readingBookId);
                 const chapter = readingChapters.find(item => String(item.index) === readingChapterIndex);
-                if (!book || !chapter) throw new Error("请先选择书籍与章节");
+                if (!book || !chapter) throw new Error("Please select a book and chapter first");
                 const annotations = await loadAnnotations(book.id, chapter.index);
                 if (readingMode === "discuss") {
                     const session = chatSessionOptions.find(option => !option.session.isGroup && option.session.contactId === extraCharacterId)?.session;
-                    if (!session) throw new Error("没有找到这个角色的聊天会话，无法预览阅读对话");
+                    if (!session) throw new Error("No chat session found for this character, cannot preview reading dialogue");
                     result = await previewReadingDiscussPrompt(session, book, {
                         chapterTitle: chapter.title,
                         chapterContent: [
-                            "当前阅读中心：整章",
-                            "本次上下文范围：整章",
+                            "Current reading focus: full chapter",
+                            "Context scope this time: full chapter",
                             "",
                             chapter.paragraphs.map((paragraph, index) => `[${index + 1}] ${paragraph}`).join("\n\n"),
                         ].join("\n"),
@@ -497,7 +497,7 @@ export function DebugPromptPanel() {
                     transcript: [],
                 });
             } else {
-                if (!selectedAdventureSave) throw new Error("请先选择一个有存档的冒险世界");
+                if (!selectedAdventureSave) throw new Error("Please select an adventure world with a save first");
                 const agent = selectedAdventureSave.agents.find(item => item.characterId === extraCharacterId);
                 const sharedUserIdentity = selectedAdventureSave.agents.length > 1 ? resolveUserIdentity(undefined, "adventure") : undefined;
                 result = await previewAdventureCompanionPromptPayload(
@@ -506,7 +506,7 @@ export function DebugPromptPanel() {
                     sharedUserIdentity,
                     agent?.affinity,
                     adventureInstructionMode === "exit"
-                        ? { instruction: "{{user}}刚才决定离开当前事件，不再继续。请以你的身份回应{{user}}的离开：你会说什么、有什么反应、接下来是否跟随/挽留/沉默旁观。" }
+                        ? { instruction: "{{user}} just decided to leave the current event and not continue. Respond in your own voice to {{user}}'s departure: what would you say, how would you react, and will you follow, try to stop them, or silently watch." }
                         : undefined,
                 );
             }
@@ -619,11 +619,11 @@ export function DebugPromptPanel() {
     const estimatedTokens = Math.round(totalChars / 2);
 
     const debugTabs: [DebugMode, string][] = [
-        ["chat", activeChatSession?.isGroup ? "群聊" : "聊天"],
-        ["moments", "朋友圈"],
-        ["calendar", "日历"],
-        ["story", "剧情"],
-        ["vn", "漫卷"],
+        ["chat", activeChatSession?.isGroup ? "Group Chat" : "Chat"],
+        ["moments", "Moments"],
+        ["calendar", "Calendar"],
+        ["story", "Story"],
+        ["vn", "VN"],
         ...EXTRA_PROMPT_APPS.map(app => [app.id, app.label] as [DebugMode, string]),
     ];
 
@@ -660,7 +660,7 @@ export function DebugPromptPanel() {
         const posts = getAllPosts();
         const chars = loadCharacters();
         return posts.slice(0, 30).map(p => {
-            const authorName = p.authorType === "user" ? "我" : (chars.find(c => c.id === p.authorId)?.name ?? "?");
+            const authorName = p.authorType === "user" ? "Me" : (chars.find(c => c.id === p.authorId)?.name ?? "?");
             return { id: p.id, label: `${authorName}: ${p.content.slice(0, 30)}...` };
         });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -731,7 +731,7 @@ export function DebugPromptPanel() {
             <button
                 type="button"
                 className="prompt-viewer-float-button"
-                aria-label="打开提示词查看器"
+                aria-label="Open prompt viewer"
                 data-positioned={floatingPosition ? "" : undefined}
                 data-dragging={draggingFloatingButton ? "" : undefined}
                 onPointerDown={handleFloatingPointerDown}
@@ -748,38 +748,38 @@ export function DebugPromptPanel() {
 
     const renderCharSelect = (value: string, onChange: (v: string) => void) => (
         <select value={value} onChange={e => onChange(e.target.value)} className="pv-select">
-            <option value="">选择角色...</option>
+            <option value="">Select character...</option>
             {charOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
     );
 
     const renderPreviewBtn = (onClick: () => void, disabled: boolean) => (
         <button onClick={onClick} disabled={disabled} className="pv-btn pv-btn-primary">
-            {loading ? "加载中..." : "预览"}
+            {loading ? "Loading..." : "Preview"}
         </button>
     );
 
     const getExtraPreviewWarning = () => {
         if (extraAppId === "reading") {
-            return "实际上下文以阅读实际场景注入，不按章节注入，此处仅为模拟";
+            return "The actual context is injected based on the real reading scene, not by chapter — this is only a simulation";
         }
         if (extraAppId === "dwelling" && dwellingMode === "explore") {
-            return "实际上下文以栖所当前点击的房间、家具和物品注入，此处仅用首个物品模拟";
+            return "The actual context is injected based on the room, furniture, and item currently clicked in the dwelling — this only simulates using the first item";
         }
         if (extraAppId === "notewall" && noteWallMode === "reply") {
-            return "实际上下文以便签墙真实触发的便签和评论注入，此处仅取候选便签模拟";
+            return "The actual context is injected based on the notes and comments actually triggered on the note wall — this only simulates using candidate notes";
         }
         if (extraAppId === "xiaohongshu") {
-            return "实际上下文以小红书当前触发的笔记、评论或@注入，此处仅取现有数据模拟";
+            return "The actual context is injected based on the note, comment, or @mention currently triggered in Xiaohongshu — this only simulates using existing data";
         }
         if (extraAppId === "cocreate") {
-            return "实际上下文以共创当前会话和刚发送内容注入，此处仅基于已保存会话模拟";
+            return "The actual context is injected based on the current co-creation session and the content just sent — this only simulates based on the saved session";
         }
         if (extraAppId === "interview") {
-            return "实际上下文以在场采访流程和已有转录注入，此处仅用空转录模拟";
+            return "The actual context is injected based on the live interview flow and existing transcript — this only simulates with an empty transcript";
         }
         if (extraAppId === "adventure") {
-            return "实际上下文以冒险当前事件、队伍状态和本轮行为注入，此处仅基于最近存档模拟";
+            return "The actual context is injected based on the current adventure event, party status, and this turn's actions — this only simulates based on the most recent save";
         }
         return null;
     };
@@ -794,7 +794,7 @@ export function DebugPromptPanel() {
             {extraAppId !== "shopping" && renderCharSelect(extraCharacterId, setExtraCharacterId)}
             {extraAppId === "checkphone" && (
                 <select value={checkPhoneAppId} onChange={e => setCheckPhoneAppId(e.target.value as CheckPhoneAppId | "manifest")} className="pv-select">
-                    <option value="manifest">桌面清单</option>
+                    <option value="manifest">Home Screen Manifest</option>
                     {Object.values(CHECKPHONE_APP_SPECS).map(spec => (
                         <option key={spec.id} value={spec.id}>{spec.label}</option>
                     ))}
@@ -803,15 +803,15 @@ export function DebugPromptPanel() {
             {extraAppId === "reading" && (
                 <>
                     <select value={readingMode} onChange={e => setReadingMode(e.target.value as "annotate" | "discuss")} className="pv-select">
-                        <option value="annotate">批注</option>
-                        <option value="discuss">对话</option>
+                        <option value="annotate">Annotate</option>
+                        <option value="discuss">Discuss</option>
                     </select>
                     <select value={readingBookId} onChange={e => setReadingBookId(e.target.value)} className="pv-select">
-                        <option value="">选择书籍...</option>
+                        <option value="">Select book...</option>
                         {readingBookOptions.map(book => <option key={book.id} value={book.id}>{book.title}</option>)}
                     </select>
                     <select value={readingChapterIndex} onChange={e => setReadingChapterIndex(e.target.value)} className="pv-select">
-                        <option value="">选择章节...</option>
+                        <option value="">Select chapter...</option>
                         {readingChapters.map(chapter => (
                             <option key={chapter.id} value={String(chapter.index)}>{chapter.title}</option>
                         ))}
@@ -820,64 +820,64 @@ export function DebugPromptPanel() {
             )}
             {extraAppId === "dwelling" && (
                 <select value={dwellingMode} onChange={e => setDwellingMode(e.target.value as DwellingRefreshMode | "explore")} className="pv-select">
-                    <option value="full">完整栖所</option>
-                    <option value="items">刷新物品</option>
-                    <option value="explore">探索物品</option>
+                    <option value="full">Full Dwelling</option>
+                    <option value="items">Refresh Items</option>
+                    <option value="explore">Explore Item</option>
                 </select>
             )}
             {extraAppId === "notewall" && (
                 <select value={noteWallMode} onChange={e => setNoteWallMode(e.target.value as "note" | "reply")} className="pv-select">
-                    <option value="note">生成便签</option>
-                    <option value="reply">回复便签</option>
+                    <option value="note">Generate Note</option>
+                    <option value="reply">Reply to Note</option>
                 </select>
             )}
             {extraAppId === "xiaohongshu" && (
                 <select value={xiaohongshuMode} onChange={e => setXiaohongshuMode(e.target.value as "activity" | "reaction" | "comment" | "mention")} className="pv-select">
-                    <option value="activity">浏览互动</option>
-                    <option value="reaction">回应用户笔记</option>
-                    <option value="comment">回复评论</option>
-                    <option value="mention">回复@</option>
+                    <option value="activity">Browse Interaction</option>
+                    <option value="reaction">Respond to User Note</option>
+                    <option value="comment">Reply to Comment</option>
+                    <option value="mention">Reply to Mention</option>
                 </select>
             )}
             {extraAppId === "cocreate" && (
                 <select value={coCreateMode} onChange={e => setCoCreateMode(e.target.value as CoCreateMode)} className="pv-select">
-                    <option value="write">写作</option>
-                    <option value="discuss">讨论</option>
+                    <option value="write">Write</option>
+                    <option value="discuss">Discuss</option>
                 </select>
             )}
             {extraAppId === "shopping" && (
                 <>
                     <select value={shoppingMode} onChange={e => setShoppingMode(e.target.value as "catalog" | "search")} className="pv-select">
-                        <option value="catalog">首页推荐</option>
-                        <option value="search">搜索结果</option>
+                        <option value="catalog">Homepage Recommendations</option>
+                        <option value="search">Search Results</option>
                     </select>
                     {shoppingMode === "search" && (
-                        <input value={shoppingQuery} onChange={e => setShoppingQuery(e.target.value)} className="pv-select" placeholder="搜索词" />
+                        <input value={shoppingQuery} onChange={e => setShoppingQuery(e.target.value)} className="pv-select" placeholder="Search term" />
                     )}
                 </>
             )}
             {extraAppId === "interview" && (
                 <>
                     <select value={interviewMode} onChange={e => setInterviewMode(e.target.value as "opening" | "host" | "answer" | "article")} className="pv-select">
-                        <option value="opening">开场提问</option>
-                        <option value="host">主持人追问</option>
-                        <option value="answer">嘉宾回答</option>
-                        <option value="article">专栏成稿</option>
+                        <option value="opening">Opening Question</option>
+                        <option value="host">Host Follow-up</option>
+                        <option value="answer">Guest Answer</option>
+                        <option value="article">Column Draft</option>
                     </select>
-                    <input value={interviewTheme} onChange={e => setInterviewTheme(e.target.value)} className="pv-select" placeholder="在场主题" />
+                    <input value={interviewTheme} onChange={e => setInterviewTheme(e.target.value)} className="pv-select" placeholder="Interview theme" />
                 </>
             )}
             {extraAppId === "adventure" && (
                 <>
                     <select value={adventureWorldId} onChange={e => setAdventureWorldId(e.target.value)} className="pv-select">
-                        <option value="">选择冒险世界...</option>
+                        <option value="">Select adventure world...</option>
                         {adventureWorldOptions.map(world => (
-                            <option key={world.id} value={world.id}>{world.skeleton.world.name || "未命名世界"}</option>
+                            <option key={world.id} value={world.id}>{world.skeleton.world.name || "Unnamed World"}</option>
                         ))}
                     </select>
                     <select value={adventureInstructionMode} onChange={e => setAdventureInstructionMode(e.target.value as "turn" | "exit")} className="pv-select">
-                        <option value="turn">角色宣言</option>
-                        <option value="exit">离开回应</option>
+                        <option value="turn">Character Declaration</option>
+                        <option value="exit">Departure Response</option>
                     </select>
                 </>
             )}
@@ -890,10 +890,10 @@ export function DebugPromptPanel() {
         <div className="pv-panel" onPointerDown={e => e.stopPropagation()}>
             {/* Header */}
             <div className="pv-header">
-                <span className="pv-header-title">提示词查看器</span>
+                <span className="pv-header-title">Prompt Viewer</span>
                 {resultMeta && <span className="pv-header-meta">{resultMeta.characterName}</span>}
                 <span style={{ flex: 1 }} />
-                <button type="button" className="pv-close-btn" aria-label="关闭" onClick={(e) => { e.stopPropagation(); setCollapsed(true); }}>
+                <button type="button" className="pv-close-btn" aria-label="Close" onClick={(e) => { e.stopPropagation(); setCollapsed(true); }}>
                     <X size={18} strokeWidth={2} />
                 </button>
             </div>
@@ -917,17 +917,17 @@ export function DebugPromptPanel() {
                             onChange={e => setSelectedChatSessionId(e.target.value)}
                             className="pv-select"
                         >
-                            <option value="">选择聊天...</option>
+                            <option value="">Select chat...</option>
                             {chatSessionOptions.map(option => (
                                 <option key={option.session.id} value={option.session.id}>{option.label}</option>
                             ))}
                         </select>
                         <button onClick={handleChatPreview} disabled={loading || !activeChatSession} className="pv-btn pv-btn-primary">
-                            {loading ? "加载中..." : "预览 Prompt"}
+                            {loading ? "Loading..." : "Preview Prompt"}
                         </button>
                         {activeChatSession && !activeChatSession.isGroup && (
                             <button onClick={() => setFollowUpMode(f => !f)} className="pv-toggle" {...(followUpMode ? { "data-active": "" } : {})}>
-                                {followUpMode ? "追发 ON" : "追发 OFF"}
+                                {followUpMode ? "Follow-up ON" : "Follow-up OFF"}
                             </button>
                         )}
                     </>
@@ -935,15 +935,15 @@ export function DebugPromptPanel() {
                 {mode === "moments" && (
                     <>
                         <select value={momentsType} onChange={e => setMomentsType(e.target.value as "post" | "comment" | "npc" | "reply")} className="pv-select">
-                            <option value="post">发帖</option>
-                            <option value="comment">评论</option>
-                            <option value="npc">NPC互动</option>
-                            <option value="reply">回复</option>
+                            <option value="post">Post</option>
+                            <option value="comment">Comment</option>
+                            <option value="npc">NPC Interaction</option>
+                            <option value="reply">Reply</option>
                         </select>
                         {renderCharSelect(selectedCharId, setSelectedCharId)}
                         {(momentsType !== "post") && (
                             <select value={selectedPostId} onChange={e => setSelectedPostId(e.target.value)} className="pv-select">
-                                <option value="">选择帖子...</option>
+                                <option value="">Select post...</option>
                                 {postOptions.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
                             </select>
                         )}
@@ -972,7 +972,7 @@ export function DebugPromptPanel() {
                 {isExtraPromptMode(mode) && renderExtraControls()}
                 {displayMessages.length > 0 && (
                     <button onClick={allMessagesExpanded ? collapseAll : expandAll} className="pv-btn pv-btn-ghost">
-                        {allMessagesExpanded ? "全部折叠" : "全部展开"}
+                        {allMessagesExpanded ? "Collapse All" : "Expand All"}
                     </button>
                 )}
                 {resultMeta && (
@@ -1020,14 +1020,14 @@ export function DebugPromptPanel() {
                 {displayMessages.length === 0 && !error && (
                     <div className="pv-empty">
                         {mode === "chat"
-                            ? (activeChatSession ? "点击「预览 Prompt」查看下一轮会发送的真实提示词" : "选择聊天对象后点击「预览 Prompt」")
-                            : mode === "moments" ? "选择角色后点击「预览」查看朋友圈 Prompt"
-                            : mode === "calendar" ? "选择角色与日期后点击「预览」"
-                            : mode === "vn" ? "选择角色后点击「预览」查看漫卷 Prompt"
-                            : mode === "story" ? "选择角色后点击「预览」查看剧情 Prompt"
+                            ? (activeChatSession ? "Click 'Preview Prompt' to see the real prompt that will be sent next" : "Select a chat, then click 'Preview Prompt'")
+                            : mode === "moments" ? "Select a character, then click 'Preview' to see the Moments Prompt"
+                            : mode === "calendar" ? "Select a character and date, then click 'Preview'"
+                            : mode === "vn" ? "Select a character, then click 'Preview' to see the VN Prompt"
+                            : mode === "story" ? "Select a character, then click 'Preview' to see the Story Prompt"
                             : isExtraPromptMode(mode)
-                                ? EXTRA_PROMPT_APPS.find(app => app.id === mode)?.emptyText ?? "选择 APP 后点击「预览」"
-                                : "选择 APP 后点击「预览」"
+                                ? EXTRA_PROMPT_APPS.find(app => app.id === mode)?.emptyText ?? "Select an app, then click 'Preview'"
+                                : "Select an app, then click 'Preview'"
                         }
                     </div>
                 )}
@@ -1038,8 +1038,8 @@ export function DebugPromptPanel() {
                 <>
                     <div className="pv-divider" />
                     <div className="pv-footer">
-                        <span>{displayMessages.length} 条消息</span>
-                        <span>{totalChars.toLocaleString()} 字符</span>
+                        <span>{displayMessages.length} messages</span>
+                        <span>{totalChars.toLocaleString()} characters</span>
                         <span>~{estimatedTokens.toLocaleString()} tokens</span>
                     </div>
                 </>

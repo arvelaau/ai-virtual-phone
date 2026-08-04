@@ -146,7 +146,7 @@ export function CheckPhonePhotosPage({ character, onBack }: CheckPhonePhotosPage
     ? selectedPhoto.locationLabel
     : selectedAlbum
       ? selectedAlbum.title
-      : payload?.headerSubtitle || "相册与回忆";
+      : payload?.headerSubtitle || "Albums and memories";
 
   return (
     <div className="cp-photos-module">
@@ -161,7 +161,7 @@ export function CheckPhonePhotosPage({ character, onBack }: CheckPhonePhotosPage
           <div className="cp-unified-title-stack">
             <div className="cp-unified-title-row">
               <i className="cp-unified-blink"></i>
-              <span className="cp-unified-title">{payload?.headerTitle || "相册"}</span>
+              <span className="cp-unified-title">{payload?.headerTitle || "Album"}</span>
             </div>
             <div className="cp-unified-subtitle">{subtitle}</div>
           </div>
@@ -192,7 +192,7 @@ export function CheckPhonePhotosPage({ character, onBack }: CheckPhonePhotosPage
 
       {loading && (
         <div className="cp-refresh-indicator cp-refresh-indicator--floating" aria-live="polite">
-          <span className="cp-refresh-indicator-text">正在刷新相册</span>
+          <span className="cp-refresh-indicator-text">Refreshing album</span>
           <span className="cp-refresh-indicator-dots" aria-hidden="true">
             <i></i><i></i><i></i>
           </span>
@@ -204,8 +204,8 @@ export function CheckPhonePhotosPage({ character, onBack }: CheckPhonePhotosPage
 
         {loaded && !payload && !loading && (
           <div className="cp-photos-status cp-empty-copy">
-            <p>暂无照片内容</p>
-            <span className="cp-photos-hint">点刷新同步相簿和最近照片</span>
+            <p>No photos yet</p>
+            <span className="cp-photos-hint">Tap refresh to sync albums and recent photos</span>
           </div>
         )}
 
@@ -216,16 +216,16 @@ export function CheckPhonePhotosPage({ character, onBack }: CheckPhonePhotosPage
             <section className="cp-photo-overview-hero">
               <span className="cp-photo-overview-kicker">MOMENTS</span>
               <div className="cp-photo-overview-metrics">
-                <span>{albums.length} 个相簿</span>
-                <span>{photos.length} 张照片</span>
+                <span>{albums.length} albums</span>
+                <span>{photos.length} photos</span>
               </div>
             </section>
 
-            <div className="cp-photo-overview-tabs" role="tablist" aria-label="相册分区">
+            <div className="cp-photo-overview-tabs" role="tablist" aria-label="Album sections">
               {[
-                { id: "featured", label: "精选" },
-                { id: "albums", label: "相簿" },
-                { id: "recent", label: "最近" },
+                { id: "featured", label: "Featured" },
+                { id: "albums", label: "Albums" },
+                { id: "recent", label: "Recent" },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -250,7 +250,7 @@ export function CheckPhonePhotosPage({ character, onBack }: CheckPhonePhotosPage
                 </div>
                 <div className="cp-photo-feature-footnote">
                   <span>{featuredPhoto.locationLabel}</span>
-                  <b>精选记录</b>
+                  <b>Featured Memory</b>
                 </div>
                 {highlightedPhotos.length > 1 ? (
                   <div className="cp-photo-mini-grid">
@@ -272,7 +272,7 @@ export function CheckPhonePhotosPage({ character, onBack }: CheckPhonePhotosPage
 
             {homeSection === "albums" && (
               <section className="cp-photo-albums">
-                <div className="cp-photo-section-title">相簿</div>
+                <div className="cp-photo-section-title">Albums</div>
                 <div className="cp-photo-album-list">
                   {albums.map((album) => {
                     const cover = photos.find((photo) => photo.id === album.coverPhotoId);
@@ -288,7 +288,7 @@ export function CheckPhonePhotosPage({ character, onBack }: CheckPhonePhotosPage
                             <p><CheckPhoneBilingualText text={album.moodLabel} tone="photos" /></p>
                           </div>
                           <div className="cp-photo-album-side">
-                            <span>共</span>
+                            <span>Total</span>
                             <b>{album.count}</b>
                           </div>
                         </div>
@@ -301,7 +301,7 @@ export function CheckPhonePhotosPage({ character, onBack }: CheckPhonePhotosPage
 
             {homeSection === "recent" && (
               <section className="cp-photo-grid-wrap">
-                <div className="cp-photo-section-title">最近照片</div>
+                <div className="cp-photo-section-title">Recent Photos</div>
                 <div className="cp-photo-grid cp-photo-grid--editorial">
                   {photos.slice(0, 12).map((photo, index) => (
                     <button
@@ -323,11 +323,11 @@ export function CheckPhonePhotosPage({ character, onBack }: CheckPhonePhotosPage
         {payload && selectedAlbum && !selectedPhoto && (
           <div className="cp-photos-scroll">
             <section className="cp-photo-album-hero">
-              <div className="cp-photo-section-title">相簿详情</div>
+              <div className="cp-photo-section-title">Album Details</div>
               <h3><CheckPhoneBilingualText text={selectedAlbum.title} tone="photos" /></h3>
               <p><CheckPhoneBilingualText text={selectedAlbum.moodLabel} tone="photos" /></p>
               <div className="cp-photo-overview-metrics cp-photo-overview-metrics--compact">
-                <span>{selectedAlbum.count} 张照片</span>
+                <span>{selectedAlbum.count} photos</span>
                 <span>{selectedAlbum.updatedLabel}</span>
               </div>
             </section>
@@ -358,7 +358,7 @@ export function CheckPhonePhotosPage({ character, onBack }: CheckPhonePhotosPage
                 <h3><CheckPhoneBilingualText text={selectedPhoto.title} tone="photos" /></h3>
                 <div className="cp-photo-detail-chips">
                   <span className="cp-photo-detail-location">{selectedPhoto.locationLabel}</span>
-                  <span>{selectedAlbum?.title ?? "照片"}</span>
+                  <span>{selectedAlbum?.title ?? "Photo"}</span>
                 </div>
                 <p><CheckPhoneBilingualText text={selectedPhoto.description} tone="photos" /></p>
               </div>
@@ -368,11 +368,11 @@ export function CheckPhonePhotosPage({ character, onBack }: CheckPhonePhotosPage
       </div>
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空相册内容？"
-          message="确认后会清空当前相册缓存。之后重新刷新时，不会再带入旧相册内容。"
+          title="Clear album content?"
+          message="This clears the current album cache. Refreshing again won't bring back the old content."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Confirm Clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

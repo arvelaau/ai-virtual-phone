@@ -25,10 +25,10 @@ function getRuleTags(rule: Pick<RegexRule, "tags">): string[] {
 }
 
 const BASE_REGEX_SCOPE_TAG_PROFILES = [
-    { id: "chat", label: "聊天", tags: ["chat", "text"] },
-    { id: "group_chat", label: "群聊", tags: ["group_chat", "text"] },
-    { id: "story", label: "剧情", tags: ["story"] },
-    { id: "offline", label: "线下", tags: ["offline"] },
+    { id: "chat", label: "Chat", tags: ["chat", "text"] },
+    { id: "group_chat", label: "Group Chat", tags: ["group_chat", "text"] },
+    { id: "story", label: "Story", tags: ["story"] },
+    { id: "offline", label: "Offline", tags: ["offline"] },
 ];
 
 const DEFAULT_REGEX_TAGS = BASE_REGEX_SCOPE_TAG_PROFILES[0].tags;
@@ -62,7 +62,7 @@ function getRuleTagsLabel(rule: Pick<RegexRule, "tags">, profiles: TagProfile[])
 
 function getRuleRawTagsLabel(rule: Pick<RegexRule, "tags">): string {
     const tags = getRuleTags(rule);
-    return tags.length > 0 ? tags.join(" · ") : "通用";
+    return tags.length > 0 ? tags.join(" · ") : "General";
 }
 
 function setRuleTags(tags: string[]): Partial<RegexRule> {
@@ -79,7 +79,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
     const [confirmDeleteTarget, setConfirmDeleteTarget] = useState<{ type: 'group' | 'rule', id: string } | null>(null);
     const [isLoaded, setIsLoaded] = useState(false);
     const [testingRuleId, setTestingRuleId] = useState<string | null>(null);
-    const [testInput, setTestInput] = useState("在这里输入测试文本...");
+    const [testInput, setTestInput] = useState("Enter test text here...");
     const [expandTarget, setExpandTarget] = useState<{ ruleId: string; field: "findRegex" | "replaceString" } | null>(null);
     const [previewHtml, setPreviewHtml] = useState<string | null>(null);
     const [groupTestOpen, setGroupTestOpen] = useState(false);
@@ -134,7 +134,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
         notifyMascotPageContext({
             page: "regex",
             mode: "editing",
-            label: activeGroup ? `正则编辑 · ${activeGroup.name}` : "正则编辑",
+            label: activeGroup ? `Regex Edit · ${activeGroup.name}` : "Regex Edit",
             fields: activeGroup ? {
                 groupId: activeGroup.id,
                 groupName: activeGroup.name,
@@ -143,7 +143,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
             } : {},
         });
         return () => {
-            notifyMascotPageContext({ page: "desktop", mode: "idle", label: "桌面", fields: {} });
+            notifyMascotPageContext({ page: "desktop", mode: "idle", label: "Desktop", fields: {} });
         };
     }, [isLoaded, isActive, activeGroupId, groups]);
 
@@ -157,7 +157,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
         if (viewMode === "detail" && activeGroupId) {
             setOverrideBack(() => () => setViewMode("list"));
             const target = groups.find(g => g.id === activeGroupId);
-            setSubpageTitle(target?.name || "正则组详情");
+            setSubpageTitle(target?.name || "Regex Group Details");
         } else {
             setOverrideBack(null);
             setSubpageTitle(null);
@@ -171,7 +171,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
 
     // --- Group Level Operations ---
     const addGroup = useCallback(() => {
-        const newGroup = createRegexGroup("新正则组");
+        const newGroup = createRegexGroup("New Regex Group");
         persist([newGroup, ...groups]);
         setActiveGroupId(newGroup.id);
         setViewMode("detail");
@@ -190,7 +190,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                     className="inline-flex h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] border border-black/10 bg-white px-4 text-xs font-bold text-gray-800 shadow-sm transition-all hover:bg-gray-50 hover:shadow-md active:scale-95 focus:outline-none"
                 >
                     <Upload size={15} strokeWidth={1.8} />
-                    <span>导入正则</span>
+                    <span>Import Regex</span>
                 </button>
                 <button
                     type="button"
@@ -198,7 +198,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                     className="inline-flex h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] bg-black px-4 text-xs font-bold text-white shadow-sm transition-all hover:bg-gray-800 hover:shadow-md active:scale-95 focus:outline-none"
                 >
                     <Plus size={15} strokeWidth={1.8} />
-                    <span>新建正则</span>
+                    <span>New Regex</span>
                 </button>
             </div>
         );
@@ -228,20 +228,20 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
         reader.onload = (event) => {
             try {
                 const text = event.target?.result as string;
-                const fallbackName = file.name.replace(/\.json$/i, "") || "导入的正则组";
+                const fallbackName = file.name.replace(/\.json$/i, "") || "Imported Regex Group";
                 const parsed = parseRegexFromJson(text, fallbackName);
                 if (parsed) {
                     const scoped = normalizeGroupScope(parsed);
                     persist([scoped, ...groups]);
                     setActiveGroupId(scoped.id);
                 } else {
-                    setImportError("无法解析正则文件，格式不正确。");
+                    setImportError("Failed to parse regex file, invalid format.");
                 }
             } catch (e) {
                 if (e instanceof Error && e.message === UNSUPPORTED_IMPORT_FORMAT) {
-                    setImportError("不支持该正则格式");
+                    setImportError("This regex format is not supported");
                 } else {
-                    setImportError("无法解析正则文件，格式不正确。");
+                    setImportError("Failed to parse regex file, invalid format.");
                 }
             }
         };
@@ -265,7 +265,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
         if (!activeGroup) return;
         const newRule: RegexRule = {
             id: `regex-rule-${Date.now()}`,
-            scriptName: "新正则规则",
+            scriptName: "New Regex Rule",
             findRegex: "",
             replaceString: "",
             disabled: false,
@@ -310,12 +310,12 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                             <div className="ui-icon-circle">
                                 <Database size={24} />
                             </div>
-                            <span className="menu-label font-semibold">没有正则组</span>
+                            <span className="menu-label font-semibold">No regex groups</span>
                             <span className="menu-desc max-w-[240px]">
-                                正则用于在发送给 AI 或收到 AI 回复时进行高阶的文本替换与格式处理。
+                                Regex rules perform advanced text replacement and formatting on text sent to or received from the AI.
                             </span>
                             <button onClick={addGroup} className="ui-btn ui-btn-primary mt-2">
-                                <Plus size={16} /> 新建正则组
+                                <Plus size={16} /> New Regex Group
                             </button>
                         </div>
                     ) : (
@@ -327,7 +327,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                     style={{ minHeight: "84px", padding: "16px", justifyContent: "space-between" }}
                                     role="button"
                                     tabIndex={0}
-                                    aria-label={`编辑 ${group.name || "正则组"}`}
+                                    aria-label={`Edit ${group.name || "Regex Group"}`}
                                     onClick={() => { setActiveGroupId(group.id); setViewMode("detail"); }}
                                     onKeyDown={(event) => {
                                         if (event.target !== event.currentTarget) return;
@@ -343,10 +343,10 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                             <Database size={16} className="shrink-0" />
                                             <span className="truncate text-[calc(14.4px*var(--app-text-scale,1))] font-bold leading-tight text-[var(--c-text-title)]">{group.name}</span>
                                         </div>
-                                        <span className="menu-desc truncate">{group.description || `${group.rules?.length || 0} 个规则`}</span>
+                                        <span className="menu-desc truncate">{group.description || `${group.rules?.length || 0} rules`}</span>
                                     </div>
                                     <div className="flex items-center justify-between gap-2">
-                                        <span className="menu-desc ts-12">规则 {group.rules?.length || 0}</span>
+                                        <span className="menu-desc ts-12">Rules {group.rules?.length || 0}</span>
                                         <ChevronLeft size={16} className="opacity-40" style={{ transform: "rotate(180deg)" }} />
                                     </div>
                                 </div>
@@ -365,7 +365,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                     className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[20px] bg-black px-4 text-xs font-bold text-white shadow-sm transition-all hover:bg-gray-800 hover:shadow-md active:scale-95"
                                 >
                                     <Download size={15} strokeWidth={1.8} />
-                                    <span>导出正则</span>
+                                    <span>Export Regex</span>
                                 </button>
                                 <button
                                     type="button"
@@ -373,29 +373,29 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                     className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[20px] border border-black/10 bg-white px-4 text-xs font-bold text-[var(--c-danger)] shadow-sm transition-all hover:bg-gray-50 hover:shadow-md active:scale-95"
                                 >
                                     <Trash2 size={15} strokeWidth={1.8} />
-                                    <span>删除正则</span>
+                                    <span>Delete Regex</span>
                                 </button>
                             </div>
 
                             <h2 className="mx-2 mb-0 mt-2 ts-20 font-bold leading-none text-black">Regex Info</h2>
                             <div className="ui-entry-card" style={{ cursor: "default" }}>
                                 <div className="flex flex-col gap-2">
-                                    <label className="menu-label ts-13 font-semibold ml-1">正则组名称</label>
+                                    <label className="menu-label ts-13 font-semibold ml-1">Regex Group Name</label>
                                     <input
                                         type="text"
                                         value={activeGroup.name}
                                         onChange={(e) => updateGroup(activeGroup.id, { name: e.target.value })}
-                                        placeholder="正则组名称..."
+                                        placeholder="Regex group name..."
                                         className="ui-input font-medium"
                                     />
                                 </div>
 
                                 <div className="flex flex-col gap-2">
-                                    <label className="menu-label ts-13 font-semibold ml-1">简介描述</label>
+                                    <label className="menu-label ts-13 font-semibold ml-1">Description</label>
                                     <textarea
                                         value={activeGroup.description || ""}
                                         onChange={(e) => updateGroup(activeGroup.id, { description: e.target.value })}
-                                        placeholder="简介描述..."
+                                        placeholder="Description..."
                                         rows={2}
                                         className="ui-textarea resize-none"
                                     />
@@ -409,16 +409,16 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                 className="ui-btn ui-btn-outline w-full ts-13"
                                 onClick={() => setGroupTestOpen(!groupTestOpen)}
                             >
-                                <Play size={14} fill="currentColor" /> {groupTestOpen ? "收起整组测试" : "整组测试"}
+                                <Play size={14} fill="currentColor" /> {groupTestOpen ? "Collapse Group Test" : "Test Whole Group"}
                             </button>
 
                             {groupTestOpen && activeGroup && (() => {
                                 let groupOutput = groupTestInput;
                                 const steps: { name: string; output: string; changed: boolean; skipped?: string }[] = [];
                                 for (const rule of activeGroup.rules) {
-                                    if (rule.disabled) { steps.push({ name: rule.scriptName, output: groupOutput, changed: false, skipped: "已禁用" }); continue; }
-                                    if (!rule.placement?.includes(2)) { steps.push({ name: rule.scriptName, output: groupOutput, changed: false, skipped: `位置=${JSON.stringify(rule.placement)}` }); continue; }
-                                    if (rule.promptOnly) { steps.push({ name: rule.scriptName, output: groupOutput, changed: false, skipped: "仅Prompt" }); continue; }
+                                    if (rule.disabled) { steps.push({ name: rule.scriptName, output: groupOutput, changed: false, skipped: "Disabled" }); continue; }
+                                    if (!rule.placement?.includes(2)) { steps.push({ name: rule.scriptName, output: groupOutput, changed: false, skipped: `Position=${JSON.stringify(rule.placement)}` }); continue; }
+                                    if (rule.promptOnly) { steps.push({ name: rule.scriptName, output: groupOutput, changed: false, skipped: "Prompt only" }); continue; }
                                     const before = groupOutput;
                                     try {
                                         const { output } = testRegexRule(rule, groupOutput);
@@ -429,11 +429,11 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                 return (
                                     <div className="ui-entry-card flex flex-col gap-3" data-active="true" style={{ gap: 12 }}>
                                         <div className="flex flex-col gap-1">
-                                            <label className="menu-desc">测试输入（粘贴一段完整的 AI 回复）</label>
+                                            <label className="menu-desc">Test Input (paste a full AI reply)</label>
                                             <textarea
                                                 value={groupTestInput}
                                                 onChange={(e) => { setGroupTestInput(e.target.value); setGroupTestExpandStep(null); }}
-                                                placeholder="在这里粘入 AI 原始回复文本..."
+                                                placeholder="Paste the raw AI reply text here..."
                                                 rows={5}
                                                 className="ui-textarea ts-13"
                                             />
@@ -441,7 +441,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                         {groupTestInput.trim() && (
                                             <>
                                                 <div className="flex flex-col gap-1">
-                                                    <label className="menu-desc">执行步骤 ({steps.filter(s => !s.skipped).length} 条规则执行，{steps.filter(s => s.skipped).length} 条跳过)</label>
+                                                    <label className="menu-desc">Execution Steps ({steps.filter(s => !s.skipped).length} rules run, {steps.filter(s => s.skipped).length} skipped)</label>
                                                     <div className="flex flex-col gap-1">
                                                         {steps.map((step, i) => (
                                                             <div key={i}>
@@ -451,14 +451,14 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                                     style={{ padding: "4px 0", borderBottom: "1px solid var(--c-panel-border)" }}
                                                                 >
                                                                     <span className="ui-tag" data-variant={step.skipped ? "muted" : step.changed ? "success" : "muted"} style={{ minWidth: 24, textAlign: "center", fontSize: "calc(11px*var(--app-text-scale,1))" }}>
-                                                                        {step.skipped ? "跳" : step.changed ? "改" : "—"}
+                                                                        {step.skipped ? "Skip" : step.changed ? "Chg" : "—"}
                                                                     </span>
                                                                     <span className="menu-label ts-12 truncate flex-1">{step.name}</span>
                                                                     {step.skipped && <span className="ts-11" style={{ color: "var(--c-icon)", opacity: 0.6 }}>{step.skipped}</span>}
                                                                 </button>
                                                                 {groupTestExpandStep === i && !step.skipped && (
                                                                     <div className="ui-code-block" style={{ maxHeight: 200, overflow: "auto", whiteSpace: "pre-wrap", fontSize: "calc(12px*var(--app-text-scale,1))", margin: "4px 0 8px" }}>
-                                                                        {step.output || <span className="menu-desc !mt-0">(空)</span>}
+                                                                        {step.output || <span className="menu-desc !mt-0">(empty)</span>}
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -466,9 +466,9 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                     </div>
                                                 </div>
                                                 <div className="flex flex-col gap-1">
-                                                    <label className="menu-desc">最终输出</label>
+                                                    <label className="menu-desc">Final Output</label>
                                                     <div className="ui-code-block" style={{ maxHeight: 300, overflow: "auto", whiteSpace: "pre-wrap", fontSize: "calc(13px*var(--app-text-scale,1))" }}>
-                                                        {groupOutput || <span className="menu-desc !mt-0">(空)</span>}
+                                                        {groupOutput || <span className="menu-desc !mt-0">(empty)</span>}
                                                     </div>
                                                 </div>
                                                 {/<[a-z][\s\S]*?>/i.test(groupOutput) && (
@@ -476,7 +476,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                         className="ui-btn ui-btn-outline self-end ts-13"
                                                         onClick={() => setPreviewHtml(groupOutput)}
                                                     >
-                                                        <Maximize2 size={14} /> 渲染预览
+                                                        <Maximize2 size={14} /> Render Preview
                                                     </button>
                                                 )}
                                             </>
@@ -488,7 +488,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                             <div className="flex flex-col gap-2">
                                 {visibleRules.length === 0 ? (
                                     <div className="menu-desc text-center mt-10 ts-14">
-                                        没找到相关的正则规则
+                                        No matching regex rules found
                                     </div>
                                 ) : (
                                     visibleRules.map(rule => {
@@ -512,16 +512,16 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                         </div>
                                                         <div className="flex flex-col gap-1 flex-1">
                                                             <span className="menu-label font-semibold break-all ts-15">
-                                                                {rule.scriptName || "(未命名规则)"}
+                                                                {rule.scriptName || "(Unnamed rule)"}
                                                             </span>
                                                             <div className="flex items-center gap-1.5 flex-wrap">
                                                                 <span className="ui-tag" data-variant="muted">
-                                                                    <span className="font-mono overflow-hidden text-ellipsis whitespace-nowrap max-w-[160px] inline-block align-bottom">{rule.findRegex || "无匹配正则"}</span>
+                                                                    <span className="font-mono overflow-hidden text-ellipsis whitespace-nowrap max-w-[160px] inline-block align-bottom">{rule.findRegex || "No match pattern"}</span>
                                                                 </span>
                                                                 <span className="ui-status-tag" data-variant={getRuleTags(rule).length > 0 ? "success" : undefined}>
                                                                     {getRuleTagsLabel(rule, regexScopeTagProfiles)}
                                                                 </span>
-                                                                {rule.disabled && <span className="ui-status-tag">已禁用</span>}
+                                                                {rule.disabled && <span className="ui-status-tag">Disabled</span>}
                                                             </div>
                                                         </div>
                                                     </button>
@@ -530,7 +530,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                         <label
                                                             className="ui-mini-toggle"
                                                             onClick={(e) => e.stopPropagation()}
-                                                            title={rule.disabled ? "已禁用 (点击启用)" : "已启用 (点击禁用)"}
+                                                            title={rule.disabled ? "Disabled (click to enable)" : "Enabled (click to disable)"}
                                                         >
                                                             <input
                                                                 type="checkbox"
@@ -553,23 +553,23 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                 {isEditing && (
                                                     <div className="ui-entry-separator flex flex-col gap-3">
                                                         <div className="flex flex-col gap-1">
-                                                            <label className="menu-desc">规则名称 (Script Name)</label>
+                                                            <label className="menu-desc">Rule Name (Script Name)</label>
                                                             <input
                                                                 type="text"
                                                                 value={rule.scriptName}
                                                                 onChange={(e) => updateRule(rule.id, { scriptName: e.target.value })}
-                                                                placeholder="例如: 屏蔽广告词"
+                                                                placeholder="e.g. Block ad keywords"
                                                                 className="ui-input ts-14 font-medium"
                                                             />
                                                         </div>
 
                                                         <div className="flex flex-col gap-1">
-                                                            <label className="menu-desc">匹配内容 (Find Regex)</label>
+                                                            <label className="menu-desc">Match Pattern (Find Regex)</label>
                                                             <div className="relative">
                                                                 <textarea
                                                                     value={rule.findRegex}
                                                                     onChange={(e) => updateRule(rule.id, { findRegex: e.target.value })}
-                                                                    placeholder="/正则表达式/flags&#10;例: /\[.*?\]/gs&#10;flags 由用户指定，不会自动添加"
+                                                                    placeholder="/regex/flags&#10;e.g.: /\[.*?\]/gs&#10;flags are user-specified and not added automatically"
                                                                     rows={3}
                                                                     className="ui-textarea ts-13 font-mono"
                                                                 />
@@ -578,12 +578,12 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                         </div>
 
                                                         <div className="flex flex-col gap-1">
-                                                            <label className="menu-desc">替换为 (Replace String)</label>
+                                                            <label className="menu-desc">Replace With (Replace String)</label>
                                                             <div className="relative">
                                                                 <textarea
                                                                     value={rule.replaceString}
                                                                     onChange={(e) => updateRule(rule.id, { replaceString: e.target.value })}
-                                                                    placeholder="留空即为删除，支持 $1 $<name> {{match}} {{char}}"
+                                                                    placeholder="Leave empty to delete. Supports $1 $<name> {{match}} {{char}}"
                                                                     rows={2}
                                                                     className="ui-textarea ts-13 font-mono"
                                                                 />
@@ -592,13 +592,13 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                         </div>
 
                                                         <div className="flex flex-col gap-1">
-                                                            <label className="menu-desc">作用位置 (Placement)</label>
+                                                            <label className="menu-desc">Placement</label>
                                                             <div className="flex items-center justify-between gap-4 mt-2">
                                                                 {([
-                                                                    [1, "用户输入"],
-                                                                    [2, "AI 输出"],
-                                                                    [5, "世界书"],
-                                                                    [6, "思维链"],
+                                                                    [1, "User Input"],
+                                                                    [2, "AI Output"],
+                                                                    [5, "World Book"],
+                                                                    [6, "Chain of Thought"],
                                                                 ] as const).map(([val, label]) => (
                                                                     <label key={val} className="ui-checkbox-label whitespace-nowrap">
                                                                         <input
@@ -617,28 +617,28 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                         </div>
 
                                                         <div className="flex flex-col gap-1">
-                                                            <label className="menu-desc">应用模式</label>
+                                                            <label className="menu-desc">Apply Mode</label>
                                                             <div className="flex items-center justify-between gap-6 mt-2">
                                                                 <label className="ui-checkbox-label whitespace-nowrap">
                                                                     <input type="checkbox" checked={rule.markdownOnly ?? false}
                                                                         onChange={(e) => updateRule(rule.id, { markdownOnly: e.target.checked || undefined, promptOnly: e.target.checked ? undefined : rule.promptOnly })} />
-                                                                    仅显示时
+                                                                    Display Only
                                                                 </label>
                                                                 <label className="ui-checkbox-label whitespace-nowrap">
                                                                     <input type="checkbox" checked={rule.promptOnly ?? false}
                                                                         onChange={(e) => updateRule(rule.id, { promptOnly: e.target.checked || undefined, markdownOnly: e.target.checked ? undefined : rule.markdownOnly })} />
-                                                                    仅Prompt
+                                                                    Prompt Only
                                                                 </label>
                                                                 <label className="ui-checkbox-label whitespace-nowrap">
                                                                     <input type="checkbox" checked={rule.runOnEdit ?? false}
                                                                         onChange={(e) => updateRule(rule.id, { runOnEdit: e.target.checked || undefined })} />
-                                                                    编辑时执行
+                                                                    Run on Edit
                                                                 </label>
                                                             </div>
                                                         </div>
 
                                                         <div className="flex flex-col gap-1">
-                                                            <label className="menu-desc">适用范围</label>
+                                                            <label className="menu-desc">Scope</label>
                                                             <select
                                                                 value={getRuleTagProfileId(rule, regexScopeTagProfiles)}
                                                                 onChange={(e) => {
@@ -656,19 +656,19 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                                 ))}
                                                             </select>
                                                             <div className="menu-desc !mt-0">
-                                                                实际标签：{getRuleRawTagsLabel(rule)}
+                                                                Actual tags: {getRuleRawTagsLabel(rule)}
                                                             </div>
                                                         </div>
 
                                                         <div className="flex flex-col gap-1">
-                                                            <label className="menu-desc">Trim Strings（从捕获组中移除的文本，每行一条）</label>
+                                                            <label className="menu-desc">Trim Strings (text removed from capture groups, one per line)</label>
                                                             <textarea
                                                                 value={(rule.trimStrings || []).join("\n")}
                                                                 onChange={(e) => {
                                                                     const lines = e.target.value.split("\n").filter(s => s.length > 0);
                                                                     updateRule(rule.id, { trimStrings: lines.length > 0 ? lines : undefined });
                                                                 }}
-                                                                placeholder="每行一条要移除的文本..."
+                                                                placeholder="One text to remove per line..."
                                                                 rows={2}
                                                                 className="ui-textarea ts-13 font-mono"
                                                             />
@@ -676,23 +676,23 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
 
                                                         <div className="flex gap-4 items-end flex-wrap">
                                                             <div className="flex flex-col gap-1 flex-1 min-w-[100px]">
-                                                                <label className="menu-desc">宏替换 (Find Regex)</label>
+                                                                <label className="menu-desc">Macro Substitution (Find Regex)</label>
                                                                 <select value={rule.substituteRegex ?? 0}
                                                                     onChange={(e) => updateRule(rule.id, { substituteRegex: Number(e.target.value) || undefined })}
                                                                     className="ui-input ts-13">
-                                                                    <option value={0}>不替换</option>
-                                                                    <option value={1}>RAW（直接展开）</option>
-                                                                    <option value={2}>ESCAPED（转义特殊字符）</option>
+                                                                    <option value={0}>No substitution</option>
+                                                                    <option value={1}>RAW (direct expansion)</option>
+                                                                    <option value={2}>ESCAPED (escape special characters)</option>
                                                                 </select>
                                                             </div>
                                                             <div className="flex flex-col gap-1 w-[72px]">
-                                                                <label className="menu-desc">最小深度</label>
+                                                                <label className="menu-desc">Min Depth</label>
                                                                 <input type="number" value={rule.minDepth ?? ""} placeholder="-1"
                                                                     onChange={(e) => updateRule(rule.id, { minDepth: e.target.value ? Number(e.target.value) : undefined })}
                                                                     className="ui-input ts-13" />
                                                             </div>
                                                             <div className="flex flex-col gap-1 w-[72px]">
-                                                                <label className="menu-desc">最大深度</label>
+                                                                <label className="menu-desc">Max Depth</label>
                                                                 <input type="number" value={rule.maxDepth ?? ""} placeholder="∞"
                                                                     onChange={(e) => updateRule(rule.id, { maxDepth: e.target.value ? Number(e.target.value) : undefined })}
                                                                     className="ui-input ts-13" />
@@ -706,7 +706,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                                 setTestingRuleId(opening ? rule.id : null);
                                                             }}
                                                         >
-                                                            <Play size={14} fill="currentColor" /> {testingRuleId === rule.id ? "收起测试" : "测试正则"}
+                                                            <Play size={14} fill="currentColor" /> {testingRuleId === rule.id ? "Collapse Test" : "Test Regex"}
                                                         </button>
 
                                                         {testingRuleId === rule.id && (() => {
@@ -714,11 +714,11 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                             return (
                                                                 <div className="ui-entry-separator flex flex-col gap-3">
                                                                     <div className="flex flex-col gap-1">
-                                                                        <label className="menu-desc">测试输入</label>
+                                                                        <label className="menu-desc">Test Input</label>
                                                                         <textarea
                                                                             value={testInput}
                                                                             onChange={(e) => setTestInput(e.target.value)}
-                                                                            placeholder="输入要测试的文本..."
+                                                                            placeholder="Enter text to test..."
                                                                             rows={3}
                                                                             className="ui-textarea ts-13"
                                                                         />
@@ -731,12 +731,12 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                                     ) : (
                                                                         <div className="flex flex-col gap-1">
                                                                             <div className="flex items-center gap-2 flex-wrap">
-                                                                                <label className="menu-desc !mt-0">替换结果</label>
+                                                                                <label className="menu-desc !mt-0">Replacement Result</label>
                                                                                 <span className="ui-tag" data-variant={matchCount > 0 ? "success" : "muted"}>
-                                                                                    {matchCount > 0 ? `${matchCount} 处匹配` : "无匹配"}
+                                                                                    {matchCount > 0 ? `${matchCount} matches` : "No matches"}
                                                                                 </span>
                                                                             </div>
-                                                                            <div className="ui-code-block">{output || <span className="menu-desc !mt-0">(空)</span>}</div>
+                                                                            <div className="ui-code-block">{output || <span className="menu-desc !mt-0">(empty)</span>}</div>
                                                                         </div>
                                                                     )}
                                                                     {!error && matchCount > 0 && /<[a-z][\s\S]*?>/i.test(output) && (
@@ -744,7 +744,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                                             className="ui-btn ui-btn-outline self-end ts-13"
                                                                             onClick={() => setPreviewHtml(output)}
                                                                         >
-                                                                            <Maximize2 size={14} /> 渲染预览
+                                                                            <Maximize2 size={14} /> Render Preview
                                                                         </button>
                                                                     )}
                                                                 </div>
@@ -764,7 +764,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                 className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[20px] bg-black px-4 text-xs font-bold text-white shadow-sm transition-all hover:bg-gray-800 hover:shadow-md active:scale-95 focus:outline-none"
                             >
                                 <Plus size={15} strokeWidth={1.8} />
-                                添加条目
+                                Add Entry
                             </button>
                             </div>
                         </div>
@@ -774,12 +774,12 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
 
             {confirmDeleteTarget && (
                 <ConfirmDialog
-                    title="确认删除？"
-                    message={confirmDeleteTarget.type === 'group' ? "删除正则组后无法恢复。是否继续？" : "删除规则后无法恢复。是否继续？"}
+                    title="Confirm Delete?"
+                    message={confirmDeleteTarget.type === 'group' ? "This regex group cannot be recovered after deletion. Continue?" : "This rule cannot be recovered after deletion. Continue?"}
                     icon={AlertCircle}
                     variant="danger"
-                    confirmLabel="确认删除"
-                    cancelLabel="取消"
+                    confirmLabel="Confirm Delete"
+                    cancelLabel="Cancel"
                     onConfirm={() => {
                         if (confirmDeleteTarget.type === 'group') {
                             removeGroup(confirmDeleteTarget.id);
@@ -794,11 +794,11 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
 
             {importError && (
                 <ConfirmDialog
-                    title="导入失败"
+                    title="Import Failed"
                     message={importError}
                     icon={AlertCircle}
                     variant="danger"
-                    confirmLabel="知道了"
+                    confirmLabel="Got it"
                     cancelLabel=""
                     onConfirm={() => setImportError(null)}
                     onCancel={() => setImportError(null)}
@@ -811,10 +811,10 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                 const isFind = expandTarget.field === "findRegex";
                 return (
                     <TextExpandModal
-                        title={isFind ? "匹配内容 (Find Regex)" : "替换为 (Replace String)"}
+                        title={isFind ? "Match Pattern (Find Regex)" : "Replace With (Replace String)"}
                         value={rule[expandTarget.field]}
                         onChange={(v) => updateRule(rule.id, { [expandTarget.field]: v })}
-                        placeholder={isFind ? "/正则表达式/flags  例: /\\[.*?\\]/gs\nflags 由用户指定，不会自动添加" : "留空即为删除，支持 $1 $<name> {{match}} {{char}}"}
+                        placeholder={isFind ? "/regex/flags  e.g.: /\\[.*?\\]/gs\nflags are user-specified and not added automatically" : "Leave empty to delete. Supports $1 $<name> {{match}} {{char}}"}
                         className="ts-13 font-mono"
                         onClose={() => setExpandTarget(null)}
                     />
@@ -824,7 +824,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
             {previewHtml && (
                 <div className="absolute inset-0 z-[999] flex flex-col" style={{ background: "var(--c-page-body-bg)" }}>
                     <header className="flex items-center justify-between px-4 shrink-0" style={{ height: 48, marginTop: 48 }}>
-                        <span className="menu-label font-semibold ts-15">渲染预览</span>
+                        <span className="menu-label font-semibold ts-15">Render Preview</span>
                         <button onClick={() => setPreviewHtml(null)} className="w-[32px] h-[32px] rounded-full flex items-center justify-center" style={{ background: "var(--c-card)", color: "var(--c-text)" }}>
                             <X size={18} />
                         </button>

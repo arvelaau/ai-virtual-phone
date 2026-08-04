@@ -12,6 +12,15 @@ import { kvGet, kvSet, registerKvMigration } from "./kv-db";
 import { emitChatPluginEvent, runChatPluginTransformSync } from "./chat-plugin-hooks";
 import { parseAIResponse } from "./rich-message-parser";
 import { extractTextToolDirectiveText } from "./text-tool-protocol";
+import {
+    GROUP_CALL_TARGET,
+    matchCallCancel,
+    matchCallHangup,
+    matchCallInitiate,
+    matchCallInitiateNoTarget,
+    matchCallReject,
+} from "./call-tag-patterns";
+import { buildPhotoTag, buildPokeTag } from "./rich-tag-builders";
 
 export const DEFAULT_VISION_IMAGE_PROMPT_LIMIT = 1;
 export const MAX_VISION_IMAGE_PROMPT_LIMIT = 20;
@@ -317,28 +326,30 @@ export function getChatMessagePreview(msg: ChatMessage): string {
         return toYou(msg.content);
     }
 
-    // Call messages: stored as assistant/user role, detect by content
-    const callInit = msg.content?.match(/\[我向(.+?)发起了((?:语音|视频)通话)\]/);
+    // Call messages: stored as assistant/user role, detect by content.
+    // Matchers accept legacy Chinese and English tags; `callType` always comes
+    // back as the canonical Chinese label. See lib/call-tag-patterns.ts.
+    const callInit = msg.content ? matchCallInitiate(msg.content) : null;
     if (callInit) {
-        if (msg.role === "user") return `你向${callInit[1]}发起了${callInit[2]}`;
+        if (msg.role === "user") return `你向${callInit.target}发起了${callInit.callType}`;
         const sess = _sessionsCache.find(s => s.id === msg.sessionId);
         const charName = msg.senderName || (!sess?.isGroup
             ? loadCharacters().find(c => c.id === sess?.contactId)?.name
             : undefined);
-        if (sess?.isGroup || callInit[1] === "群聊") {
-            return `${charName || "对方"}向群聊发起了${callInit[2]}`;
+        if (sess?.isGroup || callInit.target === GROUP_CALL_TARGET) {
+            return `${charName || "对方"}向群聊发起了${callInit.callType}`;
         }
-        return `${charName || "对方"}向你发起了${callInit[2]}`;
+        return `${charName || "对方"}向你发起了${callInit.callType}`;
     }
-    const callHangup = msg.content?.match(/\[我挂断了((?:群?(?:语音|视频))通话)\]/);
+    const callHangup = msg.content ? matchCallHangup(msg.content) : null;
     if (callHangup) {
         const dur = msg.mediaData?.callDuration;
-        return dur ? `${callHangup[1]} ${dur}` : callHangup[1];
+        return dur ? `${callHangup.callType} ${dur}` : callHangup.callType;
     }
-    const callReject = msg.content?.match(/\[我拒绝了((?:群?(?:语音|视频))通话)\]/);
-    if (callReject) return `你拒绝了${callReject[1]}`;
-    const callCancel = msg.content?.match(/\[我取消了((?:群?(?:语音|视频))通话)\]/);
-    if (callCancel) return `你取消了${callCancel[1]}`;
+    const callReject = msg.content ? matchCallReject(msg.content) : null;
+    if (callReject) return `你拒绝了${callReject.callType}`;
+    const callCancel = msg.content ? matchCallCancel(msg.content) : null;
+    if (callCancel) return `你取消了${callCancel.callType}`;
 
     // Poke: "你 拍了拍 XX" / "XX 拍了拍 你" (no brackets, user name → "你")
     if (msg.mediaType === "poke") {
@@ -370,27 +381,26 @@ export function getChatMessagePreview(msg: ChatMessage): string {
     if (msg.role === "system") {
         const c = msg.content;
         // Call initiation: [我向XX发起了语音通话] → 你/对方发起了语音通话
-        const initiate = c.match(/\[我向(.+?)发起了((?:语音|视频)通话)\]/);
+        const initiate = matchCallInitiate(c);
         if (initiate) {
-            const target = initiate[1];
-            if (userName && target === userName) return `对方发起了${initiate[2]}`;
-            return `你发起了${initiate[2]}`;
+            if (userName && initiate.target === userName) return `对方发起了${initiate.callType}`;
+            return `你发起了${initiate.callType}`;
         }
         // Follow-up AI initiated: [我发起了语音通话] → 对方发起了语音通话
-        const initNoTarget = c.match(/\[我发起了((?:语音|视频)通话)\]/);
-        if (initNoTarget) return `对方发起了${initNoTarget[1]}`;
+        const initNoTarget = matchCallInitiateNoTarget(c);
+        if (initNoTarget) return `对方发起了${initNoTarget.callType}`;
         // Hangup: [我挂断了语音通话] → 语音通话 05:23 (duration from mediaData or legacy content)
-        const hangup = c.match(/\[我挂断了(群?(?:语音|视频)通话)\](?:\(时长\s*(\d+:\d+)\))?/);
+        const hangup = matchCallHangup(c);
         if (hangup) {
-            const dur = msg.mediaData?.callDuration || hangup[2];
-            return dur ? `${hangup[1]} ${dur}` : hangup[1];
+            const dur = msg.mediaData?.callDuration || hangup.duration;
+            return dur ? `${hangup.callType} ${dur}` : hangup.callType;
         }
         // Reject: [我拒绝了语音通话] → 你拒绝了语音通话
-        const reject = c.match(/\[我拒绝了(群?(?:语音|视频)通话)\]/);
-        if (reject) return `你拒绝了${reject[1]}`;
+        const reject = matchCallReject(c);
+        if (reject) return `你拒绝了${reject.callType}`;
         // Cancel: [我取消了语音通话] → 你取消了语音通话
-        const cancel = c.match(/\[我取消了(群?(?:语音|视频)通话)\]/);
-        if (cancel) return `你取消了${cancel[1]}`;
+        const cancel = matchCallCancel(c);
+        if (cancel) return `你取消了${cancel.callType}`;
         // Other system messages: user name → "你"
         return toYou(c);
     }
@@ -1142,11 +1152,11 @@ function messageToEditableRawPart(message: ChatMessage): string {
     if (message.mediaType === "poke") {
         const sender = message.mediaData?.pokeSender?.trim();
         const target = message.mediaData?.pokeTarget?.trim();
-        if (sender && target) return `[${sender}拍了拍${target}]`;
+        if (sender && target) return buildPokeTag(sender, target);
     }
     if (message.mediaType === "image") {
         const label = message.mediaData?.label?.trim() || message.content.trim();
-        if (label) return `[照片:${label}]`;
+        if (label) return buildPhotoTag(label);
     }
     return message.content.trim();
 }
@@ -1682,18 +1692,25 @@ function replacePhotoDirectiveDescription(text: string | undefined, oldDescripti
     const nextDesc = nextDescription.trim();
     if (!text || !oldDesc || !nextDesc || oldDesc === nextDesc) return text;
 
+    // Rewrites a photo tag inside already-stored text, so it must recognise BOTH
+    // the legacy Chinese tag and the English one now emitted by
+    // lib/rich-tag-builders.ts — and it must rewrite it back in the SAME language
+    // it found, otherwise editing an old message would silently switch its tag.
     let changed = false;
-    const withExplicitMode = text.replace(/\[照片[:：]\s*(使用参考图|不使用参考图)\s*[:：]\s*([^\]]+?)\]/g, (full, mode: string, desc: string) => {
-        if (desc.trim() !== oldDesc) return full;
-        changed = true;
-        return `[照片:${mode}:${nextDesc}]`;
-    });
+    const withExplicitMode = text.replace(
+        /\[(照片|Photo)[:：]\s*(使用参考图|不使用参考图|WithRef|NoRef)\s*[:：]\s*([^\]]+?)\]/g,
+        (full, tag: string, mode: string, desc: string) => {
+            if (desc.trim() !== oldDesc) return full;
+            changed = true;
+            return `[${tag}:${mode}:${nextDesc}]`;
+        },
+    );
     if (changed) return withExplicitMode;
 
-    return text.replace(/\[照片[:：]\s*([^\]]+?)\]/g, (full, desc: string) => {
+    return text.replace(/\[(照片|Photo)[:：]\s*([^\]]+?)\]/g, (full, tag: string, desc: string) => {
         if (desc.trim() !== oldDesc) return full;
         changed = true;
-        return `[照片:${nextDesc}]`;
+        return `[${tag}:${nextDesc}]`;
     });
 }
 

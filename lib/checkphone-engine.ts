@@ -2,6 +2,7 @@ import { loadCharacters } from "./character-storage";
 import { normalizeBilingualTextInput, splitBilingualText } from "./bilingual-text";
 import { previewMessagesForApi, sendLLMRequest } from "./chat-engine";
 import { getChatMessagePreview, loadChatMessages, loadChatSessions, type ChatMessage, type ChatSession } from "./chat-storage";
+import { buildStickerTag } from "./rich-tag-builders";
 import {
   CHECKPHONE_APP_SPECS,
   type CheckPhoneAssetsPayload,
@@ -935,9 +936,11 @@ function normalizeVisibleChatMessages(messages: ChatMessage[]): ChatMessage[] {
 function getCheckPhoneRealChatText(message: ChatMessage): string {
   if (message.mediaType === "sticker") {
     const labelFromData = typeof message.mediaData?.label === "string" ? message.mediaData.label.trim() : "";
-    const labelFromContent = message.content.match(/\[表情包[：:]([^\]]+)\]/)?.[1]?.trim() ?? "";
+    // Reads a sticker tag out of stored content — accepts the legacy Chinese tag
+    // and the English one now emitted by lib/rich-tag-builders.ts.
+    const labelFromContent = message.content.match(/\[(?:表情包|Sticker)[：:]([^\]]+)\]/)?.[1]?.trim() ?? "";
     const label = labelFromData || labelFromContent;
-    return label ? `[表情包:${label}]` : "[表情]";
+    return label ? buildStickerTag(label) : "[表情]";
   }
   return getChatMessagePreview(message).trim() || message.content.trim();
 }

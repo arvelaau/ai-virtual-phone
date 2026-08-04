@@ -16,15 +16,15 @@ const RESOURCE_MENU: Omit<FeaturedCardItem, "onClick">[] = [
     {
         id: "memory",
         icon: Brain,
-        label: "记忆库",
-        desc: "角色记忆档案",
+        label: "Memory Bank",
+        desc: "Character memory archive",
         iconColor: BINDING_ACCENTS.memory,
     },
     {
         id: "vn_assets",
         icon: Sparkles,
-        label: "漫卷资源",
-        desc: "场景与角色立绘",
+        label: "VN Assets",
+        desc: "Scenes and character art",
         iconColor: CONTENT_APP_ACCENTS.vn,
     },
 ];
@@ -69,13 +69,13 @@ export function PhoneResourcesApp({ onClose, onNotice, initialPage }: { onClose:
         setMemoryView("detail");
     };
 
-    const title = currentPage === "main" ? "资源库"
+    const title = currentPage === "main" ? "Resources"
         : currentPage === "memory"
-            ? (memoryView === "settings" ? "记忆设置"
-                : memoryView === "detail" ? (memoryCharName || "记忆详情")
-                    : "记忆库")
-            : currentPage === "vn_assets" ? "漫卷资源"
-                : "资源库";
+            ? (memoryView === "settings" ? "Memory Settings"
+                : memoryView === "detail" ? (memoryCharName || "Memory Details")
+                    : "Memory Bank")
+            : currentPage === "vn_assets" ? "VN Assets"
+                : "Resources";
 
     const showSettingsIcon = currentPage === "memory" && memoryView !== "settings";
 
@@ -89,7 +89,7 @@ export function PhoneResourcesApp({ onClose, onNotice, initialPage }: { onClose:
                     onClick={() => { setPrevMemoryView(memoryView); setMemoryView("settings"); }}
                     className="page-back-btn"
                     type="button"
-                    aria-label="更多"
+                    aria-label="More"
                 >
                     <MoreHorizontal size={22} strokeWidth={1.5} />
                 </button>

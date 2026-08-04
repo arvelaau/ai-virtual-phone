@@ -13,12 +13,12 @@ const emotionEmoji: Record<string, string> = {
 };
 
 export const ADVENTURE_THEMES = [
-  { name: "暗夜古卷", preview: "#e8d0a0" },
-  { name: "粉彩甜心", preview: "#f8a0c8" },
-  { name: "旧纸书卷", preview: "#8b6914" },
-  { name: "青苹果园", preview: "#6aaa30" },
-  { name: "清水蓝天", preview: "#3a9cc8" },
-  { name: "暖阳卡通", preview: "#ff8820" },
+  { name: "Midnight Scroll", preview: "#e8d0a0" },
+  { name: "Pastel Sweetheart", preview: "#f8a0c8" },
+  { name: "Old Parchment", preview: "#8b6914" },
+  { name: "Green Orchard", preview: "#6aaa30" },
+  { name: "Clear Blue Sky", preview: "#3a9cc8" },
+  { name: "Sunny Cartoon", preview: "#ff8820" },
 ];
 
 type Props = {
@@ -101,7 +101,7 @@ export default function MapTextStream({
             fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-adv-accent-dim)",
             fontFamily: "inherit", letterSpacing: "0.15em",
           }}>
-            {loadingText || "DM 正在书写命运..."}
+            {loadingText || "The DM is writing your fate..."}
           </div>
         </div>
       )}
@@ -186,12 +186,12 @@ function MessageItem({
           <div style={{
             display: "flex", alignItems: "center", gap: 6, marginBottom: 3,
           }}>
-            <SpeakerAvatar src={avatar} fallback="你" size={18} />
+            <SpeakerAvatar src={avatar} fallback="You" size={18} />
             <span style={{
               fontSize: "calc(11px*var(--app-text-scale,1))", fontWeight: 600, letterSpacing: "0.05em",
               color: "var(--c-adv-player-name)",
             }}>
-              {msg.speaker || "你"}
+              {msg.speaker || "You"}
             </span>
           </div>
           <div style={{ fontSize, lineHeight, color: "var(--c-adv-body)", whiteSpace: "pre-wrap" }}>

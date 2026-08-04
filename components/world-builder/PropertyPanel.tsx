@@ -27,7 +27,7 @@ export default function PropertyPanel({ selected, onUpdate, onDelete, onArray }:
   const dragging = useRef(false);
   const startPos = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
 
-  // 加载模型尺寸（考虑旋转后的世界空间包围盒）
+  // Load model size (considering world-space bounding box after rotation)
   useEffect(() => {
     if (!selected) { setModelSize(null); return; }
     let cancelled = false;
@@ -48,7 +48,7 @@ export default function PropertyPanel({ selected, onUpdate, onDelete, onArray }:
     return () => { cancelled = true; };
   }, [selected?.id, selected?.modelUrl, selected?.scale?.join(","), selected?.rotation]);
 
-  // 切轴时更新默认间距（仅用户没手动改过时）
+  // Update default spacing when switching axis (only if the user hasn't manually changed it)
   useEffect(() => {
     if (modelSize) {
       spacingEditedRef.current = false;
@@ -94,12 +94,12 @@ export default function PropertyPanel({ selected, onUpdate, onDelete, onArray }:
         style={{ cursor: "grab", touchAction: "none" }}
       >
         <span>{name}</span>
-        <button className="wb-float-close wb-float-delete" onClick={() => onDelete(id)} title="删除" aria-label="删除模型">
+        <button className="wb-float-close wb-float-delete" onClick={() => onDelete(id)} title="Delete" aria-label="Delete Model">
           <Trash2 size={14} strokeWidth={2} />
         </button>
       </div>
 
-      {/* 尺寸信息 */}
+      {/* Size info */}
       {modelSize && (
         <div className="wb-float-section wb-size-row">
           {([
@@ -115,7 +115,7 @@ export default function PropertyPanel({ selected, onUpdate, onDelete, onArray }:
       )}
 
       <div className="wb-float-section">
-        <span className="wb-float-label">旋转</span>
+        <span className="wb-float-label">Rotation</span>
         <div className="wb-rotate-grid">
           {([
             [new THREE.Vector3(1, 0, 0), "X", "#e55"],
@@ -148,11 +148,11 @@ export default function PropertyPanel({ selected, onUpdate, onDelete, onArray }:
 
       <div className="wb-float-section">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-          <span className="wb-float-label" style={{ margin: 0 }}>缩放</span>
+          <span className="wb-float-label" style={{ margin: 0 }}>Scale</span>
           <button
             className="wb-scale-lock"
             onClick={() => setScaleLocked(!scaleLocked)}
-            title={scaleLocked ? "展开单轴缩放" : "收起"}
+            title={scaleLocked ? "Expand single-axis scale" : "Collapse"}
           >
             {scaleLocked ? "▾" : "▴"}
           </button>
@@ -203,12 +203,12 @@ export default function PropertyPanel({ selected, onUpdate, onDelete, onArray }:
         )}
       </div>
 
-      {/* 灯光参数 */}
+      {/* Light parameters */}
       {selected.light && (
         <div className="wb-float-section">
-          <span className="wb-float-label">灯光</span>
+          <span className="wb-float-label">Light</span>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-            <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.4)" }}>颜色</span>
+            <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.4)" }}>Color</span>
             <input
               type="color"
               value={selected.light.color}
@@ -217,7 +217,7 @@ export default function PropertyPanel({ selected, onUpdate, onDelete, onArray }:
             />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-            <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.4)", width: 28 }}>强度</span>
+            <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.4)", width: 28 }}>Intensity</span>
             <input className="wb-scale-slider" type="range" min={0} max={50} step="any"
               value={selected.light.intensity}
               onChange={(e) => onUpdate(id, { light: { ...selected.light!, intensity: parseFloat(e.target.value) } })}
@@ -226,7 +226,7 @@ export default function PropertyPanel({ selected, onUpdate, onDelete, onArray }:
           </div>
           {(selected.light.type === "point" || selected.light.type === "spot") && (
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-              <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.4)", width: 28 }}>范围</span>
+              <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.4)", width: 28 }}>Range</span>
               <input className="wb-scale-slider" type="range" min={1} max={50} step={1}
                 value={selected.light.range}
                 onChange={(e) => onUpdate(id, { light: { ...selected.light!, range: parseInt(e.target.value) } })}
@@ -237,7 +237,7 @@ export default function PropertyPanel({ selected, onUpdate, onDelete, onArray }:
           {selected.light.type === "spot" && (
             <>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.4)", width: 28 }}>锥角</span>
+                <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.4)", width: 28 }}>Cone Angle</span>
                 <input className="wb-scale-slider" type="range" min={5} max={90} step={5}
                   value={Math.round(selected.light.angle / Math.PI * 180)}
                   onChange={(e) => onUpdate(id, { light: { ...selected.light!, angle: parseInt(e.target.value) / 180 * Math.PI } })}
@@ -245,7 +245,7 @@ export default function PropertyPanel({ selected, onUpdate, onDelete, onArray }:
                 <span className="wb-scale-value">{Math.round(selected.light.angle / Math.PI * 180)}°</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.4)", width: 28 }}>柔和</span>
+                <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.4)", width: 28 }}>Softness</span>
                 <input className="wb-scale-slider" type="range" min={0} max={100} step={5}
                   value={Math.round(selected.light.penumbra * 100)}
                   onChange={(e) => onUpdate(id, { light: { ...selected.light!, penumbra: parseInt(e.target.value) / 100 } })}
@@ -257,7 +257,7 @@ export default function PropertyPanel({ selected, onUpdate, onDelete, onArray }:
           {selected.light.type === "area" && (
             <>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.4)", width: 28 }}>宽</span>
+                <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.4)", width: 28 }}>Width</span>
                 <input className="wb-scale-slider" type="range" min={0.5} max={10} step="any"
                   value={selected.light.width}
                   onChange={(e) => onUpdate(id, { light: { ...selected.light!, width: parseFloat(e.target.value) } })}
@@ -265,7 +265,7 @@ export default function PropertyPanel({ selected, onUpdate, onDelete, onArray }:
                 <span className="wb-scale-value">{selected.light.width}</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.4)", width: 28 }}>高</span>
+                <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.4)", width: 28 }}>Height</span>
                 <input className="wb-scale-slider" type="range" min={0.5} max={10} step="any"
                   value={selected.light.height}
                   onChange={(e) => onUpdate(id, { light: { ...selected.light!, height: parseFloat(e.target.value) } })}
@@ -282,12 +282,12 @@ export default function PropertyPanel({ selected, onUpdate, onDelete, onArray }:
           className="wb-array-toggle"
           onClick={() => setShowArray(!showArray)}
         >
-          阵列 {showArray ? "▴" : "▾"}
+          Array {showArray ? "▴" : "▾"}
         </button>
         {showArray && (
           <div className="wb-array-panel">
             <div className="wb-array-row">
-              <span className="wb-float-label">轴向</span>
+              <span className="wb-float-label">Axis</span>
               <div className="wb-array-axis">
                 {([
                   [0, "X", "#e55"],
@@ -304,7 +304,7 @@ export default function PropertyPanel({ selected, onUpdate, onDelete, onArray }:
               </div>
             </div>
             <div className="wb-array-row">
-              <span className="wb-float-label">数量</span>
+              <span className="wb-float-label">Count</span>
               <input
                 type="range"
                 className="wb-scale-slider"
@@ -317,7 +317,7 @@ export default function PropertyPanel({ selected, onUpdate, onDelete, onArray }:
               <span className="wb-scale-value">{arrayCount}</span>
             </div>
             <div className="wb-array-row">
-              <span className="wb-float-label">间距</span>
+              <span className="wb-float-label">Spacing</span>
               <input
                 type="number"
                 className="wb-spacing-input"
@@ -337,7 +337,7 @@ export default function PropertyPanel({ selected, onUpdate, onDelete, onArray }:
                 setShowArray(false);
               }}
             >
-              生成阵列
+              Generate Array
             </button>
           </div>
         )}

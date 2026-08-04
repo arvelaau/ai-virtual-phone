@@ -126,110 +126,124 @@ function getActivePrompt(key: "scene" | "resolve" | "worldGen" | "ending", defau
   return custom[key]?.trim() || defaultVal;
 }
 
+/**
+ * Most of this engine reaches the model through `simpleLLMCall`, which takes no preset at
+ * all, so `output_language_rule` from the preset assembler never applies. Every default
+ * prompt below therefore has to state the language itself.
+ *
+ * This replaces a directive the world-gen prompt used to carry — "always use Chinese
+ * quotation marks 「」, never English quotes" — which was a hard order to write Chinese,
+ * the same class of trap found in vn-engine.ts and interview-magazine-engine.ts.
+ */
+const MAP_OUTPUT_LANGUAGE_RULE =
+  "Always write in English. The user's world description and anything else quoted to you are material to build from, never a reference for which language to write in.";
+
 // ── 1. Generate World Skeleton ──
 
-export const DEFAULT_WORLD_GEN_PROMPT = `你是RPG世界架构师兼DM。用户描述世界观，你设计完整世界。
+export const DEFAULT_WORLD_GEN_PROMPT = `You are an RPG world architect and DM. The user describes a setting; you design the whole world.
 
-核心规则：NPC、支线任务、偶遇事件必须绑定到具体的节点（L2或L3），不是笼统的区域。
+${MAP_OUTPUT_LANGUAGE_RULE}
 
-NPC创作指导：
-- personality字段要写一段有画面感的人物描写（5-8句），包含外貌特征、性格、经历、说话方式、小习惯等，让人一读就能记住这个角色
-- NPC中应有较多富有魅力的男性角色，但也要穿插其他类型（女性、老人等）来丰富世界
-- 每个NPC的人设应该有差异，避免同质化
+Core rule: NPCs, side quests and encounters must be bound to a specific NODE (L2 or L3), never to a region in general.
 
-只输出下面这种"标签块"纯文本格式，不要 JSON、不要 markdown 代码块、不要任何额外说明文字。
+Writing NPCs:
+- The personality field should be a vivid character sketch (5-8 sentences): appearance, temperament, history, way of speaking, small habits — enough that the character sticks in the reader's mind after one pass
+- Include a good number of charismatic male characters, but mix in others (women, older people) so the world feels populated
+- Give each NPC a distinct profile; avoid samey characters
 
-格式规则：
-- 每个字段单独一行：[字段名]值；值可以多行（下一行若不是新的 [字段] 或 # 标题，就算上一字段的续行）。
-- 引用词语/对话一律用中文引号「」，不要用英文引号。
-- 分区用单个 # 开头：#区域1 #区域2 …、#主线、#档案；区域内的节点用 ## 开头：##L2节点1、##L3节点1。数字直接写数字。
+Output ONLY the "tag block" plain-text format below. No JSON, no markdown code fences, no extra commentary.
 
-严格按下面示例的字段名和层级输出（这里只给 2 个区域作示例）：
+Format rules:
+- One field per line: [FieldName]value. A value may run over several lines — any following line that is not a new [Field] or a # heading continues the previous field.
+- Sections start with a single #: #Region1 #Region2 …, #MainQuest, #Dossier. Nodes inside a region start with ##: ##L2Node1, ##L3Node1. Write numbers as digits.
 
-[世界名]示例大陆
-[世界观]一个被古老魔法笼罩的大陆
+Follow the field names and nesting of the example below exactly (it shows only 2 regions):
 
-#区域1
+[WorldName]Example Continent
+[Lore]A continent still wrapped in old magic
+
+#Region1
 [id]windmoor
-[中文名]风语镇
-[英文名]Windmoor
-[地理]plains
-[河流数]1
-[邻接]darkwood
-[主城NPC名]李沧海
-[主城NPC性格]五十多岁的老镇长，年轻时是远近闻名的剑客，现在蓄了一把花白的胡子，眼神依然锐利。说话慢悠悠的，总爱用「当年啊」开头讲古。对外来者很热情，但会不动声色地旁敲侧击打听来意。书房里挂着一幅女子画像，从不对人提起。
-[主城NPC角色]info
-##L2节点1
-[名称]废弃磨坊
-[NPC名]谢长安
-[NPC性格]二十出头的赏金猎人，总戴着兜帽遮住半张脸。说话极简，点菜都是「随便」，但偶尔冒出的毒舌精准得让人怀疑他一直在观察所有人。左手无名指缺了一截，问他只会说「不小心」。
-[NPC角色]quest
-[任务id]sq1
-[任务标题]磨坊的秘密
-[任务简介]调查磨坊地下的异响
-##L2节点2
-[名称]河畔集市
-[NPC名]苏瑾年
-[NPC性格]镇上药铺的年轻老板，长相清秀温和，永远带着让人放松的笑。其实是三年前一夜败落的云家大少爷，从不提过去。唯独对流浪猫毫无抵抗力，后门永远放着一碟鱼干。
-[NPC角色]merchant
-##L3节点1
-[名称]古老石碑
-[偶遇id]enc1
-[偶遇简介]石碑上的文字突然发光
-[偶遇情绪]mysterious
+[Name]Windmoor
+[CodeName]WINDMOOR
+[Geography]plains
+[RiverCount]1
+[AdjacentTo]darkwood
+[CapitalNPCName]Alden Crowe
+[CapitalNPCPersonality]The town elder, past fifty, once a swordsman known for three valleys around. Grey beard now, but the eyes are still sharp. Speaks slowly and starts half his stories with "back in the day". Warm to strangers, though he will quietly work out why you came. A portrait of a woman hangs in his study; he never mentions it.
+[CapitalNPCRole]info
+##L2Node1
+[Name]The Abandoned Mill
+[NPCName]Rook Vance
+[NPCPersonality]A bounty hunter barely past twenty, hood always pulled down over half his face. Says as little as possible — orders food with "whatever" — but the occasional barb lands so precisely you suspect he has been watching everyone the whole time. Half his left ring finger is missing; ask and you get "carelessness".
+[NPCRole]quest
+[QuestId]sq1
+[QuestTitle]What Is Under the Mill
+[QuestBrief]Investigate the noises beneath the mill floor
+##L2Node2
+[Name]The Riverside Market
+[NPCName]Sable Quinn
+[NPCPersonality]The young owner of the town apothecary, fine-featured and mild, always wearing a smile that puts people at ease. In truth the heir of a house that collapsed in a single night three years ago; he never speaks of it. Utterly defenceless against stray cats — there is always a dish of dried fish at his back door.
+[NPCRole]merchant
+##L3Node1
+[Name]The Old Stele
+[EncounterId]enc1
+[EncounterBrief]The writing on the stone suddenly begins to glow
+[EncounterMood]mysterious
 
-#区域2
+#Region2
 [id]darkwood
-[中文名]暗影林
-[英文名]Darkwood
-[地理]mountainous
-[河流数]0
-[邻接]windmoor
-[主城NPC名]莫老爹
-[主城NPC性格]暗影林入口守林小屋的独居老人，满脸皱纹但眼神精亮，拄着一根比人还高的木杖。对每个进林子的人都要唠叨一番「林子里的规矩」，但说着说着就跑题讲起自己当年的冒险故事。
-[主城NPC角色]info
-##L2节点1
-[名称]猎人小屋
-[NPC名]岳野
-[NPC性格]常年独居山林的猎人，晒得很黑，肩膀很宽，说话声音低哑像是不常开口。不太懂人情世故，送人东西直接塞过来不说话。背上有道很长的旧伤疤。
-[NPC角色]info
-[偶遇id]enc2
-[偶遇简介]小屋附近发现可疑脚印
-[偶遇情绪]tense
+[Name]Darkwood
+[CodeName]DARKWOOD
+[Geography]mountainous
+[RiverCount]0
+[AdjacentTo]windmoor
+[CapitalNPCName]Old Mabon
+[CapitalNPCPersonality]Lives alone in the warden's hut at the forest edge, face all creases and eyes still bright, leaning on a staff taller than he is. Lectures everyone who enters about "the rules of the wood", then wanders off into stories about his own adventuring years.
+[CapitalNPCRole]info
+##L2Node1
+[Name]The Hunter's Cabin
+[NPCName]Bram Holt
+[NPCPersonality]A hunter who has lived in these hills for years, weathered dark by the sun, broad across the shoulders, voice low and rough like it does not get much use. Not much for social niceties — when he gives you something he just pushes it into your hands and says nothing. A long old scar runs across his back.
+[NPCRole]info
+[EncounterId]enc2
+[EncounterBrief]Strange footprints found near the cabin
+[EncounterMood]tense
 
-#主线
+#MainQuest
 [id]mq
-[标题]封印之谜
-[梗概]调查大陆各处的古代封印，阻止黑暗力量复苏
-[阶段1地点]废弃磨坊
-[阶段1简介]在磨坊地下找到第一块封印碎片
-[阶段1解锁]解锁暗影林深处
-[阶段2地点]猎人小屋
-[阶段2简介]从猎人处获得进入林深处的线索
-[阶段2解锁]获得森林地图
+[Title]The Riddle of the Seals
+[Synopsis]Investigate the ancient seals across the continent and stop a dark power from waking
+[Stage1Location]The Abandoned Mill
+[Stage1Brief]Find the first shard of the seal beneath the mill
+[Stage1Unlock]Unlocks the depths of Darkwood
+[Stage2Location]The Hunter's Cabin
+[Stage2Brief]Get directions into the deep forest from the hunter
+[Stage2Unlock]Obtain the forest map
 
-#档案
-[隐藏真相]封印是千年前的大法师为了封锁自己的黑暗面而设
-[NPC秘密:李沧海]他其实是大法师的后裔，知道封印的真相但选择隐瞒
-[NPC秘密:谢长安]他是被封印力量吸引来的，目的不纯
-[伏笔1]磨坊地下的符文和石碑上的文字是同一种语言
-[伏笔2]猎人提到林中有不属于任何动物的嚎叫
-[反转]谢长安其实想利用玩家打开封印
-[结局]玩家必须选择是彻底摧毁封印（释放黑暗面）还是用新方法加固（牺牲某个NPC）
+#Dossier
+[HiddenTruth]The seals were set a thousand years ago by an archmage to lock away his own darker half
+[NPCSecret:Alden Crowe]He is the archmage's descendant. He knows what the seals really are and has chosen to keep quiet.
+[NPCSecret:Rook Vance]The power in the seals is what drew him here, and his reasons are not clean.
+[Foreshadowing1]The runes under the mill and the writing on the stele are the same language
+[Foreshadowing2]The hunter mentions howling in the wood that belongs to no animal
+[PlotTwist]Rook Vance intends to use the player to open the seal
+[Endgame]The player must choose between destroying the seal outright (releasing the darker half) or reinforcing it a new way (at the cost of one NPC)
 
-以上只是 2 个区域的示例。要求：
-- 共 {{region_count}} 个区域，按 #区域1 #区域2 … 顺序编号；[邻接] 必须对称（A 邻接 B 则 B 也邻接 A），多个用顿号、分隔
-- 每个区域 2-4 个 ##L2节点、0-2 个 ##L3节点，节点也顺序编号
-- 每个节点最多绑 1 个 NPC + 1 个任务或偶遇；不需要的字段整组省略即可
-- 每个区域必须有主城 NPC（[主城NPC名][主城NPC性格][主城NPC角色] 不能省）
-- 主线 4-5 个阶段，[阶段N地点] 写具体节点名（不是区域名）
-- 总共 {{npc_count}} 个 NPC 分布在不同节点；至少 2 个在 #档案 里有隐藏身份（用 [NPC秘密:名字]，名字与 NPC 名完全一致）
-- 总共 5-8 个偶遇分布在不同节点
-- [NPC性格] 写一段有画面感的人物描写（5-8 句）
-- [地理] 可选：mountainous/plains/canyon/forest/coastal/desert/swamp
-- 世界风格基调：{{tone}}
-- 主线类型倾向：{{main_quest_type}}
-- 难度倾向：{{difficulty}}`;
+That was only a 2-region example. Requirements:
+- {{region_count}} regions in total, numbered in order as #Region1 #Region2 …; [AdjacentTo] must be symmetrical (if A borders B then B borders A), separate multiple ids with commas
+- 2-4 ##L2Node and 0-2 ##L3Node per region, also numbered in order
+- At most 1 NPC plus 1 quest OR encounter per node; omit an entire field group you do not need
+- Every region must have a capital NPC ([CapitalNPCName][CapitalNPCPersonality][CapitalNPCRole] cannot be omitted)
+- 4-5 main-quest stages; [StageNLocation] names a specific NODE, not a region
+- {{npc_count}} NPCs in total spread across different nodes; at least 2 of them have a hidden identity in #Dossier (via [NPCSecret:Name], where Name matches the NPC name exactly)
+- 5-8 encounters in total spread across different nodes
+- [NPCPersonality] is a vivid character sketch (5-8 sentences)
+- [Geography] is one of: mountainous/plains/canyon/forest/coastal/desert/swamp
+- IMPORTANT: every value in the example above is a PLACEHOLDER. Invent your own world — never copy the example's names, places or plot, and never output a placeholder word itself.
+- World tone: {{tone}}
+- Main quest leaning: {{main_quest_type}}
+- Difficulty leaning: {{difficulty}}`;
 
 // ── Tagged-block world parser (replaces fragile JSON; same shape as the old JSON.parse) ──
 function parseWorldTaggedFields(block: string): Record<string, string> {
@@ -256,12 +270,66 @@ function worldSplitList(value: string | undefined): string[] {
   return String(value ?? "").split(/[,，、;；\s]+/).map(s => s.trim()).filter(Boolean);
 }
 
+// ── World-skeleton field vocabulary ──
+//
+// Dual recognition: the English tag is what DEFAULT_WORLD_GEN_PROMPT teaches now, the
+// Chinese one is what it taught before — and, unlike most engines here, a user may have a
+// pre-migration prompt saved under map_dm_prompts (map-storage.ts:297) that still teaches
+// the Chinese tags. That stored prompt is the user's own text and is never rewritten, so
+// the Chinese aliases have to keep working indefinitely, not just during a migration window.
+//
+// The skeleton IS persisted (world JSON), but only after being mapped onto the fixed
+// English keys below, so nothing here reaches storage as a Chinese tag name.
+
+/** First non-empty value among the given field aliases, case-insensitive on the second pass. */
+function worldField(f: Record<string, string>, ...aliases: string[]): string {
+  for (const alias of aliases) {
+    if (f[alias]) return f[alias];
+  }
+  const lowered = aliases.map(a => a.toLowerCase());
+  for (const [key, value] of Object.entries(f)) {
+    if (value && lowered.includes(key.trim().toLowerCase())) return value;
+  }
+  return "";
+}
+
+// Section headers. `DM` was already accepted for the dossier before the migration.
+const RE_REGION_HEADER = /^(?:区域|地区|Region)/i;
+const RE_MAIN_QUEST_HEADER = /^(?:主线|MainQuest|Main Quest)/i;
+const RE_DOSSIER_HEADER = /^(?:档案|密档|DM|Dossier)/i;
+/** `Stage3Location` / `阶段3地点` — the number is what identifies the stage. */
+const RE_STAGE_INDEX = /^(?:阶段|Stage)\s*(\d+)/i;
+/** `NPCSecret: Ada` / `NPC秘密·苏瑾年` — separator may be any of ·:：・ */
+const RE_NPC_SECRET = /^(?:NPC秘密|NPCSecret)\s*[·:：・]\s*(.+)$/i;
+const RE_FORESHADOWING = /^(?:伏笔|Foreshadowing)\s*\d+$/i;
+
 function parseWorldNodeBlock(body: string): Record<string, unknown> {
   const f = parseWorldTaggedFields(body);
-  const node: Record<string, unknown> = { name: f["名称"] || f["节点名"] || "" };
-  if ((f["NPC名"] || "").trim()) node.npc = { name: f["NPC名"], personality: f["NPC性格"] || "", role: f["NPC角色"] || "info" };
-  if ((f["任务标题"] || "").trim()) node.quest = { id: f["任务id"] || f["任务ID"] || "", title: f["任务标题"], brief: f["任务简介"] || "" };
-  if ((f["偶遇简介"] || "").trim()) node.encounter = { id: f["偶遇id"] || f["偶遇ID"] || "", brief: f["偶遇简介"], mood: f["偶遇情绪"] || "mysterious" };
+  const node: Record<string, unknown> = { name: worldField(f, "Name", "名称", "节点名") };
+  const npcName = worldField(f, "NPCName", "NPC名");
+  if (npcName.trim()) {
+    node.npc = {
+      name: npcName,
+      personality: worldField(f, "NPCPersonality", "NPC性格"),
+      role: worldField(f, "NPCRole", "NPC角色") || "info",
+    };
+  }
+  const questTitle = worldField(f, "QuestTitle", "任务标题");
+  if (questTitle.trim()) {
+    node.quest = {
+      id: worldField(f, "QuestId", "任务id", "任务ID"),
+      title: questTitle,
+      brief: worldField(f, "QuestBrief", "任务简介"),
+    };
+  }
+  const encounterBrief = worldField(f, "EncounterBrief", "偶遇简介");
+  if (encounterBrief.trim()) {
+    node.encounter = {
+      id: worldField(f, "EncounterId", "偶遇id", "偶遇ID"),
+      brief: encounterBrief,
+      mood: worldField(f, "EncounterMood", "偶遇情绪") || "mysterious",
+    };
+  }
   return node;
 }
 
@@ -271,17 +339,36 @@ function parseWorldRegionBlock(body: string): Record<string, unknown> {
   const l1Body = subs.length && subs[0].index !== undefined ? body.slice(0, subs[0].index) : body;
   const f = parseWorldTaggedFields(l1Body);
   const region: Record<string, unknown> = {
-    id: f["id"] || f["ID"] || "",
-    l1_name_cn: f["中文名"] || f["名称"] || "",
-    l1_name_en: f["英文名"] || "",
-    geography: f["地理"] || "plains",
-    river_count: worldIntField(f["河流数"]),
-    adjacent_to: worldSplitList(f["邻接"]),
+    id: worldField(f, "id", "ID"),
+    // l1_name_cn / l1_name_en are the two-line region label the map renderer draws
+    // (map-renderer.tsx:346,350): a display name plus a stylised code name. The TS field
+    // names keep their historical _cn/_en suffixes — renaming them would ripple through
+    // map-types.ts and map-engine.ts for no behavioural gain — but the TAGS the model is
+    // taught are now language-neutral: [Name] and [CodeName].
+    l1_name_cn: worldField(f, "Name", "中文名", "名称"),
+    l1_name_en: worldField(f, "CodeName", "英文名"),
+    geography: worldField(f, "Geography", "地理") || "plains",
+    river_count: worldIntField(worldField(f, "RiverCount", "河流数")),
+    adjacent_to: worldSplitList(worldField(f, "AdjacentTo", "邻接")),
     l2_nodes: [] as unknown[],
     l3_nodes: [] as unknown[],
   };
-  if ((f["主城NPC名"] || "").trim()) region.l1_npc = { name: f["主城NPC名"], personality: f["主城NPC性格"] || "", role: f["主城NPC角色"] || "info" };
-  if ((f["主城任务标题"] || "").trim()) region.l1_quest = { id: f["主城任务id"] || `q_${region.id}`, title: f["主城任务标题"], brief: f["主城任务简介"] || "" };
+  const capitalNpcName = worldField(f, "CapitalNPCName", "主城NPC名");
+  if (capitalNpcName.trim()) {
+    region.l1_npc = {
+      name: capitalNpcName,
+      personality: worldField(f, "CapitalNPCPersonality", "主城NPC性格"),
+      role: worldField(f, "CapitalNPCRole", "主城NPC角色") || "info",
+    };
+  }
+  const capitalQuestTitle = worldField(f, "CapitalQuestTitle", "主城任务标题");
+  if (capitalQuestTitle.trim()) {
+    region.l1_quest = {
+      id: worldField(f, "CapitalQuestId", "主城任务id") || `q_${region.id}`,
+      title: capitalQuestTitle,
+      brief: worldField(f, "CapitalQuestBrief", "主城任务简介"),
+    };
+  }
   for (let i = 0; i < subs.length; i++) {
     const cur = subs[i];
     if (cur.index === undefined) continue;
@@ -295,7 +382,12 @@ function parseWorldRegionBlock(body: string): Record<string, unknown> {
   return region;
 }
 
-function parseWorldTagged(text: string): Record<string, unknown> {
+/**
+ * Exported for round-trip testing. Pure, and otherwise only reachable behind a network
+ * call — and the Map/Adventure feature cannot be smoke-tested by hand, so this parser's
+ * automated coverage is the only coverage it gets.
+ */
+export function parseWorldTagged(text: string): Record<string, unknown> {
   const src = text.replace(/```[a-zA-Z]*\s*/g, "").replace(/```/g, "").replace(/\r/g, "").trim();
   const topRe = /^#(?!#)\s*(.+?)\s*$/gm;
   const heads = [...src.matchAll(topRe)];
@@ -313,38 +405,46 @@ function parseWorldTagged(text: string): Record<string, unknown> {
     const start = cur.index + cur[0].length;
     const end = i + 1 < heads.length && heads[i + 1].index !== undefined ? heads[i + 1].index! : src.length;
     const body = src.slice(start, end);
-    if (/^区域|^地区/.test(header)) {
+    if (RE_REGION_HEADER.test(header)) {
       regions.push(parseWorldRegionBlock(body));
-    } else if (/^主线/.test(header)) {
+    } else if (RE_MAIN_QUEST_HEADER.test(header)) {
       const f = parseWorldTaggedFields(body);
-      const stageIdx = [...new Set(Object.keys(f).map(k => k.match(/^阶段(\d+)/)?.[1] ?? "").filter(Boolean))].map(Number).sort((a, b) => a - b);
+      const stageIdx = [...new Set(Object.keys(f).map(k => k.match(RE_STAGE_INDEX)?.[1] ?? "").filter(Boolean))].map(Number).sort((a, b) => a - b);
       const stages = stageIdx.map(n => ({
-        location_hint: f[`阶段${n}地点`] || "",
-        brief: f[`阶段${n}简介`] || "",
-        unlock_hint: f[`阶段${n}解锁`] || f[`阶段${n}解锁提示`] || "",
+        location_hint: worldField(f, `Stage${n}Location`, `阶段${n}地点`),
+        brief: worldField(f, `Stage${n}Brief`, `阶段${n}简介`),
+        unlock_hint: worldField(f, `Stage${n}Unlock`, `阶段${n}解锁`, `阶段${n}解锁提示`),
       })).filter(s => s.location_hint || s.brief);
-      mainQuest = { id: f["id"] || "mq", title: f["标题"] || "", synopsis: f["梗概"] || f["简介"] || "", stages };
-    } else if (/^档案|^DM|^密档/.test(header)) {
+      mainQuest = {
+        id: worldField(f, "id", "ID") || "mq",
+        title: worldField(f, "Title", "标题"),
+        synopsis: worldField(f, "Synopsis", "梗概", "简介"),
+        stages,
+      };
+    } else if (RE_DOSSIER_HEADER.test(header)) {
       const f = parseWorldTaggedFields(body);
       const npcSecrets: Record<string, string> = {};
       const foreshadowing: string[] = [];
       for (const [k, v] of Object.entries(f)) {
-        const secret = k.match(/^NPC秘密[·:：・]\s*(.+)$/);
+        const secret = k.match(RE_NPC_SECRET);
         if (secret) { if (v.trim()) npcSecrets[secret[1].trim()] = v; continue; }
-        if (/^伏笔\d+$/.test(k) && v.trim()) foreshadowing.push(v);
+        if (RE_FORESHADOWING.test(k) && v.trim()) foreshadowing.push(v);
       }
       dossier = {
-        hidden_truth: f["隐藏真相"] || "",
+        hidden_truth: worldField(f, "HiddenTruth", "隐藏真相"),
         npc_secrets: npcSecrets,
         foreshadowing,
-        plot_twist: f["反转"] || "",
-        endgame: f["结局"] || "",
+        plot_twist: worldField(f, "PlotTwist", "反转"),
+        endgame: worldField(f, "Endgame", "结局"),
       };
     }
   }
 
   return {
-    world: { name: top["世界名"] || "", lore: top["世界观"] || top["世界观设定"] || "" },
+    world: {
+      name: worldField(top, "WorldName", "世界名"),
+      lore: worldField(top, "Lore", "世界观", "世界观设定"),
+    },
     regions,
     main_quest: mainQuest,
     dm_dossier: dossier,
@@ -512,46 +612,49 @@ export async function generateWorldSkeleton(
 
 // ── 2a. DM Scene — generates narration + NPC lines + choices (DM knows secrets) ──
 
-export const DEFAULT_DM_SCENE_PROMPT = `你是RPG世界的DM。你控制旁白和NPC，不替队伍成员说话。平等对待所有队员，所有成员都用名字称呼。
+export const DEFAULT_DM_SCENE_PROMPT = `You are the DM of an RPG world. You control the narration and the NPCs; you never speak for party members. Treat every party member equally and refer to all of them by name.
 
-职责：描述场景、扮演NPC、推进剧情、埋伏笔、给玩家选项。
+${MAP_OUTPUT_LANGUAGE_RULE}
 
-【人称规则·重要】
-- 用户也是队伍成员之一，必须用 {{user}} 称呼用户，不要用"你"或"你们"指代用户。
-- narration、npc_lines.text、choices.label、journal、world_events 这些会展示或传给角色AI的文本，都必须使用 {{user}}。
-- stat_check.who 和 move_to 对象键如果指向用户，也使用 {{user}}。
-- 需要指代全队时，写"队伍"、"众人"或列出名字，不要写"你们"。
+Your job: describe scenes, play the NPCs, drive the plot, plant setups, and give the player choices.
 
-【叙事节奏·最重要】
-你是故事的导演，不只是场景描述器。你必须有意识地推进主线剧情，让故事走向结局：
-- 看[进展]判断当前处于哪个阶段：
-  · 前期（1-2阶段）：铺垫世界观，介绍关键NPC，埋下伏笔（从密档的foreshadowing中选），让玩家对真相产生好奇
-  · 中期（3阶段左右）：开始揭示部分真相，触发反转（密档的plotTwist），NPC暴露隐藏面目，冲突升级
-  · 后期（最后1-2阶段）：收束剧情，重要抉择，走向结局（密档的endgame），营造紧迫感
-- 每个场景至少做一件推进剧情的事：给一条主线线索/引导玩家去下一个主线地点/让NPC暗示某个伏笔/揭示一个秘密
-- 选项设计要引导剧情前进：至少一个选项与主线相关，让玩家有理由去探索下一个关键地点
-- 不要让玩家在同一个地方原地转圈——如果当前地点的事件已经处理完，暗示他们该去哪里
-- advance=true表示当前主线阶段完成，请在关键剧情节点（获得重要物品/击败关键敌人/揭示重大真相）时设为true
+【Addressing people · important】
+- The user is one of the party members. Always refer to the user as {{user}}; never address them as "you".
+- narration, npc_lines.text, choices.label, journal and world_events are all shown to the player or passed to character AIs, so they must all use {{user}}.
+- stat_check.who and the move_to object keys must also use {{user}} when they refer to the user.
+- To refer to everyone at once, write "the party", "the group", or list the names. Do not write "you".
 
-【NPC扮演】
-- NPC有自己的性格和秘密（见密档），对话要体现性格
-- 有秘密的NPC：初期正常表现，中期言行出现矛盾暗示，后期可能暴露
-- NPC之间也有关系和冲突，利用这些制造戏剧张力
+【Pacing · most important】
+You are directing a story, not just describing rooms. Push the main quest forward deliberately, towards an ending:
+- Read [Progress] to work out which act you are in:
+  · Early (stages 1-2): establish the setting, introduce key NPCs, plant setups (choose from the dossier's foreshadowing), make the player curious about the truth
+  · Middle (around stage 3): start revealing parts of the truth, trigger the twist (the dossier's plotTwist), let NPCs show their hidden side, escalate the conflict
+  · Late (final 1-2 stages): tighten the threads, force the important choice, drive towards the ending (the dossier's endgame), build urgency
+- Every scene must do at least one thing that moves the plot: give a main-quest lead, point the party at the next main-quest location, have an NPC hint at a setup, or reveal a secret
+- Design choices that carry the story forward: at least one choice should relate to the main quest and give the player a reason to go somewhere important
+- Never leave the player circling the same spot — once this location's business is done, hint at where to go next
+- advance=true means the current main-quest stage is complete. Set it at real milestones: obtaining a key item, defeating a key enemy, or revealing a major truth.
 
-【位置更新】如果剧情中队伍移动到了新地点，move_to必须填写目的地节点名（从地图节点中选）。不填则位置不变。
+【Playing NPCs】
+- NPCs have their own personalities and secrets (see the dossier); their dialogue should show it
+- An NPC with a secret behaves normally early on, contradicts themselves in small ways in the middle, and may be exposed late
+- NPCs have relationships and conflicts with each other too — use them for dramatic tension
 
-【属性检定】选项可以带stat_check，系统会抽一个人掷D100（≤属性值=成功），你在下一轮根据成败描述结果。
-- 指定谁掷：stat_check里加who字段，如{"stat":"cha","who":"{{user}}"}或{"stat":"str","who":"谢长安"}——用于只适合特定人的行动
-- 不指定who：系统随机抽一个人掷——此时选项描述必须是全队通用的（如"小心前进"），不能写只适合某个人的行动（如"保持名媛姿态"）
+【Location updates】If the party moves somewhere new, move_to must contain the destination node name (chosen from the map nodes). Leave it empty and the location is unchanged.
 
-【旁白排版】
-- narration 必须按自然段分段书写。场景变化、人物动作、气氛描写、结果揭示之间要换段。
-- 在 narration 字符串内部使用 \\n\\n 表示空行换段，不要把整段旁白挤成一整块。
+【Stat checks】A choice may carry a stat_check. The system picks someone to roll D100 (≤ the stat value = success) and you describe the outcome on the following turn.
+- To choose who rolls, add a who field: {"stat":"cha","who":"{{user}}"} or {"stat":"str","who":"Bram Holt"} — for actions only one person could take
+- With no who, the system picks at random — so the choice text must work for anyone in the party ("advance carefully"), not something only one character would do ("keep up the socialite act")
 
-【完结判定】当你觉得故事已经完美收束时，设ending:true。不要在剧情高潮时突然结束，要让故事自然落幕。
+【Narration layout】
+- narration must be written in paragraphs. Break between a change of scene, a character's action, atmosphere, and the reveal of a result.
+- Use \\n\\n inside the narration string for a blank line between paragraphs. Never deliver the whole narration as one block.
 
-只输出JSON：
-{"narration":"雨水沿着屋檐滴落，青石板路泛着冷光。\\n\\n酒馆门口的风铃轻轻晃动，像是在提醒来客这里并不太平。\\n\\n柜台后的老板抬起头，看了队伍一眼。","npc_lines":[{"speaker":"NPC名","text":"台词"}],"situation":"角色们看到的（传给角色AI）","choices":[{"label":"保持警惕前进","stat_check":{"stat":"per"}},{"label":"{{user}}优雅地与贵族周旋","stat_check":{"stat":"cha","who":"{{user}}"}},{"label":"用钥匙开门","requires":"古老钥匙"},{"label":"直接离开"}],"journal":"这轮日志","gained":["获得的物品"],"lost":["使用/失去的物品"],"advance":false,"ending":false,"move_to":"如果移动了则填目的地节点名，否则留空","world_events":["此刻世界各处正在发生的事件，每条包含地点和事件描述，3-5条"]}`;
+【Ending】When the story has genuinely come to rest, set ending:true. Do not cut off at the climax; let it land.
+
+Output JSON only:
+{"narration":"Rain drips from the eaves and the flagstones give back a cold light.\\n\\nThe wind chime by the tavern door turns slowly, as if warning arrivals that this is not a quiet place.\\n\\nBehind the counter the owner looks up and takes in the party.","npc_lines":[{"speaker":"NPC name","text":"their line"}],"situation":"what the characters can see (passed to the character AIs)","choices":[{"label":"advance carefully","stat_check":{"stat":"per"}},{"label":"{{user}} works the nobles with practised charm","stat_check":{"stat":"cha","who":"{{user}}"}},{"label":"open the door with the key","requires":"the old key"},{"label":"leave"}],"journal":"this round's log","gained":["item gained"],"lost":["item used or lost"],"advance":false,"ending":false,"move_to":"destination node name if the party moved, otherwise empty","world_events":["what is happening elsewhere in the world right now — each entry gives a place and an event, 3-5 entries"]}
+IMPORTANT: every value in that JSON is a PLACEHOLDER showing the shape. Replace all of them with real content for this scene — never output a placeholder phrase itself.`;
 
 export type DMSceneResult = {
   narration: string;

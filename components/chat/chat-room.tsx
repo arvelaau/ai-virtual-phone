@@ -3,6 +3,26 @@
 import { forwardRef, Fragment, memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChatSession, ChatMessage, CHAT_APP_SETTINGS_UPDATED_EVENT, CHAT_INITIAL_VISIBLE_MESSAGE_COUNT, CHAT_LOAD_MORE_MESSAGE_COUNT, CHAT_REQUEST_REPLY_EVENT, loadChatAppSettings, loadChatMessages, loadChatContacts, loadChatSessions, saveChatSessions, pushChatMessage, updateChatMessage, deleteChatMessage, deleteChatMessagesFrom, deleteChatMessagesByIds, retractChatMessage, editChatMessage, updateMessageMediaData, replaceResponseBatchWithParts, replaceGroupResponseRound, isReadingDiscussMessage, isSystemInstructionMessage, createResponseBatchId, createResponseRoundId, getLatestStateValues, getLatestCharacterStateValues, compareChatMessages } from "@/lib/chat-storage";
 import type { StateValue } from "@/lib/chat-storage";
+import {
+    GROUP_CALL_TARGET,
+    isCallSystemContent,
+    matchCallCancel,
+    matchCallHangup,
+    matchCallInitiate,
+    matchCallInitiateNoTarget,
+    matchCallReject,
+    replaceRaw,
+    buildCallInitiateNoTargetTag,
+} from "@/lib/call-tag-patterns";
+import {
+    TAG_ACCEPT_PAYMENT_REQUEST,
+    TAG_CLAIM_RED_PACKET,
+    TAG_CLAIM_TRANSFER,
+    TAG_DECLINE_PAYMENT_REQUEST,
+    TAG_DECLINE_RED_PACKET,
+    TAG_DECLINE_TRANSFER,
+    buildMusicTag,
+} from "@/lib/rich-tag-builders";
 import { parseStateValues, mergeStateValues } from "@/lib/state-value-parser";
 import { parseAIResponse, type ParsedMessagePart } from "@/lib/rich-message-parser";
 import { isKnownStickerLabel } from "@/lib/sticker-data";
@@ -83,9 +103,10 @@ import { ChatPluginSlot } from "@/components/chat/chat-plugin-slot";
 // ── Call system message detection ──────────────────────────
 // Call messages are stored with user/assistant role for correct prompt alternation,
 // but should render as centered system notifications in the UI.
-const CALL_SYS_RE = /\[我(?:向.+)?(?:发起了|挂断了|拒绝了|取消了)(?:群?(?:语音|视频)通话)/;
+// CALL_SYS_RE / isCallSystemContent accept both the legacy Chinese call tags and
+// the going-forward English ones — see lib/call-tag-patterns.ts.
 function isCallSysMsg(msg: ChatMessage): boolean {
-    return CALL_SYS_RE.test(msg.content);
+    return isCallSystemContent(msg.content);
 }
 /** Returns the effective UI role: call messages render as "system" regardless of stored role */
 const ACTION_MEDIA_TYPES = new Set(["poke", "accept_red_packet", "decline_red_packet", "accept_transfer", "decline_transfer", "accept_payment_request", "decline_payment_request", "group_admin_notice"]);
@@ -93,7 +114,7 @@ const ACTION_MEDIA_TYPES = new Set(["poke", "accept_red_packet", "decline_red_pa
 // 状态栏/内心独白/状态值挂上去会被显示层吞掉，挂载时必须跳过它们
 function canCarryFoldedPanel(part: { content?: string; mediaType?: ChatMessage["mediaType"] }): boolean {
     if (part.mediaType === "poke" || part.mediaType === "group_admin_notice") return false;
-    return !CALL_SYS_RE.test(part.content || "");
+    return !isCallSystemContent(part.content);
 }
 function uiRole(msg: ChatMessage): string {
     if (msg.role === "system" || ACTION_MEDIA_TYPES.has(msg.mediaType || "")) return "system";
@@ -1585,7 +1606,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             }
             if (part.mediaType === "music") {
                 const title = part.mediaData?.musicTitle || part.mediaData?.label;
-                return title ? [{ content: `[音乐:${title}]` }] : [];
+                return title ? [{ content: buildMusicTag(title) }] : [];
             }
             if (part.mediaType === "group_admin_notice") {
                 const d = part.mediaData;
@@ -2564,9 +2585,11 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         showChatToast("Offline generation stopped");
     };
 
+    // Mirror of normalizeTextBubbleContent in message-bubble.tsx — both must accept
+    // the legacy Chinese directive names and the English ones. See lib/text-tool-protocol.ts.
     const stripEditableToolTags = (text: string) => text
-        .replace(/\[[^\]]*?(?:获取指令|获取工具)[:：][^\]]*\]/g, "")
-        .replace(/\[[^\]]*?(?:执行动作|工具调用)[:：][^\]]*?[（(][\s\S]*?[)）]\]/g, "")
+        .replace(/\[[^\]]*?(?:获取指令|获取工具|FetchTool)[:：][^\]]*\]/g, "")
+        .replace(/\[[^\]]*?(?:执行动作|工具调用|CallTool)[:：][^\]]*?[（(][\s\S]*?[)）]\]/g, "")
         .replace(/\n{3,}/g, "\n\n")
         .trim();
 
@@ -2697,12 +2720,12 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 handleAIMediaAction(p.mediaType, charN, userN);
                 continue;
             }
-            // Music: convert to plain text [音乐:xxx] (stays in history for AI), auto-play
+            // Music: convert to a plain [Music:…] tag (stays in history for AI), auto-play
             if (p.mediaType === "music") {
                 const mTitle = p.mediaData?.musicTitle || p.mediaData?.label;
                 if (mTitle) {
                     pushFilteredPart(
-                        { content: `[音乐:${mTitle}]` },
+                        { content: buildMusicTag(mTitle) },
                         () => autoPlayMusic(mTitle, charN, p.mediaData?.musicArtist || undefined),
                     );
                     continue;
@@ -3008,27 +3031,41 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         let text = content;
         const charN = character?.name || "对方";
         const userN = userIdentity?.name;
+        // Call tags: matchers below accept both the legacy Chinese tags and the
+        // going-forward English ones, and always report `callType` as the
+        // canonical Chinese label, so these display templates stay unchanged.
+        // See lib/call-tag-patterns.ts.
         // Call initiation: [我向XX发起了语音/视频通话]
-        text = text.replace(/\[我向(.+?)发起了((?:群?(?:语音|视频)通话))\]/, (_, target, callType) => {
+        const initiate = matchCallInitiate(text);
+        if (initiate) {
+            const { target, callType } = initiate;
             // 单聊：target=用户名 → 角色发起；target=角色名 → 用户发起
             // 群聊：target=群聊，用 role 判断
-            if (userN && target === userN) return `${charN}向你发起了${callType}`;
-            if (target === "群聊" && msg?.role === "assistant") {
-                const sender = msg.senderName || charN;
-                return `${sender}向群聊发起了${callType}`;
-            }
-            return `你向${target}发起了${callType}`;
-        });
+            const replacement = (userN && target === userN)
+                ? `${charN}向你发起了${callType}`
+                : (target === GROUP_CALL_TARGET && msg?.role === "assistant")
+                    ? `${msg.senderName || charN}向群聊发起了${callType}`
+                    : `你向${target}发起了${callType}`;
+            text = replaceRaw(text, initiate.raw, replacement);
+        }
         // Follow-up AI initiated: [我发起了语音/视频通话]
-        text = text.replace(/\[我发起了((?:语音|视频)通话)\]/, `${charN}发起了$1`);
+        const initNoTarget = matchCallInitiateNoTarget(text);
+        if (initNoTarget) {
+            text = replaceRaw(text, initNoTarget.raw, `${charN}发起了${initNoTarget.callType}`);
+        }
         // Hangup: [我挂断了XX通话] (duration now in mediaData, not content)
-        text = text.replace(/\[我挂断了(.+?通话)\](?:\(时长\s*(.+?)\))?/, (_, callType, dur) =>
-            dur ? `你挂断了${callType}，时长 ${dur}` : `你挂断了${callType}`
-        );
+        const hangup = matchCallHangup(text);
+        if (hangup) {
+            text = replaceRaw(text, hangup.raw, hangup.duration
+                ? `你挂断了${hangup.callType}，时长 ${hangup.duration}`
+                : `你挂断了${hangup.callType}`);
+        }
         // Reject: [我拒绝了XX通话]
-        text = text.replace(/\[我拒绝了(.+?通话)\]/, `你拒绝了$1`);
+        const reject = matchCallReject(text);
+        if (reject) text = replaceRaw(text, reject.raw, `你拒绝了${reject.callType}`);
         // Cancel: [我取消了XX通话]
-        text = text.replace(/\[我取消了(.+?通话)\]/, `你取消了$1`);
+        const cancel = matchCallCancel(text);
+        if (cancel) text = replaceRaw(text, cancel.raw, `你取消了${cancel.callType}`);
         // General user name → "你"
         if (userN) text = text.replace(new RegExp(userN, "g"), "你");
         // Friend add normalization
@@ -4143,14 +4180,13 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         return parts.flatMap(part => {
             if (part.mediaType === "music") {
                 const title = part.mediaData?.musicTitle || part.mediaData?.label || "未知歌曲";
-                const artist = part.mediaData?.musicArtist ? `-${part.mediaData.musicArtist}` : "";
-                return [{ content: `[音乐:${title}${artist}]` }];
+                return [{ content: buildMusicTag(title, part.mediaData?.musicArtist) }];
             }
             if (part.mediaType === "voice_call") {
-                return [{ content: "[我发起了语音通话]" }];
+                return [{ content: buildCallInitiateNoTargetTag("voice") }];
             }
             if (part.mediaType === "video_call") {
-                return [{ content: "[我发起了视频通话]" }];
+                return [{ content: buildCallInitiateNoTargetTag("video") }];
             }
             if (
                 options?.omitHandledFinancialActions &&
@@ -4166,22 +4202,22 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 return [];
             }
             if (part.mediaType === "accept_red_packet") {
-                return [{ content: "[领取红包]" }];
+                return [{ content: TAG_CLAIM_RED_PACKET }];
             }
             if (part.mediaType === "decline_red_packet") {
-                return [{ content: "[拒收红包]" }];
+                return [{ content: TAG_DECLINE_RED_PACKET }];
             }
             if (part.mediaType === "accept_transfer") {
-                return [{ content: "[领取转账]" }];
+                return [{ content: TAG_CLAIM_TRANSFER }];
             }
             if (part.mediaType === "decline_transfer") {
-                return [{ content: "[拒收转账]" }];
+                return [{ content: TAG_DECLINE_TRANSFER }];
             }
             if (part.mediaType === "accept_payment_request") {
-                return [{ content: "[接受代付]" }];
+                return [{ content: TAG_ACCEPT_PAYMENT_REQUEST }];
             }
             if (part.mediaType === "decline_payment_request") {
-                return [{ content: "[拒绝代付]" }];
+                return [{ content: TAG_DECLINE_PAYMENT_REQUEST }];
             }
             if (part.mediaType === "poke") {
                 const sender = (part.mediaData?.pokeSender === "我" ? senderNameOverride : part.mediaData?.pokeSender)

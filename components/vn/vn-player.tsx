@@ -69,7 +69,7 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(reader.error || new Error("音频转换失败"));
+    reader.onerror = () => reject(reader.error || new Error("Audio conversion failed"));
     reader.readAsDataURL(blob);
   });
 }
@@ -138,7 +138,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
   const session = createOrGetVnSession(characterId);
   const isArchived = session.chapters[chapterIndex]?.archived ?? false;
 
-  const userName = useMemo(() => resolveUserIdentity(characterId, "vn")?.name ?? "我", [characterId]);
+  const userName = useMemo(() => resolveUserIdentity(characterId, "vn")?.name ?? "Me", [characterId]);
   const availableScenes = useMemo(() => loadVnScenes(characterId), [characterId]);
   const sceneAssetNames = useMemo(() => new Set(availableScenes.map((scene) => scene.name)), [availableScenes]);
   const getTypingSourceText = useCallback((nextFrame: VnFrame | null | undefined) => {
@@ -177,7 +177,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
     options?: { play?: boolean; alertOnMissingConfig?: boolean; auto?: boolean },
   ) => {
     const key = getFrameVoiceKey(targetFrame);
-    // 无 speaker = 旁白帧，只读不配音
+    // No speaker = narration frame, read-only, no voice synthesis
     if (!key || !targetFrame.speaker || targetFrame.sourceRole !== "assistant" || !targetFrame.text.trim()) return;
     const messageId = targetFrame.sourceMessageId;
     const frameIndex = targetFrame.sourceFrameIndex;
@@ -198,7 +198,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
     const voiceConfig = resolveVoiceConfig(characterId, "vn");
     if (!voiceConfig || !voiceConfig.enableTTS) {
       if (options?.alertOnMissingConfig) {
-        alert("请先在设置 - 绑定中为漫卷配置并启用语音 API。");
+        alert("Please configure and enable the voice API for VN under Settings - Bindings first.");
       }
       return;
     }
@@ -223,8 +223,8 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
     } catch (error) {
       console.warn("[VN] voice synthesis failed:", error);
       if (options?.alertOnMissingConfig) {
-        const msg = error instanceof Error ? error.message : String(error || "未知错误");
-        alert(`语音合成失败: ${msg}`);
+        const msg = error instanceof Error ? error.message : String(error || "Unknown error");
+        alert(`Voice synthesis failed: ${msg}`);
       }
     } finally {
       setVoiceBusyKey((current) => current === key ? null : current);
@@ -882,7 +882,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
   const replayDialogueText = replayFrame?.speaker ? (isTyping ? displayedText : replayFrame.text) : displayedText;
   const renderFrameVoiceButton = (targetFrame: VnFrame | null | undefined) => {
     const key = getFrameVoiceKey(targetFrame);
-    // 旁白帧（无 speaker）不提供配音按钮
+    // Narration frames (no speaker) don't get a voice button
     if (!targetFrame || !key || !targetFrame.speaker || targetFrame.sourceRole !== "assistant" || !targetFrame.text.trim()) return null;
     const speechText = getTypingSourceText(targetFrame).trim();
     const hasCurrentAudio = Boolean(
@@ -897,8 +897,8 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
         className="vn-frame-voice-btn"
         data-ready={hasCurrentAudio ? "true" : undefined}
         data-playing={playing ? "true" : undefined}
-        aria-label={hasCurrentAudio ? "播放语音" : "合成语音"}
-        title={hasCurrentAudio ? "播放语音" : "合成语音"}
+        aria-label={hasCurrentAudio ? "Play voice" : "Synthesize voice"}
+        title={hasCurrentAudio ? "Play voice" : "Synthesize voice"}
         disabled={busy}
         onClick={(event) => {
           event.stopPropagation();
@@ -936,7 +936,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       })()}
       {currentScene && !sceneVisualReady && (
         <div className="vn-scene-loading" aria-hidden="true">
-          <span>场景加载中</span>
+          <span>Loading scene</span>
         </div>
       )}
 
@@ -972,20 +972,20 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
         </button>
         <div className="vn-topbar-right">
           {!isArchived && (
-            <button className="vn-topbar-btn" onClick={() => setShowBeatsPanel(true)} title="情节控制">
+            <button className="vn-topbar-btn" onClick={() => setShowBeatsPanel(true)} title="Plot control">
               <ListOrdered size={18} />
             </button>
           )}
           {!isArchived && (
-            <button className="vn-topbar-btn" onClick={() => setShowScenePicker(true)} title="切换场景">
+            <button className="vn-topbar-btn" onClick={() => setShowScenePicker(true)} title="Switch scene">
               <MapPin size={18} />
             </button>
           )}
-          <button className="vn-topbar-btn" onClick={() => setHistoryOpen(true)} title="回顾">
+          <button className="vn-topbar-btn" onClick={() => setHistoryOpen(true)} title="History">
             <Clock size={18} />
           </button>
           {!isArchived && (
-            <button className="vn-topbar-btn" onClick={() => setShowArchiveConfirm(true)} title="归档章节">
+            <button className="vn-topbar-btn" onClick={() => setShowArchiveConfirm(true)} title="Archive chapter">
               <Archive size={18} />
             </button>
           )}
@@ -1034,7 +1034,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                 )}
                 {isGenerating && (
                   <div className="vn-advance" style={{ animation: "vn-pulse-loading 1.5s ease-in-out infinite", fontSize: "calc(11px*var(--app-text-scale,1))", letterSpacing: "0.1em" }}>
-                    生成中...
+                    Generating...
                   </div>
                 )}
               </>
@@ -1064,7 +1064,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                     {pendingActions.map((a, i) => (
                       <div key={i} className="vn-pending-item" data-type={a.type}>
                         <span className="vn-pending-tag">
-                          {a.type === "dialogue" ? "对话" : a.type === "narration" ? "旁白" : "场景"}
+                          {a.type === "dialogue" ? "Dialogue" : a.type === "narration" ? "Narration" : "Scene"}
                         </span>
                         <span className="vn-pending-text">{a.text}</span>
                         <button className="vn-pending-del" onClick={() => handleRemovePending(i)}>&times;</button>
@@ -1081,7 +1081,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                     onClick={() => setInputMode("dialogue")}
                   >
                     <MessageSquare size={10} style={{ marginRight: 4, display: "inline" }} />
-                    对话
+                    Dialogue
                   </button>
                   <button
                     className="vn-mode-btn"
@@ -1089,27 +1089,27 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                     onClick={() => setInputMode("narration")}
                   >
                     <BookOpen size={10} style={{ marginRight: 4, display: "inline" }} />
-                    旁白
+                    Narration
                   </button>
                 </div>
                 <div className="vn-input-row">
                   <textarea
                     ref={inputRef}
                     className="vn-input-field"
-                    placeholder={inputMode === "dialogue" ? "说些什么..." : "描述一个动作或场景..."}
+                    placeholder={inputMode === "dialogue" ? "Say something..." : "Describe an action or scene..."}
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={(e) => {}}
                     rows={1}
                   />
-                  <button className="vn-send-btn" disabled={!inputText.trim()} onClick={handleTextSubmit} title="添加">
+                  <button className="vn-send-btn" disabled={!inputText.trim()} onClick={handleTextSubmit} title="Add">
                     +
                   </button>
                   <button
                     className="vn-send-btn"
                     disabled={pendingActions.length === 0}
                     onClick={handleSendAll}
-                    title="发送"
+                    title="Send"
                     style={pendingActions.length > 0 ? { background: "rgba(160,140,240,0.3)", color: "rgba(255,255,255,0.9)" } : undefined}
                   >
                     <Send size={14} />
@@ -1124,23 +1124,23 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       {/* ── Control Bar ── */}
       {!showArchiveConfirm && !waitingForInput && !isReplaying && (
         <div className="vn-controls" onClick={(e) => e.stopPropagation()}>
-          <button className="vn-ctrl-btn" onClick={() => setHideDialogue(!hideDialogue)} data-active={hideDialogue ? "true" : undefined} title="隐藏">
+          <button className="vn-ctrl-btn" onClick={() => setHideDialogue(!hideDialogue)} data-active={hideDialogue ? "true" : undefined} title="Hide">
             {hideDialogue ? <Eye size={15} /> : <EyeOff size={15} />}
           </button>
-          <button className="vn-ctrl-btn" onClick={() => setAutoMode(!autoMode)} data-active={autoMode ? "true" : undefined} title="自动">
+          <button className="vn-ctrl-btn" onClick={() => setAutoMode(!autoMode)} data-active={autoMode ? "true" : undefined} title="Auto">
             {autoMode ? <Pause size={15} /> : <Play size={15} />}
           </button>
           <button
             className="vn-ctrl-btn"
             onClick={handleVoiceToggle}
             data-active={voiceAutoEnabled ? "true" : undefined}
-            title={voiceAutoEnabled ? "关闭语音" : "开启语音"}
+            title={voiceAutoEnabled ? "Turn off voice" : "Turn on voice"}
             aria-pressed={voiceAutoEnabled}
-            aria-label={voiceAutoEnabled ? "关闭漫卷语音" : "开启漫卷语音"}
+            aria-label={voiceAutoEnabled ? "Turn off VN voice" : "Turn on VN voice"}
           >
             <Volume2 size={15} />
           </button>
-          <button className="vn-ctrl-btn" onClick={() => setShowReplayConfirm(true)} title="回放">
+          <button className="vn-ctrl-btn" onClick={() => setShowReplayConfirm(true)} title="Replay">
             <RotateCcw size={15} />
           </button>
         </div>
@@ -1154,7 +1154,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
               <ArrowRight size={16} />
             </button>
             {historyMessages.map((msg) => {
-              const roleLabel = msg.role === "user" ? "用户" : msg.role === "assistant" ? "AI" : "系统";
+              const roleLabel = msg.role === "user" ? "User" : msg.role === "assistant" ? "AI" : "System";
               // Parse for display preview
               const parsed = parseVnResponse(msg.rawContent);
               const frames = parsed.frames.filter((f) => f.text);
@@ -1182,8 +1182,8 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                         }}
                       />
                       <div className="vn-history-msg-edit-actions">
-                        <button className="vn-history-msg-edit-btn" onClick={() => { setEditingMsgId(null); setEditingContent(""); }}>取消</button>
-                        <button className="vn-history-msg-edit-btn" data-save="true" onClick={handleMsgEditSave}>保存</button>
+                        <button className="vn-history-msg-edit-btn" onClick={() => { setEditingMsgId(null); setEditingContent(""); }}>Cancel</button>
+                        <button className="vn-history-msg-edit-btn" data-save="true" onClick={handleMsgEditSave}>Save</button>
                       </div>
                     </div>
                   ) : (
@@ -1205,12 +1205,12 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                   {ctxMenuMsgId === msg.id && editingMsgId !== msg.id && (() => {
                     const menu = (
                       <div className="vn-ctx-menu" style={{ left: ctxMenuX, top: ctxMenuY, transform: "translateX(-50%)" }} onClick={(e) => e.stopPropagation()}>
-                        <button className="vn-ctx-btn" onClick={() => handleMsgEditStart(msg)}>编辑</button>
+                        <button className="vn-ctx-btn" onClick={() => handleMsgEditStart(msg)}>Edit</button>
                         {msg.role === "assistant" && (
-                          <button className="vn-ctx-btn vn-ctx-btn-danger" onClick={() => handleMsgRetry(msg.id)}>重试</button>
+                          <button className="vn-ctx-btn vn-ctx-btn-danger" onClick={() => handleMsgRetry(msg.id)}>Retry</button>
                         )}
-                        <button className="vn-ctx-btn vn-ctx-btn-danger" onClick={() => handleMsgDelete(msg.id)}>删除</button>
-                        <button className="vn-ctx-btn vn-ctx-btn-danger" onClick={() => handleMsgDeleteFrom(msg.id)}>删除以下</button>
+                        <button className="vn-ctx-btn vn-ctx-btn-danger" onClick={() => handleMsgDelete(msg.id)}>Delete</button>
+                        <button className="vn-ctx-btn vn-ctx-btn-danger" onClick={() => handleMsgDeleteFrom(msg.id)}>Delete from here</button>
                       </div>
                     );
                     return vnShellRef.current ? createPortal(menu, vnShellRef.current) : menu;
@@ -1229,9 +1229,9 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
             <button className="vn-history-close" onClick={() => setShowScenePicker(false)}>
               <ArrowRight size={16} />
             </button>
-            <div className="vn-scene-picker-title">切换场景</div>
+            <div className="vn-scene-picker-title">Switch scene</div>
             {availableScenes.length === 0 ? (
-              <div className="vn-scene-picker-empty">暂无场景，请在资源库中上传</div>
+              <div className="vn-scene-picker-empty">No scenes yet. Upload one in the asset library.</div>
             ) : (
               availableScenes.map((scene) => (
                 <button
@@ -1256,10 +1256,10 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
             <button className="vn-history-close" onClick={() => setShowBeatsPanel(false)}>
               <ArrowRight size={16} />
             </button>
-            <div className="vn-beats-title">情节控制</div>
+            <div className="vn-beats-title">Plot control</div>
             {beats.length > 0 && (
               <div className="vn-beat-progress">
-                {beats.filter((_, i) => i < activeBeatIdx).length}/{beats.length} 已完成
+                {beats.filter((_, i) => i < activeBeatIdx).length}/{beats.length} completed
               </div>
             )}
 
@@ -1289,20 +1289,20 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
             <div className="vn-beat-add">
               <input
                 className="vn-beat-input"
-                placeholder="节点名称"
+                placeholder="Beat name"
                 value={editingBeatTitle}
                 onChange={(e) => setEditingBeatTitle(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleAddBeat(); }}
               />
               <input
                 className="vn-beat-input"
-                placeholder="描述（可选）"
+                placeholder="Description (optional)"
                 value={editingBeatDesc}
                 onChange={(e) => setEditingBeatDesc(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleAddBeat(); }}
               />
               <button className="vn-beat-add-btn" onClick={handleAddBeat} disabled={!editingBeatTitle.trim()}>
-                <Plus size={12} /> 添加节点
+                <Plus size={12} /> Add beat
               </button>
             </div>
           </div>
@@ -1314,13 +1314,13 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
         <div className="vn-end" onClick={(e) => e.stopPropagation()}>
           <div className="vn-end-line" />
           <div className="vn-end-text">
-            {isArchiving ? "归档中..." : "是否决定完结该章节并归档？"}
+            {isArchiving ? "Archiving..." : "End this chapter and archive it?"}
           </div>
           <div className="vn-end-line" />
           {!isArchiving && (
             <div style={{ display: "flex", gap: 16, marginTop: 16 }}>
               <button className="vn-end-btn" onClick={() => setShowArchiveConfirm(false)}>
-                返回
+                Back
               </button>
               <button
                 className="vn-end-btn"
@@ -1335,7 +1335,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                   onChapterEnd();
                 }}
               >
-                确认
+                Confirm
               </button>
             </div>
           )}
@@ -1346,11 +1346,11 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       {showReplayConfirm && (
         <div className="vn-end" onClick={(e) => e.stopPropagation()}>
           <div className="vn-end-line" />
-          <div className="vn-end-text">是否确认章节回放？</div>
+          <div className="vn-end-text">Replay this chapter?</div>
           <div className="vn-end-line" />
           <div style={{ display: "flex", gap: 16, marginTop: 16 }}>
             <button className="vn-end-btn" onClick={() => setShowReplayConfirm(false)}>
-              返回
+              Back
             </button>
             <button
               className="vn-end-btn"
@@ -1376,7 +1376,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                 startTyping(getTypingSourceText(first));
               }}
             >
-              确认
+              Confirm
             </button>
           </div>
         </div>

@@ -84,26 +84,26 @@ function isAbortLikeError(error: unknown): boolean {
 function formatStoryTime(iso: string): string {
   const date = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getMonth() + 1}月${date.getDate()}日 ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${date.getMonth() + 1}/${date.getDate()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 const CSS_EXAMPLE = STORY_CSS_EXAMPLE;
 const STORY_THEMES = [
-  { id: "paper", color: "#94a3b8", name: "纸白" },
-  { id: "warm", color: "#b89870", name: "手账" },
-  { id: "night", color: "#3a4560", name: "夜读" },
-  { id: "ink", color: "#1a1a1a", name: "水墨" },
-  { id: "rose", color: "#d4889a", name: "玫瑰" },
-  { id: "sage", color: "#7a9a6a", name: "青苔" },
+  { id: "paper", color: "#94a3b8", name: "Paper" },
+  { id: "warm", color: "#b89870", name: "Journal" },
+  { id: "night", color: "#3a4560", name: "Night Read" },
+  { id: "ink", color: "#1a1a1a", name: "Ink Wash" },
+  { id: "rose", color: "#d4889a", name: "Rose" },
+  { id: "sage", color: "#7a9a6a", name: "Moss" },
 ] as const;
 
 function getStoryPreview(messages: StoryMessage[]): string {
   const last = messages[messages.length - 1];
-  if (!last) return "从这里开始新的剧情。";
+  if (!last) return "Start a new story from here.";
   const source = last.renderedContent || last.rawContent;
   // Strip HTML tags and collapse whitespace for preview text
   const text = source.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  return text.slice(0, 60) || "继续上次的场景。";
+  return text.slice(0, 60) || "Continue from the last scene.";
 }
 
 function resizeStoryComposerTextarea(el: HTMLTextAreaElement) {
@@ -116,7 +116,7 @@ type StoryComposerAppendRequest = {
   text: string;
 };
 
-const STORY_GENERATION_STATUS = ["整理场景", "续写剧情", "打磨对白", "写入故事"];
+const STORY_GENERATION_STATUS = ["Organizing scene", "Continuing story", "Polishing dialogue", "Writing story"];
 const STORY_INITIAL_LOAD = 10;
 const STORY_LOAD_MORE_COUNT = 10;
 
@@ -157,7 +157,7 @@ function StoryGeneratingIndicator({
             {!hideAvatar && !hideTimestamp ? <span className="story-generating-head">{status}</span> : null}
           </div>
         ) : null}
-        <div className="story-bubble story-generating-bubble" aria-label="正在生成剧情">
+        <div className="story-bubble story-generating-bubble" aria-label="Generating story">
           <span className="story-generating-copy">{status}</span>
           <span className="story-generating-dots" aria-hidden="true">
             <i />
@@ -231,13 +231,13 @@ const StoryComposer = memo(function StoryComposer({
             submit();
           }
         }}
-        placeholder={`以你和“${characterName}”为主角继续这一段剧情……`}
+        placeholder={`Continue this story with you and "${characterName}" as the protagonists...`}
       />
       <button
         className={`story-send-btn${isGenerating ? " is-generating" : ""}`}
         onClick={submit}
-        aria-label={isGenerating ? "停止剧情生成" : "发送剧情输入"}
-        title={isGenerating ? "停止剧情生成" : "发送剧情输入"}
+        aria-label={isGenerating ? "Stop story generation" : "Send story input"}
+        title={isGenerating ? "Stop story generation" : "Send story input"}
         disabled={!isGenerating && !draft.trim()}
       >
         {isGenerating ? <Square size={17} /> : <ArrowUp className="story-send-icon" size={18} />}
@@ -333,7 +333,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
     setStorageVersion((value) => value + 1);
   }, [activeCharacterId]);
 
-  // Listen for live CSS updates from 小卷
+  // Listen for live CSS updates from the assistant
   useEffect(() => {
     const onCSSUpdate = (e: Event) => {
       const detail = (e as CustomEvent).detail;
@@ -347,19 +347,20 @@ export function StoryApp({ onClose }: StoryAppProps) {
 
   const autoBottomLockRef = useRef(true);
   const foldToggleSuppressUntilRef = useRef(0);
-  // 段落编辑期间：贴底锁必须关掉，否则编辑框自适应高度每次变化都会被
-  // ResizeObserver 拽到底部（表现为"一打字就滚到底"）
+  // During paragraph editing: the bottom-lock must be turned off, otherwise the auto-resizing edit box would get
+  // dragged to the bottom by the ResizeObserver on every height change (this shows up as "scrolls to bottom on every keystroke")
   const editingMessageIdRef = useRef<string | null>(null);
   useEffect(() => {
     editingMessageIdRef.current = editingMessageId;
     if (editingMessageId) autoBottomLockRef.current = false;
   }, [editingMessageId]);
-  // 编辑草稿放 ref、textarea 非受控：逐键 setState 会让 React 回写 value，
-  // 中文输入法下 iOS 会光标错位；逐键改 style.height 又会触发 iOS 自动滚动。
-  // 高度自适应改由纯 CSS 镜像（.story-grow-wrap::after）完成，打字零 JS 干预。
+  // Edit draft is kept in a ref, textarea is uncontrolled: setState on every keystroke would make React write back
+  // value, causing cursor misplacement with Chinese IME on iOS; changing style.height on every keystroke also
+  // triggers iOS auto-scroll. Height auto-sizing is instead handled by a pure CSS mirror (.story-grow-wrap::after),
+  // with zero JS intervention while typing.
   const editingDraftRef = useRef("");
   const scrollStoryToBottom = useCallback(() => {
-    if (editingMessageIdRef.current) return; // 段落编辑期间任何路径都不允许自动贴底
+    if (editingMessageIdRef.current) return; // No path may auto-stick to bottom during paragraph editing
     const node = scrollRef.current;
     if (!node) return;
     const prevBehavior = node.style.scrollBehavior;
@@ -402,7 +403,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
     let frame = 0;
     const observer = new ResizeObserver(() => {
       if (performance.now() < foldToggleSuppressUntilRef.current) return;
-      if (editingMessageIdRef.current) return; // 编辑中不自动贴底
+      if (editingMessageIdRef.current) return; // Don't auto-stick to bottom while editing
       if (!autoBottomLockRef.current) return;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(scrollStoryToBottom);
@@ -602,7 +603,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
       }
     } catch (error) {
       if (!isCurrentGeneration() || isAbortLikeError(error)) return;
-      const errText = error instanceof Error ? error.message : "剧情生成失败，请稍后再试。";
+      const errText = error instanceof Error ? error.message : "Story generation failed, please try again later.";
       const systemMessage = pushStoryMessage({
         sessionId,
         role: "system",
@@ -648,12 +649,12 @@ export function StoryApp({ onClose }: StoryAppProps) {
 
   function handleTouchEnd() {
     if (dragStartX == null) return;
-    // 从右边缘向左滑打开
+    // Swipe left from the right edge to open
     const screenW = typeof window !== "undefined" ? window.innerWidth : 400;
     if (!drawerOpen && dragStartX > screenW - 32 && dragDeltaX < -54) {
       setDrawerOpen(true);
     }
-    // 向右滑关闭
+    // Swipe right to close
     if (drawerOpen && dragDeltaX > 54) {
       setDrawerOpen(false);
     }
@@ -716,7 +717,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
   }
   function handleStoryEditStart(msg: StoryMessage) {
     setEditingMessageId(msg.id);
-    setEditingContent(msg.rawContent); // 仅作为非受控 textarea 的初始值
+    setEditingContent(msg.rawContent); // Only used as the initial value for the uncontrolled textarea
     editingDraftRef.current = msg.rawContent;
     setActiveMessageId(null);
   }
@@ -728,7 +729,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
     try {
       const { regexes } = getStoryRenderSignature(activeCharacterId);
       if (regexes.length > 0) {
-        const macroEngine = new MacroEngine(currentCharacter?.name ?? "", userIdentity?.name ?? "用户");
+        const macroEngine = new MacroEngine(currentCharacter?.name ?? "", userIdentity?.name ?? "User");
         newRawContent = applyEditOutputRegex(newRawContent, regexes, { macroEngine, activeTags: ["story"] });
       }
     } catch {
@@ -793,7 +794,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
       setStorageVersion(v => v + 1);
     } catch (error) {
       if (!isCurrentGeneration() || isAbortLikeError(error)) return;
-      const errText = error instanceof Error ? error.message : "重试失败，请稍后再试。";
+      const errText = error instanceof Error ? error.message : "Retry failed, please try again later.";
       const systemMessage = pushStoryMessage({ sessionId, role: "system", rawContent: errText, renderedContent: errText });
       if (activeSessionIdRef.current === sessionId) setMessages(prev => [...prev, systemMessage]);
       setStorageVersion(v => v + 1);
@@ -813,7 +814,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
             <div className="story-header-safe-area" />
             <div className="story-header-content">
               <div className="story-header-left">
-                <button className="story-top-btn" onClick={onClose} aria-label="关闭剧情模式">
+                <button className="story-top-btn" onClick={onClose} aria-label="Close story mode">
                   <ArrowLeft size={16} />
                 </button>
               </div>
@@ -827,11 +828,11 @@ export function StoryApp({ onClose }: StoryAppProps) {
               <div className="story-empty story-empty-panel">
                 <Sparkles size={28} opacity={0.5} />
                 <div>
-                  <div className="story-empty-title">还没有角色卡</div>
-                  <div className="story-empty-desc">请先创建或导入角色卡，再进入剧情 APP 开始故事。</div>
+                  <div className="story-empty-title">No character cards yet</div>
+                  <div className="story-empty-desc">Please create or import a character card first, then enter the Story app to begin.</div>
                 </div>
                 <button className="story-empty-action" onClick={onClose}>
-                  返回
+                  Back
                 </button>
               </div>
             </div>
@@ -867,7 +868,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
       {drawerOpen ? <div className="story-drawer-overlay" onClick={() => setDrawerOpen(false)} /> : null}
       <aside className="story-drawer" style={{ transform: drawerOpen ? "translateX(0)" : "translateX(106%)", transition: "transform 220ms ease" }}>
         <div className="story-drawer-section">
-          <div className="story-drawer-eyebrow">剧情角色</div>
+          <div className="story-drawer-eyebrow">Story Characters</div>
           <div className="story-character-list">
             {characters.map((character) => {
               const session = createOrGetStorySession(character.id);
@@ -896,14 +897,14 @@ export function StoryApp({ onClose }: StoryAppProps) {
         </div>
 
         <div className="story-drawer-section">
-          <div className="story-drawer-eyebrow">显示选项</div>
+          <div className="story-drawer-eyebrow">Display Options</div>
           <div style={{ display: "flex", gap: 8 }}>
             <button
               onClick={() => handleDrawerToggle("hideBubble")}
               style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 0", borderRadius: 12, border: "1px solid var(--c-story-panel-border, rgba(0,0,0,0.04))", background: uiPrefs.hideBubble ? "var(--c-story-panel-active, rgba(148,163,184,0.12))" : "var(--c-story-panel, rgba(255,255,255,0.5))", fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-story-text, #3a3b3c)" }}
             >
               <MessageSquareText size={18} opacity={uiPrefs.hideBubble ? 0.4 : 1} />
-              <span>气泡</span>
+              <span>Bubble</span>
               {uiPrefs.hideBubble ? <EyeOff size={12} opacity={0.4} /> : <Eye size={12} opacity={0.6} />}
             </button>
             <button
@@ -911,7 +912,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
               style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 0", borderRadius: 12, border: "1px solid var(--c-story-panel-border, rgba(0,0,0,0.04))", background: uiPrefs.hideAvatar ? "var(--c-story-panel-active, rgba(148,163,184,0.12))" : "var(--c-story-panel, rgba(255,255,255,0.5))", fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-story-text, #3a3b3c)" }}
             >
               <UserRound size={18} opacity={uiPrefs.hideAvatar ? 0.4 : 1} />
-              <span>头像</span>
+              <span>Avatar</span>
               {uiPrefs.hideAvatar ? <EyeOff size={12} opacity={0.4} /> : <Eye size={12} opacity={0.6} />}
             </button>
             <button
@@ -919,13 +920,13 @@ export function StoryApp({ onClose }: StoryAppProps) {
               style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 0", borderRadius: 12, border: "1px solid var(--c-story-panel-border, rgba(0,0,0,0.04))", background: uiPrefs.hideTimestamp ? "var(--c-story-panel-active, rgba(148,163,184,0.12))" : "var(--c-story-panel, rgba(255,255,255,0.5))", fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-story-text, #3a3b3c)" }}
             >
               <Clock3 size={18} opacity={uiPrefs.hideTimestamp ? 0.4 : 1} />
-              <span>时间</span>
+              <span>Time</span>
               {uiPrefs.hideTimestamp ? <EyeOff size={12} opacity={0.4} /> : <Eye size={12} opacity={0.6} />}
             </button>
           </div>
           <div style={{ padding: "10px 0", borderBottom: "1px solid var(--c-story-drawer-border, rgba(124, 104, 68, 0.08))" }}>
             <label style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-story-sub, rgba(95, 82, 61, 0.72))", display: "block", marginBottom: 6 }}>
-              折叠标签
+              Fold Tags
             </label>
             <input
               type="text"
@@ -943,12 +944,12 @@ export function StoryApp({ onClose }: StoryAppProps) {
               }}
             />
             <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", marginTop: 4, color: "var(--c-story-sub, rgba(95, 82, 61, 0.72))" }}>
-              逗号分隔标签名，如 think,thinking,reasoning
+              Comma-separated tag names, e.g. think,thinking,reasoning
             </div>
           </div>
           <div style={{ padding: "10px 0", borderBottom: "1px solid var(--c-story-drawer-border, rgba(124, 104, 68, 0.08))" }}>
             <label style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-story-sub, rgba(95, 82, 61, 0.72))", display: "block", marginBottom: 6 }}>
-              不进上下文标签
+              Tags Excluded From Context
             </label>
             <input
               type="text"
@@ -966,44 +967,44 @@ export function StoryApp({ onClose }: StoryAppProps) {
               }}
             />
             <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", marginTop: 4, color: "var(--c-story-sub, rgba(95, 82, 61, 0.72))" }}>
-              默认 think,thinking；影响后续生成上下文，不影响显示与保存
+              Default: think,thinking; affects subsequent generation context only, does not affect display or saving
             </div>
           </div>
         </div>
 
         <div className="story-drawer-section">
-          <div className="story-drawer-eyebrow">工具</div>
+          <div className="story-drawer-eyebrow">Tools</div>
           <button
             className="story-character-chip justify-center"
             onClick={() => {
               const rebuilt = rebuildStorySessionRenderCache(activeCharacterId, currentSession.id, { sessionFoldTags: currentSession.foldTags });
               setMessages(rebuilt);
               setStorageVersion((value) => value + 1);
-              alert(`缓存重建完成，${rebuilt.length} 条消息已更新`);
+              alert(`Cache rebuild complete, ${rebuilt.length} messages updated`);
             }}
           >
-            重建渲染缓存
+            Rebuild Render Cache
           </button>
         </div>
       </aside>
 
       <div className="story-shell-inner" ref={shellInnerRef}>
 
-        {/* ====== 固定顶部标题栏 ====== */}
+        {/* ====== Fixed top header bar ====== */}
         <div className="story-header">
           <div className="story-header-safe-area" />
           <div className="story-header-content">
             <div className="story-header-left">
-              <button className="story-top-btn" onClick={onClose} aria-label="关闭剧情模式">
+              <button className="story-top-btn" onClick={onClose} aria-label="Close story mode">
                 <ArrowLeft size={16} />
               </button>
             </div>
             <div className="story-header-center">Story</div>
             <div className="story-header-right" style={{ gap: 8 }}>
-              <button className="story-top-btn" onClick={() => setCssModalOpen(true)} aria-label="页面样式">
+              <button className="story-top-btn" onClick={() => setCssModalOpen(true)} aria-label="Page style">
                 <Paintbrush size={16} />
               </button>
-              <button className="story-top-btn" onClick={() => setDrawerOpen(true)} aria-label="打开剧情侧栏">
+              <button className="story-top-btn" onClick={() => setDrawerOpen(true)} aria-label="Open story sidebar">
                 <Menu size={16} />
               </button>
             </div>
@@ -1022,7 +1023,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
         >
           <div className="story-stage-inner">
             
-            {/* ====== 顶部信息阅读卡片 ====== */}
+            {/* ====== Top reading info card ====== */}
             <div className="story-meta">
               <div className="story-meta-layout">
                 <div className="story-meta-cover">
@@ -1033,13 +1034,13 @@ export function StoryApp({ onClose }: StoryAppProps) {
                   )}
                 </div>
                 <div className="story-meta-body">
-                  <div className="story-meta-title">本次阅读：《 {currentCharacter.name} 》</div>
+                  <div className="story-meta-title">Reading now: 《 {currentCharacter.name} 》</div>
                   <div className="story-meta-tags">
-                    {userIdentity?.name || "我"} x {currentCharacter.name}
+                    {userIdentity?.name || "Me"} x {currentCharacter.name}
                   </div>
                   <div className="story-meta-desc">
                     {/* Character type might not have description, so we use a stylized default text */}
-                    “有些故事，在开始之前就已经写好了结局。”
+                    "Some stories already have their ending written before they even begin."
                   </div>
                 </div>
               </div>
@@ -1049,8 +1050,8 @@ export function StoryApp({ onClose }: StoryAppProps) {
               <div className="story-empty">
                 <Sparkles size={26} opacity={0.5} />
                 <div>
-                  <div className="text-[calc(14px*var(--app-text-scale,1))] font-medium text-[var(--c-story-heading,#1e293b)] mb-1">故事从这里开始</div>
-                  <div className="text-[calc(12px*var(--app-text-scale,1))] opacity-70">从底部输入一段引导，剧情会继续展开。</div>
+                  <div className="text-[calc(14px*var(--app-text-scale,1))] font-medium text-[var(--c-story-heading,#1e293b)] mb-1">The story starts here</div>
+                  <div className="text-[calc(12px*var(--app-text-scale,1))] opacity-70">Enter a prompt at the bottom to continue the story.</div>
                 </div>
               </div>
             ) : (
@@ -1061,7 +1062,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
                     className="story-load-more-btn"
                     onClick={loadMoreMessages}
                   >
-                    <span>查看更多消息</span>
+                    <span>View more messages</span>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <polyline points="18 15 12 9 6 15" />
                     </svg>
@@ -1069,10 +1070,10 @@ export function StoryApp({ onClose }: StoryAppProps) {
                 ) : null}
                 {visibleMessages.map((message) => {
                   const speakerName = message.role === "user"
-                    ? (userIdentity?.name?.trim() || "我")
+                    ? (userIdentity?.name?.trim() || "Me")
                     : message.role === "assistant"
                       ? currentCharacter.name
-                      : "系统";
+                      : "System";
                   const avatarUrl = message.role === "user"
                     ? (userIdentity?.avatarUrl || undefined)
                     : message.role === "assistant"
@@ -1126,8 +1127,8 @@ export function StoryApp({ onClose }: StoryAppProps) {
                                 />
                               </div>
                               <div className="story-inline-edit-actions">
-                                <button onClick={() => { setEditingMessageId(null); setEditingContent(""); }} className="story-inline-edit-btn">取消</button>
-                                <button onClick={handleStoryEditSave} className="story-inline-edit-btn story-inline-edit-btn-save">保存</button>
+                                <button onClick={() => { setEditingMessageId(null); setEditingContent(""); }} className="story-inline-edit-btn">Cancel</button>
+                                <button onClick={handleStoryEditSave} className="story-inline-edit-btn story-inline-edit-btn-save">Save</button>
                               </div>
                             </div>
                           ) : (
@@ -1146,15 +1147,15 @@ export function StoryApp({ onClose }: StoryAppProps) {
                               onPointerDown={(e) => e.stopPropagation()}
                             >
                               <div style={{ display: "flex" }}>
-                                <button onClick={() => handleStoryCopy(message.rawContent)} className="story-ctx-btn">复制</button>
-                                <button onClick={() => handleStoryEditStart(message)} className="story-ctx-btn">编辑</button>
+                                <button onClick={() => handleStoryCopy(message.rawContent)} className="story-ctx-btn">Copy</button>
+                                <button onClick={() => handleStoryEditStart(message)} className="story-ctx-btn">Edit</button>
                                 {(message.role === "assistant" || message.role === "user") && (
-                                  <button onClick={() => { void handleStoryRetry(message.id); }} className="story-ctx-btn story-ctx-btn-danger">重试</button>
+                                  <button onClick={() => { void handleStoryRetry(message.id); }} className="story-ctx-btn story-ctx-btn-danger">Retry</button>
                                 )}
                               </div>
                               <div style={{ display: "flex" }}>
-                                <button onClick={() => handleStoryDelete(message.id)} className="story-ctx-btn story-ctx-btn-danger">删除</button>
-                                <button onClick={() => handleStoryDeleteFrom(message.id)} className="story-ctx-btn story-ctx-btn-danger">删除以下</button>
+                                <button onClick={() => handleStoryDelete(message.id)} className="story-ctx-btn story-ctx-btn-danger">Delete</button>
+                                <button onClick={() => handleStoryDeleteFrom(message.id)} className="story-ctx-btn story-ctx-btn-danger">Delete Below</button>
                               </div>
                               <div className="story-ctx-triangle" />
                             </div>
@@ -1201,7 +1202,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
             borderBottom: "1px solid rgba(0,0,0,0.04)",
           }}>
             <span style={{ fontSize: "calc(13px*var(--app-text-scale,1))", letterSpacing: "0.08em", textTransform: "uppercase" as const, fontWeight: 500, color: "var(--c-story-sub, #94a3b8)" }}>
-              页面样式
+              Page Style
             </span>
             <button className="story-top-btn" onClick={() => setCssModalOpen(false)}>
               <X size={16} />
@@ -1216,7 +1217,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
                     <button
                       key={t.id}
                       type="button"
-                      aria-label={`切换到${t.name}主题`}
+                      aria-label={`Switch to ${t.name} theme`}
                       aria-pressed={active}
                       onClick={() => applySessionUpdates({ uiPrefs: { ...uiPrefs, theme: t.id } })}
                       style={{
@@ -1252,7 +1253,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
               className="story-css-box"
               value={customCssDraft}
               onChange={(event) => setCustomCssDraft(event.target.value)}
-              placeholder={`/* 这里写剧情模式的 session CSS */\n.story-bubble { border-radius: 30px; }\n.story-composer { backdrop-filter: blur(24px); }`}
+              placeholder={`/* Write session CSS for story mode here */\n.story-bubble { border-radius: 30px; }\n.story-composer { backdrop-filter: blur(24px); }`}
               style={{ flex: 1, minHeight: 280 }}
             />
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -1278,7 +1279,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
                   fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 500, cursor: "pointer",
                 }}
               >
-                加载示例
+                Load Example
               </button>
               <button
                 onClick={() => setCustomCssDraft("")}
@@ -1289,7 +1290,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
                   fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 500, cursor: "pointer",
                 }}
               >
-                清除
+                Clear
               </button>
               <button
                 onClick={() => { applySessionUpdates({ customCSS: customCssDraft }); setCssModalOpen(false); }}
@@ -1299,7 +1300,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
                   fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 500, cursor: "pointer",
                 }}
               >
-                应用
+Apply
               </button>
             </div>
           </div>

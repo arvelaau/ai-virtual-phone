@@ -787,7 +787,7 @@ export function CheckPhoneChatPage({
 
   const payload = snapshot?.payload ?? null;
   const checkPhoneUserDisplayName = useMemo(
-    () => resolveUserIdentity(character.id, "checkphone")?.name?.trim() || "用户",
+    () => resolveUserIdentity(character.id, "checkphone")?.name?.trim() || "User",
     [character.id],
   );
   const getConversationDisplayName = (item: CheckPhoneChatConversation | null | undefined): string => {
@@ -821,7 +821,7 @@ export function CheckPhoneChatPage({
 
   const subtitle = activeGroup
     ? formatCheckPhoneGroupActivityLabel(activeGroup.activityLabel)
-    : payload?.headerSubtitle || "会话、群聊与朋友圈";
+    : payload?.headerSubtitle || "Conversations, group chats & Moments";
   const homeTitle =
     CHAT_TABS.find((tab) => tab.id === selectedTab)?.title ?? "Chats";
   const homeDescription =
@@ -1044,7 +1044,7 @@ export function CheckPhoneChatPage({
           className="cp-refresh-indicator cp-refresh-indicator--floating"
           aria-live="polite"
         >
-          <span className="cp-refresh-indicator-text">正在刷新聊天</span>
+          <span className="cp-refresh-indicator-text">Refreshing chat</span>
           <span className="cp-refresh-indicator-dots" aria-hidden="true">
             <i></i>
             <i></i>
@@ -1060,8 +1060,8 @@ export function CheckPhoneChatPage({
 
         {loaded && !payload && !loading && (
           <div className="cp-chat-status cp-empty-copy">
-            <p>暂无聊天内容</p>
-            <span className="cp-chat-hint">点刷新同步会话群聊朋友圈与联系人</span>
+            <p>No chat content yet</p>
+            <span className="cp-chat-hint">Tap refresh to sync conversations, group chats, Moments, and contacts</span>
           </div>
         )}
 
@@ -1264,7 +1264,7 @@ export function CheckPhoneChatPage({
                                   flexShrink: 0,
                                 }}
                               >
-                                置顶
+                                Pinned
                               </span>
                             ) : null}
                             {item.muted ? (
@@ -1279,7 +1279,7 @@ export function CheckPhoneChatPage({
                                   flexShrink: 0,
                                 }}
                               >
-                                静音
+                                Muted
                               </span>
                             ) : null}
                           </div>
@@ -1954,7 +1954,7 @@ export function CheckPhoneChatPage({
                         }}
                       >
                         <CheckPhoneBubbleAvatar
-                          label={outgoing ? "我" : getInitial(activeConversationDisplayName)}
+                          label={outgoing ? "Me" : getInitial(activeConversationDisplayName)}
                           outgoing={outgoing}
                           visible={!outgoing && !groupedWithPrevious}
                           reserveSpace={!outgoing}
@@ -2066,7 +2066,7 @@ export function CheckPhoneChatPage({
                   const stickerOnly = isCheckPhoneStickerOnly(message.text);
                   const imageStickerOnly = isCheckPhoneImageStickerOnly(message.text, character.id);
                   const outgoing = message.direction === "outgoing";
-                  const speakerLabel = outgoing ? "我" : message.authorLabel;
+                  const speakerLabel = outgoing ? "Me" : message.authorLabel;
                   const groupedWithPrevious = isSameBubbleSender(
                     message,
                     messages[index - 1],
@@ -2097,7 +2097,7 @@ export function CheckPhoneChatPage({
                         }}
                       >
                         <CheckPhoneBubbleAvatar
-                          label={outgoing ? "我" : getInitial(message.authorLabel || activeGroup.name)}
+                          label={outgoing ? "Me" : getInitial(message.authorLabel || activeGroup.name)}
                           outgoing={outgoing}
                           visible={!outgoing && !groupedWithPrevious}
                           reserveSpace={!outgoing}
@@ -2183,11 +2183,11 @@ export function CheckPhoneChatPage({
       </div>
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空聊天内容？"
-          message="确认后会清空当前聊天缓存。之后重新刷新时，不会再带入旧聊天内容。"
+          title="Clear chat content?"
+          message="This will clear the current chat cache. Old chat content will no longer be included on the next refresh."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Confirm clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

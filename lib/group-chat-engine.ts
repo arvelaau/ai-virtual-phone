@@ -2,7 +2,7 @@
 // Group chat engine: single API call for all characters.
 
 import { ChatSession, ChatMessage, loadChatAppSettings, createResponseBatchId, createResponseRoundId, createToolExecutionId, loadChatSessions, getLatestCharacterStateValues } from "./chat-storage";
-import { extractTextToolDirectiveText } from "./text-tool-protocol";
+import { ACTION_DIRECTIVE_NAMES, extractTextToolDirectiveText, FETCH_DIRECTIVE_NAMES } from "./text-tool-protocol";
 import type { ApiConfig, PresetConfig, RegexConfig } from "./settings-types";
 import { loadCharacters } from "./character-storage";
 import { buildScreenEffectPromptHint } from "./chat-screen-effects";
@@ -62,7 +62,7 @@ import { parseActionTags, dispatchActions } from "./action-parser";
 import { getCustomStickerExample, loadCustomStickers } from "./custom-sticker-storage";
 import { formatCustomAppChatDirectivesForPrompt } from "./custom-app-chat-directives";
 import { findEnabledToolForSchema, getEnabledTools } from "./tool-storage";
-import { formatToolsForPrompt, formatGroupToolsForPrompt, formatToolSchema } from "./tool-prompt";
+import { FETCH_RESULT_HEADER, formatToolsForPrompt, formatGroupToolsForPrompt, formatToolSchema } from "./tool-prompt";
 import { parseToolCalls, parseToolFetches, executeToolCalls, formatToolResults, type ToolCall } from "./tool-executor";
 import { stripStateAndInnerForPrompt } from "./prompt-sanitizer";
 import { buildGroupRosterMacro } from "./group-admin";
@@ -73,12 +73,21 @@ import { throwIfAborted } from "./abort-utils";
 import { buildCharacterTimeContext, buildGroupTimeContext } from "./character-time";
 import { getPromptTimestampOptionsForTimeContext } from "./prompt-time";
 
+// Sentinels. NO_SCHEDULE must match what calendar-storage returns for "no plan".
+const NO_STICKERS = "none";
+const NO_SCHEDULE = "none";
+
 function stripGroupFinancialActionsForMetadataRepair(text: string): string {
     return stripStateAndInnerForPrompt(text)
-        .replace(/\[[^\]\n]+领取了[^\]\n]+的红包\]/g, "")
-        .replace(/\[[^\]\n]+退回了[^\]\n]+的红包\]/g, "")
-        .replace(/\[[^\]\n]+(?:接受|领取)了[^\]\n]+的转账\]/g, "")
-        .replace(/\[[^\]\n]+(?:拒收|退回)了[^\]\n]+的转账\]/g, "")
+        // Already-handled financial actions, both languages. Must stay in step with
+        // rich-message-parser's alternations, or a metadata-only block fails to merge
+        // and renders as a stray bubble.
+        .replace(/\[[^\]\n]+(?:领取了[^\]\n]+的红包|claimed the red envelope from [^\]\n]+)\]/g, "")
+        .replace(/\[[^\]\n]+(?:退回了[^\]\n]+的红包|returned the red envelope from [^\]\n]+)\]/g, "")
+        .replace(/\[[^\]\n]+(?:(?:接受|领取)了[^\]\n]+的转账|(?:accepted|claimed) the transfer from [^\]\n]+)\]/g, "")
+        .replace(/\[[^\]\n]+(?:(?:拒收|退回)了[^\]\n]+的转账|(?:declined|returned) the transfer from [^\]\n]+)\]/g, "")
+        .replace(/\[[^\]\n]+(?:(?:接受|同意)了[^\]\n]+的代付|accepted the payment request from [^\]\n]+)\]/g, "")
+        .replace(/\[[^\]\n]+(?:(?:拒绝|拒收|退回)了[^\]\n]+的代付|(?:rejected|declined|returned) the payment request from [^\]\n]+)\]/g, "")
         .replace(/\n{3,}/g, "\n\n")
         .trim();
 }
@@ -103,15 +112,15 @@ export function annotateGroupHistory(
             senderName = userName;
         } else {
             // assistant message — use senderName or look up from senderCharacterId
-            senderName = msg.senderName || charMap.get(msg.senderCharacterId || "") || "未知";
+            senderName = msg.senderName || charMap.get(msg.senderCharacterId || "") || "Unknown";
         }
 
         // For rich-media messages, resolve content from mediaType/mediaData
-        // charName = the "other party": for user msgs use recipient or "群聊", for AI msgs use the character's own name
+        // charName = the "other party": for user msgs use recipient or the group, for AI msgs the character's own name
         let content = msg.content;
         if (msg.mediaType) {
             const charName = msg.role === "user"
-                ? (msg.mediaData?.recipientName || "群聊")
+                ? (msg.mediaData?.recipientName || "the group chat")
                 : senderName;
             content = formatRichMediaForHistory(msg, userName, charName, true);
         }
@@ -124,7 +133,7 @@ export function annotateGroupHistory(
 }
 
 /**
- * Parse the LLM output in [角色名]: format into per-character results.
+ * Parse the LLM output in [CharacterName]: format into per-character results.
  * Falls back: if no known name prefix found, assigns entire output to the first member.
  */
 export function parseGroupChatResponse(
@@ -132,9 +141,11 @@ export function parseGroupChatResponse(
     nameToId: Map<string, string>,
 ): { characterId: string; characterName: string; responseText: string }[] {
     const names = [...nameToId.keys()];
-    // 通用切分：任何 [名字]: 行都开启新段落——包括被踢成员、冒用的用户名或
-    // 幻觉名字。未知名字的段落随后被 nameToId 校验整段丢弃，防止其内容以
-    // 字面文本粘进上一个合法角色的气泡（或经兜底逻辑错挂到第一个成员头上）。
+    // Generic split: ANY [Name]: line opens a new segment — including removed members,
+    // a spoofed user name, or a hallucinated name. Segments whose name fails the
+    // nameToId check are then discarded whole, so their text cannot get glued as literal
+    // content onto the previous legitimate character's bubble (or, via the fallback,
+    // mis-attributed to the first member).
     const pattern = /^\[([^\]\n]{1,32})\]:\s*/;
 
     const segments: { name: string; lines: string[] }[] = [];
@@ -171,7 +182,7 @@ export function parseGroupChatResponse(
 
     // Preserve original segment order, but repair a common format slip:
     // [Name]: [state][inner] followed by another [Name]: actual message.
-    // The first block may include a handled financial action like [A领取了B的红包].
+    // The first block may include a handled financial action like [A claimed the red envelope from B].
     // Without this, the metadata block becomes a separate silent heart row.
     const results: { characterId: string; characterName: string; responseText: string }[] = [];
     for (let i = 0; i < rawResults.length; i += 1) {
@@ -196,8 +207,8 @@ export function parseGroupChatResponse(
 
 function stripToolTags(text: string): string {
     return text
-        .replace(/\[[^\]]*?(?:获取指令|获取工具)[:：][^\]]*\]/g, "")
-        .replace(/\[[^\]]*?(?:执行动作|工具调用)[:：][^\]]*?[（(][\s\S]*?[)）]\]/g, "")
+        .replace(new RegExp(`\\[[^\\]]*?(?:${FETCH_DIRECTIVE_NAMES})[:：][^\\]]*\\]`, "g"), "")
+        .replace(new RegExp(`\\[[^\\]]*?(?:${ACTION_DIRECTIVE_NAMES})[:：][^\\]]*?[（(][\\s\\S]*?[)）]\\]`, "g"), "")
         .replace(/\n{3,}/g, "\n\n")
         .trim();
 }
@@ -208,11 +219,11 @@ function resolveGroupToolActor(
 ): { actorName: string; characterId: string } | { actorName: string; error: string } {
     const actorName = actor?.trim() || "";
     if (!actorName) {
-        return { actorName, error: "群聊动作必须标注执行角色，请使用当前群成员名。" };
+        return { actorName, error: "A group action must name the character performing it; use a current group member's name." };
     }
     const characterId = nameToId.get(actorName);
     if (!characterId) {
-        return { actorName, error: `群聊成员「${actorName}」不存在，请从当前群成员中选择。` };
+        return { actorName, error: `Group member "${actorName}" does not exist; choose one of the current members.` };
     }
     return { actorName, characterId };
 }
@@ -309,10 +320,12 @@ async function buildGroupChatPromptMessages(
         : (activeSlot.regexIds || []).map(id => allRegexes.find(r => r.id === id)).filter(Boolean) as typeof allRegexes;
 
     const userIdentity = resolveUserIdentity(undefined, "group_chat");
-    const userName = userIdentity?.name ?? "用户";
+    const userName = userIdentity?.name ?? "User";
     const baseAppTags = options?.appTags ?? ["group_chat", "text"];
-    // 围观群：追加 spectator tag 激活围观语境条目（tags 子集过滤，老条目不受影响）。
-    // 只在宿主群聊链路追加——自定义 APP 的纯 appTags 生成（generateGroupRawCompletion）不掺宿主场景 tag。
+    // Spectator groups: append the spectator tag to activate the spectator-context entry
+    // (tag-subset filtering, so existing entries are unaffected). Only appended on the host
+    // group-chat path — a custom app's pure appTags generation (generateGroupRawCompletion)
+    // must not have host scene tags mixed in.
     const activeAppTags = session.isSpectator && baseAppTags.includes("group_chat") && !baseAppTags.includes("spectator")
         ? [...baseAppTags, "spectator"]
         : baseAppTags;
@@ -399,33 +412,38 @@ async function buildGroupChatPromptMessages(
 
     const stickerRows = members.map(m => {
         const names = loadCustomStickers(m.character.id).map(sticker => sticker.name).filter(Boolean);
-        return `${m.character.name}：${names.length > 0 ? names.join("，") : "无"}`;
+        return `${m.character.name}: ${names.length > 0 ? names.join(", ") : NO_STICKERS}`;
     });
-    const hasAnySticker = stickerRows.some(row => !row.endsWith("：无"));
+    const hasAnySticker = stickerRows.some(row => !row.endsWith(`: ${NO_STICKERS}`));
     const allStickerNames = hasAnySticker
-        ? `每个角色只能使用自己名下的表情包：\n${stickerRows.join("\n")}`
-        : "无可用表情包，该功能不可用";
+        ? `Each character may only use stickers registered to them:\n${stickerRows.join("\n")}`
+        : "No stickers are available; this feature is unusable.";
     const firstExample = members.map(m => getCustomStickerExample(m.character.id)).find(Boolean) || "";
     const [musicLocal, musicCloud] = await Promise.all([buildMusicLocalMacro(), buildMusicCloudMacro()]);
     const activeMemberSchedules = members
         .map(m => ({ name: m.character.name, schedule: m.currentSchedule?.trim() || "" }))
-        .filter(item => item.schedule && item.schedule !== "无");
+        // `无` is the pre-migration sentinel. getCurrentCalendarScheduleForPrompt returns
+        // "none" today (calendar-storage.ts:224,234), so this only catches a schedule
+        // stored before that change — kept for the same reason calendar-engine.ts:107
+        // still accepts it. Cheap, and dropping it would silently inject "无" as if it
+        // were a real plan.
+        .filter(item => item.schedule && item.schedule !== NO_SCHEDULE && item.schedule !== "无");
     const currentSchedule = activeMemberSchedules.length > 0
-        ? activeMemberSchedules.map(item => `${item.name}：${item.schedule}`).join("；")
-        : "无";
-    const musicOnlineHint = isNeteaseConfigured() ? "- 你可以推荐任何歌曲，系统会在线搜索并播放。不局限于用户本地音乐库。\n" : "\n";
+        ? activeMemberSchedules.map(item => `${item.name}: ${item.schedule}`).join("; ")
+        : NO_SCHEDULE;
+    const musicOnlineHint = isNeteaseConfigured() ? "- You may recommend any song; the system will search for it online and play it. You are not limited to the user's local library.\n" : "\n";
     const pluginPrompt = await runChatPluginTransform("prompt.system", {
         sessionId: session.id,
         isGroup: true,
         hint: buildChatPluginPromptFragments(session.id),
     });
-    const pluginPromptHint = pluginPrompt.hint?.trim() ? `\n\n### 扩展插件\n${pluginPrompt.hint.trim()}\n` : "";
+    const pluginPromptHint = pluginPrompt.hint?.trim() ? `\n\n### Plugins\n${pluginPrompt.hint.trim()}\n` : "";
     const customAppRichMediaDirectives = formatCustomAppChatDirectivesForPrompt({ group: true }) + buildScreenEffectPromptHint() + pluginPromptHint;
     const toolsPrompt = usesNativeActions
-        ? "需要动作时使用可用动作接口。"
+        ? "Use the available action interface when an action is needed."
         : formatToolsForPrompt(enabledTools);
     const groupToolsPrompt = usesNativeActions
-        ? `需要动作时使用可用动作接口，并填写执行成员 actorName。可选成员：${memberNames.join("、")}`
+        ? `Use the available action interface when an action is needed, and fill in actorName with the member performing it. Available members: ${memberNames.join(", ")}`
         : formatGroupToolsForPrompt(enabledTools);
     const chatBilingualInstruction = buildChatBilingualInstruction(
         session.bilingualTranslationEnabled !== false,
@@ -452,7 +470,7 @@ async function buildGroupChatPromptMessages(
         userIdentity,
         userName,
         groupName: session.groupName,
-        memberNames: memberNames.join("、"),
+        memberNames: memberNames.join(", "),
         worldBookActivationContext: wbActivationContext,
         unifiedRecentItems,
         customStickerNames: allStickerNames,
@@ -478,12 +496,12 @@ async function buildGroupChatPromptMessages(
     if (promptProfile?.output === "plain_text") {
         llmMessages.push({
             role: "system",
-            content: "本次自定义 APP AI 任务只输出纯文本结果。每个角色的发言以 [角色名]: 开头，除此之外不要输出聊天富媒体指令、状态面板、内心想法、XML 包裹或 Markdown 代码块。",
+            content: "For this custom-app AI task, output plain text only. Each character's turn starts with [CharacterName]:. Beyond that, do not output chat rich-media directives, status panels, inner thoughts, XML wrappers, or Markdown code blocks.",
         });
     } else if (promptProfile?.output === "json") {
         llmMessages.push({
             role: "system",
-            content: "本次自定义 APP AI 任务只输出严格 JSON。不要输出 Markdown 代码块、解释文字或聊天富媒体指令。",
+            content: "For this custom-app AI task, output strict JSON only. Do not output Markdown code blocks, explanatory text, or chat rich-media directives.",
         });
     }
     appendEmptyGenerateGuardMessage(llmMessages, config, history);
@@ -527,7 +545,7 @@ async function appendNativeMediaContext(
             requestMessages.push({
                 role: "user",
                 content: [
-                    { type: "text", text: "系统记录：这是你刚才生成的图片。" },
+                    { type: "text", text: "System note: this is the image you just generated." },
                     { type: "image_url", image_url: { url: dataUrl, detail: "low" } },
                 ],
             });
@@ -558,12 +576,12 @@ async function runNativeGroupToolLoop(params: {
     );
     const nativeToolBuildOptions = {
         actorNames: memberNames,
-        characterName: `群聊:${session.groupName || "群聊"}`,
+        characterName: `Group: ${session.groupName || "group chat"}`,
         userName: params.userName,
     };
     let nativeBundle = buildNativeChatTools(enabledTools, expandedSourceIds, nativeToolBuildOptions);
     const requestMessages: LlmRequestMessage[] = toLlmRequestMessages(llmMessages);
-    const meta = { characterName: `群聊:${session.groupName || "群聊"}`, userName: params.userName };
+    const meta = { characterName: `Group: ${session.groupName || "group chat"}`, userName: params.userName };
     const expandableSourceKeys = new Set(enabledTools.filter(tool => !isNativeSingleTool(tool)).map(nativeToolSourceKey));
     let finalRawOutput = "";
 
@@ -579,7 +597,7 @@ async function runNativeGroupToolLoop(params: {
         } catch (err) {
             if (finalRawOutput) {
                 throwIfAborted(signal);
-                callbacks?.onToolNotice?.(`⚠️ 回复生成失败: ${err instanceof Error ? err.message : String(err)}`);
+                callbacks?.onToolNotice?.(`⚠️ Reply generation failed: ${err instanceof Error ? err.message : String(err)}`);
                 break;
             }
             throw err;
@@ -589,7 +607,8 @@ async function runNativeGroupToolLoop(params: {
         const assistantForToolContext = stripStateAndInnerForPrompt(result.content);
         if (result.toolCalls.length === 0) {
             throwIfAborted(signal);
-            // 无工具调用的最终轮：把解析到的思维链交给回调（随后由 processGroupParts 挂到本轮首条气泡）
+            // Final round with no tool calls: hand the parsed reasoning to the callback
+            // (processGroupParts then attaches it to this round's first bubble)
             if (result.reasoning) callbacks?.onReasoning?.(result.reasoning);
             finalRawOutput = result.content;
             break;
@@ -612,12 +631,12 @@ async function runNativeGroupToolLoop(params: {
         const actorNames = [...new Set([
             ...loaderCalls.map(item => getNativeGroupActorName(item.call)),
             ...textCalls.map(call => call.actor),
-        ].map(name => name?.trim()).filter(Boolean))].join("、") || "未标注角色";
+        ].map(name => name?.trim()).filter(Boolean))].join(", ") || "unnamed character";
         const displayedActionNames = [
-            ...loaderCalls.map(item => `展开「${item.loader.label}」动作说明`),
+            ...loaderCalls.map(item => `Expand the "${item.loader.label}" action description`),
             ...realNativeCalls.map(call => nativeBundle.displayNameMap.get(call.name) || nativeBundle.nameMap.get(call.name) || call.name),
         ];
-        if (displayedActionNames.length > 0) callbacks?.onToolNotice?.(`${actorNames}正在${displayedActionNames.join("、")}...`);
+        if (displayedActionNames.length > 0) callbacks?.onToolNotice?.(`${actorNames} is running ${displayedActionNames.join(", ")}...`);
 
         let realResults: Awaited<ReturnType<typeof executeToolCalls>> = [];
         try {
@@ -639,7 +658,7 @@ async function runNativeGroupToolLoop(params: {
             }));
         } catch (err) {
             throwIfAborted(signal);
-            callbacks?.onToolNotice?.(`⚠️ 动作执行失败: ${err instanceof Error ? err.message : String(err)}`);
+            callbacks?.onToolNotice?.(`⚠️ Action execution failed: ${err instanceof Error ? err.message : String(err)}`);
             break;
         }
 
@@ -674,8 +693,8 @@ async function runNativeGroupToolLoop(params: {
             const realResult = realResults[realResultIndex] || {
                 name: nativeBundle.nameMap.get(nativeCall.name) || nativeCall.name,
                 success: false,
-                error: "动作结果缺失。",
-                userNotice: `✗ ${nativeBundle.nameMap.get(nativeCall.name) || nativeCall.name}: 动作结果缺失。`,
+                error: "Action result missing.",
+                userNotice: `✗ ${nativeBundle.nameMap.get(nativeCall.name) || nativeCall.name}: action result missing.`,
             };
             realResultIndex += 1;
             const sourceKey = nativeBundle.realToolSourceMap.get(nativeCall.name);
@@ -697,8 +716,8 @@ async function runNativeGroupToolLoop(params: {
         }
 
         const notices = outcomes.map(item => (
-            item.result.userNotice || (item.result.success ? `✓ ${item.result.name} 执行成功` : `✗ ${item.result.name}: ${item.result.error}`)
-        )).filter(Boolean).join("；");
+            item.result.userNotice || (item.result.success ? `✓ ${item.result.name} succeeded` : `✗ ${item.result.name}: ${item.result.error}`)
+        )).filter(Boolean).join("; ");
         throwIfAborted(signal);
         if (notices) callbacks?.onToolNotice?.(notices);
 
@@ -764,7 +783,7 @@ export async function generateGroupChatCompletion(
     const participantIds = session.participantIds || [];
 
     const MAX_TOOL_ROUNDS = 5;
-    const meta = { characterName: `群聊:${session.groupName || "群聊"}` };
+    const meta = { characterName: `Group: ${session.groupName || "group chat"}` };
     let finalRawOutput = "";
 
     if (nativeToolProtocolForConfig(config) && enabledTools.length > 0) {
@@ -804,7 +823,7 @@ export async function generateGroupChatCompletion(
         } catch (err) {
             if (finalRawOutput) {
                 throwIfAborted(options?.signal);
-                callbacks?.onToolNotice?.(`⚠️ 回复生成失败: ${err instanceof Error ? err.message : String(err)}`);
+                callbacks?.onToolNotice?.(`⚠️ Reply generation failed: ${err instanceof Error ? err.message : String(err)}`);
                 break;
             }
             throw err;
@@ -853,17 +872,17 @@ export async function generateGroupChatCompletion(
             }
         }
 
-        // Handle [获取指令:xxx]
+        // Handle [FetchTool:xxx]
         if (toolFetches.length > 0) {
             for (const fetch of toolFetches) {
                 throwIfAborted(options?.signal);
                 const actor = resolveGroupToolActor(fetch.actor, nameToId);
-                const actorName = actor.actorName || "未标注角色";
-                callbacks?.onToolNotice?.(`${actorName}正在获取「${fetch.name}」指令...`);
+                const actorName = actor.actorName || "unnamed character";
+                callbacks?.onToolNotice?.(`${actorName} is fetching the "${fetch.name}" action description...`);
 
                 let schemaContent: string;
                 if ("error" in actor) {
-                    schemaContent = `以下是你获取指令的返回结果：\n${actor.error}`;
+                    schemaContent = `${FETCH_RESULT_HEADER}\n${actor.error}`;
                 } else {
                     const tool = findEnabledToolForSchema(fetch.name, "group_chat", {
                         characterName: actorName,
@@ -874,7 +893,7 @@ export async function generateGroupChatCompletion(
                             characterName: actorName,
                             userName,
                         })
-                        : `以下是你获取指令的返回结果：\n动作类别「${fetch.name}」未找到。`;
+                        : `${FETCH_RESULT_HEADER}\nAction category "${fetch.name}" not found.`;
                 }
 
                 throwIfAborted(options?.signal);
@@ -888,10 +907,10 @@ export async function generateGroupChatCompletion(
             continue;
         }
 
-        // Handle [执行动作:xxx({...})]
+        // Handle [CallTool:xxx({...})]
         if (toolCalls.length > 0) {
-            const actorNames = [...new Set(toolCalls.map(t => t.actor?.trim()).filter(Boolean))].join("、") || "未标注角色";
-            callbacks?.onToolNotice?.(`${actorNames}正在${toolCalls.map(t => t.name).join("、")}...`);
+            const actorNames = [...new Set(toolCalls.map(t => t.actor?.trim()).filter(Boolean))].join(", ") || "unnamed character";
+            callbacks?.onToolNotice?.(`${actorNames} is running ${toolCalls.map(t => t.name).join(", ")}...`);
 
             let results: Awaited<ReturnType<typeof executeToolCalls>>;
             try {
@@ -912,11 +931,11 @@ export async function generateGroupChatCompletion(
                     return attachGroupToolActor(result!, actor);
                 }));
                 throwIfAborted(options?.signal);
-                const notices = results.map(r => r.userNotice || (r.success ? `✓ ${r.name} 执行成功` : `✗ ${r.name}: ${r.error}`)).join("；");
+                const notices = results.map(r => r.userNotice || (r.success ? `✓ ${r.name} succeeded` : `✗ ${r.name}: ${r.error}`)).join("; ");
                 callbacks?.onToolNotice?.(notices);
             } catch (err) {
                 throwIfAborted(options?.signal);
-                callbacks?.onToolNotice?.(`⚠️ 动作执行失败: ${err instanceof Error ? err.message : String(err)}`);
+                callbacks?.onToolNotice?.(`⚠️ Action execution failed: ${err instanceof Error ? err.message : String(err)}`);
                 break;
             }
 
@@ -989,11 +1008,14 @@ export async function generateGroupChatCompletion(
 }
 
 /**
- * 自定义 APP 的多角色"通用条目"补全：共用群聊的多人资料包组装（<member> 人设块、
- * 用户身份、记忆等结构化内容），但内容条目只按调用方给的 appTags 命中——不强塞
- * "text"/"offline" 等宿主内置场景 tag，APP 拿不到内置 APP 的格式条目。
- * 输出格式由 APP 自己的预设条目约定，返回原始文本，不经过群聊线上解析器
- * （parseGroupChatResponse）与动作标签剥离，由 APP 自行解析。
+ * Multi-character "generic entry" completion for custom apps: reuses the group chat
+ * multi-member profile assembly (<member> persona blocks, user identity, memories and
+ * other structured content), but content entries are matched ONLY against the appTags
+ * the caller supplies — host scene tags like "text"/"offline" are never forced in, so
+ * an app cannot pick up a built-in app's format entries.
+ * The output format is defined by the app's own preset entries. Raw text is returned
+ * without going through the group online parser (parseGroupChatResponse) or action-tag
+ * stripping; the app parses it itself.
  */
 export async function generateGroupRawCompletion(
     session: ChatSession,
@@ -1011,7 +1033,7 @@ export async function generateGroupRawCompletion(
         },
     );
     const rawOutput = await sendLLMRequest(config, preset, llmMessages, regexes, {
-        characterName: `群聊:${session.groupName || "群聊"}`,
+        characterName: `Group: ${session.groupName || "group chat"}`,
     }, {
         appId: options?.appId ?? "group_chat",
         appTags: options?.appTags ?? [],
@@ -1021,12 +1043,12 @@ export async function generateGroupRawCompletion(
     return {
         text: rawOutput,
         model: config.defaultModel,
-        presetName: preset?.name || "默认预设",
+        presetName: preset?.name || "Default preset",
     };
 }
 
 export type GroupOfflineChatCompletionResult = ParsedOfflineResponse & {
-    /** 模型思维链（reasoning）内容，供线下记录展示 */
+    /** The model's reasoning, kept for offline log display */
     reasoning?: string;
     model: string;
     presetName: string;
@@ -1049,7 +1071,7 @@ export async function generateGroupOfflineChatCompletion(
     const summaryTag = preset?.story_summary_tag?.trim() || "summary";
     let reasoning = "";
     const rawOutput = await sendLLMRequest(config, preset, llmMessages, regexes, {
-        characterName: `群聊:${session.groupName || "群聊"}`,
+        characterName: `Group: ${session.groupName || "group chat"}`,
     }, {
         appId: "group_chat",
         appTags: ["group_chat", "offline"],
@@ -1060,7 +1082,7 @@ export async function generateGroupOfflineChatCompletion(
     return {
         ...parseOfflineResponse(rawOutput, summaryTag),
         model: config.defaultModel,
-        presetName: preset?.name || "默认预设",
+        presetName: preset?.name || "Default preset",
         reasoning: reasoning || undefined,
     };
 }
@@ -1079,9 +1101,9 @@ export async function previewGroupPromptPayload(
 
     return {
         messages: apiMessages,
-        characterName: `群聊:${session.groupName || "群聊"}`,
+        characterName: `Group: ${session.groupName || "group chat"}`,
         model: config.defaultModel,
-        presetName: preset?.name ?? "(无预设)",
+        presetName: preset?.name ?? "(no preset)",
     };
 }
 
@@ -1092,7 +1114,7 @@ export async function previewGroupPromptRequestSnapshot(
 ): Promise<DebugPromptSnapshot> {
     const { llmMessages, config, preset, memberNames, enabledTools, userName, appTags } = await buildGroupChatPromptMessages(session, history, options);
     const requestMessages = toLlmRequestMessages(llmMessages);
-    const meta = { characterName: `群聊:${session.groupName || "群聊"}`, userName };
+    const meta = { characterName: `Group: ${session.groupName || "group chat"}`, userName };
 
     if (nativeToolProtocolForConfig(config) && enabledTools.length > 0) {
         const persistedSession = loadChatSessions().find(item => item.id === session.id);
@@ -1102,7 +1124,7 @@ export async function previewGroupPromptRequestSnapshot(
         );
         const nativeBundle = buildNativeChatTools(enabledTools, expandedSourceIds, {
             actorNames: memberNames,
-            characterName: `群聊:${session.groupName || "群聊"}`,
+            characterName: `Group: ${session.groupName || "group chat"}`,
             userName,
         });
         const request = buildProviderRequest(config, preset, requestMessages, { tools: nativeBundle.definitions });

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { ChatSession, ChatMessage, loadChatMessages, pushChatMessage, getLatestCharacterStateValues } from "@/lib/chat-storage";
 import type { StateValue } from "@/lib/chat-storage";
+import { buildCallCancelTag, buildCallHangupTag, buildCallInitiateTag, buildCallRejectTag } from "@/lib/call-tag-patterns";
 import { parseStateValues, mergeStateValues } from "@/lib/state-value-parser";
 import { parseAIResponse } from "@/lib/rich-message-parser";
 import { generateChatCompletion, flattenCompletionResult } from "@/lib/chat-engine";
@@ -269,10 +270,15 @@ export function VideoCallScreen({ session, character, onEnd, onConnect, initiato
 
         const lastMsg = messagesRef.current[messagesRef.current.length - 1];
         const initRole = initiator === "character" ? "assistant" : "user";
-        if (!lastMsg || !(lastMsg.content.includes("发起了视频通话"))) {
+        // Dedupe guard: accepts the legacy Chinese tag and the English one
+        // (see lib/call-tag-patterns.ts) so a remount doesn't double-insert.
+        const alreadyInitiated = !!lastMsg
+            && (lastMsg.content.includes("发起了视频通话")
+                || /I started (?:a|the) (?:group )?video call/i.test(lastMsg.content));
+        if (!alreadyInitiated) {
             const callMsg = initiator === "character"
-                ? `[我向${userNameRef.current}发起了视频通话]`
-                : `[我向${character.name}发起了视频通话]`;
+                ? buildCallInitiateTag("video", userNameRef.current)
+                : buildCallInitiateTag("video", character.name);
             const sysMsg = pushChatMessage({
                 sessionId: session.id,
                 role: initRole,
@@ -513,7 +519,7 @@ export function VideoCallScreen({ session, character, onEnd, onConnect, initiato
 
         const endMsg = pushChatMessage({
             sessionId: session.id, role: "user",
-            content: `[我挂断了视频通话]`,
+            content: buildCallHangupTag("video", false),
             mediaData: { callDuration: formatTime(callDuration) },
         });
         messagesRef.current = [...messagesRef.current, endMsg];
@@ -856,7 +862,7 @@ export function VideoCallScreen({ session, character, onEnd, onConnect, initiato
                     <>
                         <button
                             onClick={() => {
-                                pushChatMessage({ sessionId: session.id, role: "user", content: `[我拒绝了视频通话]` });
+                                pushChatMessage({ sessionId: session.id, role: "user", content: buildCallRejectTag("video", false) });
                                 onEnd();
                             }}
                             className="ui-call-btn ui-call-btn-danger"
@@ -879,7 +885,7 @@ export function VideoCallScreen({ session, character, onEnd, onConnect, initiato
                     /* User-initiated: show cancel only */
                     <button
                         onClick={() => {
-                            pushChatMessage({ sessionId: session.id, role: "user", content: `[我取消了视频通话]` });
+                            pushChatMessage({ sessionId: session.id, role: "user", content: buildCallCancelTag("video", false) });
                             onEnd();
                         }}
                         className="ui-call-btn ui-call-btn-danger"

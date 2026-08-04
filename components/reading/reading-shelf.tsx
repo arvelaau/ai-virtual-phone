@@ -38,48 +38,48 @@ function buildImportError(stage: string, err: unknown, format?: Book["format"]):
 
     if (lower.includes("notfounderror") || lower.includes("object store")) {
         return {
-            summary: `导入失败，阶段：${stage}。本地阅读数据库结构异常，刷新页面后重试即可自动修复。`,
+            summary: `Import failed at stage: ${stage}. The local reading database structure is abnormal; refreshing the page will auto-repair it.`,
             detail,
         };
     }
 
     if (lower.includes("quotaexceeded")) {
         return {
-            summary: `导入失败，阶段：${stage}。当前浏览器可用存储空间不足，原始文件没能保存成功。`,
+            summary: `Import failed at stage: ${stage}. Your browser's available storage is insufficient, so the original file could not be saved.`,
             detail,
         };
     }
 
     if (lower.includes("database") || lower.includes("indexeddb") || lower.includes("idbdatabase")) {
         return {
-            summary: `导入失败，阶段：${stage}。浏览器本地数据库写入失败。`,
+            summary: `Import failed at stage: ${stage}. Failed to write to the browser's local database.`,
             detail,
         };
     }
 
     if (lower.includes("out of memory") || lower.includes("memory") || lower.includes("allocation") || lower.includes("unable to allocate")) {
         return {
-            summary: `导入失败，阶段：${stage}。当前手机内存不足，这份${format === "pdf" ? " PDF " : ""}文件对浏览器来说太大了。`,
+            summary: `Import failed at stage: ${stage}. Your phone is low on memory, so this${format === "pdf" ? " PDF " : ""} file is too large for the browser.`,
             detail,
         };
     }
 
     if (lower.includes("abort") || lower.includes("interrupted")) {
         return {
-            summary: `导入失败，阶段：${stage}。浏览器中断了这次文件处理，手机上常见于切后台、内存紧张或系统回收。`,
+            summary: `Import failed at stage: ${stage}. The browser interrupted this file processing, commonly caused on phones by backgrounding the app, low memory, or system reclamation.`,
             detail,
         };
     }
 
     if (lower.includes("failed to load pdf.js") || lower.includes("pdf")) {
         return {
-            summary: `导入失败，阶段：${stage}。PDF 引擎没能完成这份文件的读取。`,
+            summary: `Import failed at stage: ${stage}. The PDF engine failed to finish reading this file.`,
             detail,
         };
     }
 
     return {
-        summary: `导入失败，阶段：${stage}。`,
+        summary: `Import failed at stage: ${stage}.`,
         detail,
     };
 }
@@ -142,10 +142,10 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
             if (!saved?.stage || !saved?.updatedAt) return;
 
             const timeLabel = new Date(saved.updatedAt).toLocaleString();
-            const sizeLabel = saved.fileSize > 0 ? `，文件大小约 ${(saved.fileSize / 1024 / 1024).toFixed(1)} MB` : "";
+            const sizeLabel = saved.fileSize > 0 ? `, file size approx. ${(saved.fileSize / 1024 / 1024).toFixed(1)} MB` : "";
             const summary = saved.status === "running"
-                ? `上次导入在「${saved.stage}」阶段中断了。文件：${saved.fileName}${sizeLabel}。时间：${timeLabel}。`
-                : `上次导入在「${saved.stage}」阶段失败。文件：${saved.fileName}${sizeLabel}。时间：${timeLabel}。`;
+                ? `The last import was interrupted at the "${saved.stage}" stage. File: ${saved.fileName}${sizeLabel}. Time: ${timeLabel}.`
+                : `The last import failed at the "${saved.stage}" stage. File: ${saved.fileName}${sizeLabel}. Time: ${timeLabel}.`;
             setImportError({ summary, detail: saved.detail });
         } catch {
             // Ignore broken diagnostics.
@@ -169,8 +169,8 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
         e.target.value = "";
         setImporting(true);
         setImportError(null);
-        setImportStatus("正在准备导入…");
-        let importStage = "准备导入";
+        setImportStatus("Preparing import…");
+        let importStage = "Preparing import";
         const ext = file.name.split(".").pop()?.toLowerCase();
         const detectedFormat = ext === "pdf" ? "pdf" : ext === "epub" ? "epub" : "txt";
         persistImportDiagnostic({
@@ -188,8 +188,8 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
             let rawFile: Blob | null = null;
 
             if (ext === "txt") {
-                importStage = "读取 TXT 文件";
-                setImportStatus("正在读取 TXT 文件…");
+                importStage = "Reading TXT file";
+                setImportStatus("Reading TXT file…");
                 persistImportDiagnostic({
                     status: "running",
                     stage: importStage,
@@ -202,8 +202,8 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
                 parsed = parseTxtContent(text, file.name);
                 format = "txt";
             } else if (ext === "epub") {
-                importStage = "读取 EPUB 文件";
-                setImportStatus("正在读取 EPUB 文件…");
+                importStage = "Reading EPUB file";
+                setImportStatus("Reading EPUB file…");
                 persistImportDiagnostic({
                     status: "running",
                     stage: importStage,
@@ -213,8 +213,8 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
                     updatedAt: new Date().toISOString(),
                 });
                 const buffer = await file.arrayBuffer();
-                importStage = "解析 EPUB 内容";
-                setImportStatus("正在解析 EPUB 内容…");
+                importStage = "Parsing EPUB content";
+                setImportStatus("Parsing EPUB content…");
                 persistImportDiagnostic({
                     status: "running",
                     stage: importStage,
@@ -227,8 +227,8 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
                 format = "epub";
             } else if (ext === "pdf") {
                 rawFile = file;
-                importStage = "创建 PDF 导入记录";
-                setImportStatus("正在创建 PDF 导入记录…");
+                importStage = "Creating PDF import record";
+                setImportStatus("Creating PDF import record…");
                 persistImportDiagnostic({
                     status: "running",
                     stage: importStage,
@@ -238,13 +238,13 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
                     updatedAt: new Date().toISOString(),
                 });
                 parsed = {
-                    title: file.name.replace(/\.[^.]+$/, "") || "未命名",
-                    chapters: [{ title: `第1-${PDF_PAGES_PER_CHAPTER}页`, paragraphs: [] }],
+                    title: file.name.replace(/\.[^.]+$/, "") || "Untitled",
+                    chapters: [{ title: `Pages 1-${PDF_PAGES_PER_CHAPTER}`, paragraphs: [] }],
                     totalPages: 0,
                 };
                 format = "pdf";
             } else {
-                alert("不支持的格式，请上传 TXT、EPUB 或 PDF 文件");
+                alert("Unsupported format, please upload a TXT, EPUB, or PDF file");
                 persistImportDiagnostic(null);
                 return;
             }
@@ -277,8 +277,8 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
                 return { id: `${bookId}_ch${i}`, bookId, index: i, title: ch.title, paragraphs: ch.paragraphs };
             });
 
-            importStage = "写入书架数据";
-            setImportStatus("正在写入书架数据…");
+            importStage = "Writing bookshelf data";
+            setImportStatus("Writing bookshelf data…");
             persistImportDiagnostic({
                 status: "running",
                 stage: importStage,
@@ -291,8 +291,8 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
             await saveChapters(bookId, chapters);
             if (rawFile) {
                 try {
-                    importStage = format === "pdf" ? "保存原始 PDF 文件" : "保存原始文件";
-                    setImportStatus(format === "pdf" ? "正在保存原始 PDF 文件…" : "正在保存原始文件…");
+                    importStage = format === "pdf" ? "Saving original PDF file" : "Saving original file";
+                    setImportStatus(format === "pdf" ? "Saving original PDF file…" : "Saving original file…");
                     persistImportDiagnostic({
                         status: "running",
                         stage: importStage,
@@ -343,7 +343,7 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
     };
 
     const handleDelete = async (bookId: string) => {
-        if (!confirm("确定删除这本书吗？")) return;
+        if (!confirm("Delete this book?")) return;
         await deleteBook(bookId);
         setBooks(loadBooks());
     };
@@ -357,11 +357,11 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
         <div className="reading-app-surface absolute inset-0 z-[100] flex flex-col">
             <header className="reading-shelf-header">
                 <div className="reading-shelf-appbar">
-                    <button className="reading-shelf-back" type="button" onClick={onClose} aria-label="返回">
+                    <button className="reading-shelf-back" type="button" onClick={onClose} aria-label="Back">
                         <ChevronLeft size={22} strokeWidth={2.5} />
                     </button>
                     <div className="reading-shelf-actions">
-                        <button className="reading-shelf-action-btn" type="button" onClick={() => setShowAppearanceDialog(true)} aria-label="阅读外观">
+                        <button className="reading-shelf-action-btn" type="button" onClick={() => setShowAppearanceDialog(true)} aria-label="Reading Appearance">
                             <Palette size={16} strokeWidth={1.7} />
                         </button>
                         <label className="reading-shelf-action-btn reading-shelf-action-primary" style={{ cursor: "pointer" }}>
@@ -373,7 +373,7 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
                     </div>
                 </div>
                 <div className="reading-shelf-title-stack">
-                    <h1 className="reading-shelf-title">书架</h1>
+                    <h1 className="reading-shelf-title">Bookshelf</h1>
                     <span className="reading-shelf-subtitle">{books.length} BOOKS IN YOUR LIBRARY</span>
                 </div>
             </header>
@@ -385,7 +385,7 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
                         <input
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            placeholder={`搜索 ${books.length} 本书`}
+                            placeholder={`Search ${books.length} books`}
                             className="reading-search-input"
                         />
                     </div>
@@ -393,27 +393,27 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
 
                 {importing && (
                     <div className="text-center ts-13 py-2" style={{ color: "var(--reading-warm-brown, #8a5a2b)" }}>
-                        {importStatus ? `导入中：${importStatus}` : "导入中..."}
+                        {importStatus ? `Importing: ${importStatus}` : "Importing..."}
                     </div>
                 )}
                 {importError && (
                     <div className="modal-overlay" data-ui="modal" onClick={dismissImportError}>
                         <div className="reading-import-error-card reading-import-error-dialog" onClick={(e) => e.stopPropagation()}>
-                            <button type="button" className="reading-import-error-close" onClick={dismissImportError} aria-label="关闭">✕</button>
+                            <button type="button" className="reading-import-error-close" onClick={dismissImportError} aria-label="Close">✕</button>
                             <div className="reading-import-error-kicker">IMPORT ERROR</div>
-                            <div className="ts-13 font-medium" style={{ color: "#2f261f" }}>导入失败</div>
+                            <div className="ts-13 font-medium" style={{ color: "#2f261f" }}>Import Failed</div>
                             <div className="ts-12 mt-1" style={{ color: "#7f7266" }}>{importError.summary}</div>
                             {importError.detail && (
                                 <div className="ts-11 mt-2 break-all reading-import-error-detail" style={{ color: "#a39487" }}>{importError.detail}</div>
                             )}
-                            <button type="button" className="reading-import-error-ok" onClick={dismissImportError}>知道了</button>
+                            <button type="button" className="reading-import-error-ok" onClick={dismissImportError}>Got it</button>
                         </div>
                     </div>
                 )}
 
                 {filteredBooks.length === 0 ? (
                     <div className="py-10 text-center ts-14" style={{ color: "var(--reading-warm-ink-tertiary, #999)" }}>
-                        {books.length === 0 ? "还没有书籍，点右上角 + 导入" : "没有匹配的书籍"}
+                        {books.length === 0 ? "No books yet, tap + in the top right to import" : "No matching books"}
                     </div>
                 ) : (
                     <div className="reading-book-list">
@@ -431,8 +431,8 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
                                 : prog.scope === "book" && prog.current && prog.pageTotal
                                     ? `${prog.current}/${prog.pageTotal}`
                                     : prog.current && prog.pageTotal
-                                        ? `第${Math.max(1, prog.chapterIndex + 1)}章 · ${prog.current}/${prog.pageTotal}`
-                                        : `第${Math.max(1, prog.chapterIndex + 1)}/${Math.max(1, prog.total)}章`;
+                                        ? `Chapter ${Math.max(1, prog.chapterIndex + 1)} · ${prog.current}/${prog.pageTotal}`
+                                        : `Chapter ${Math.max(1, prog.chapterIndex + 1)}/${Math.max(1, prog.total)}`;
                             const gradient = coverGradients[book.title.length % coverGradients.length];
                             const layout = coverLayouts[(book.title.length + (book.author?.length || 0)) % coverLayouts.length];
                             return (
@@ -446,11 +446,11 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
                                         {book.author && <span className="reading-list-author">{book.author}</span>}
                                         <div className="reading-list-meta">
                                             <span className="reading-list-badge">{formatBadge(book.format)}</span>
-                                            <span>{book.totalChapters}章</span>
+                                            <span>{book.totalChapters} chapters</span>
                                         </div>
                                         <div className="reading-list-progress-row">
                                             <span className="reading-list-progress-label">
-                                                {prog?.hasProgress ? `阅读进度 ${progressPct}%` : "未开始阅读"}
+                                                {prog?.hasProgress ? `Reading progress ${progressPct}%` : "Not started"}
                                             </span>
                                             {progressMeta && (
                                                 <span className="reading-list-progress-meta">
@@ -477,7 +477,7 @@ export function ReadingShelf({ onOpenBook, onClose, appearance, backgroundUrl, o
                 )}
 
                 <div className="reading-shelf-footer">
-                    共 {books.length} 本书籍
+                    {books.length} books total
                 </div>
             </div>
 

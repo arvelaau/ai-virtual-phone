@@ -9,20 +9,20 @@ import { RectAreaLightUniformsLib } from "three/examples/jsm/lights/RectAreaLigh
 import { clone as skeletonClone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { SceneObject } from "./scene-store";
 
-// 面光源需要初始化
+// Area light needs initialization
 try { RectAreaLightUniformsLib.init(); } catch {}
 import type { SceneSettings } from "./SettingsModal";
 
 const SNAP_THRESHOLD = 0.15;
 
-/* ── 计算包围盒（排除 hitbox 球体） ── */
+/* ── Compute bounding box (excluding hitbox sphere) ── */
 function getModelBox(group: THREE.Object3D): THREE.Box3 {
   const box = new THREE.Box3();
   group.updateMatrixWorld(true);
   group.traverse((child) => {
     if (!(child as THREE.Mesh).isMesh) return;
     const mat = (child as THREE.Mesh).material as THREE.Material;
-    if (mat && (mat as any).opacity < 0.1) return; // 跳过 hitbox
+    if (mat && (mat as any).opacity < 0.1) return; // Skip hitbox
     const mesh = child as THREE.Mesh;
     mesh.geometry.computeBoundingBox();
     const meshBox = mesh.geometry.boundingBox!.clone();
@@ -33,7 +33,7 @@ function getModelBox(group: THREE.Object3D): THREE.Box3 {
   return box;
 }
 
-/* ── 纯包围盒吸附（AABB 面对面对齐，不用射线） ── */
+/* ── Pure bounding-box snapping (AABB face-to-face alignment, no raycasting) ── */
 function snapAABB(
   dragGroup: THREE.Object3D,
   otherGroups: THREE.Object3D[]
@@ -49,18 +49,18 @@ function snapAABB(
   for (const other of otherGroups) {
     const _boxB = getModelBox(other);
 
-    // XZ 重叠 → 可以做 Y 吸附（放上面/下面）
+    // XZ overlap → can snap on Y (place on top/below)
     const hasXZ =
       _boxA.max.x > _boxB.min.x && _boxA.min.x < _boxB.max.x &&
       _boxA.max.z > _boxB.min.z && _boxA.min.z < _boxB.max.z;
     if (hasXZ) {
-      const dyTop = _boxB.max.y - _boxA.min.y; // A底 贴 B顶
+      const dyTop = _boxB.max.y - _boxA.min.y; // A's bottom against B's top
       if (Math.abs(dyTop) < SNAP_THRESHOLD && Math.abs(dyTop) < bestY) { bestY = Math.abs(dyTop); applyY = dyTop; }
-      const dyBot = _boxB.min.y - _boxA.max.y; // A顶 贴 B底
+      const dyBot = _boxB.min.y - _boxA.max.y; // A's top against B's bottom
       if (Math.abs(dyBot) < SNAP_THRESHOLD && Math.abs(dyBot) < bestY) { bestY = Math.abs(dyBot); applyY = dyBot; }
     }
 
-    // YZ 重叠 → 可以做 X 吸附（左右贴合）
+    // YZ overlap → can snap on X (left/right alignment)
     const hasYZ =
       _boxA.max.y > _boxB.min.y && _boxA.min.y < _boxB.max.y &&
       _boxA.max.z > _boxB.min.z && _boxA.min.z < _boxB.max.z;
@@ -71,7 +71,7 @@ function snapAABB(
       if (Math.abs(dxL) < SNAP_THRESHOLD && Math.abs(dxL) < bestX) { bestX = Math.abs(dxL); applyX = dxL; }
     }
 
-    // YX 重叠 → 可以做 Z 吸附（前后贴合）
+    // YX overlap → can snap on Z (front/back alignment)
     const hasYX =
       _boxA.max.y > _boxB.min.y && _boxA.min.y < _boxB.max.y &&
       _boxA.max.x > _boxB.min.x && _boxA.min.x < _boxB.max.x;
@@ -89,16 +89,16 @@ function snapAABB(
   if (bestZ < Infinity) pos.z += applyZ;
 }
 
-/* ── 收集所有其他物体 ref ── */
+/* ── Collect refs of all other objects ── */
 const groupRefs = new Map<string, THREE.Group>();
 
-/* ── 面光源组件（命令式创建） ── */
+/* ── Area light component (imperative creation) ── */
 function AreaLight({ color, intensity, width, height }: { color: string; intensity: number; width: number; height: number }) {
   const ref = useRef<THREE.Group>(null!);
 
   useEffect(() => {
     if (!ref.current) return;
-    // 清理旧灯
+    // Clean up old light
     ref.current.children.forEach((c) => {
       if ((c as any).isRectAreaLight) ref.current.remove(c);
     });
@@ -110,7 +110,7 @@ function AreaLight({ color, intensity, width, height }: { color: string; intensi
   return <group ref={ref} />;
 }
 
-/* ── 灯光场景物体 ── */
+/* ── Light scene object ── */
 function LightSceneModel({
   obj,
   selected,
@@ -137,7 +137,7 @@ function LightSceneModel({
     return () => { groupRefs.delete(obj.id); };
   }, [obj.id]);
 
-  // 灯光颜色对应的球体显示色
+  // Sphere display color matches the light color
   const helperColor = light.color;
 
   return (
@@ -147,7 +147,7 @@ function LightSceneModel({
         position={obj.position}
         rotation={obj.rotation}
       >
-        {/* 灯光本体 */}
+        {/* Light itself */}
         {light.type === "point" && (
           <pointLight color={light.color} intensity={light.intensity} distance={light.range} decay={2} />
         )}
@@ -168,7 +168,7 @@ function LightSceneModel({
           <directionalLight color={light.color} intensity={light.intensity} />
         )}
 
-        {/* 可视化小球（选中用） */}
+        {/* Visualization sphere (for selection) */}
         <mesh
           onClick={(e) => {
             e.stopPropagation();
@@ -181,7 +181,7 @@ function LightSceneModel({
           <meshBasicMaterial color={helperColor} transparent opacity={selected ? 1 : 0.6} />
         </mesh>
 
-        {/* 面光源可视化矩形 */}
+        {/* Area light visualization rectangle */}
         {light.type === "area" && (
           <mesh>
             <planeGeometry args={[light.width, light.height]} />
@@ -207,7 +207,7 @@ function LightSceneModel({
   );
 }
 
-/* ── 单个场景物体 ── */
+/* ── Single scene object ── */
 function SceneModel({
   obj,
   selected,
@@ -230,16 +230,16 @@ function SceneModel({
   onSelect: () => void;
   onPlace: (point: [number, number, number]) => void;
   onTransformEnd: (id: string, pos: [number, number, number], rot: [number, number, number], scale: [number, number, number]) => void;
-  /** 角色化身：头顶名牌文字 */
+  /** Character avatar: nameplate text above head */
   characterLabel?: string;
-  /** 点击名牌 → 弹角色简介卡 */
+  /** Click nameplate → open character profile card */
   onCharacterTap?: () => void;
-  /** 化身漫步（有动画 + 设置开启 + 同屏配额内） */
+  /** Avatar wandering (has animation + setting enabled + within on-screen quota) */
   motionEnabled?: boolean;
   onLoaded: (id: string) => void;
 }) {
   const { scene, animations } = useGLTF(obj.modelUrl);
-  // 含骨骼动画的模型必须用 SkeletonUtils.clone（普通 clone 不会重映射骨骼引用）
+  // Models with skeletal animation must use SkeletonUtils.clone (a regular clone won't remap bone references)
   const clone = useMemo(
     () => (animations?.length ? (skeletonClone(scene) as THREE.Group) : scene.clone(true)),
     [scene, animations],
@@ -264,12 +264,12 @@ function SceneModel({
   const groupRef = useRef<THREE.Group>(null!);
   const tcRef = useRef<any>(null);
 
-  // 计算包围盒，用作透明点击热区
+  // Compute bounding box, used as a transparent click hit area
   const hitBox = useMemo(() => {
     const box = new THREE.Box3().setFromObject(clone);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
-    // 至少 0.3 保证小物体也能点到
+    // At least 0.3 to ensure small objects can still be clicked
     size.x = Math.max(size.x, 0.3);
     size.y = Math.max(size.y, 0.3);
     size.z = Math.max(size.z, 0.3);
@@ -279,14 +279,14 @@ function SceneModel({
   const [mounted, setMounted] = useState(false);
   const wanderActive = !!motionEnabled && !!animations?.length && !selected && !placing;
 
-  // 注册/注销 ref + 强制二次渲染让 TransformControls 出现
+  // Register/unregister ref + force a second render so TransformControls appears
   useEffect(() => {
     if (groupRef.current) groupRefs.set(obj.id, groupRef.current);
     setMounted(true);
     return () => { groupRefs.delete(obj.id); };
   }, [obj.id]);
 
-  // 拖拽时实时吸附
+  // Real-time snapping while dragging
   useEffect(() => {
     if (!selected || !tcRef.current || !settings.snap) return;
     const tc = tcRef.current;
@@ -310,7 +310,7 @@ function SceneModel({
         rotation={obj.rotation}
         scale={obj.scale}
       >
-        {/* 漫步是纯视觉偏移；选中/关闭漫步时由 R3F 按 props 归位 */}
+        {/* Wandering is a pure visual offset; R3F resets position via props when selected/wandering is disabled */}
         <primitive
           object={clone}
           onPointerDown={(e: any) => e.stopPropagation()}
@@ -366,8 +366,8 @@ function SceneModel({
   );
 }
 
-/** 化身漫步控制器：家半径内随机选点 → 转身 → 走过去 → 发呆，循环。
- *  只动 group 的视觉位置，不写回场景数据；卸载时 R3F 按 props 归位。 */
+/** Avatar wander controller: pick a random point within home radius → turn → walk over → idle, loop.
+ *  Only moves the group's visual position, doesn't write back to scene data; R3F resets position via props on unmount. */
 function AvatarWanderer({
   group,
   clone,
@@ -380,9 +380,9 @@ function AvatarWanderer({
   home: [number, number, number];
 }) {
   const mixer = useMemo(() => new THREE.AnimationMixer(clone), [clone]);
-  // 动作的启动/停止必须成对放在 effect 里：StrictMode 开发模式会挂载→卸载→
-  // 再挂载，若 play 在 useMemo、stop 在 cleanup，重挂载后动作被停掉且无人
-  // 重新 play——表现为化身滑步（平移但不播动画）。
+  // Action start/stop must be paired inside the effect: StrictMode dev mode mounts→unmounts→
+  // remounts; if play is in useMemo and stop is in cleanup, the action gets stopped on remount and nothing
+  // replays it — this shows up as the avatar sliding (translating without playing the animation).
   const actionRef = useRef<THREE.AnimationAction | null>(null);
   const state = useRef({
     mode: "idle" as "idle" | "walk",
@@ -395,22 +395,22 @@ function AvatarWanderer({
   useEffect(() => {
     const source = animations.find((c) => /walk/i.test(c.name)) ?? animations[0];
     if (!source) return;
-    // 剥离根骨骼位移轨道（root motion）：Tripo 走路动画自带 Root.position
-    // 前进位移，每个循环结束会瞬移回循环起点；位移改由漫步控制器全权负责。
-    // clone 后过滤，避免污染 useGLTF 的共享缓存。
+    // Strip the root bone translation track (root motion): Tripo's walk animation has its own Root.position
+    // forward translation, which teleports back to the loop start at the end of each cycle; translation is now fully handled by the wander controller.
+    // Filter after cloning to avoid polluting useGLTF's shared cache.
     const clip = source.clone();
     clip.tracks = clip.tracks.filter(
       (t) => !(t.name.endsWith(".position") && /(root|hips|pelvis|armature)/i.test(t.name)),
     );
     const a = mixer.clipAction(clip);
-    // 关键机制：动作权重 < 1 时，混合器会用「绑定时的原始姿势」补足剩余权重——
-    // 即模型静置的自然站姿（Tripo 绑骨用的立绘原姿态）。因此驻足 = fadeOut
-    // 权重到 0（自动回到站姿），起步 = fadeIn（站姿平滑长出步态），不再需要
-    // 暂停在某一帧的各种猜测。play 一次建立绑定（原始姿势在此刻被快照）。
+    // Key mechanism: when action weight < 1, the mixer fills the remaining weight with the "pose at bind time" —
+    // i.e. the model's natural idle stance (Tripo's original bind pose). So idling = fadeOut
+    // the weight to 0 (auto-returns to idle stance), and starting to walk = fadeIn (idle stance smoothly grows into a walking gait) — no need
+    // to guess which frame to pause on. play() is called once to establish the binding (the original pose is snapshotted at this moment).
     a.play();
     a.setEffectiveWeight(0);
 
-    // 采样找一个双脚贴地的帧作为起步相位（从近似站姿开始迈步，fadeIn 更顺）
+    // Sample to find a frame where both feet are grounded, to use as the starting phase (stepping off from a near-idle pose makes fadeIn smoother)
     let walkStartTime = 0;
     const feet: THREE.Object3D[] = [];
     clone.traverse((n) => { if (/foot/i.test(n.name) && feet.length < 2) feet.push(n); });
@@ -430,7 +430,7 @@ function AvatarWanderer({
         const score = Math.max(fa.y, fb.y) + 0.3 * Math.hypot(fa.x - fb.x, fa.z - fb.z);
         if (score < best) { best = score; walkStartTime = t; }
       }
-      // 采样结束：权重归零 + 应用一帧，骨骼回到原始站姿
+      // End of sampling: weight reset to 0 + apply one frame, bones return to original idle stance
       a.setEffectiveWeight(0);
       mixer.update(0);
     }
@@ -452,7 +452,7 @@ function AvatarWanderer({
   useFrame((_, rawDelta) => {
     const g = group.current;
     if (!g) return;
-    const delta = Math.min(rawDelta, 0.1); // 掉帧/切后台回来防瞬移
+    const delta = Math.min(rawDelta, 0.1); // Prevent teleporting after dropped frames / returning from background
     mixer.update(delta);
     const st = state.current;
     const a = actionRef.current;
@@ -462,23 +462,23 @@ function AvatarWanderer({
       if (st.timer <= 0) {
         pickTarget(st);
         st.mode = "walk";
-        st.pivoting = true; // 先站着把方向转过来再迈步
+        st.pivoting = true; // Turn to face the direction while standing still before stepping
       }
       return;
     }
 
-    // walk：朝目标转身 + 前进
+    // walk: turn toward target + advance
     const pos = g.position;
     const dx = st.target.x - pos.x;
     const dz = st.target.z - pos.z;
     const dist = Math.hypot(dx, dz);
     if (dist < 0.15) {
-      // 40% 概率不歇脚：直接选下一个目标继续走（边走边转），减少停顿次数
+      // 40% chance to skip resting: pick the next target directly and keep walking (turning while walking), reducing the number of pauses
       if (Math.random() < 0.4) {
         pickTarget(st);
         return;
       }
-      // 驻足：权重淡出 0.35s，骨骼自动混合回原始站姿
+      // Idle: weight fades out over 0.35s, bones automatically blend back to the original idle stance
       if (a) a.fadeOut(0.35);
       st.mode = "idle";
       st.timer = 1.9 + Math.random() * 2.5;
@@ -488,16 +488,16 @@ function AvatarWanderer({
     let yawDiff = targetYaw - g.rotation.y;
     while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
     while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
-    // 起步转身：保持站姿快速把方向转过来（像真人先转身再走）
+    // Starting turn: quickly turn to face the direction while staying in idle stance (like a real person turning before walking)
     if (st.pivoting) {
       const pivotTurn = 5 * delta;
       g.rotation.y += Math.max(-pivotTurn, Math.min(pivotTurn, yawDiff));
       if (Math.abs(yawDiff) < 0.45) {
         st.pivoting = false;
         if (a) {
-          // 从双脚贴地相位起步，权重淡入：站姿平滑长出步态。
-          // 注意：fadeIn 是在基础权重上乘 0→1 的系数，基础权重必须先恢复为 1
-          //（挂载时用 setEffectiveWeight(0) 压到 0 了）；reset+play 重新激活动作。
+          // Start from the phase where both feet are grounded, weight fades in: idle stance smoothly grows into a walking gait.
+          // Note: fadeIn multiplies the base weight by a 0→1 coefficient, so the base weight must first be restored to 1
+          // (it was pushed to 0 with setEffectiveWeight(0) on mount); reset+play reactivates the action.
           a.setEffectiveWeight(1);
           a.reset();
           a.time = st.walkStartTime;
@@ -510,7 +510,7 @@ function AvatarWanderer({
     }
     const maxTurn = 3.5 * delta;
     g.rotation.y += Math.max(-maxTurn, Math.min(maxTurn, yawDiff));
-    // 边转边走：前进速度按朝向对齐度缩放；腿速跟随移动速度
+    // Turning while walking: forward speed scales with heading alignment; leg speed follows movement speed
     const align = Math.max(0, Math.cos(yawDiff));
     const speed = 0.6 * align;
     if (a) a.timeScale = 0.35 + 0.75 * align;
@@ -533,16 +533,16 @@ function ModelLoadingPlaceholder({ obj }: { obj: SceneObject }) {
         <meshBasicMaterial color="#f5c668" transparent opacity={0.28} side={THREE.DoubleSide} />
       </mesh>
       <Html center distanceFactor={8} position={[0, 0.45, 0]}>
-        <div className="wb-model-loading-label">正在加载 {obj.name}</div>
+        <div className="wb-model-loading-label">Loading {obj.name}</div>
       </Html>
     </group>
   );
 }
 
 /**
- * 先把球占位画出一帧，再挂载真正的模型（开始加载/解析 GLB）。
- * 否则低配安卓上，模型加载会同步卡死主线程，占位那一帧来不及画出来，
- * 模型直接"啪"地出现——看不到加载过渡。延后 ~2 帧给浏览器一个绘制占位的窗口。
+ * First render the sphere placeholder for one frame, then mount the actual model (start loading/parsing the GLB).
+ * Otherwise, on low-end Android, model loading synchronously blocks the main thread, and the placeholder frame doesn't get a chance to render,
+ * so the model just pops in — no loading transition is visible. Defer ~2 frames to give the browser a window to paint the placeholder.
  */
 function DeferredSceneModel(props: ComponentProps<typeof SceneModel>) {
   const [ready, setReady] = useState(false);
@@ -559,14 +559,14 @@ function DeferredSceneModel(props: ComponentProps<typeof SceneModel>) {
   );
 }
 
-/* ── 透明点击面（仅用于放置，不阻止射线穿透到物体） ── */
+/* ── Transparent click plane (only for placement, doesn't block raycasts to objects) ── */
 function Ground({ onClickGround }: { onClickGround: (point: [number, number, number]) => void }) {
   return (
     <mesh
       rotation={[-Math.PI / 2, 0, 0]}
       position={[0, -0.01, 0]}
       onClick={(e) => {
-        // 不 stopPropagation — 让物体的 onClick 优先
+        // Don't stopPropagation — let the object's onClick take priority
         onClickGround([e.point.x, 0, e.point.z]);
       }}
     >
@@ -590,7 +590,7 @@ function Controls() {
   );
 }
 
-/* ── 主视口 ── */
+/* ── Main viewport ── */
 export default function SceneViewport({
   objects,
   selectedId,
@@ -611,7 +611,7 @@ export default function SceneViewport({
   onPlace: (position: [number, number, number]) => void;
   onTransformEnd: (id: string, pos: [number, number, number], rot: [number, number, number], scale: [number, number, number]) => void;
   onSceneMounted?: () => void;
-  /** 角色化身名牌：characterId → 名字 */
+  /** Character avatar nameplate: characterId → name */
   characterNameById?: Map<string, string>;
   onCharacterTap?: (characterId: string) => void;
 }) {
@@ -671,8 +671,8 @@ export default function SceneViewport({
       background: settings.theme,
     }}>
       <Canvas
-        // 限制像素比：高分屏手机默认 DPR=3 → 帧缓冲 9 倍像素，弱机显存顶爆闪退。
-        // 钳到 1.5 后约 1/4 负载，3D 画面仅略软，是防闪退最关键的一刀（对所有设备生效）。
+        // Cap the pixel ratio: high-DPI phones default to DPR=3 → 9x the framebuffer pixels, which blows out VRAM and crashes weak devices.
+        // Clamping to 1.5 cuts the load to about 1/4; the 3D image is only slightly softer. This is the single most important crash-prevention fix (applies to all devices).
         dpr={[1, 1.5]}
         gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.2, alpha: true }}
         shadows={settings.shadows}
@@ -681,7 +681,7 @@ export default function SceneViewport({
         <PerspectiveCamera makeDefault fov={40} position={[8, 6, 8]} />
         <Controls />
 
-        {/* ── 灯光（受全局亮度/色温影响） ── */}
+        {/* ── Lighting (affected by global brightness/color temperature) ── */}
         <ambientLight
           intensity={0.4 * settings.globalBrightness}
           color={new THREE.Color().lerpColors(
@@ -716,17 +716,17 @@ export default function SceneViewport({
         />
         <directionalLight position={[-4, 4, 2]} intensity={0.5 * settings.globalBrightness} color="#eee8e0" />
 
-        {/* HDRI 仅用于 PBR 反射 */}
+        {/* HDRI is only used for PBR reflections */}
         {settings.hdri && (
           <Suspense fallback={null}>
             <Environment files="/hdri/park.hdr" />
           </Suspense>
         )}
 
-        {/* ── 地面 ── */}
+        {/* ── Ground ── */}
         <Ground onClickGround={handleClickGround} />
 
-        {/* 后处理 */}
+        {/* Post-processing */}
         {settings.bloom && (
           <EffectComposer enableNormalPass={false}>
             <Bloom luminanceThreshold={0.8} intensity={0.2} mipmapBlur />
@@ -734,7 +734,7 @@ export default function SceneViewport({
         )}
 
         {(() => {
-          // 性能配额：同屏最多 3 个化身漫步，其余保持手办状态
+          // Performance quota: at most 3 avatars wander on screen at once, the rest stay in figurine (static) state
           const motionQuota = new Set(
             objects.filter((o) => o.characterId && !o.light).slice(0, 3).map((o) => o.id)
           );
@@ -761,7 +761,7 @@ export default function SceneViewport({
               onPlace={handleClickGround}
               onTransformEnd={onTransformEnd}
               onLoaded={handleModelLoaded}
-              characterLabel={obj.characterId ? (characterNameById?.get(obj.characterId) ?? "未知角色") : undefined}
+              characterLabel={obj.characterId ? (characterNameById?.get(obj.characterId) ?? "Unknown Character") : undefined}
               onCharacterTap={obj.characterId ? () => onCharacterTap?.(obj.characterId!) : undefined}
               motionEnabled={settings.avatarMotion !== false && motionQuota.has(obj.id)}
             />
@@ -772,15 +772,15 @@ export default function SceneViewport({
 
       {placingModel && (
         <div className="wb-placing-hint">
-          点击地面放置「{placingModel.name}」· 按 Esc 取消
+          Click the ground to place "{placingModel.name}" · Press Esc to cancel
         </div>
       )}
       {loadingModelNames.length > 0 && (
         <div className="wb-model-loading-toast" role="status" aria-live="polite">
           <span className="wb-thumb-loading" aria-hidden="true" />
           <span>
-            正在加载「{loadingModelNames[0]}」
-            {loadingModelNames.length > 1 ? ` 等 ${loadingModelNames.length} 个模型` : ""}
+            Loading "{loadingModelNames[0]}"
+            {loadingModelNames.length > 1 ? ` and ${loadingModelNames.length} more models` : ""}
           </span>
         </div>
       )}

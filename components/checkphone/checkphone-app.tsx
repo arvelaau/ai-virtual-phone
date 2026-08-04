@@ -598,8 +598,8 @@ export function CheckPhoneApp({ onClose }: CheckPhoneAppProps) {
                     </div>
                     <div className="cp-desktop-settings-row">
                       <div>
-                        <strong>双语翻译</strong>
-                        <span>外语文本自动附中文译文</span>
+                        <strong>Bilingual Translation</strong>
+                        <span>Automatically append Chinese translation to foreign text</span>
                       </div>
                       <Toggle
                         checked={checkPhoneSettings.bilingualTranslationEnabled}
@@ -609,8 +609,8 @@ export function CheckPhoneApp({ onClose }: CheckPhoneAppProps) {
                     </div>
                     <div className="cp-desktop-settings-row">
                       <div>
-                        <strong>折叠中文</strong>
-                        <span>关闭后默认直接展开中文</span>
+                        <strong>Collapse Chinese</strong>
+                        <span>When off, Chinese text is expanded by default</span>
                       </div>
                       <Toggle
                         checked={checkPhoneSettings.collapseBilingualTranslation}
@@ -626,7 +626,7 @@ export function CheckPhoneApp({ onClose }: CheckPhoneAppProps) {
                           onClick={openCheckPhonePromptEditor}
                           disabled={!!activeState?.loading}
                         >
-                          编辑双语提示词
+                          Edit Bilingual Prompt
                         </button>
                       </div>
                     )}
@@ -659,7 +659,7 @@ export function CheckPhoneApp({ onClose }: CheckPhoneAppProps) {
 
           {manifest && activeState?.loading && (
             <div className="cp-refresh-indicator cp-refresh-indicator--floating" aria-live="polite">
-              <span className="cp-refresh-indicator-text">正在刷新桌面</span>
+              <span className="cp-refresh-indicator-text">Refreshing desktop</span>
               <span className="cp-refresh-indicator-dots" aria-hidden="true">
                 <i></i><i></i><i></i>
               </span>
@@ -910,11 +910,11 @@ export function CheckPhoneApp({ onClose }: CheckPhoneAppProps) {
         </div>
         {confirmClearOpen && (
           <ConfirmDialog
-            title="清空当前桌面？"
-            message="确认后会清空这位角色已生成的查手机桌面缓存。之后重新刷新时，不会再带入旧桌面内容。"
+            title="Clear current desktop?"
+            message="This clears the generated CheckPhone desktop cache for this character. Refreshing again won't bring back the old desktop."
             variant="danger"
-            confirmLabel="确认清空"
-            cancelLabel="取消"
+            confirmLabel="Confirm Clear"
+            cancelLabel="Cancel"
             onConfirm={handleClearManifest}
             onCancel={() => setConfirmClearOpen(false)}
           />
@@ -924,21 +924,21 @@ export function CheckPhoneApp({ onClose }: CheckPhoneAppProps) {
             className="cp-prompt-modal-overlay"
             role="dialog"
             aria-modal="true"
-            aria-label="编辑查手机双语提示词"
+            aria-label="Edit CheckPhone bilingual prompt"
             onClick={() => setPromptEditorOpen(false)}
           >
             <div className="cp-prompt-modal" onClick={(event) => event.stopPropagation()}>
               <div className="cp-prompt-modal-head">
                 <div>
-                  <h3>编辑双语提示词</h3>
-                  <p>仅影响查手机页面的双语文本生成。</p>
+                  <h3>Edit Bilingual Prompt</h3>
+                  <p>Only affects bilingual text generation on the CheckPhone pages.</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setPromptDraft(DEFAULT_CHECKPHONE_BILINGUAL_PROMPT)}
                   disabled={!!activeState?.loading}
                 >
-                  恢复默认
+                  Restore Default
                 </button>
               </div>
               <textarea
@@ -948,10 +948,10 @@ export function CheckPhoneApp({ onClose }: CheckPhoneAppProps) {
               />
               <div className="cp-prompt-modal-actions">
                 <button type="button" onClick={() => setPromptEditorOpen(false)}>
-                  取消
+                  Cancel
                 </button>
                 <button type="button" onClick={saveCheckPhonePromptDraft} disabled={!!activeState?.loading}>
-                  保存
+                  Save
                 </button>
               </div>
             </div>
@@ -967,7 +967,7 @@ export function CheckPhoneApp({ onClose }: CheckPhoneAppProps) {
       loadCharacters()
         .map(character => ({
           characterId: character.id,
-          name: character.name || "未知角色",
+          name: character.name || "Unknown Character",
           entries: loadCheckPhoneProjectionEntries(character.id),
         }))
         .filter(group => group.entries.length > 0),
@@ -993,7 +993,7 @@ export function CheckPhoneApp({ onClose }: CheckPhoneAppProps) {
   };
 
   const formatHistoryContent = (content: string, characterName: string) =>
-    content.replace(/\{\{user\}\}/g, "你").replace(/\{\{char\}\}/g, characterName);
+    content.replace(/\{\{user\}\}/g, "You").replace(/\{\{char\}\}/g, characterName);
 
   return (
     <PageShell
@@ -1004,7 +1004,7 @@ export function CheckPhoneApp({ onClose }: CheckPhoneAppProps) {
         <button
           type="button"
           className="cp-history-btn"
-          aria-label="查手机记录"
+          aria-label="CheckPhone Log"
           onClick={openHistory}
         >
           <History size={18} strokeWidth={1.8} />
@@ -1094,13 +1094,13 @@ export function CheckPhoneApp({ onClose }: CheckPhoneAppProps) {
           </div>
         </div>
 
-        {/* Access log: 查手机记录（注入短期记忆的条目，可逐条删除） */}
+        {/* Access log: CheckPhone log (entries injected into short-term memory, deletable one by one) */}
         {historyOpen && (
           <div
             className="cp-history-overlay"
             role="dialog"
             aria-modal="true"
-            aria-label="查手机记录"
+            aria-label="CheckPhone Log"
             onClick={() => setHistoryOpen(false)}
           >
             <div className="cp-history-modal" onClick={(event) => event.stopPropagation()}>
@@ -1110,12 +1110,12 @@ export function CheckPhoneApp({ onClose }: CheckPhoneAppProps) {
                     <span>ACCESS LOG</span>
                     <span className="cp-terminal-pulse-dot" />
                   </div>
-                  <div className="cp-history-subtitle">查手机记录 · 会注入对应角色的短期记忆</div>
+                  <div className="cp-history-subtitle">CheckPhone log · Injected into this character's short-term memory</div>
                 </div>
                 <button
                   type="button"
                   className="cp-history-close"
-                  aria-label="关闭"
+                  aria-label="Close"
                   onClick={() => setHistoryOpen(false)}
                 >
                   <X size={16} strokeWidth={2} />
@@ -1129,13 +1129,13 @@ export function CheckPhoneApp({ onClose }: CheckPhoneAppProps) {
                   <div key={group.characterId} className="cp-history-group">
                     <div className="cp-history-group-head">
                       <span className="cp-history-group-name">{group.name}</span>
-                      <span className="cp-history-group-count">{group.entries.length} 条</span>
+                      <span className="cp-history-group-count">{group.entries.length}</span>
                       <button
                         type="button"
                         className="cp-history-clear-btn"
                         onClick={() => setConfirmClearHistoryCharId(group.characterId)}
                       >
-                        清空
+                        Clear
                       </button>
                     </div>
                     {[...group.entries].reverse().map((entry) => (
@@ -1146,7 +1146,7 @@ export function CheckPhoneApp({ onClose }: CheckPhoneAppProps) {
                         <button
                           type="button"
                           className="cp-history-entry-delete"
-                          aria-label="删除该记录"
+                          aria-label="Delete this entry"
                           onClick={() => handleDeleteHistoryEntry(group.characterId, entry.id)}
                         >
                           <Trash2 size={14} strokeWidth={1.8} />
@@ -1161,11 +1161,11 @@ export function CheckPhoneApp({ onClose }: CheckPhoneAppProps) {
         )}
         {confirmClearHistoryCharId && (
           <ConfirmDialog
-            title="清空该角色的查手机记录？"
-            message="清空后这些记录将不再注入该角色的短期记忆，无法恢复。是否继续？"
+            title="Clear this character's CheckPhone log?"
+            message="Once cleared, these entries will no longer be injected into this character's short-term memory and cannot be recovered. Continue?"
             variant="danger"
-            confirmLabel="清空"
-            cancelLabel="取消"
+            confirmLabel="Clear"
+            cancelLabel="Cancel"
             onConfirm={handleClearHistoryForChar}
             onCancel={() => setConfirmClearHistoryCharId(null)}
           />

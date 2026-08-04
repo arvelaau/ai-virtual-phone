@@ -87,8 +87,8 @@ export function IconGlyph({ id, className }: IconGlyphProps) {
   );
 }
 
-// ===== 无图标自定义 APP 的兜底字形 =====
-// 与内置图标同一套 mdi 风格,按名字哈希稳定选取,只有图形不同、配色跟随桌面主题。
+// ===== Fallback glyphs for custom apps without an icon =====
+// Same mdi style as the built-in icons, deterministically chosen by name hash — only the shape differs; color follows the desktop theme.
 const CUSTOM_APP_FALLBACK_PATHS = [
   mdiPuzzle,
   mdiHeart,

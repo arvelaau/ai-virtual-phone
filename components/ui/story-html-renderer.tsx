@@ -29,7 +29,7 @@ type Segment =
     | { type: "html-page"; content: string }
     | { type: "fold"; label: string; content: string };
 
-/** 折叠块：think/thinking（思维链）带「翻译」按钮与 中文/原文/对照 切换；其余折叠标签（summary、自定义等）不带 */
+/** Fold block: think/thinking (chain-of-thought) has a "Translate" button plus a Chinese/Original/Side-by-Side toggle; other fold tags (summary, custom, etc.) do not */
 function StoryFoldBlock({ label, content, scopeClass, children }: {
     label: string;
     content: string;
@@ -50,9 +50,9 @@ function StoryFoldBlock({ label, content, scopeClass, children }: {
         try {
             const result = await translateReasoningText(content);
             if (result.content) { setTranslation(result.content); setViewMode("both"); }
-            else setError(result.error || "翻译失败，请重试");
+            else setError(result.error || "Translation failed, please try again");
         } catch {
-            setError("翻译失败，请重试");
+            setError("Translation failed, please try again");
         } finally {
             setTranslating(false);
         }
@@ -68,12 +68,12 @@ function StoryFoldBlock({ label, content, scopeClass, children }: {
                 {label}
                 {canTranslate && !translation && (
                     <button type="button" className="story-fold-translate-btn" onClick={handleTranslate}>
-                        {translating ? "翻译中…" : "翻译"}
+                        {translating ? "Translating…" : "Translate"}
                     </button>
                 )}
                 {canTranslate && translation && (
                     <span className="story-fold-view-switch">
-                        {([["zh", "中文"], ["orig", "原文"], ["both", "对照"]] as const).map(([mode, text]) => (
+                        {([["zh", "Chinese"], ["orig", "Original"], ["both", "Side-by-Side"]] as const).map(([mode, text]) => (
                             <button
                                 key={mode}
                                 type="button"
@@ -234,12 +234,16 @@ function HtmlPageSegment({ html, onOptionSelect, htmlPageMode }: HtmlPageProps) 
     const contained = htmlPageMode === "contained";
 
     const srcDoc = useMemo(() => {
-        // 高度桥接：照搬黑市剧场那套"按构造稳定"的做法——getBoundingClientRect 测真实
-        // 内容、能缩回去；MutationObserver + 一堆事件捕捉任何变化(自定义按钮也行)；
-        // body 高=内容高，父层改 iframe 高不反馈到内容 → 测出不变 → 天然不循环。
-        // iframe 内部永远不滚（iOS 对 iframe 内部文档滚动的手势支持不可靠，生成页里的
-        // fixed/100vh 元素会让整页划不动）；contained 模式改由外层同文档 div 滚动。
-        // height:auto 把生成页常见的 height:100vh 压回内容高，保证测量与手势链正确。
+        // Height bridging: reuses the "stable-by-construction" approach from the black-market
+        // theater feature — getBoundingClientRect measures real content and can shrink back down;
+        // MutationObserver + a bunch of events catch any change (custom buttons included);
+        // body height = content height, and the parent changing the iframe height doesn't feed
+        // back into the content → the measurement stays stable → naturally no feedback loop.
+        // The iframe itself never scrolls internally (iOS's gesture support for scrolling inside
+        // an iframe document is unreliable, and fixed/100vh elements in generated pages would make
+        // the whole page unswipeable); in "contained" mode, scrolling is instead handled by the
+        // outer same-document div. height:auto collapses the height:100vh commonly seen in
+        // generated pages back down to content height, keeping measurement and gesture chaining correct.
         const bridge = `<style>html,body{overflow:hidden!important;height:auto!important;min-height:0!important}</style><script>(function(){function measure(){var d=document.documentElement;var b=document.body;if(!b)return 0;var br=b.getBoundingClientRect();var h=Math.max(br.height,b.scrollHeight||0,d?d.scrollHeight||0:0);for(var i=0;i<b.children.length;i++){var c=b.children[i];var r=c.getBoundingClientRect();if(r.width||r.height)h=Math.max(h,r.bottom-br.top,c.scrollHeight||0)}return Math.ceil(h)}function send(){window.parent.postMessage({type:"_rhr",h:measure()},"*")}function schedule(){requestAnimationFrame(function(){send();requestAnimationFrame(send)})}window.addEventListener("load",schedule);window.addEventListener("resize",schedule);document.addEventListener("click",function(e){var t=e.target&&e.target.closest&&e.target.closest("[data-action]");if(t){var a=t.getAttribute("data-action");if(a){e.preventDefault();e.stopPropagation();window.parent.postMessage({type:"_rhr_opt",text:a},"*")}}schedule()},true);document.addEventListener("toggle",schedule,true);document.addEventListener("transitionend",schedule,true);document.addEventListener("animationend",schedule,true);if(window.MutationObserver)new MutationObserver(schedule).observe(document.documentElement,{attributes:true,childList:true,subtree:true,characterData:true});if(window.ResizeObserver){var ro=new ResizeObserver(schedule);ro.observe(document.documentElement);if(document.body)ro.observe(document.body)}setTimeout(send,80);setTimeout(send,500);setTimeout(send,1600)})();<\/script>`;
         let h = html;
         // Convert basic markdown inside hidden data divs
@@ -289,8 +293,9 @@ function HtmlPageSegment({ html, onOptionSelect, htmlPageMode }: HtmlPageProps) 
 
     if (!contained) return frame;
 
-    // contained：iframe 按内容全高撑开，滚动交给这个同文档的外层容器
-    // （iOS 上 iframe 内部滚动手势不可靠，同文档滚动器则始终可靠）
+    // contained: the iframe expands to its full content height, and scrolling is delegated to
+    // this same-document outer container (iframe-internal scroll gestures are unreliable on iOS,
+    // while a same-document scroller is always reliable)
     return (
         <div style={{
             maxHeight: "min(68dvh, 560px)",

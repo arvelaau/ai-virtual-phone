@@ -66,23 +66,23 @@ function cloneJson<T>(value: T): T {
 }
 
 function uniqueImportedName(baseName: string, existingNames: Set<string>): string {
-    const base = baseName.trim() || "导入工具";
+    const base = baseName.trim() || "Imported Tool";
     if (!existingNames.has(base)) {
         existingNames.add(base);
         return base;
     }
 
-    const first = `${base}（导入）`;
+    const first = `${base} (Imported)`;
     if (!existingNames.has(first)) {
         existingNames.add(first);
         return first;
     }
 
     let index = 2;
-    while (existingNames.has(`${base}（导入 ${index}）`)) {
+    while (existingNames.has(`${base} (Imported ${index})`)) {
         index += 1;
     }
-    const next = `${base}（导入 ${index}）`;
+    const next = `${base} (Imported ${index})`;
     existingNames.add(next);
     return next;
 }
@@ -92,7 +92,7 @@ function customAppToolKey(tool: Pick<CustomAppToolEntry, "appId" | "id">): strin
 }
 
 function customAppToolVisibilityLabel(tool: CustomAppToolEntry): string {
-    return tool.visibility === "shared" ? "共享" : "仅应用内";
+    return tool.visibility === "shared" ? "Shared" : "App only";
 }
 
 function isCustomAppToolEnabled(tool: CustomAppToolEntry): boolean {
@@ -251,25 +251,25 @@ export function ToolboxSettings() {
 
     function getAutoOnlyCapabilityDetail(id: string): string {
         if (id === MUSIC_CONTROL_CAPABILITY_ID) {
-            return "网易云音乐开启后，角色可以通过工具读取你的本地歌单、网易云歌单、歌单歌曲和当前播放列表，并执行加入播放列表、查看当前歌曲、切换歌曲等播放操作。";
+            return "When NetEase Cloud Music is enabled, the character can use tools to read your local playlists, NetEase Cloud playlists, playlist songs, and the current playback queue, and can perform actions like adding to the playlist, checking the current song, or switching songs.";
         }
         if (id === NOTE_WALL_CAPABILITY_ID) {
-            return "便签墙开启后，角色可以通过工具向公共便签墙写入便签，用来留下留言、记录想法或把聊天中的内容整理成可回看的便签。";
+            return "When the Note Wall is enabled, the character can use tools to write notes to the shared note wall, to leave messages, jot down thoughts, or turn chat content into notes you can look back on.";
         }
         if (id === CALENDAR_MANAGEMENT_CAPABILITY_ID) {
-            return "日历管理开启后，角色可以通过工具查看当前角色的日程，并添加、修改或取消日程安排；相关操作会走工具箱能力，不再依赖旧的日程指令。";
+            return "When Calendar Management is enabled, the character can use tools to view its own schedule, and add, edit, or cancel events; these actions go through the toolbox capability and no longer rely on the old schedule commands.";
         }
         if (id === LOCAL_DATA_LIBRARY_CAPABILITY_ID) {
-            return "本地资料库开启后，角色可以通过工具浏览虚拟资料目录，并读取或搜索本机小手机里的角色卡、聊天、朋友圈、记忆、工具箱、设置和应用数据。";
+            return "When the Local Data Library is enabled, the character can use tools to browse the virtual data directory, and read or search this device's character cards, chats, moments, memories, toolbox, settings, and app data.";
         }
         if (id === TOOLBOX_MANAGEMENT_CAPABILITY_ID) {
-            return "工具箱管理开启后，角色可以创建和维护它自己写入的 REST 工具、REST 套件、组合工具和组合工具套件；系统会拒绝修改用户手动创建或内置内容。";
+            return "When Toolbox Management is enabled, the character can create and maintain the REST tools, REST packages, workflow tools, and workflow packages it writes itself; the system will refuse to modify content you created manually or built-in content.";
         }
-        return "这是内置工具能力，开启后角色可以在聊天中按需获取并调用对应工具。";
+        return "This is a built-in tool capability. Once enabled, the character can fetch and call the corresponding tool as needed during chat.";
     }
 
     function addRestPackage() {
-        setDraftRestPackage(createRestToolPackage("新工具套件"));
+        setDraftRestPackage(createRestToolPackage("New Tool Package"));
     }
     function confirmDraftRestPackage() {
         if (!draftRestPackage) return;
@@ -281,7 +281,7 @@ export function ToolboxSettings() {
     }
 
     function addRestTool(packageId?: string) {
-        setDraftRest(createRestTool("新工具", packageId));
+        setDraftRest(createRestTool("New Tool", packageId));
     }
     function confirmDraftRest() {
         if (!draftRest) return;
@@ -293,7 +293,7 @@ export function ToolboxSettings() {
     }
 
     function addCompositePackage() {
-        setDraftCompositePackage(createCompositeToolPackage("新组合套件"));
+        setDraftCompositePackage(createCompositeToolPackage("New Workflow Package"));
     }
     function confirmDraftCompositePackage() {
         if (!draftCompositePackage) return;
@@ -305,7 +305,7 @@ export function ToolboxSettings() {
     }
 
     function addCompositeTool(packageId?: string) {
-        setDraftComposite(createCompositeTool("新组合工具", packageId));
+        setDraftComposite(createCompositeTool("New Workflow Tool", packageId));
     }
     function confirmDraftComposite() {
         if (!draftComposite) return;
@@ -317,7 +317,7 @@ export function ToolboxSettings() {
     }
 
     function addMcpServer() {
-        setDraftMcp(createMcpServer("新MCP服务器", ""));
+        setDraftMcp(createMcpServer("New MCP Server", ""));
     }
     function confirmDraftMcp() {
         if (!draftMcp) return;
@@ -366,7 +366,7 @@ export function ToolboxSettings() {
                 updateMcpServer(server.id, { discoveredTools: tools });
             }
         } catch (e) {
-            setDiscoverError(e instanceof Error ? e.message : "发现失败");
+            setDiscoverError(e instanceof Error ? e.message : "Discovery failed");
         } finally {
             setIsDiscovering(false);
         }
@@ -381,7 +381,7 @@ export function ToolboxSettings() {
             entries.push({
                 key: `rest:${tool.id}`,
                 label: tool.name,
-                description: tool.description || "REST 单件工具",
+                description: tool.description || "Single REST tool",
                 kind: "REST",
             });
         }
@@ -390,15 +390,15 @@ export function ToolboxSettings() {
             entries.push({
                 key: `restPackage:${pkg.id}`,
                 label: pkg.name,
-                description: pkg.description || `${children.length} 个 REST 子工具`,
-                kind: "REST 套件",
+                description: pkg.description || `${children.length} REST sub-tools`,
+                kind: "REST Package",
             });
             for (const tool of children) {
                 entries.push({
                     key: `rest:${tool.id}`,
                     label: tool.name,
-                    description: tool.description || `属于 ${pkg.name}`,
-                    kind: "REST 子工具",
+                    description: tool.description || `Belongs to ${pkg.name}`,
+                    kind: "REST Sub-tool",
                 });
             }
         }
@@ -407,8 +407,8 @@ export function ToolboxSettings() {
             entries.push({
                 key: `composite:${tool.id}`,
                 label: tool.name,
-                description: tool.description || "组合单件工具",
-                kind: "组合",
+                description: tool.description || "Single workflow tool",
+                kind: "Workflow",
             });
         }
         for (const pkg of compositePackages) {
@@ -416,15 +416,15 @@ export function ToolboxSettings() {
             entries.push({
                 key: `compositePackage:${pkg.id}`,
                 label: pkg.name,
-                description: pkg.description || `${children.length} 个组合工具`,
-                kind: "组合套件",
+                description: pkg.description || `${children.length} workflow tools`,
+                kind: "Workflow Package",
             });
             for (const tool of children) {
                 entries.push({
                     key: `composite:${tool.id}`,
                     label: tool.name,
-                    description: tool.description || `属于 ${pkg.name}`,
-                    kind: "组合子工具",
+                    description: tool.description || `Belongs to ${pkg.name}`,
+                    kind: "Workflow Sub-tool",
                 });
             }
         }
@@ -433,7 +433,7 @@ export function ToolboxSettings() {
             entries.push({
                 key: `mcp:${server.id}`,
                 label: server.name,
-                description: server.description || server.url || "MCP 服务器",
+                description: server.description || server.url || "MCP Server",
                 kind: "MCP",
             });
         }
@@ -527,7 +527,7 @@ export function ToolboxSettings() {
 
     async function handleExportSelected() {
         if (exportSelection.length === 0) {
-            setToolboxImportError("请至少选择一个要导出的工具。");
+            setToolboxImportError("Please select at least one tool to export.");
             return;
         }
         const exportData = buildExportFile(exportSelection);
@@ -544,7 +544,7 @@ export function ToolboxSettings() {
         try {
             const parsed = JSON.parse(await file.text()) as Partial<ToolboxExportFile>;
             if (parsed.format !== "ai-phone-toolbox" || parsed.version !== 1) {
-                throw new Error("这不是有效的工具箱导出文件。");
+                throw new Error("This is not a valid toolbox export file.");
             }
 
             const importedRestPackages = Array.isArray(parsed.restPackages) ? parsed.restPackages : [];
@@ -559,7 +559,7 @@ export function ToolboxSettings() {
                 && importedCompositeTools.length === 0
                 && importedMcpServers.length === 0
             ) {
-                throw new Error("文件里没有可导入的工具。");
+                throw new Error("The file contains no tools to import.");
             }
 
             const now = Date.now();
@@ -700,9 +700,9 @@ export function ToolboxSettings() {
             persistComposite([...nextCompositeTools, ...compositeTools]);
 
             const count = nextRestPackages.length + nextRestTools.length + nextCompositePackages.length + nextCompositeTools.length + nextMcpServers.length;
-            setToolboxImportMessage(`导入完成：共导入 ${count} 个工具配置。`);
+            setToolboxImportMessage(`Import complete: ${count} tool configuration(s) imported.`);
         } catch (error) {
-            setToolboxImportError(error instanceof Error ? error.message : "导入失败。");
+            setToolboxImportError(error instanceof Error ? error.message : "Import failed.");
         } finally {
             event.target.value = "";
         }
@@ -713,7 +713,7 @@ export function ToolboxSettings() {
             <div className="relative">
                 <button
                     type="button"
-                    aria-label="工具菜单"
+                    aria-label="Tool menu"
                     onClick={() => setToolsMenuOpen(open => !open)}
                     className="modal-header-btn modal-header-btn-muted"
                 >
@@ -730,7 +730,7 @@ export function ToolboxSettings() {
                             }}
                         >
                             <Upload size={14} />
-                            导入工具
+                            Import Tools
                         </button>
                         <button
                             type="button"
@@ -741,7 +741,7 @@ export function ToolboxSettings() {
                             }}
                         >
                             <Download size={14} />
-                            导出工具
+                            Export Tools
                         </button>
                     </div>
                 )}
@@ -795,7 +795,7 @@ export function ToolboxSettings() {
                         className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] border border-black/10 bg-white px-4 text-xs font-bold text-gray-800 shadow-sm transition-all hover:bg-gray-50 hover:shadow-md active:scale-95 focus:outline-none"
                     >
                         <Plus size={15} strokeWidth={1.8} />
-                        <span>添加单件</span>
+                        <span>Add Single</span>
                     </button>
                     <button
                         type="button"
@@ -803,7 +803,7 @@ export function ToolboxSettings() {
                         className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[18px] bg-black px-3 text-xs font-bold text-white shadow-sm transition-all hover:bg-gray-800 hover:shadow-md active:scale-95 focus:outline-none"
                     >
                         <Plus size={14} strokeWidth={1.8} />
-                        添加套件
+                        Add Package
                     </button>
                 </div>
             </div>
@@ -811,8 +811,8 @@ export function ToolboxSettings() {
             {restTools.length === 0 && restPackages.length === 0 ? (
                 <div className="ui-empty-compact mt-2">
                     <div className="ui-icon-circle"><Wrench size={24} /></div>
-                    <span className="menu-label font-semibold">没有工具</span>
-                    <span className="menu-desc max-w-[240px]">可以创建单件 REST 工具，也可以创建套件后添加多个子工具。</span>
+                    <span className="menu-label font-semibold">No tools</span>
+                    <span className="menu-desc max-w-[240px]">You can create a single REST tool, or create a package and add multiple sub-tools.</span>
                 </div>
             ) : (
                 <div className="flex flex-col gap-2">
@@ -823,10 +823,10 @@ export function ToolboxSettings() {
                                 <div className="flex-1 flex flex-col gap-1 min-w-0">
                                     <div className="flex items-center gap-[6px] min-w-0">
                                         <span className="menu-label truncate min-w-0">{t.name}</span>
-                                        {t.builtIn && <span className="ui-badge shrink-0" data-variant="success">内置</span>}
+                                        {t.builtIn && <span className="ui-badge shrink-0" data-variant="success">Built-in</span>}
                                         {t.createdBy === "ai" && <span className="ui-badge shrink-0">AI</span>}
                                     </div>
-                                    <span className="menu-desc !mt-0 truncate">{t.description || "未配置"}</span>
+                                    <span className="menu-desc !mt-0 truncate">{t.description || "Not configured"}</span>
                                 </div>
                             </button>
                             <div className="flex items-center gap-3 shrink-0">
@@ -849,10 +849,10 @@ export function ToolboxSettings() {
                                         <div className="flex-1 flex flex-col gap-1 min-w-0">
                                             <div className="flex items-center gap-[6px] min-w-0">
                                                 <span className="menu-label truncate min-w-0">{pkg.name}</span>
-                                                {pkg.builtIn && <span className="ui-badge shrink-0" data-variant="success">内置</span>}
-                                                <span className="ui-badge shrink-0">{children.length} 个子工具</span>
+                                                {pkg.builtIn && <span className="ui-badge shrink-0" data-variant="success">Built-in</span>}
+                                                <span className="ui-badge shrink-0">{children.length} sub-tools</span>
                                             </div>
-                                            <span className="menu-desc !mt-0 truncate">{pkg.description || "未配置"}</span>
+                                            <span className="menu-desc !mt-0 truncate">{pkg.description || "Not configured"}</span>
                                         </div>
                                     </button>
                                     <div className="flex items-center gap-3 shrink-0">
@@ -871,7 +871,7 @@ export function ToolboxSettings() {
                                 <div className="ml-3 flex flex-col gap-1.5 border-l border-[var(--c-border)] pl-3">
                                     {children.length === 0 ? (
                                         <div className="ui-group-card py-2">
-                                            <span className="menu-desc !mt-0">暂无子工具</span>
+                                            <span className="menu-desc !mt-0">No sub-tools yet</span>
                                         </div>
                                     ) : children.map(t => (
                                         <div key={t.id} className="ui-group-card !flex-row !items-center py-2">
@@ -880,10 +880,10 @@ export function ToolboxSettings() {
                                                 <div className="flex-1 flex flex-col gap-1 min-w-0">
                                                     <div className="flex items-center gap-[6px] min-w-0">
                                                         <span className="menu-label truncate min-w-0">{t.name}</span>
-                                                        {t.builtIn && <span className="ui-badge shrink-0" data-variant="success">内置</span>}
+                                                        {t.builtIn && <span className="ui-badge shrink-0" data-variant="success">Built-in</span>}
                                                         {t.createdBy === "ai" && <span className="ui-badge shrink-0">AI</span>}
                                                     </div>
-                                                    <span className="menu-desc !mt-0 truncate">{t.description || "未配置"}</span>
+                                                    <span className="menu-desc !mt-0 truncate">{t.description || "Not configured"}</span>
                                                 </div>
                                             </button>
                                             <div className="flex items-center gap-3 shrink-0">
@@ -912,7 +912,7 @@ export function ToolboxSettings() {
                         className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] border border-black/10 bg-white px-4 text-xs font-bold text-gray-800 shadow-sm transition-all hover:bg-gray-50 hover:shadow-md active:scale-95 focus:outline-none"
                     >
                         <Plus size={15} strokeWidth={1.8} />
-                        <span>添加单件</span>
+                        <span>Add Single</span>
                     </button>
                     <button
                         type="button"
@@ -920,13 +920,13 @@ export function ToolboxSettings() {
                         className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[18px] bg-black px-3 text-xs font-bold text-white shadow-sm transition-all hover:bg-gray-800 hover:shadow-md active:scale-95 focus:outline-none"
                     >
                         <Plus size={14} strokeWidth={1.8} />
-                        添加套件
+                        Add Package
                     </button>
                 </div>
             </div>
 
             {compositeTools.length === 0 && compositePackages.length === 0 ? (
-                <div className="ui-empty-compact mt-2"><span className="menu-desc">暂无 Workflows</span></div>
+                <div className="ui-empty-compact mt-2"><span className="menu-desc">No Workflows yet</span></div>
             ) : (
                 <div className="flex flex-col gap-2">
                     {singleCompositeTools.map(t => (
@@ -937,9 +937,9 @@ export function ToolboxSettings() {
                                     <div className="flex items-center gap-[6px] min-w-0">
                                         <span className="menu-label truncate min-w-0">{t.name}</span>
                                         {t.createdBy === "ai" && <span className="ui-badge shrink-0">AI</span>}
-                                        <span className="ui-badge shrink-0">{t.steps.length} 步</span>
+                                        <span className="ui-badge shrink-0">{t.steps.length} steps</span>
                                     </div>
-                                    <span className="menu-desc !mt-0 truncate">{t.description || "未配置"}</span>
+                                    <span className="menu-desc !mt-0 truncate">{t.description || "Not configured"}</span>
                                 </div>
                             </button>
                             <div className="flex items-center gap-3 shrink-0">
@@ -970,9 +970,9 @@ export function ToolboxSettings() {
                                             <div className="flex items-center gap-[6px] min-w-0">
                                                 <span className="menu-label truncate min-w-0">{pkg.name}</span>
                                                 {pkg.createdBy === "ai" && <span className="ui-badge shrink-0">AI</span>}
-                                                <span className="ui-badge shrink-0">{children.length} 个组合工具</span>
+                                                <span className="ui-badge shrink-0">{children.length} workflow tools</span>
                                             </div>
-                                            <span className="menu-desc !mt-0 truncate">{pkg.description || "未配置"}</span>
+                                            <span className="menu-desc !mt-0 truncate">{pkg.description || "Not configured"}</span>
                                         </div>
                                     </button>
                                     <div className="flex items-center gap-3 shrink-0">
@@ -981,7 +981,7 @@ export function ToolboxSettings() {
                                             onClick={() => setEditCompositePackageId(pkg.id)}
                                             className="ui-link-btn"
                                             data-variant="muted"
-                                            aria-label="编辑组合套件"
+                                            aria-label="Edit workflow package"
                                         >
                                             <MoreHorizontal size={14} />
                                         </button>
@@ -1001,7 +1001,7 @@ export function ToolboxSettings() {
                                     <div className="ml-3 flex flex-col gap-1.5 border-l border-[var(--c-border)] pl-3">
                                         {children.length === 0 ? (
                                             <div className="ui-group-card py-2">
-                                                <span className="menu-desc !mt-0">暂无组合工具</span>
+                                                <span className="menu-desc !mt-0">No workflow tools yet</span>
                                             </div>
                                         ) : children.map(t => (
                                             <div key={t.id} className="ui-group-card !flex-row !items-center py-2">
@@ -1011,9 +1011,9 @@ export function ToolboxSettings() {
                                                         <div className="flex items-center gap-[6px] min-w-0">
                                                             <span className="menu-label truncate min-w-0">{t.name}</span>
                                                             {t.createdBy === "ai" && <span className="ui-badge shrink-0">AI</span>}
-                                                            <span className="ui-badge shrink-0">{t.steps.length} 步</span>
+                                                            <span className="ui-badge shrink-0">{t.steps.length} steps</span>
                                                         </div>
-                                                        <span className="menu-desc !mt-0 truncate">{t.description || "未配置"}</span>
+                                                        <span className="menu-desc !mt-0 truncate">{t.description || "Not configured"}</span>
                                                     </div>
                                                 </button>
                                                 <div className="flex items-center gap-3 shrink-0">
@@ -1044,7 +1044,7 @@ export function ToolboxSettings() {
                         <div className="flex-1 flex flex-col gap-1 min-w-0">
                             <div className="flex items-center gap-[6px] min-w-0">
                                 <span className="menu-label truncate min-w-0">{item.name}</span>
-                                <span className="ui-badge shrink-0">内置</span>
+                                <span className="ui-badge shrink-0">Built-in</span>
                             </div>
                             <span className="menu-desc !mt-0 truncate">{item.description}</span>
                         </div>
@@ -1079,7 +1079,7 @@ export function ToolboxSettings() {
 
             {customAppTools.length === 0 ? (
                 <div className="ui-empty-compact mt-2">
-                    <span className="menu-desc">暂无共享给聊天和其他 APP 的自定义 APP 工具</span>
+                    <span className="menu-desc">No custom APP tools shared with chat and other APPs yet</span>
                 </div>
             ) : (
                 <div className="flex flex-col gap-2">
@@ -1100,7 +1100,7 @@ export function ToolboxSettings() {
                                                 <span className="ui-badge shrink-0">APP</span>
                                                 <span className="ui-badge shrink-0">{first.appName}</span>
                                             </div>
-                                            <span className="menu-desc !mt-0 truncate">{first.description || "来自自定义 APP 的聊天工具"}</span>
+                                            <span className="menu-desc !mt-0 truncate">{first.description || "Chat tool from a custom APP"}</span>
                                         </div>
                                     </button>
                                     <div className="flex items-center gap-3 shrink-0">
@@ -1117,11 +1117,11 @@ export function ToolboxSettings() {
                                         {first.appIconDataUrl && <img src={first.appIconDataUrl} alt="" className="w-8 h-8 rounded-[8px] object-cover shrink-0" />}
                                         <div className="flex-1 flex flex-col gap-1 min-w-0">
                                             <div className="flex items-center gap-[6px] min-w-0">
-                                                <span className="menu-label truncate min-w-0">{first.appName}工具</span>
+                                                <span className="menu-label truncate min-w-0">{first.appName} Tools</span>
                                                 <span className="ui-badge shrink-0">APP</span>
-                                                <span className="ui-badge shrink-0">{group.length} 个子工具</span>
+                                                <span className="ui-badge shrink-0">{group.length} sub-tools</span>
                                             </div>
-                                            <span className="menu-desc !mt-0 truncate">来自「{first.appName}」的自定义 APP 工具套件</span>
+                                            <span className="menu-desc !mt-0 truncate">Custom APP tool package from "{first.appName}"</span>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3 shrink-0">
@@ -1141,7 +1141,7 @@ export function ToolboxSettings() {
                                                         <span className="menu-label truncate min-w-0">{tool.name}</span>
                                                         <span className="ui-badge shrink-0">{customAppToolVisibilityLabel(tool)}</span>
                                                     </div>
-                                                    <span className="menu-desc !mt-0 truncate">{tool.description || "未配置描述"}</span>
+                                                    <span className="menu-desc !mt-0 truncate">{tool.description || "No description"}</span>
                                                 </div>
                                             </button>
                                             <div className="flex items-center gap-3 shrink-0">
@@ -1164,12 +1164,12 @@ export function ToolboxSettings() {
                     className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[18px] bg-black px-3 text-xs font-bold text-white shadow-sm transition-all hover:bg-gray-800 hover:shadow-md active:scale-95 focus:outline-none"
                 >
                     <Plus size={14} strokeWidth={1.8} />
-                    添加新MCP工具
+                    Add New MCP Tool
                 </button>
             </div>
 
             {mcpServers.length === 0 ? (
-                <div className="ui-empty-compact mt-2"><span className="menu-desc">暂无 MCP 服务器</span></div>
+                <div className="ui-empty-compact mt-2"><span className="menu-desc">No MCP servers yet</span></div>
             ) : (
                 <div className="flex flex-col gap-2">
                     {mcpServers.map(s => (
@@ -1179,7 +1179,7 @@ export function ToolboxSettings() {
                                 <div className="flex-1 flex flex-col gap-1 min-w-0">
                                     <span className="menu-label truncate min-w-0">{s.name}</span>
                                     <span className="menu-desc !mt-0 truncate">
-                                        {s.description || (s.discoveredTools ? `${s.discoveredTools.length} 个工具` : s.url ? "已配置" : "未配置")}
+                                        {s.description || (s.discoveredTools ? `${s.discoveredTools.length} tools` : s.url ? "Set" : "Not configured")}
                                     </span>
                                 </div>
                             </button>
@@ -1201,40 +1201,40 @@ export function ToolboxSettings() {
                 };
                 const onConfirm = () => { if (isNewRestPackage) confirmDraftRestPackage(); else setEditRestPackageId(null); };
                 const onCancel = () => { if (isNewRestPackage) cancelDraftRestPackage(); else setEditRestPackageId(null); };
-                const title = editRestPackage.builtIn ? editRestPackage.name : (isNewRestPackage ? "添加工具套件" : "编辑工具套件");
+                const title = editRestPackage.builtIn ? editRestPackage.name : (isNewRestPackage ? "Add Tool Package" : "Edit Tool Package");
                 const childCount = restTools.filter(t => t.packageId === editRestPackage.id).length;
 
                 if (editRestPackage.builtIn) {
                     return (
-                        <ContentDialog title={title} confirmLabel="完成" onConfirm={onConfirm} onCancel={onCancel}>
+                        <ContentDialog title={title} confirmLabel="Done" onConfirm={onConfirm} onCancel={onCancel}>
                             <div className="flex flex-col gap-3">
                                 <span className="menu-desc">{editRestPackage.description}</span>
-                                <span className="menu-desc">当前包含 {childCount} 个内置 REST 子工具。</span>
+                                <span className="menu-desc">Currently includes {childCount} built-in REST sub-tools.</span>
                             </div>
                         </ContentDialog>
                     );
                 }
 
                 return (
-                    <ContentDialog title={title} confirmLabel={isNewRestPackage ? "创建" : "完成"} onConfirm={onConfirm} onCancel={onCancel}>
+                    <ContentDialog title={title} confirmLabel={isNewRestPackage ? "Create" : "Done"} onConfirm={onConfirm} onCancel={onCancel}>
                         <div className="flex flex-col gap-3">
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">套件名称</label>
+                                <label className="menu-desc ml-1">Package Name</label>
                                 <Input value={editRestPackage.name} onChange={e => setP({ name: e.target.value })} />
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">套件描述</label>
-                                <Input value={editRestPackage.description} placeholder="例如：搜索、读取和整理网页内容" onChange={e => setP({ description: e.target.value })} />
+                                <label className="menu-desc ml-1">Package Description</label>
+                                <Input value={editRestPackage.description} placeholder="e.g. search, read, and organize web content" onChange={e => setP({ description: e.target.value })} />
                             </div>
                             {!isNewRestPackage && (
                                 <div className="ui-group-card">
-                                    <span className="menu-label">子工具</span>
-                                    <span className="menu-desc !mt-0">当前包含 {childCount} 个 REST 子工具。</span>
+                                    <span className="menu-label">Sub-tools</span>
+                                    <span className="menu-desc !mt-0">Currently includes {childCount} REST sub-tools.</span>
                                     <button className="ui-link-btn self-start flex items-center gap-1" onClick={() => {
                                         setEditRestPackageId(null);
                                         addRestTool(editRestPackage.id);
                                     }}>
-                                        <Plus size={14} /> 添加子工具
+                                        <Plus size={14} /> Add Sub-tool
                                     </button>
                                 </div>
                             )}
@@ -1252,32 +1252,32 @@ export function ToolboxSettings() {
                 };
                 const onConfirm = () => { if (isNewRest) confirmDraftRest(); else setEditRestId(null); };
                 const onCancel = () => { if (isNewRest) cancelDraftRest(); else setEditRestId(null); };
-                const title = editRest.builtIn ? editRest.name : (isNewRest ? "添加工具" : "编辑工具");
+                const title = editRest.builtIn ? editRest.name : (isNewRest ? "Add Tool" : "Edit Tool");
                 const directFetchInputId = `direct-fetch-${editRest.id}`;
 
                 if (editRest.builtIn) {
                     // Only tools that carry a key in fixedParams (weather/search) need an
-                    // API Key field; keyless tools like 查看网页 (Jina Reader) don't.
+                    // API Key field; keyless tools like "View Webpage" (Jina Reader) don't.
                     const apiKeyField = Object.keys(editRest.fixedParams || {})[0];
                     return (
-                        <ContentDialog title={title} confirmLabel="完成" onConfirm={onConfirm} onCancel={onCancel}>
+                        <ContentDialog title={title} confirmLabel="Done" onConfirm={onConfirm} onCancel={onCancel}>
                             <div className="flex flex-col gap-3">
                                 <span className="menu-desc">{editRest.description}</span>
                                 {apiKeyField && (
                                 <div className="flex flex-col gap-1">
                                     <label className="menu-desc ml-1">API Key</label>
-                                    <Input type="password" value={editRest.fixedParams?.[apiKeyField] ?? ""} placeholder="填入你的 API Key"
+                                    <Input type="password" value={editRest.fixedParams?.[apiKeyField] ?? ""} placeholder="Enter your API Key"
                                         onChange={e => setR({ fixedParams: { ...editRest.fixedParams, [apiKeyField]: e.target.value } })} />
                                     <span className="menu-desc ml-1">
-                                        {editRest.id === "builtin_weather" && "去 weatherapi.com 免费注册获取"}
-                                        {editRest.id === "builtin_search" && "去 tavily.com 免费注册获取"}
+                                        {editRest.id === "builtin_weather" && "Get one for free at weatherapi.com"}
+                                        {editRest.id === "builtin_search" && "Get one for free at tavily.com"}
                                     </span>
                                 </div>
                                 )}
                                 <div className="flex items-center gap-2">
                                     <input type="checkbox" id={directFetchInputId} checked={editRest.directFetch ?? true}
                                         onChange={e => setR({ directFetch: e.target.checked })} />
-                                    <label htmlFor={directFetchInputId} className="menu-desc">直连模式（跳过服务端代理，无超时限制）</label>
+                                    <label htmlFor={directFetchInputId} className="menu-desc">Direct mode (skip server-side proxy, no timeout limit)</label>
                                 </div>
                             </div>
                         </ContentDialog>
@@ -1285,31 +1285,31 @@ export function ToolboxSettings() {
                 }
 
                 return (
-                    <ContentDialog title={title} confirmLabel={isNewRest ? "创建" : "完成"} onConfirm={onConfirm} onCancel={onCancel}>
+                    <ContentDialog title={title} confirmLabel={isNewRest ? "Create" : "Done"} onConfirm={onConfirm} onCancel={onCancel}>
                         <div className="flex flex-col gap-3">
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">工具名称</label>
+                                <label className="menu-desc ml-1">Tool Name</label>
                                 <Input value={editRest.name} onChange={e => setR({ name: e.target.value })} />
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">功能描述</label>
-                                <Input value={editRest.description} placeholder="这个工具做什么" onChange={e => setR({ description: e.target.value })} />
+                                <label className="menu-desc ml-1">Description</label>
+                                <Input value={editRest.description} placeholder="What does this tool do" onChange={e => setR({ description: e.target.value })} />
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">所属套件</label>
+                                <label className="menu-desc ml-1">Package</label>
                                 <Select value={editRest.packageId || ""} onChange={e => setR({ packageId: e.target.value || undefined })}>
-                                    <option value="">不放入套件（单件工具）</option>
+                                    <option value="">Don't put in a package (standalone tool)</option>
                                     {restPackages.filter(pkg => !pkg.builtIn).map(pkg => (
                                         <option key={pkg.id} value={pkg.id}>{pkg.name}</option>
                                     ))}
                                 </Select>
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">接口地址</label>
+                                <label className="menu-desc ml-1">Endpoint URL</label>
                                 <Input value={editRest.endpoint} placeholder="https://api.example.com/..." onChange={e => setR({ endpoint: e.target.value })} />
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">请求方式</label>
+                                <label className="menu-desc ml-1">Request Method</label>
                                 <Select value={editRest.method} onChange={e => setR({ method: e.target.value as "GET" | "POST" })}>
                                     <option value="GET">GET</option>
                                     <option value="POST">POST</option>
@@ -1318,21 +1318,21 @@ export function ToolboxSettings() {
                             <div className="flex items-center gap-2">
                                 <input type="checkbox" id={directFetchInputId} checked={editRest.directFetch ?? true}
                                     onChange={e => setR({ directFetch: e.target.checked })} />
-                                <label htmlFor={directFetchInputId} className="menu-desc">直连模式（跳过服务端代理，无超时限制）</label>
+                                <label htmlFor={directFetchInputId} className="menu-desc">Direct mode (skip server-side proxy, no timeout limit)</label>
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">固定参数（API Key 等，不暴露给 AI）</label>
+                                <label className="menu-desc ml-1">Fixed Parameters (API Key, etc. — not exposed to AI)</label>
                                 <FixedParamsEditor params={editRest.fixedParams || {}} onChange={fp => setR({ fixedParams: fp })} />
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">请求头（可选）</label>
+                                <label className="menu-desc ml-1">Request Headers (optional)</label>
                                 <FixedParamsEditor params={editRest.headers || {}} onChange={h => setR({ headers: h })}
-                                    keyPlaceholder="Header 名" valuePlaceholder="Header 值" />
-                                <span className="menu-desc ml-1">接口地址支持 {"{{参数名}}"} 转义插入、{"{{{参数名}}}"} 原样插入；请求头支持 {"{{参数名}}"}。</span>
+                                    keyPlaceholder="Header name" valuePlaceholder="Header value" />
+                                <span className="menu-desc ml-1">The endpoint URL supports {"{{paramName}}"} for escaped insertion and {"{{{paramName}}}"} for raw insertion; headers support {"{{paramName}}"}.</span>
                             </div>
                             {editRest.method === "POST" && (
                                 <div className="flex flex-col gap-1">
-                                    <label className="menu-desc ml-1">请求体模板（JSON，可选）</label>
+                                    <label className="menu-desc ml-1">Request Body Template (JSON, optional)</label>
                                     <Textarea
                                         className="font-mono ts-11"
                                         rows={5}
@@ -1340,11 +1340,11 @@ export function ToolboxSettings() {
                                         placeholder={`{\n  "input": "{{text}}",\n  "options": {\n    "tone": "{{style}}"\n  }\n}`}
                                         onChange={e => setR({ bodyTemplate: e.target.value })}
                                     />
-                                    <span className="menu-desc ml-1">留空时沿用旧逻辑：把 AI 参数和固定参数合并后直接作为 POST JSON。</span>
+                                    <span className="menu-desc ml-1">When left empty, falls back to the old behavior: AI parameters and fixed parameters are merged and sent directly as the POST JSON.</span>
                                 </div>
                             )}
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">AI 参数定义（JSON Schema）</label>
+                                <label className="menu-desc ml-1">AI Parameter Definition (JSON Schema)</label>
                                 <Textarea className="font-mono ts-11" rows={4} value={editRest.parameterSchema}
                                     onChange={e => setR({ parameterSchema: e.target.value })} />
                             </div>
@@ -1361,29 +1361,29 @@ export function ToolboxSettings() {
                 };
                 const onConfirm = () => { if (isNewCompositePackage) confirmDraftCompositePackage(); else setEditCompositePackageId(null); };
                 const onCancel = () => { if (isNewCompositePackage) cancelDraftCompositePackage(); else setEditCompositePackageId(null); };
-                const title = isNewCompositePackage ? "添加组合套件" : "编辑组合套件";
+                const title = isNewCompositePackage ? "Add Workflow Package" : "Edit Workflow Package";
                 const childCount = compositeTools.filter(t => t.packageId === editCompositePackage.id).length;
 
                 return (
-                    <ContentDialog title={title} confirmLabel={isNewCompositePackage ? "创建" : "完成"} onConfirm={onConfirm} onCancel={onCancel}>
+                    <ContentDialog title={title} confirmLabel={isNewCompositePackage ? "Create" : "Done"} onConfirm={onConfirm} onCancel={onCancel}>
                         <div className="flex flex-col gap-3">
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">套件名称</label>
+                                <label className="menu-desc ml-1">Package Name</label>
                                 <Input value={editCompositePackage.name} onChange={e => setP({ name: e.target.value })} />
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">套件描述</label>
-                                <Input value={editCompositePackage.description} placeholder="例如：网页研究、联系人整理、日程检查" onChange={e => setP({ description: e.target.value })} />
+                                <label className="menu-desc ml-1">Package Description</label>
+                                <Input value={editCompositePackage.description} placeholder="e.g. web research, contact organizing, schedule checking" onChange={e => setP({ description: e.target.value })} />
                             </div>
                             {!isNewCompositePackage && (
                                 <div className="ui-group-card">
-                                    <span className="menu-label">组合工具</span>
-                                    <span className="menu-desc !mt-0">当前包含 {childCount} 个组合工具。</span>
+                                    <span className="menu-label">Workflow Tools</span>
+                                    <span className="menu-desc !mt-0">Currently includes {childCount} workflow tools.</span>
                                     <button className="ui-link-btn self-start flex items-center gap-1" onClick={() => {
                                         setEditCompositePackageId(null);
                                         addCompositeTool(editCompositePackage.id);
                                     }}>
-                                        <Plus size={14} /> 添加组合工具
+                                        <Plus size={14} /> Add Workflow Tool
                                     </button>
                                 </div>
                             )}
@@ -1400,36 +1400,36 @@ export function ToolboxSettings() {
                 };
                 const onConfirm = () => { if (isNewComposite) confirmDraftComposite(); else setEditCompositeId(null); };
                 const onCancel = () => { if (isNewComposite) cancelDraftComposite(); else setEditCompositeId(null); };
-                const title = isNewComposite ? "添加组合工具" : "编辑组合工具";
+                const title = isNewComposite ? "Add Workflow Tool" : "Edit Workflow Tool";
                 const parentCompositePackage = editComposite.packageId
                     ? compositePackages.find(pkg => pkg.id === editComposite.packageId)
                     : null;
                 const belongsToBuiltInPackage = Boolean(editComposite.builtIn || parentCompositePackage?.builtIn);
 
                 return (
-                    <ContentDialog title={title} confirmLabel={isNewComposite ? "创建" : "完成"} onConfirm={onConfirm} onCancel={onCancel}>
+                    <ContentDialog title={title} confirmLabel={isNewComposite ? "Create" : "Done"} onConfirm={onConfirm} onCancel={onCancel}>
                         <div className="flex flex-col gap-3">
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">工具名称</label>
+                                <label className="menu-desc ml-1">Tool Name</label>
                                 <Input value={editComposite.name} onChange={e => setC({ name: e.target.value })} />
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">功能描述</label>
-                                <Input value={editComposite.description} placeholder="这个组合工具完成什么流程" onChange={e => setC({ description: e.target.value })} />
+                                <label className="menu-desc ml-1">Description</label>
+                                <Input value={editComposite.description} placeholder="What flow does this workflow tool perform" onChange={e => setC({ description: e.target.value })} />
                             </div>
                             {belongsToBuiltInPackage ? (
                                 <div className="flex flex-col gap-1">
-                                    <label className="menu-desc ml-1">所属 Workflow</label>
+                                    <label className="menu-desc ml-1">Workflow</label>
                                     <div className="ui-group-card py-2">
-                                        <span className="menu-label">{parentCompositePackage?.name || "内置 Workflow"}</span>
-                                        <span className="menu-desc !mt-0">内置 Workflow 子工具，所属套件不可修改。</span>
+                                        <span className="menu-label">{parentCompositePackage?.name || "Built-in Workflow"}</span>
+                                        <span className="menu-desc !mt-0">Built-in Workflow sub-tool; its package cannot be changed.</span>
                                     </div>
                                 </div>
                             ) : (
                                 <div className="flex flex-col gap-1">
-                                    <label className="menu-desc ml-1">所属 Workflow</label>
+                                    <label className="menu-desc ml-1">Workflow</label>
                                     <Select value={editComposite.packageId || ""} onChange={e => setC({ packageId: e.target.value || undefined })}>
-                                        <option value="">不放入 Workflow（单件组合工具）</option>
+                                        <option value="">Don't put in a Workflow (standalone workflow tool)</option>
                                         {compositePackages.filter(pkg => !pkg.builtIn).map(pkg => (
                                             <option key={pkg.id} value={pkg.id}>{pkg.name}</option>
                                         ))}
@@ -1437,17 +1437,17 @@ export function ToolboxSettings() {
                                 </div>
                             )}
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">AI 参数定义（JSON Schema）</label>
+                                <label className="menu-desc ml-1">AI Parameter Definition (JSON Schema)</label>
                                 <Textarea className="font-mono ts-11" rows={4} value={editComposite.parameterSchema}
                                     onChange={e => setC({ parameterSchema: e.target.value })} />
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">执行步骤</label>
+                                <label className="menu-desc ml-1">Execution Steps</label>
                                 <CompositeStepsEditor steps={editComposite.steps} onChange={steps => setC({ steps })} />
-                                <span className="menu-desc ml-1">参数模板支持 {"{{input.xxx}}"}、{"{{last.data}}"}、{"{{steps.名称.data}}"}；如果结果是 JSON，也可用 {"{{steps.名称.json}}"}。</span>
+                                <span className="menu-desc ml-1">Parameter templates support {"{{input.xxx}}"}, {"{{last.data}}"}, {"{{steps.name.data}}"}; if the result is JSON, you can also use {"{{steps.name.json}}"}.</span>
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">最终返回模板（可选）</label>
+                                <label className="menu-desc ml-1">Final Return Template (optional)</label>
                                 <Textarea
                                     className="font-mono ts-11"
                                     rows={3}
@@ -1465,22 +1465,22 @@ export function ToolboxSettings() {
             {editCustomAppTool && (
                 <ContentDialog
                     title={editCustomAppTool.name}
-                    confirmLabel="完成"
+                    confirmLabel="Done"
                     onConfirm={() => setEditCustomAppToolKey(null)}
                     onCancel={() => setEditCustomAppToolKey(null)}
                 >
                     <div className="flex flex-col gap-3">
                         <div className="ui-group-card">
-                            <span className="menu-label">来源应用</span>
+                            <span className="menu-label">Source App</span>
                             <span className="menu-desc !mt-0">{editCustomAppTool.appName}</span>
                         </div>
                         <div className="ui-group-card">
-                            <span className="menu-label">使用范围</span>
-                            <span className="menu-desc !mt-0">{customAppToolVisibilityLabel(editCustomAppTool)}给普通聊天和其他 APP</span>
+                            <span className="menu-label">Scope</span>
+                            <span className="menu-desc !mt-0">{customAppToolVisibilityLabel(editCustomAppTool)} with regular chat and other APPs</span>
                         </div>
                         {editCustomAppTool.description && (
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">功能描述</label>
+                                <label className="menu-desc ml-1">Description</label>
                                 <div className="ui-group-card py-2">
                                     <span className="menu-desc !mt-0 whitespace-pre-wrap">{editCustomAppTool.description}</span>
                                 </div>
@@ -1490,11 +1490,11 @@ export function ToolboxSettings() {
                             <label className="menu-desc ml-1">Handler</label>
                             <div className="ui-group-card py-2">
                                 <span className="menu-label">{editCustomAppTool.handler || editCustomAppTool.id}</span>
-                                <span className="menu-desc !mt-0">由自定义 APP 页面注册并执行，工具箱不直接编辑。</span>
+                                <span className="menu-desc !mt-0">Registered and executed by the custom APP page; the toolbox cannot edit it directly.</span>
                             </div>
                         </div>
                         <div className="flex flex-col gap-1">
-                            <label className="menu-desc ml-1">AI 参数定义</label>
+                            <label className="menu-desc ml-1">AI Parameter Definition</label>
                             <pre className="ui-group-card max-h-[220px] overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
                                 {JSON.stringify(editCustomAppTool.parameterSchema || { type: "object", properties: {} }, null, 2)}
                             </pre>
@@ -1513,31 +1513,31 @@ export function ToolboxSettings() {
                 const onCancel = () => { if (isNewMcp) cancelDraftMcp(); else setEditMcpId(null); };
 
                 return (
-                    <ContentDialog title={isNewMcp ? "添加 MCP 服务器" : "MCP 服务器"} confirmLabel={isNewMcp ? "创建" : "完成"} onConfirm={onConfirm} onCancel={onCancel}>
+                    <ContentDialog title={isNewMcp ? "Add MCP Server" : "MCP Server"} confirmLabel={isNewMcp ? "Create" : "Done"} onConfirm={onConfirm} onCancel={onCancel}>
                         <div className="flex flex-col gap-3">
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">名称</label>
+                                <label className="menu-desc ml-1">Name</label>
                                 <Input value={editMcp.name} onChange={e => setM({ name: e.target.value })} />
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">服务器 URL</label>
+                                <label className="menu-desc ml-1">Server URL</label>
                                 <Input value={editMcp.url} placeholder="https://mcp-server.example.com" onChange={e => setM({ url: e.target.value })} />
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">工具描述</label>
+                                <label className="menu-desc ml-1">Tool Description</label>
                                 <Input
                                     value={editMcp.description || ""}
-                                    placeholder="例如：麦当劳点餐、查菜单、领券和下单"
+                                    placeholder="e.g. McDonald's ordering, menu lookup, coupons, and checkout"
                                     onChange={e => setM({ description: e.target.value })}
                                 />
-                                <span className="menu-desc ml-1">这段描述会和 MCP 名称一起发给 AI，具体工具列表不会默认塞进上下文。</span>
+                                <span className="menu-desc ml-1">This description is sent to the AI along with the MCP name; the detailed tool list isn't included in the context by default.</span>
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">访问 Token（可选）</label>
+                                <label className="menu-desc ml-1">Access Token (optional)</label>
                                 <Input
                                     type="password"
                                     value={editMcp.accessToken || ""}
-                                    placeholder="需要鉴权的 MCP 填这里，会作为 Bearer Token 发送"
+                                    placeholder="For MCPs that require authentication; sent as a Bearer Token"
                                     onChange={e => setM({
                                         accessToken: e.target.value.trim(),
                                         refreshToken: undefined,
@@ -1551,15 +1551,15 @@ export function ToolboxSettings() {
                                         oauthProtectedResourceMetadataUrl: undefined,
                                     })}
                                 />
-                                <span className="menu-desc ml-1">适用于需要 `Authorization: Bearer TOKEN` 的 MCP 服务器。</span>
+                                <span className="menu-desc ml-1">Use this for MCP servers that require `Authorization: Bearer TOKEN`.</span>
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">请求头（可选）</label>
+                                <label className="menu-desc ml-1">Request Headers (optional)</label>
                                 <FixedParamsEditor
                                     params={editMcp.headers || {}}
                                     onChange={headers => setM({ headers })}
-                                    keyPlaceholder="Header 名"
-                                    valuePlaceholder="Header 值"
+                                    keyPlaceholder="Header name"
+                                    valuePlaceholder="Header value"
                                 />
                             </div>
                             {editMcp.url.trim() && (
@@ -1567,7 +1567,7 @@ export function ToolboxSettings() {
                                     <div className="modal-footer !p-0">
                                         <button className="ui-btn ui-btn-primary" onClick={() => handleDiscover(editMcp)}
                                             disabled={isDiscovering || !editMcp.url.trim()}>
-                                            <Search size={14} /> {isDiscovering ? "发现中..." : "发现工具"}
+                                            <Search size={14} /> {isDiscovering ? "Discovering..." : "Discover Tools"}
                                         </button>
                                         <button className="ui-btn ui-btn-outline" onClick={async () => {
                                             setIsAuthorizing(true); setAuthResult(null);
@@ -1579,20 +1579,20 @@ export function ToolboxSettings() {
                                             }
                                             const r = await startMcpOAuth(targetMcp);
                                             setIsAuthorizing(false);
-                                            setAuthResult(r.success ? "授权成功 ✓" : (r.error || "授权失败"));
+                                            setAuthResult(r.success ? "Authorization successful ✓" : (r.error || "Authorization failed"));
                                             if (r.success) {
                                                 setMcpServers(loadMcpServers());
                                             }
                                         }} disabled={isAuthorizing || !editMcp.url.trim()}>
-                                            {isAuthorizing ? "授权中..." : "OAuth 授权"}
+                                            {isAuthorizing ? "Authorizing..." : "OAuth Authorize"}
                                         </button>
                                     </div>
-                                    {editMcp.accessToken && <span className="menu-desc text-[var(--c-icon-green)]">✓ 已配置 Token</span>}
+                                    {editMcp.accessToken && <span className="menu-desc text-[var(--c-icon-green)]">✓ Token configured</span>}
                                     {authResult && <span className={`menu-desc ${authResult.includes("✓") ? "text-[var(--c-icon-green)]" : "text-[var(--c-danger)]"}`}>{authResult}</span>}
                                     {discoverError && <span className="menu-desc text-[var(--c-danger)]">{discoverError}</span>}
                                     {editMcp.discoveredTools && editMcp.discoveredTools.length > 0 && (
                                         <div className="flex flex-col gap-1">
-                                            <label className="menu-desc ml-1">已发现 {editMcp.discoveredTools.length} 个工具</label>
+                                            <label className="menu-desc ml-1">Discovered {editMcp.discoveredTools.length} tools</label>
                                             {editMcp.discoveredTools.map((t, i) => (
                                                 <div key={i} className="ui-group-card py-2">
                                                     <span className="menu-label">{t.name}</span>
@@ -1616,7 +1616,7 @@ export function ToolboxSettings() {
                     return (
                         <ContentDialog
                             title={capability.name}
-                            confirmLabel="我知道了"
+                            confirmLabel="Got it"
                             cancelLabel=""
                             onConfirm={() => setEditInternalId(null)}
                             onCancel={() => setEditInternalId(null)}
@@ -1626,26 +1626,26 @@ export function ToolboxSettings() {
                     );
                 }
                 return (
-                    <ContentDialog title={capability.name} confirmLabel="完成" onConfirm={() => setEditInternalId(null)} onCancel={() => setEditInternalId(null)}>
+                    <ContentDialog title={capability.name} confirmLabel="Done" onConfirm={() => setEditInternalId(null)} onCancel={() => setEditInternalId(null)}>
                         <div className="flex flex-col gap-3">
                             <span className="menu-desc">{capability.description}</span>
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">执行模式</label>
+                                <label className="menu-desc ml-1">Execution Mode</label>
                                 <Select
                                     value={capability.mode}
                                     onChange={e => updateInternalCapability(capability.id, { mode: e.target.value as InternalCapabilityConfig["mode"], enabled: e.target.value !== "off" })}
                                 >
-                                    <option value="off">关闭</option>
-                                    <option value="confirm">执行前确认</option>
-                                    <option value="auto">自动执行</option>
+                                    <option value="off">Off</option>
+                                    <option value="confirm">Confirm before executing</option>
+                                    <option value="auto">Execute automatically</option>
                                 </Select>
                             </div>
                             <div className="ui-group-card">
-                                <span className="menu-label">建议</span>
+                                <span className="menu-label">Suggestion</span>
                                 <span className="menu-desc !mt-0">
                                     {capability.id === NOTE_WALL_CAPABILITY_ID || capability.id === MUSIC_CONTROL_CAPABILITY_ID
-                                        ? "这是服务型工具，开启后日常提示词里只会出现服务入口，具体工具会在角色获取后返回。"
-                                        : "默认使用“执行前确认”。这样角色可以提出工具请求，但真正落库前仍由你决定。"}
+                                        ? "This is a service-type tool. Once enabled, only the service entry point appears in the day-to-day prompt; the actual tools are returned once the character fetches them."
+                                        : "Uses 'Confirm before executing' by default. This lets the character propose tool requests, but you still decide before anything is actually committed."}
                                 </span>
                             </div>
                         </div>
@@ -1655,17 +1655,17 @@ export function ToolboxSettings() {
 
             {/* Toolbox import/export dialogs */}
             {showExportDialog && (
-                <ContentDialog title="导出工具" confirmLabel="导出" onConfirm={handleExportSelected} onCancel={() => setShowExportDialog(false)}>
+                <ContentDialog title="Export Tools" confirmLabel="Export" onConfirm={handleExportSelected} onCancel={() => setShowExportDialog(false)}>
                     <div className="flex flex-col gap-3">
                         <div className="flex items-center justify-between gap-2">
-                            <span className="menu-desc !mt-0">选择要导出的工具配置。</span>
+                            <span className="menu-desc !mt-0">Select the tool configurations to export.</span>
                             <div className="flex items-center gap-2">
                                 <button
                                     type="button"
                                     className="ui-link-btn"
                                     onClick={() => setExportSelection(exportEntries.map(entry => entry.key))}
                                 >
-                                    全选
+                                    Select All
                                 </button>
                                 <button
                                     type="button"
@@ -1673,13 +1673,13 @@ export function ToolboxSettings() {
                                     data-variant="muted"
                                     onClick={() => setExportSelection([])}
                                 >
-                                    清空
+                                    Clear
                                 </button>
                             </div>
                         </div>
                         {exportEntries.length === 0 ? (
                             <div className="ui-empty-compact">
-                                <span className="menu-desc">暂无可导出的工具。</span>
+                                <span className="menu-desc">No tools available to export.</span>
                             </div>
                         ) : (
                             <div className="flex max-h-[46vh] flex-col gap-2 overflow-auto pr-1">
@@ -1705,18 +1705,18 @@ export function ToolboxSettings() {
                                 ))}
                             </div>
                         )}
-                        <span className="menu-desc !mt-0">导出套件会自动包含它的子工具；组合工具会一并带上通过 ID 直接引用的工具。</span>
+                        <span className="menu-desc !mt-0">Exporting a package automatically includes its sub-tools; workflow tools will also bring along any tools they reference directly by ID.</span>
                     </div>
                 </ContentDialog>
             )}
 
             {toolboxImportMessage && (
                 <ConfirmDialog
-                    title="工具导入完成"
+                    title="Import Complete"
                     message={toolboxImportMessage}
                     icon={Upload}
                     variant="action"
-                    confirmLabel="我知道了"
+                    confirmLabel="Got it"
                     cancelLabel=""
                     onConfirm={() => setToolboxImportMessage(null)}
                     onCancel={() => setToolboxImportMessage(null)}
@@ -1725,11 +1725,11 @@ export function ToolboxSettings() {
 
             {toolboxImportError && (
                 <ConfirmDialog
-                    title="工具导入/导出失败"
+                    title="Tool Import/Export Failed"
                     message={toolboxImportError}
                     icon={AlertCircle}
                     variant="danger"
-                    confirmLabel="我知道了"
+                    confirmLabel="Got it"
                     cancelLabel=""
                     onConfirm={() => setToolboxImportError(null)}
                     onCancel={() => setToolboxImportError(null)}
@@ -1738,8 +1738,8 @@ export function ToolboxSettings() {
 
             {/* Delete confirm */}
             {confirmDeleteId && (
-                <ConfirmDialog title="确认删除？" message="删除后无法恢复。是否继续？" icon={AlertCircle}
-                    variant="danger" confirmLabel="确认删除" onConfirm={handleConfirmDelete} onCancel={() => setConfirmDeleteId(null)} />
+                <ConfirmDialog title="Confirm Deletion?" message="This cannot be undone once deleted. Continue?" icon={AlertCircle}
+                    variant="danger" confirmLabel="Confirm Delete" onConfirm={handleConfirmDelete} onCancel={() => setConfirmDeleteId(null)} />
             )}
         </div>
     );
@@ -1777,47 +1777,47 @@ function CompositeStepsEditor({
             {steps.map((step, index) => (
                 <div key={step.id || index} className="ui-group-card gap-2">
                     <div className="flex items-center justify-between gap-2">
-                        <span className="menu-label">步骤 {index + 1}</span>
+                        <span className="menu-label">Step {index + 1}</span>
                         <button onClick={() => remove(index)} className="ui-link-btn" data-variant="muted"><Trash2 size={13} /></button>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                         <div className="flex flex-col gap-1">
-                            <label className="menu-desc ml-1">类别</label>
+                            <label className="menu-desc ml-1">Type</label>
                             <Select value={step.toolType || "auto"} onChange={e => update(index, { toolType: e.target.value as CompositeToolStep["toolType"] })}>
-                                <option value="auto">自动</option>
+                                <option value="auto">Auto</option>
                                 <option value="rest">REST</option>
-                                <option value="internal">内置能力</option>
+                                <option value="internal">Internal Capability</option>
                                 <option value="mcp">MCP</option>
-                                <option value="composite">组合工具</option>
-                                <option value="script">脚本</option>
+                                <option value="composite">Workflow Tool</option>
+                                <option value="script">Script</option>
                             </Select>
                         </div>
                         <div className="flex flex-col gap-1">
-                            <label className="menu-desc ml-1">保存为</label>
+                            <label className="menu-desc ml-1">Save As</label>
                             <Input value={step.saveAs || ""} placeholder="search" onChange={e => update(index, { saveAs: e.target.value })} />
                         </div>
                     </div>
                     {step.toolType !== "script" && (
                         <>
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">动作名称</label>
-                                <Input value={step.toolName || ""} placeholder="例如：搜索 / 读取资料文件" onChange={e => update(index, { toolName: e.target.value })} />
+                                <label className="menu-desc ml-1">Action Name</label>
+                                <Input value={step.toolName || ""} placeholder="e.g. search / read data file" onChange={e => update(index, { toolName: e.target.value })} />
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                                 <div className="flex flex-col gap-1">
-                                    <label className="menu-desc ml-1">工具 ID（可选）</label>
-                                    <Input value={step.toolId || ""} placeholder="同名时填写" onChange={e => update(index, { toolId: e.target.value || undefined })} />
+                                    <label className="menu-desc ml-1">Tool ID (optional)</label>
+                                    <Input value={step.toolId || ""} placeholder="Fill in if names match" onChange={e => update(index, { toolId: e.target.value || undefined })} />
                                 </div>
                                 <div className="flex flex-col gap-1">
-                                    <label className="menu-desc ml-1">MCP 服务器 ID（可选）</label>
-                                    <Input value={step.serverId || ""} placeholder="MCP 同名时填写" onChange={e => update(index, { serverId: e.target.value || undefined })} />
+                                    <label className="menu-desc ml-1">MCP Server ID (optional)</label>
+                                    <Input value={step.serverId || ""} placeholder="Fill in if MCP names match" onChange={e => update(index, { serverId: e.target.value || undefined })} />
                                 </div>
                             </div>
                         </>
                     )}
                     {step.toolType === "script" && (
                         <div className="flex flex-col gap-1">
-                            <label className="menu-desc ml-1">脚本（支持 await / return）</label>
+                            <label className="menu-desc ml-1">Script (supports await / return)</label>
                             <Textarea
                                 className="font-mono ts-11"
                                 rows={6}
@@ -1825,11 +1825,11 @@ function CompositeStepsEditor({
                                 placeholder={`const contacts = JSON.parse(steps.contacts.data);\nreturn contacts.map(item => item.value);`}
                                 onChange={e => update(index, { script: e.target.value })}
                             />
-                            <span className="menu-desc ml-1">可使用 input、steps、last、args、context，也可访问 window、localStorage、fetch、document。</span>
+                            <span className="menu-desc ml-1">You can use input, steps, last, args, context, and also access window, localStorage, fetch, document.</span>
                         </div>
                     )}
                     <div className="flex flex-col gap-1">
-                        <label className="menu-desc ml-1">参数模板（JSON）</label>
+                        <label className="menu-desc ml-1">Parameter Template (JSON)</label>
                         <Textarea
                             className="font-mono ts-11"
                             rows={3}
@@ -1841,7 +1841,7 @@ function CompositeStepsEditor({
                 </div>
             ))}
             <button onClick={add} className="ui-link-btn self-start flex items-center gap-1">
-                <Plus size={14} /> 添加步骤
+                <Plus size={14} /> Add Step
             </button>
         </div>
     );
@@ -1849,7 +1849,7 @@ function CompositeStepsEditor({
 
 // ── Key-value editor ──
 function FixedParamsEditor({
-    params, onChange, keyPlaceholder = "参数名", valuePlaceholder = "参数值"
+    params, onChange, keyPlaceholder = "Parameter name", valuePlaceholder = "Parameter value"
 }: {
     params: Record<string, string>;
     onChange: (params: Record<string, string>) => void;
@@ -1874,7 +1874,7 @@ function FixedParamsEditor({
                 </div>
             ))}
             <button onClick={() => onChange({ ...params, [""]: "" })} className="ui-link-btn self-start flex items-center gap-1">
-                <Plus size={14} /> 添加
+                <Plus size={14} /> Add
             </button>
         </div>
     );

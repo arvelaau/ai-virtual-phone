@@ -33,6 +33,7 @@ import {
   type CoCreateToolResult,
 } from "./cocreate-tools";
 import { nativeToolProtocolForConfig, toLlmRequestMessages, type LlmRequestMessage, type LlmToolCall } from "./llm-provider-adapter";
+import { ACTION_DIRECTIVE_NAMES } from "./text-tool-protocol";
 import {
   COCREATE_APP_ID,
   type CoCreateChapter,
@@ -46,7 +47,7 @@ const MAX_COCREATE_TOOL_ROUNDS = 3;
 const WRITE_OUTPUT_LIMIT = 2400;
 const DISCUSS_OUTPUT_LIMIT = 1600;
 const STREAM_ACTION_SAFE_TAIL = 24;
-const WRITER_NOTEBOOK_NOTE = "你有一个由你自行维护的作品笔记本。它会在每轮共创时重新注入给你，用于保持故事大纲、伏笔、人物连续性、核心设定和后续计划稳定。它是你的创作台账。当出现会影响后续创作的重要信息时，你可以主动维护它；";
+const WRITER_NOTEBOOK_NOTE = "You keep a notebook for this work, maintained by you. It is re-injected on every co-writing turn to hold the outline, planted foreshadowing, character continuity, core settings and forward plans steady. It is your working ledger. Whenever something surfaces that will matter for what comes next, you may update it on your own initiative; ";
 
 type CoCreateRuntime = {
   character: NonNullable<ReturnType<typeof loadCharacters>[number]>;
@@ -110,8 +111,21 @@ function formatToolDebug(round: number, session: CoCreateSession, toolCalls: CoC
   ].join("\n");
 }
 
+/** Index just past the first `[/<directive>]` closing tag at or after `fromIndex`,
+ *  or -1. Checks every accepted directive name, so `[/CallTool]` closes a block
+ *  opened with `[CallTool…]` just as `[/执行动作]` closes a legacy one. */
+function findActionCloseTagEnd(text: string, fromIndex: number): number {
+  let best = -1;
+  for (const name of ACTION_DIRECTIVE_NAMES.split("|")) {
+    const tag = `[/${name}]`;
+    const at = text.indexOf(tag, fromIndex);
+    if (at >= 0 && (best === -1 || at < best)) best = at + tag.length;
+  }
+  return best;
+}
+
 function findStreamActionStart(text: string, fromIndex: number): number {
-  const pattern = /\[[^\[\]]{0,120}?(?:执行动作|工具调用)/g;
+  const pattern = new RegExp(`\\[[^\\[\\]]{0,120}?(?:${ACTION_DIRECTIVE_NAMES})`, "g");
   pattern.lastIndex = fromIndex;
   const match = pattern.exec(text);
   return match ? match.index : -1;
@@ -121,30 +135,30 @@ function getStreamActionEnd(text: string, startIndex: number): number | null {
   const closeBracket = text.indexOf("]", startIndex);
   if (closeBracket < 0) return null;
   const header = text.slice(startIndex, closeBracket + 1);
-  const actionIndex = Math.max(header.indexOf("执行动作"), header.indexOf("工具调用"));
+  const actionIndex = Math.max(...ACTION_DIRECTIVE_NAMES.split("|").map(n => header.indexOf(n)));
   const payloadPart = actionIndex >= 0 ? header.slice(actionIndex) : header;
   if (/[({（]/.test(payloadPart)) return closeBracket + 1;
-  const closeBlock = text.indexOf("[/执行动作]", closeBracket + 1);
-  return closeBlock >= 0 ? closeBlock + "[/执行动作]".length : null;
+  const closeBlockEnd = findActionCloseTagEnd(text, closeBracket + 1);
+  return closeBlockEnd >= 0 ? closeBlockEnd : null;
 }
 
 function peekStreamActionName(text: string, startIndex: number): string | null {
   const slice = text.slice(startIndex);
-  const m = /(?:执行动作|工具调用)\s*[:：]\s*([A-Za-z一-龥_][A-Za-z0-9一-龥_]*)\s*[\(\{（]/.exec(slice);
+  const m = new RegExp(`(?:${ACTION_DIRECTIVE_NAMES})\\s*[:：]\\s*([A-Za-z一-龥_][A-Za-z0-9一-龥_]*)\\s*[\\(\\{（]`).exec(slice);
   return m ? m[1] : null;
 }
 
 function resolveRuntime(characterId: string): CoCreateRuntime {
   const character = loadCharacters().find((item) => item.id === characterId);
-  if (!character) throw new ChatEngineError("请先选择一个共创搭档角色。");
+  if (!character) throw new ChatEngineError("Please choose a co-writing partner character first.");
 
   const bindings = loadBindingConfig();
   const slot = resolveBinding(bindings, characterId, COCREATE_APP_ID);
   if (!slot.apiConfigId) {
-    throw new ChatEngineError(`未给 ${character.name} 绑定共创 API。请到设置 → 绑定管理 → 共创 配置。`);
+    throw new ChatEngineError(`No Co-Create API is bound to ${character.name}. Configure it under Settings -> Binding Manager -> Co-Create.`);
   }
   const apiConfig = loadApiConfigs().find((item) => item.id === slot.apiConfigId);
-  if (!apiConfig) throw new ChatEngineError(`找不到 ${character.name} 的共创 API 配置。`);
+  if (!apiConfig) throw new ChatEngineError(`Co-Create API configuration for ${character.name} not found.`);
 
   const presets = loadPresets();
   const preset = slot.presetId
@@ -168,21 +182,21 @@ function resolveRuntime(characterId: string): CoCreateRuntime {
     preset,
     regexes,
     worldBooks,
-    userName: userIdentity?.name?.trim() || "用户",
+    userName: userIdentity?.name?.trim() || "User",
   };
 }
 
 function formatCastForPrompt(session: CoCreateSession): string {
-  if (session.cast.length === 0) return "暂无已登记的小说角色。";
-  const intro = "> 未揭示暗线不会出现在本上下文中。";
+  if (session.cast.length === 0) return "No novel characters have been registered yet.";
+  const intro = "> Unrevealed hidden threads do not appear in this context.";
   const blocks = session.cast.map((member, index) => {
     const lines = [
       `### ${index + 1}. ${member.name} / ${member.nameEn}`,
-      `- 身份：${member.role}`,
-      `- 公开设定：${member.desc}`,
-      member.major ? `- 位置/背景：${member.major}` : "",
-      member.label ? `- 标签：${member.label}` : "",
-      member.secret && !member.secretHidden ? `- 已揭示暗线：${member.secret}` : "",
+      `- Role: ${member.role}`,
+      `- Public setting: ${member.desc}`,
+      member.major ? `- Position/background: ${member.major}` : "",
+      member.label ? `- Tags: ${member.label}` : "",
+      member.secret && !member.secretHidden ? `- Revealed hidden thread: ${member.secret}` : "",
     ].filter(Boolean);
     return lines.join("\n");
   });
@@ -190,25 +204,25 @@ function formatCastForPrompt(session: CoCreateSession): string {
 }
 
 function formatChaptersForPrompt(session: CoCreateSession): string {
-  if (session.chapters.length === 0) return "暂无章节目录。";
+  if (session.chapters.length === 0) return "No chapter list yet.";
   return session.chapters.map((chapter) => {
-    const active = chapter.id === session.activeChapterId ? " · ⭐ 当前章节" : "";
+    const active = chapter.id === session.activeChapterId ? " - (star) current chapter" : "";
     const state = chapter.archivedAt ? "archived" : "draft";
-    const head = `- **第 ${chapter.num} 章** ${chapter.title} / ${chapter.titleEn} — \`${state}\` · ${chapter.words} 字${active}`;
-    const summary = chapter.summary ? `\n  - 摘要：${chapter.summary}` : "";
+    const head = `- **Chapter ${chapter.num}** ${chapter.title} / ${chapter.titleEn} - \`${state}\` - ${chapter.words} words${active}`;
+    const summary = chapter.summary ? `\n  - Summary: ${chapter.summary}` : "";
     return `${head}${summary}`;
   }).join("\n");
 }
 
 function formatArchivedChaptersForPrompt(session: CoCreateSession): string {
   const archived = session.chapters.filter((chapter) => Boolean(chapter.archivedAt));
-  if (archived.length === 0) return "暂无已结束章节。";
+  if (archived.length === 0) return "No finished chapters yet.";
   const recentFullCount = Math.max(0, Math.min(10, Number(session.settings?.recentFullTextChapters ?? 2)));
   const fullTextChapters = archived.slice(-recentFullCount).filter((chapter) => chapter.content?.trim());
-  if (fullTextChapters.length === 0) return "已结束章节的标题与摘要见上方章节目录。";
-  const intro = `> 按时间顺序，最近 ${fullTextChapters.length} 章全文；更早的章节请用「查看」动作读取。`;
+  if (fullTextChapters.length === 0) return "Titles and summaries of finished chapters are in the chapter list above.";
+  const intro = `> The full text of the most recent ${fullTextChapters.length} chapter(s), in order; use the view action to read earlier ones.`;
   const blocks = fullTextChapters.map((chapter) => [
-    `### 第 ${chapter.num} 章 · ${chapter.title} / ${chapter.titleEn}`,
+    `### Chapter ${chapter.num} - ${chapter.title} / ${chapter.titleEn}`,
     "",
     chapter.content!.trim(),
   ].join("\n"));
@@ -216,53 +230,53 @@ function formatArchivedChaptersForPrompt(session: CoCreateSession): string {
 }
 
 function formatWriterNotebookBody(session: CoCreateSession): string {
-  return session.writerNotebook?.trim() || "暂无笔记。";
+  return session.writerNotebook?.trim() || "No notes yet.";
 }
 
 function modeName(mode: CoCreateMode | "archive"): string {
-  if (mode === "write") return "正文创作";
-  if (mode === "discuss") return "创作讨论";
-  return "结束章节";
+  if (mode === "write") return "Prose writing";
+  if (mode === "discuss") return "Creative discussion";
+  return "Finish chapter";
 }
 
 function buildProjectContext(session: CoCreateSession, _mode: CoCreateMode | "archive"): string {
   const sections: string[] = [
-    `# 共创项目：《${session.title}》`,
-    `- 副题：${session.subtitle}`,
+    `# Co-Create project: ${session.title}`,
+    `- Subtitle: ${session.subtitle}`,
     "",
-    "## 小说角色档案",
+    "## Novel character dossier",
     formatCastForPrompt(session),
     "",
-    "## 章节目录",
+    "## Chapter list",
     formatChaptersForPrompt(session),
     "",
-    "## 作家笔记",
+    "## Writer notebook",
     `> ${WRITER_NOTEBOOK_NOTE}`,
     "",
     formatWriterNotebookBody(session),
     "",
-    "## 已存档章节正文",
+    "## Archived chapter text",
     formatArchivedChaptersForPrompt(session),
   ];
   if (session.relationshipDossier?.trim()) {
-    sections.push("", "## 人物关系档案", session.relationshipDossier.trim());
+    sections.push("", "## Relationship dossier", session.relationshipDossier.trim());
   }
   if (session.rollingSummary?.trim()) {
-    sections.push("", "## 历史共创摘要", session.rollingSummary.trim());
+    sections.push("", "## Rolling co-writing summary", session.rollingSummary.trim());
   }
   return sections.join("\n");
 }
 
 function formatCurrentChapterForPrompt(session: CoCreateSession): string {
   const chapter = getActiveChapter(session);
-  if (!chapter) return "## 当前章节\n\n暂无当前章节。";
+  if (!chapter) return "## Current chapter\n\nNo current chapter.";
   const body = chapter.content?.trim();
   return [
-    "## 当前章节",
-    `> 第 ${chapter.num} 章 · ${chapter.title} / ${chapter.titleEn}（元数据见上方章节目录）`,
+    "## Current chapter",
+    `> Chapter ${chapter.num} - ${chapter.title} / ${chapter.titleEn} (metadata is in the chapter list above)`,
     "",
-    "### 当前正文",
-    body || "（暂无正文）",
+    "### Current text",
+    body || "(no text yet)",
   ].join("\n");
 }
 
@@ -297,9 +311,9 @@ function buildHistory(session: CoCreateSession): ChatMessage[] {
 
 function nativeActionPromptHint(variant: "write" | "read"): string {
   if (variant === "read") {
-    return "你可以通过系统提供的原生动作读取章节、角色、人物关系和作品笔记。讨论模式只能读取，不能写入、编辑或删除；需要查看资料时直接调用动作，不要输出方括号动作指令。";
+    return "You can read chapters, characters, relationships and the writer notebook through the native actions the system provides. Discussion mode is read-only - no writing, editing or deleting. Call an action directly when you need to look something up; do not output bracketed action directives.";
   }
-  return "你可以通过系统提供的原生动作读取或维护章节、角色、人物关系和作品笔记。需要读取或写入时直接调用动作；不要输出方括号动作指令。";
+  return "You can read or maintain chapters, characters, relationships and the writer notebook through the native actions the system provides. Call an action directly when you need to read or write; do not output bracketed action directives.";
 }
 
 function formatNativeActionResult(result: CoCreateToolResult): string {
@@ -307,7 +321,7 @@ function formatNativeActionResult(result: CoCreateToolResult): string {
     `<action_result name="${result.name}" success="${result.success ? "true" : "false"}">`,
     result.success ? result.data || result.notice : result.error || result.notice,
     "</action_result>",
-    "动作结果已经展示给用户。继续时不要复述动作结果；如果还需要动作，继续调用；如果不需要，直接给出自然回应。",
+    "The action results have already been shown to the user. Do not restate them when you continue; call another action if you still need one, and otherwise just reply naturally.",
   ].join("\n");
 }
 
@@ -387,9 +401,9 @@ async function runNativeCoCreateLoop(params: {
     if (result.toolCalls.length === 0) {
       workingSession = finalizeCoCreateToolArtifacts(workingSession);
       return {
-        content: cleanText(cleanOutput, mode === "write" ? WRITE_OUTPUT_LIMIT : DISCUSS_OUTPUT_LIMIT) || (mode === "write" ? "我已经把正文写入章节，我们可以继续往下推进。" : "我们先把这个方向拆开看。"),
+        content: cleanText(cleanOutput, mode === "write" ? WRITE_OUTPUT_LIMIT : DISCUSS_OUTPUT_LIMIT) || (mode === "write" ? "I have written the text into the chapter; we can carry on from here." : "Let us take this direction apart first."),
         model: runtime.apiConfig.defaultModel,
-        presetName: runtime.preset?.name || "默认预设",
+        presetName: runtime.preset?.name || "Default preset",
         updatedSession: workingSession,
         toolNotices,
         toolDebugs,
@@ -447,9 +461,9 @@ async function runNativeCoCreateLoop(params: {
 
   workingSession = finalizeCoCreateToolArtifacts(workingSession);
   return {
-    content: cleanText(lastCleanOutput, mode === "write" ? WRITE_OUTPUT_LIMIT : DISCUSS_OUTPUT_LIMIT) || "我已经处理了这些资料，我们继续。",
+    content: cleanText(lastCleanOutput, mode === "write" ? WRITE_OUTPUT_LIMIT : DISCUSS_OUTPUT_LIMIT) || "I have gone through the material; let us continue.",
     model: runtime.apiConfig.defaultModel,
-    presetName: runtime.preset?.name || "默认预设",
+    presetName: runtime.preset?.name || "Default preset",
     updatedSession: workingSession,
     toolNotices,
     toolDebugs,
@@ -716,9 +730,9 @@ export async function generateCoCreateReply(
     if (toolCalls.length === 0) {
       workingSession = finalizeCoCreateToolArtifacts(workingSession);
       return {
-        content: cleanText(cleanOutput || raw, mode === "write" ? WRITE_OUTPUT_LIMIT : DISCUSS_OUTPUT_LIMIT) || (mode === "write" ? "我已经把正文写入章节，我们可以继续往下推进。" : "我们先把这个方向拆开看。"),
+        content: cleanText(cleanOutput || raw, mode === "write" ? WRITE_OUTPUT_LIMIT : DISCUSS_OUTPUT_LIMIT) || (mode === "write" ? "I have written the text into the chapter; we can carry on from here." : "Let us take this direction apart first."),
         model: runtime.apiConfig.defaultModel,
-        presetName: runtime.preset?.name || "默认预设",
+        presetName: runtime.preset?.name || "Default preset",
         updatedSession: workingSession,
         toolNotices,
         toolDebugs,
@@ -734,9 +748,9 @@ export async function generateCoCreateReply(
 
   workingSession = finalizeCoCreateToolArtifacts(workingSession);
   return {
-    content: cleanText(lastCleanOutput, mode === "write" ? WRITE_OUTPUT_LIMIT : DISCUSS_OUTPUT_LIMIT) || "我已经处理了这些资料，我们继续。",
+    content: cleanText(lastCleanOutput, mode === "write" ? WRITE_OUTPUT_LIMIT : DISCUSS_OUTPUT_LIMIT) || "I have gone through the material; let us continue.",
     model: runtime.apiConfig.defaultModel,
-    presetName: runtime.preset?.name || "默认预设",
+    presetName: runtime.preset?.name || "Default preset",
     updatedSession: workingSession,
     toolNotices,
     toolDebugs,
@@ -811,9 +825,9 @@ export async function previewCoCreatePromptPayload(
   });
   return {
     messages: previewMessagesForApi(runtime.apiConfig, runtime.preset, llmMessages),
-    characterName: `共创:${runtime.character.name}`,
+    characterName: `Co-Create: ${runtime.character.name}`,
     model: runtime.apiConfig.defaultModel,
-    presetName: runtime.preset?.name ?? "默认预设",
+    presetName: runtime.preset?.name ?? "Default preset",
   };
 }
 
@@ -853,30 +867,35 @@ export async function generateCoCreateChapterAutoArchive(
   const runtime = resolveRuntime(session.partnerCharacterId);
 
   const systemPrompt = [
-    "你是一位创作搭档，需要为一本正在协作的小说生成「章节摘要」和「路人短评」。",
-    "章节摘要：客观概括本章关键事件、人物状态变化、情绪/动机、铺垫和伏笔。第三人称叙述，200-400 字。",
-    "路人短评：用一个随机视角（可以是阅读这本书的读者、咖啡店里的看客、虚构的网友评论员等任意路人身份）对本章吐槽/点评，2-4 句。允许荒诞、犀利、调侃、片段式，但要扣紧本章具体情节，不要笼统赞美或冒犯作者。",
+    "You are a writing partner. Produce a chapter summary and a bystander comment for a novel being written collaboratively.",
+    "Chapter summary: objectively cover this chapter's key events, changes in character state, emotion and motive, setup and foreshadowing. Third person, 130-270 words.",
+    "Bystander comment: react to the chapter from some random vantage point - a reader of the book, an onlooker in a coffee shop, an invented commenter online, anyone - in 2-4 sentences. Absurd, sharp, teasing or fragmentary is all fine, but stay tied to what actually happens in this chapter; no vague praise, and nothing insulting to the author.",
     "",
-    "严格按下面格式输出，不要任何额外解释：",
+    "Follow this format exactly, with no extra explanation:",
     "<chapter_summary>",
-    "（章节摘要正文）",
+    "(the chapter summary goes here)",
     "</chapter_summary>",
     "<archive_note>",
-    "（路人短评正文）",
+    "(the bystander comment goes here)",
     "</archive_note>",
+    "",
+    // simpleLLMCall bypasses the preset assembler, so the global output_language_rule
+    // never reaches this prompt. The chapter text being summarized is NOT a language
+    // reference — restate the rule locally.
+    "Always write in English, whatever language the chapter text below is in.",
   ].join("\n");
 
   const projectInfo = [
-    `【项目】《${session.title || "未命名作品"}》`,
-    session.subtitle ? `【副题】${session.subtitle}` : "",
-    `【章节】第 ${chapter.num} 章 · ${chapter.title} / ${chapter.titleEn}`,
-    `【字数】${chapter.words} 字`,
+    `[Project] ${session.title || "Untitled work"}`,
+    session.subtitle ? `[Subtitle] ${session.subtitle}` : "",
+    `[Chapter] Chapter ${chapter.num} - ${chapter.title} / ${chapter.titleEn}`,
+    `[Word count] ${chapter.words}`,
   ].filter(Boolean).join("\n");
 
   const userPrompt = [
     projectInfo,
     "",
-    "【正文】",
+    "[Text]",
     body,
   ].join("\n");
 
@@ -890,7 +909,7 @@ export async function generateCoCreateChapterAutoArchive(
   );
 
   if (!result.content) {
-    throw new ChatEngineError(result.error || "章节自动归档失败：模型返回空内容。");
+    throw new ChatEngineError(result.error || "Automatic chapter archiving failed: the model returned empty content.");
   }
 
   const raw = result.content;
@@ -899,7 +918,7 @@ export async function generateCoCreateChapterAutoArchive(
   const archiveNote = cleanText(extractXmlTag(raw, "archive_note"), 700);
 
   if (!summary) {
-    throw new ChatEngineError("章节自动归档失败：没有解析到章节摘要。");
+    throw new ChatEngineError("Automatic chapter archiving failed: no chapter summary could be parsed.");
   }
 
   return {
@@ -923,7 +942,7 @@ function formatSessionMessagesForMemory(messages: CoCreateMessage[], userName: s
   return messages.map((message, index) => {
     if (message.role === "system" || message.role === "tool") return null;
     if (message.promptHidden) return null;
-    const who = message.role === "user" ? userName : message.role === "assistant" ? partnerName : message.authorName || "系统";
+    const who = message.role === "user" ? userName : message.role === "assistant" ? partnerName : message.authorName || "System";
     const body = message.content?.trim();
     if (!body) return null;
     return `${index + 1}. [${who}] ${body}`;
@@ -936,7 +955,7 @@ export async function generateCoCreateSessionMemory(
 ): Promise<CoCreateSessionMemoryResult | null> {
   const apiConfig = resolveAuxiliaryApiConfig("memorySummaryApiConfigId");
   if (!apiConfig) {
-    throw new ChatEngineError("未配置记忆总结 API（设置 → 绑定管理 → 辅助 API 绑定）。");
+    throw new ChatEngineError("No memory-summary API is configured (Settings -> Binding Manager -> Auxiliary API binding).");
   }
 
   const since = options?.sinceTimestamp;
@@ -956,17 +975,20 @@ export async function generateCoCreateSessionMemory(
   if (!formatted) return null;
 
   const systemPrompt = [
-    "你是创作项目的记忆助理。请把下面这段共创对话总结成一条简短的「记忆条目」，写给后续创作的{{自己}}看。",
-    "要点：",
-    "- 提取这段对话浮现出的关键想法、判断、风格倾向、伏笔决定、待办、情绪基调。",
-    "- 不要复述每一句；要做沉淀。",
-    "- 100-300 字。",
-    "- 直接输出纯文本，不要 XML / JSON / 标题 / 解释。",
+    "You are the memory assistant for a writing project. Condense the co-writing conversation below into one short memory entry, written for your own future self to read while continuing the work.",
+    "Key points:",
+    "- Extract the key ideas, judgements, stylistic leanings, foreshadowing decisions, open tasks and emotional register that surfaced in this conversation.",
+    "- Do not restate every line; distil.",
+    "- 70-200 words.",
+    "- Output plain text only - no XML, JSON, headings or explanation.",
+    // Same preset bypass as the archive prompt above — the conversation excerpt is
+    // information about what was said, not a language reference.
+    "- Always write in English, whatever language the conversation below is in.",
   ].join("\n");
 
   const userPrompt = [
-    `【项目】《${session.title || "未命名作品"}》`,
-    `【对话片段】（${candidateMessages.length} 条）`,
+    `[Project] ${session.title || "Untitled work"}`,
+    `[Conversation excerpt] (${candidateMessages.length} message(s))`,
     "",
     formatted,
   ].join("\n");
@@ -981,7 +1003,7 @@ export async function generateCoCreateSessionMemory(
   );
 
   if (!result.content) {
-    throw new ChatEngineError(result.error || "会话记忆总结失败：模型返回空内容。");
+    throw new ChatEngineError(result.error || "Session memory summary failed: the model returned empty content.");
   }
 
   return {

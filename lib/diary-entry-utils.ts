@@ -1,4 +1,5 @@
 import { jsonrepair } from "jsonrepair";
+import { stripReasoningTags } from "./block-tags";
 import type { DiaryEntryBlock, DiaryEntryTodoItem } from "./diary-entry-types";
 
 export type ParsedDiaryEntry = {
@@ -129,7 +130,12 @@ function normalizeBlocks(value: unknown, fallbackBody: string): DiaryEntryBlock[
 }
 
 export function parseDiaryEntryContent(content: string): ParsedDiaryEntry {
-  const trimmed = content.trim();
+  // Some reasoning models write literal <think>…</think> into the content instead of
+  // only exposing it through the reasoning API field. Here that is doubly damaging: the
+  // block sits in front of the JSON, so parseJsonLike fails and the fallback branch below
+  // stores the ENTIRE raw string — reasoning included — as the diary body. Strip before
+  // parsing, so a leaked block costs nothing rather than replacing the whole entry.
+  const trimmed = stripReasoningTags(content).trim();
   const parsed = parseJsonLike(trimmed);
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {

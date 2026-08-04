@@ -224,12 +224,83 @@ function parseMetric(value: unknown): number {
   return Math.max(0, Math.round(numeric));
 }
 
+// ── Field vocabulary ──
+//
+// Dual recognition: the English tag is what the preset teaches now, the Chinese one is
+// what it taught before. `metricField` already worked off an alias list, so the whole file
+// now reads fields the same way rather than indexing `fields["中文"]` directly.
+//
+// Nothing here is persisted as a tag name — every match is mapped onto the fixed English
+// keys of XiaohongshuNote/Comment before storage.
+const F_BODY = ["Body", "Text", "正文", "内容"];
+const F_TITLE = ["Title", "标题"];
+const F_AUTHOR = ["Author", "作者", "落款"];
+const F_NAME = ["Name", "名称", "作者"];
+const F_VIDEO_DESC = ["VideoDescription", "视频描述", "画面描述"];
+const F_IMAGE_DESC = ["ImageDescription", "图片描述", "配图"];
+const F_ICON = ["Icon", "图标"];
+const F_TAGS = ["Tags", "标签", "TAG"];
+const F_LIKES = ["Likes", "点赞", "点赞数", "赞"];
+const F_SAVES = ["Saves", "收藏", "收藏数"];
+const F_COMMENT_COUNT = ["CommentCount", "评论数", "评论量", "评论"];
+const F_FOLLOWERS = ["NewFollowers", "新增关注", "关注", "粉丝"];
+const F_LIKED = ["Liked", "已赞"];
+const F_SAVED = ["Saved", "已收藏"];
+/** Numbered person fields, e.g. LikedBy1 / 点赞用户1. */
+const numberedField = (n: number) => [`LikedBy${n}`, `点赞用户${n}`];
+const numberedSaveField = (n: number) => [`SavedBy${n}`, `收藏用户${n}`];
+const numberedFollowField = (n: number) => [`FollowedBy${n}`, `关注用户${n}`];
+
+// Block titles. parseBlocks strips the trailing number, so these match the word only.
+const RE_NEARBY_BLOCK = /Nearby|附近笔记|同城笔记|附近/i;
+const RE_HOME_BLOCK = /HomeNote|Note|首页笔记|图文笔记|笔记/i;
+const RE_VIDEO_BLOCK = /Video|视频/i;
+const RE_NOT_VIDEO_OR_NEARBY = /Video|Nearby|视频|附近|同城/i;
+const RE_INTERACTION_BLOCK = /Interaction|用户笔记互动|互动/i;
+const RE_DM_BLOCK = /DirectMessage|Message|私信|消息/i;
+
+// Numbered comment fields: `Comment1Author` / `评论1作者`.
+const RE_COMMENT_AUTHOR_KEY = /^(?:Comment(\d+)Author|评论(\d+)作者)$/i;
+const commentAuthorField = (n: number) => [`Comment${n}Author`, `评论${n}作者`];
+const commentTextField = (n: number) => [`Comment${n}Text`, `评论${n}内容`];
+const commentReplyField = (n: number) => [`Comment${n}ReplyTo`, `评论${n}回复对象`];
+/** A reply target written as a comment reference: `Comment3` / `评论3`. */
+const RE_COMMENT_REF = /^(?:Comment\s*(\d+)|评论(\d+))$/i;
+
+const F_REPLY_BODY = ["Body", "Text", "Reply", "正文", "内容", "回复"];
+const F_COMMENT_TEXT = ["Comment", "Text", "评论", "内容"];
+const F_NOTE_ID = ["NoteId", "noteId", "笔记ID"];
+const F_POST_TYPE = ["Type", "Format", "类型", "格式"];
+const F_FOLLOW_AUTHOR = ["FollowedAuthor", "Follow", "关注作者", "关注"];
+const F_VIDEO_DESC_WIDE = ["VideoDescription", "视频描述", "视频画面", "图片描述", "配图"];
+/** Extended/thread comment family: `Extra1Author` / `延伸1作者`. */
+const RE_EXTRA_AUTHOR_KEY = /^(?:Extra(\d+)Author|延伸(\d+)作者)$/i;
+const extraAuthorField = (n: number) => [`Extra${n}Author`, `延伸${n}作者`];
+const extraTextField = (n: number) => [`Extra${n}Text`, `延伸${n}内容`];
+const extraReplyField = (n: number) => [`Extra${n}ReplyTo`, `延伸${n}回复对象`];
+const commentReplyIdField = (n: number) => [`Comment${n}ReplyToId`, `评论${n}回复评论ID`];
+
+const DEFAULT_XHS_AUTHOR = "Xiaohongshu user";
+const DEFAULT_XHS_TITLE = "Untitled note";
+
 function metricField(fields: Record<string, string> | undefined, names: string[]): unknown {
   if (!fields) return undefined;
   for (const name of names) {
     if (fields[name] !== undefined) return fields[name];
   }
+  // Case-insensitive second pass: a model writing English produces `[title]` as often
+  // as `[Title]`, and parseBlocks keeps whatever case it was given.
+  const lowered = names.map(n => n.toLowerCase());
+  for (const [key, value] of Object.entries(fields)) {
+    if (value !== undefined && lowered.includes(key.trim().toLowerCase())) return value;
+  }
   return undefined;
+}
+
+/** String read across an alias list — the text counterpart of metricField. */
+function textField(fields: Record<string, string> | undefined, names: string[]): string | undefined {
+  const value = metricField(fields, names);
+  return value === undefined ? undefined : String(value);
 }
 
 function parseMetricField(fields: Record<string, string> | undefined, names: string[], fallback = 0): number {
@@ -243,8 +314,13 @@ function parseBoolean(value: unknown): boolean {
 }
 
 function parseTags(value: unknown): string[] {
-  return Array.from(new Set(String(value ?? "")
-    .split(/[,，、#\s]+/)
+  const raw = String(value ?? "");
+  // Split on whitespace ONLY when there is no explicit separator. Chinese tags have no
+  // spaces, so shredding on whitespace was harmless; English ones do ("rainy day"), and
+  // splitting those would turn one tag into two. An explicit comma/、/# wins when present.
+  const separator = /[,，、#]/.test(raw) ? /[,，、#]+/ : /\s+/;
+  return Array.from(new Set(raw
+    .split(separator)
     .map(tag => cleanText(tag, 18))
     .filter(Boolean))).slice(0, 6);
 }
@@ -287,20 +363,21 @@ function parseBlocks(text: string): ParsedBlock[] {
 
 function parseBlockComments(fields: Record<string, string>, noteId: string, source: "npc" | "character" = "npc"): XiaohongshuComment[] {
   const numbers = Object.keys(fields)
-    .map(key => /^评论(\d+)作者$/.exec(key)?.[1])
+    .map(key => { const m = RE_COMMENT_AUTHOR_KEY.exec(key.trim()); return m ? (m[1] ?? m[2]) : undefined; })
     .filter((value): value is string => Boolean(value))
     .map(Number)
     .sort((a, b) => a - b);
   return numbers.map((number) => {
-    const authorName = cleanText(fields[`评论${number}作者`], 60) || "小红书用户";
-    const replyTarget = cleanText(fields[`评论${number}回复对象`], 40);
-    const replyNumber = /^评论(\d+)$/.exec(replyTarget)?.[1];
+    const authorName = cleanText(textField(fields, commentAuthorField(number)), 60) || DEFAULT_XHS_AUTHOR;
+    const replyTarget = cleanText(textField(fields, commentReplyField(number)), 40);
+    const replyRef = RE_COMMENT_REF.exec(replyTarget);
+    const replyNumber = replyRef ? (replyRef[1] ?? replyRef[2]) : undefined;
     return makeXiaohongshuComment({
       noteId,
       authorType: source,
       authorId: source === "npc" ? makeXiaohongshuNpcId(authorName) : source,
       authorName,
-      text: cleanMultiline(fields[`评论${number}内容`], 600),
+      text: cleanMultiline(textField(fields, commentTextField(number)), 600),
       replyTo: replyNumber ? undefined : replyTarget || undefined,
       replyToCommentId: replyNumber ? `${noteId}_comment_${replyNumber}` : undefined,
       unread: source === "npc",
@@ -315,17 +392,17 @@ function parseBlockComments(fields: Record<string, string>, noteId: string, sour
  */
 function parseCharacterThreadFields(fields: Record<string, string>): ParsedXiaohongshuCharacterThreadItem[] {
   const numbers = Object.keys(fields)
-    .map(key => /^延伸(\d+)作者$/.exec(key)?.[1])
+    .map(key => { const m = RE_EXTRA_AUTHOR_KEY.exec(key.trim()); return m ? (m[1] ?? m[2]) : undefined; })
     .filter((value): value is string => Boolean(value))
     .map(Number)
     .sort((a, b) => a - b);
   return numbers.map((number) => {
-    const authorName = cleanText(fields[`延伸${number}作者`], 60);
-    const replyTo = cleanText(fields[`延伸${number}回复对象`], 60);
+    const authorName = cleanText(textField(fields, extraAuthorField(number)), 60);
+    const replyTo = cleanText(textField(fields, extraReplyField(number)), 60);
     return {
       number,
       authorName,
-      text: cleanMultiline(fields[`延伸${number}内容`], 600),
+      text: cleanMultiline(textField(fields, extraTextField(number)), 600),
       replyTo: replyTo || undefined,
     };
   }).filter(item => item.text && item.authorName).slice(0, 8);
@@ -414,11 +491,11 @@ function parseNoteBlock(
   feedScope: XiaohongshuNote["feedScope"] = "discover",
 ): XiaohongshuNote | null {
   const noteId = makeId(type === "video" ? "xhs_video" : "xhs_note");
-  const body = cleanMultiline(block.fields["正文"] ?? block.fields["内容"], 3000);
-  const title = cleanText(block.fields["标题"], 80) || body.slice(0, 24);
+  const body = cleanMultiline(textField(block.fields, F_BODY), 3000);
+  const title = cleanText(textField(block.fields, F_TITLE), 80) || body.slice(0, 24);
   if (!title && !body) return null;
   const comments = parseBlockComments(block.fields, noteId, source);
-  const authorName = cleanText(block.fields["作者"] ?? block.fields["落款"], 60) || "小红书用户";
+  const authorName = cleanText(textField(block.fields, F_AUTHOR), 60) || DEFAULT_XHS_AUTHOR;
   return {
     id: noteId,
     type,
@@ -426,21 +503,21 @@ function parseNoteBlock(
     source,
     authorId: source === "npc" && authorId === "npc" ? makeXiaohongshuNpcId(authorName) : authorId,
     authorName,
-    title: title || "未命名笔记",
+    title: title || DEFAULT_XHS_TITLE,
     body,
-    videoDescription: cleanMultiline(block.fields["视频描述"] ?? block.fields["画面描述"], 500) || undefined,
-    coverIcon: cleanText(block.fields["图标"], 8) || (type === "video" ? "▶" : "✦"),
+    videoDescription: cleanMultiline(textField(block.fields, F_VIDEO_DESC), 500) || undefined,
+    coverIcon: cleanText(textField(block.fields, F_ICON), 8) || (type === "video" ? "▶" : "✦"),
     tone: index % 4 === 1 ? "mist" : index % 4 === 2 ? "blush" : index % 4 === 3 ? "graphite" : "ivory",
-    tags: parseTags(block.fields["标签"] ?? block.fields["TAG"]),
-    likeCount: parseMetricField(block.fields, ["点赞", "点赞数", "赞"]),
-    saveCount: parseMetricField(block.fields, ["收藏", "收藏数"]),
-    commentCount: parseMetricField(block.fields, ["评论数", "评论量", "评论"], comments.length),
-    liked: parseBoolean(block.fields["已赞"]),
-    saved: parseBoolean(block.fields["已收藏"]),
-    recentLikeNames: [block.fields["点赞用户1"], block.fields["点赞用户2"]].map(name => cleanText(name, 24)).filter(Boolean),
-    recentSaveNames: [block.fields["收藏用户1"], block.fields["收藏用户2"]].map(name => cleanText(name, 24)).filter(Boolean),
+    tags: parseTags(textField(block.fields, F_TAGS)),
+    likeCount: parseMetricField(block.fields, F_LIKES),
+    saveCount: parseMetricField(block.fields, F_SAVES),
+    commentCount: parseMetricField(block.fields, F_COMMENT_COUNT, comments.length),
+    liked: parseBoolean(textField(block.fields, F_LIKED)),
+    saved: parseBoolean(textField(block.fields, F_SAVED)),
+    recentLikeNames: [1, 2].map(n => cleanText(textField(block.fields, numberedField(n)), 24)).filter(Boolean),
+    recentSaveNames: [1, 2].map(n => cleanText(textField(block.fields, numberedSaveField(n)), 24)).filter(Boolean),
     comments: comments.map((comment, idx) => ({ ...comment, id: `${noteId}_comment_${idx + 1}` })),
-    imageDescription: cleanMultiline(block.fields["图片描述"] ?? block.fields["配图"], 500) || undefined,
+    imageDescription: cleanMultiline(textField(block.fields, F_IMAGE_DESC), 500) || undefined,
     createdAt: new Date(Date.now() - index * 1000 * 60 * 5).toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -449,17 +526,17 @@ function parseNoteBlock(
 export function parseXiaohongshuNpcFeed(raw: string): ParsedXiaohongshuNpcFeed {
   const blocks = parseBlocks(raw);
   const nearbyNotes = blocks
-    .filter(block => /附近笔记|同城笔记|附近/.test(block.title) && !/视频/.test(block.title))
+    .filter(block => RE_NEARBY_BLOCK.test(block.title) && !RE_VIDEO_BLOCK.test(block.title))
     .slice(0, 4)
     .map((block, index) => parseNoteBlock(block, "post", index + 12, "npc", "npc", "nearby"))
     .filter((note): note is XiaohongshuNote => Boolean(note));
   const homeNotes = blocks
-    .filter(block => /首页笔记|图文笔记|笔记/.test(block.title) && !/视频|附近|同城/.test(block.title))
+    .filter(block => RE_HOME_BLOCK.test(block.title) && !RE_NOT_VIDEO_OR_NEARBY.test(block.title))
     .slice(0, 6)
     .map((block, index) => parseNoteBlock(block, "post", index, "npc"))
     .filter((note): note is XiaohongshuNote => Boolean(note));
   const videoNotes = blocks
-    .filter(block => /视频/.test(block.title))
+    .filter(block => RE_VIDEO_BLOCK.test(block.title))
     .slice(0, 6)
     .map((block, index) => parseNoteBlock(block, "video", index + homeNotes.length, "npc"))
     .filter((note): note is XiaohongshuNote => Boolean(note));
@@ -468,7 +545,7 @@ export function parseXiaohongshuNpcFeed(raw: string): ParsedXiaohongshuNpcFeed {
 
 export function parseXiaohongshuNpcReaction(raw: string, noteId: string): ParsedXiaohongshuNpcReaction {
   const blocks = parseBlocks(raw);
-  const interaction = blocks.find(block => /用户笔记互动|互动/.test(block.title)) ?? blocks[0];
+  const interaction = blocks.find(block => RE_INTERACTION_BLOCK.test(block.title)) ?? blocks[0];
   const commentFields = blocks.reduce<Record<string, string>>((acc, block) => ({ ...acc, ...block.fields }), {});
   const comments = parseBlockComments(commentFields, noteId, "npc").map((comment) => ({
     authorName: comment.authorName,
@@ -477,25 +554,23 @@ export function parseXiaohongshuNpcReaction(raw: string, noteId: string): Parsed
     replyToCommentId: comment.replyToCommentId,
   }));
   const directMessages = blocks
-    .filter(block => /私信|消息/.test(block.title))
+    .filter(block => RE_DM_BLOCK.test(block.title))
     .map(block => ({
-      name: cleanText(block.fields["名称"] ?? block.fields["作者"], 60) || "小红书用户",
-      text: cleanMultiline(block.fields["正文"] ?? block.fields["内容"], 600),
+      name: cleanText(textField(block.fields, F_NAME), 60) || DEFAULT_XHS_AUTHOR,
+      text: cleanMultiline(textField(block.fields, F_BODY), 600),
     }))
     .filter(item => item.text)
     .slice(0, 6);
-  const followerCount = parseMetric(metricField(interaction?.fields, ["新增关注", "关注", "粉丝"]));
+  const followerCount = parseMetric(metricField(interaction?.fields, F_FOLLOWERS));
   const followerNames = Array.from(new Set([
-    interaction?.fields["关注用户1"],
-    interaction?.fields["关注用户2"],
-    interaction?.fields["关注用户3"],
-    ...Array.from({ length: Math.min(12, followerCount) }, (_, index) => interaction?.fields[`关注用户${index + 1}`]),
+    ...[1, 2, 3].map(n => textField(interaction?.fields, numberedFollowField(n))),
+    ...Array.from({ length: Math.min(12, followerCount) }, (_, index) => textField(interaction?.fields, numberedFollowField(index + 1))),
   ].map(name => cleanText(name, 60)).filter(Boolean))).slice(0, Math.max(2, followerCount || 0));
   return {
-    likeCount: parseMetric(metricField(interaction?.fields, ["点赞", "点赞数", "赞"])),
-    saveCount: parseMetric(metricField(interaction?.fields, ["收藏", "收藏数"])),
-    recentLikeNames: [interaction?.fields["点赞用户1"], interaction?.fields["点赞用户2"]].map(name => cleanText(name, 24)).filter(Boolean),
-    recentSaveNames: [interaction?.fields["收藏用户1"], interaction?.fields["收藏用户2"]].map(name => cleanText(name, 24)).filter(Boolean),
+    likeCount: parseMetric(metricField(interaction?.fields, F_LIKES)),
+    saveCount: parseMetric(metricField(interaction?.fields, F_SAVES)),
+    recentLikeNames: [1, 2].map(n => cleanText(textField(interaction?.fields, numberedField(n)), 24)).filter(Boolean),
+    recentSaveNames: [1, 2].map(n => cleanText(textField(interaction?.fields, numberedSaveField(n)), 24)).filter(Boolean),
     comments,
     directMessages,
     followerNames,
@@ -506,15 +581,20 @@ export function parseXiaohongshuNpcCommentReply(raw: string, noteId: string, fal
   const blocks = parseBlocks(raw);
   const fields = blocks.reduce<Record<string, string>>((acc, block) => ({ ...acc, ...block.fields }), {});
   const numbers = Object.keys(fields)
-    .map(key => /^评论(\d+)作者$/.exec(key)?.[1])
+    .map(key => { const m = RE_COMMENT_AUTHOR_KEY.exec(key.trim()); return m ? (m[1] ?? m[2]) : undefined; })
     .filter((value): value is string => Boolean(value))
     .map(Number)
     .sort((a, b) => a - b);
   const comments = numbers.map((number) => {
-    const authorName = cleanText(fields[`评论${number}作者`], 60) || "小红书用户";
-    const replyValue = cleanText(fields[`评论${number}回复评论ID`] ?? fields[`评论${number}回复对象`], 180);
-    const replyNumber = /^评论(\d+)$/.exec(replyValue)?.[1];
-    const isEmptyReply = !replyValue || /^(无|none|null|-)$/.test(replyValue.toLowerCase()) || /被回复|候选|评论id/i.test(replyValue);
+    const authorName = cleanText(textField(fields, commentAuthorField(number)), 60) || DEFAULT_XHS_AUTHOR;
+    const replyValue = cleanText(
+      textField(fields, commentReplyIdField(number)) ?? textField(fields, commentReplyField(number)), 180);
+    const replyRef = RE_COMMENT_REF.exec(replyValue);
+    const replyNumber = replyRef ? (replyRef[1] ?? replyRef[2]) : undefined;
+    // Placeholder guard: models echo the instruction word instead of a real target.
+    const isEmptyReply = !replyValue
+      || /^(无|none|null|-)$/.test(replyValue.toLowerCase())
+      || /被回复|候选|评论id|reply\s*target|comment\s*id|candidate/i.test(replyValue);
     const replyToCommentId = replyNumber
       ? `${noteId}_comment_${replyNumber}`
       : !isEmptyReply
@@ -522,7 +602,7 @@ export function parseXiaohongshuNpcCommentReply(raw: string, noteId: string, fal
         : fallbackReplyToCommentId;
     return {
       authorName,
-      text: cleanMultiline(fields[`评论${number}内容`], 600),
+      text: cleanMultiline(textField(fields, commentTextField(number)), 600),
       replyToCommentId,
     };
   }).filter(comment => comment.text).slice(0, 4);
@@ -533,19 +613,22 @@ export function parseXiaohongshuNpcMoreComments(raw: string): ParsedXiaohongshuN
   const blocks = parseBlocks(raw);
   const fields = blocks.reduce<Record<string, string>>((acc, block) => ({ ...acc, ...block.fields }), {});
   const numbers = Object.keys(fields)
-    .map(key => /^评论(\d+)作者$/.exec(key)?.[1])
+    .map(key => { const m = RE_COMMENT_AUTHOR_KEY.exec(key.trim()); return m ? (m[1] ?? m[2]) : undefined; })
     .filter((value): value is string => Boolean(value))
     .map(Number)
     .sort((a, b) => a - b);
   const comments = numbers.map((number) => {
-    const authorName = cleanText(fields[`评论${number}作者`], 60) || "小红书用户";
-    const replyId = cleanText(fields[`评论${number}回复评论ID`], 180);
-    const replyTarget = cleanText(fields[`评论${number}回复对象`], 80);
-    const replyNumber = /^评论(\d+)$/.exec(replyTarget)?.[1];
-    const isEmptyReplyId = !replyId || /^(无|none|null|-)$/.test(replyId.toLowerCase()) || /从上下文|真实评论id|被回复|候选|评论id/i.test(replyId);
+    const authorName = cleanText(textField(fields, commentAuthorField(number)), 60) || DEFAULT_XHS_AUTHOR;
+    const replyId = cleanText(textField(fields, commentReplyIdField(number)), 180);
+    const replyTarget = cleanText(textField(fields, commentReplyField(number)), 80);
+    const replyRefB = RE_COMMENT_REF.exec(replyTarget);
+    const replyNumber = replyRefB ? (replyRefB[1] ?? replyRefB[2]) : undefined;
+    const isEmptyReplyId = !replyId
+      || /^(无|none|null|-)$/.test(replyId.toLowerCase())
+      || /从上下文|真实评论id|被回复|候选|评论id|from\s*context|real\s*comment\s*id|reply\s*target|comment\s*id|candidate/i.test(replyId);
     return {
       authorName,
-      text: cleanMultiline(fields[`评论${number}内容`], 600),
+      text: cleanMultiline(textField(fields, commentTextField(number)), 600),
       replyTo: !replyNumber && replyTarget ? replyTarget : undefined,
       replyToCommentId: !isEmptyReplyId
         ? replyId
@@ -558,9 +641,9 @@ export function parseXiaohongshuNpcMoreComments(raw: string): ParsedXiaohongshuN
 }
 
 export function parseXiaohongshuNpcDmReply(raw: string): ParsedXiaohongshuNpcDmReply {
-  const blocks = parseBlocks(raw).filter(block => /私信|回复|消息/.test(block.title));
+  const blocks = parseBlocks(raw).filter(block => /DirectMessage|Message|Reply|私信|回复|消息/i.test(block.title));
   const messages = blocks
-    .map(block => cleanMultiline(block.fields["正文"] ?? block.fields["内容"] ?? block.fields["回复"], 600))
+    .map(block => cleanMultiline(textField(block.fields, F_REPLY_BODY), 600))
     .filter(Boolean)
     .slice(0, 4);
   if (messages.length > 0) return { messages };
@@ -571,37 +654,37 @@ export function parseXiaohongshuNpcDmReply(raw: string): ParsedXiaohongshuNpcDmR
 export function parseXiaohongshuCharacterActivity(raw: string, allowedNoteIds: string[]): ParsedXiaohongshuCharacterActivity {
   const blocks = parseBlocks(raw);
   const comments = blocks
-    .filter(block => /评论/.test(block.title))
+    .filter(block => /Comment|评论/i.test(block.title))
     .map(block => {
       const thread = parseCharacterThreadFields(block.fields);
       return {
-        noteId: cleanText(block.fields["笔记ID"] ?? block.fields["noteId"], 180),
-        text: cleanMultiline(block.fields["内容"] ?? block.fields["评论"], 600),
-        liked: parseBoolean(block.fields["点赞"]),
-        saved: parseBoolean(block.fields["收藏"]),
+        noteId: cleanText(textField(block.fields, F_NOTE_ID), 180),
+        text: cleanMultiline(textField(block.fields, F_COMMENT_TEXT), 600),
+        liked: parseBoolean(textField(block.fields, F_LIKES)),
+        saved: parseBoolean(textField(block.fields, F_SAVES)),
         thread: thread.length > 0 ? thread : undefined,
       };
     })
     .filter(item => item.noteId && item.text && allowedNoteIds.includes(item.noteId))
     .slice(0, 3);
-  const postBlock = blocks.find(block => /发帖|笔记|视频/.test(block.title) && !/评论/.test(block.title));
-  const rawPostType = cleanText(postBlock?.fields["类型"] ?? postBlock?.fields["格式"] ?? postBlock?.title, 40).toLowerCase();
+  const postBlock = blocks.find(block => /Post|Note|Video|发帖|笔记|视频/i.test(block.title) && !/Comment|评论/i.test(block.title));
+  const rawPostType = cleanText(textField(postBlock?.fields, F_POST_TYPE) ?? postBlock?.title, 40).toLowerCase();
   const postType: XiaohongshuNoteType = /视频|video/.test(rawPostType) ? "video" : "post";
   const post = postBlock
     ? {
         type: postType,
-        title: cleanText(postBlock.fields["标题"], 80),
-        body: cleanMultiline(postBlock.fields["正文"] ?? postBlock.fields["内容"], 3000),
-        coverIcon: cleanText(postBlock.fields["图标"], 8) || (postType === "video" ? "▶" : "✦"),
-        tags: parseTags(postBlock.fields["标签"] ?? postBlock.fields["TAG"]),
-        likeCount: parseMetricField(postBlock.fields, ["点赞", "点赞数", "赞"]),
-        saveCount: parseMetricField(postBlock.fields, ["收藏", "收藏数"]),
-        commentCount: parseMetricField(postBlock.fields, ["评论数", "评论量", "评论"], parseBlockComments(postBlock.fields, "__character_post__", "npc").length),
-        recentLikeNames: [postBlock.fields["点赞用户1"], postBlock.fields["点赞用户2"]].map(name => cleanText(name, 24)).filter(Boolean),
-        recentSaveNames: [postBlock.fields["收藏用户1"], postBlock.fields["收藏用户2"]].map(name => cleanText(name, 24)).filter(Boolean),
-        imageDescription: postType === "post" ? cleanMultiline(postBlock.fields["图片描述"] ?? postBlock.fields["配图"], 500) || undefined : undefined,
+        title: cleanText(textField(postBlock.fields, F_TITLE), 80),
+        body: cleanMultiline(textField(postBlock.fields, F_BODY), 3000),
+        coverIcon: cleanText(textField(postBlock.fields, F_ICON), 8) || (postType === "video" ? "▶" : "✦"),
+        tags: parseTags(textField(postBlock.fields, F_TAGS)),
+        likeCount: parseMetricField(postBlock.fields, F_LIKES),
+        saveCount: parseMetricField(postBlock.fields, F_SAVES),
+        commentCount: parseMetricField(postBlock.fields, F_COMMENT_COUNT, parseBlockComments(postBlock.fields, "__character_post__", "npc").length),
+        recentLikeNames: [1, 2].map(n => cleanText(textField(postBlock.fields, numberedField(n)), 24)).filter(Boolean),
+        recentSaveNames: [1, 2].map(n => cleanText(textField(postBlock.fields, numberedSaveField(n)), 24)).filter(Boolean),
+        imageDescription: postType === "post" ? cleanMultiline(textField(postBlock.fields, F_IMAGE_DESC), 500) || undefined : undefined,
         videoDescription: postType === "video"
-          ? cleanMultiline(postBlock.fields["视频描述"] ?? postBlock.fields["视频画面"] ?? postBlock.fields["图片描述"] ?? postBlock.fields["配图"], 500) || undefined
+          ? cleanMultiline(textField(postBlock.fields, F_VIDEO_DESC_WIDE), 500) || undefined
           : undefined,
         comments: parseBlockComments(postBlock.fields, "__character_post__", "npc")
           .map((comment) => ({
@@ -618,13 +701,13 @@ export function parseXiaohongshuCharacterActivity(raw: string, allowedNoteIds: s
 
 export function parseXiaohongshuCharacterReaction(raw: string): ParsedXiaohongshuCharacterReaction {
   const blocks = parseBlocks(raw);
-  const block = blocks.find(item => /角色互动|互动|评论|回复/.test(item.title)) ?? blocks[0];
+  const block = blocks.find(item => /Interaction|Comment|Reply|角色互动|互动|评论|回复/i.test(item.title)) ?? blocks[0];
   const thread = block ? parseCharacterThreadFields(block.fields) : [];
   return {
-    comment: cleanMultiline(block?.fields["评论"] ?? block?.fields["内容"], 600),
-    liked: parseBoolean(block?.fields["点赞"]),
-    saved: parseBoolean(block?.fields["收藏"]),
-    followedAuthor: parseBoolean(block?.fields["关注作者"] ?? block?.fields["关注"]),
+    comment: cleanMultiline(textField(block?.fields, F_COMMENT_TEXT), 600),
+    liked: parseBoolean(textField(block?.fields, F_LIKES)),
+    saved: parseBoolean(textField(block?.fields, F_SAVES)),
+    followedAuthor: parseBoolean(textField(block?.fields, F_FOLLOW_AUTHOR)),
     thread: thread.length > 0 ? thread : undefined,
   };
 }

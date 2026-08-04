@@ -188,11 +188,14 @@ function splitChatContent(text: string): { type: "md" | "html"; content: string 
 }
 
 export function normalizeTextBubbleContent(content: string): string {
+    // Strips leftover protocol markers so they never leak into a text bubble.
+    // Each pattern accepts the legacy Chinese token and its going-forward English
+    // alias — see PROTOCOL-MIGRATION-PLAN.md.
     return content
-        .replace(/\[音乐(?:分享)?(?:[：:][^\]]*)?\]/g, "")
-        .replace(/\[[^\]]+拍了拍[^\]]+\]/g, "")
-        .replace(/\[[^\]]*?(?:获取指令|获取工具)[:：][^\]]*\]/g, "")
-        .replace(/\[[^\]]*?(?:执行动作|工具调用)[:：][^\]]*?[（(][\s\S]*?[)）]\]/g, "")
+        .replace(/\[(?:音乐(?:分享)?|Music(?:Share)?)(?:[：:][^\]]*)?\]/g, "")
+        .replace(/\[[^\]]+(?:拍了拍| poked )[^\]]+\]/g, "")
+        .replace(/\[[^\]]*?(?:获取指令|获取工具|FetchTool)[:：][^\]]*\]/g, "")
+        .replace(/\[[^\]]*?(?:执行动作|工具调用|CallTool)[:：][^\]]*?[（(][\s\S]*?[)）]\]/g, "")
         .replace(/\n{3,}/g, "\n\n")
         .trim();
 }

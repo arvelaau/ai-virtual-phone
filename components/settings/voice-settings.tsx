@@ -12,21 +12,21 @@ import { Alert } from "@/components/ui/feedback";
 
 const SUPPORTED_VOICE_PROVIDERS = new Set(["Minimax", "OpenAI"]);
 const MINIMAX_BASE_URL_OPTIONS = [
-    { id: "cn", label: "国内版", baseUrl: "https://api.minimaxi.com/v1" },
-    { id: "global", label: "海外版", baseUrl: "https://api.minimax.io/v1" },
+    { id: "cn", label: "Mainland China", baseUrl: "https://api.minimaxi.com/v1" },
+    { id: "global", label: "Global", baseUrl: "https://api.minimax.io/v1" },
 ];
 const DEFAULT_MINIMAX_BASE_URL = MINIMAX_BASE_URL_OPTIONS[0].baseUrl;
 const GLOBAL_MINIMAX_BASE_URL = MINIMAX_BASE_URL_OPTIONS[1].baseUrl;
 const VOICE_PROVIDER_OPTIONS = [
     { value: "OpenAI", label: "OpenAI TTS" },
-    { value: "MinimaxCN", label: "Minimax 语音国内版" },
-    { value: "MinimaxGlobal", label: "Minimax 语音海外版" },
+    { value: "MinimaxCN", label: "Minimax Voice (Mainland China)" },
+    { value: "MinimaxGlobal", label: "Minimax Voice (Global)" },
 ];
 
 const DEFAULT_VOICE_CONFIGS: VoiceApiConfig[] = [
     {
         id: "default-minimax-tts",
-        name: "Minimax 语音",
+        name: "Minimax Voice",
         provider: "Minimax",
         apiKey: "",
         baseUrl: DEFAULT_MINIMAX_BASE_URL,
@@ -45,52 +45,52 @@ const DEFAULT_MINIMAX_MODELS = [
     { id: "speech-02-hd", name: "speech-02-hd" },
     { id: "speech-02-turbo", name: "speech-02-turbo" },
     { id: "speech-01-hd", name: "speech-01-hd" },
-    { id: "speech-01-turbo", name: "speech-01-turbo (速度快/性价比高)" },
+    { id: "speech-01-turbo", name: "speech-01-turbo (fast, cost-effective)" },
 ];
 
 const MINIMAX_LANGUAGE_OPTIONS = [
-    { value: "", label: "不指定（保持默认）" },
-    { value: "auto", label: "自动识别" },
-    { value: "Chinese", label: "普通话" },
-    { value: "Chinese,Yue", label: "粤语" },
-    { value: "English", label: "英语" },
-    { value: "Arabic", label: "阿拉伯语" },
-    { value: "Russian", label: "俄语" },
-    { value: "Spanish", label: "西班牙语" },
-    { value: "French", label: "法语" },
-    { value: "Portuguese", label: "葡萄牙语" },
-    { value: "German", label: "德语" },
-    { value: "Turkish", label: "土耳其语" },
-    { value: "Dutch", label: "荷兰语" },
-    { value: "Ukrainian", label: "乌克兰语" },
-    { value: "Vietnamese", label: "越南语" },
-    { value: "Indonesian", label: "印尼语" },
-    { value: "Japanese", label: "日语" },
-    { value: "Italian", label: "意大利语" },
-    { value: "Korean", label: "韩语" },
-    { value: "Thai", label: "泰语" },
-    { value: "Polish", label: "波兰语" },
-    { value: "Romanian", label: "罗马尼亚语" },
-    { value: "Greek", label: "希腊语" },
-    { value: "Czech", label: "捷克语" },
-    { value: "Finnish", label: "芬兰语" },
-    { value: "Hindi", label: "印地语" },
-    { value: "Bulgarian", label: "保加利亚语" },
-    { value: "Danish", label: "丹麦语" },
-    { value: "Hebrew", label: "希伯来语" },
-    { value: "Malay", label: "马来语" },
-    { value: "Persian", label: "波斯语" },
-    { value: "Slovak", label: "斯洛伐克语" },
-    { value: "Swedish", label: "瑞典语" },
-    { value: "Croatian", label: "克罗地亚语" },
-    { value: "Filipino", label: "菲律宾语" },
-    { value: "Hungarian", label: "匈牙利语" },
-    { value: "Norwegian", label: "挪威语" },
-    { value: "Slovenian", label: "斯洛文尼亚语" },
-    { value: "Catalan", label: "加泰罗尼亚语" },
-    { value: "Nynorsk", label: "新挪威语" },
-    { value: "Tamil", label: "泰米尔语" },
-    { value: "Afrikaans", label: "南非荷兰语" },
+    { value: "", label: "Not specified (keep default)" },
+    { value: "auto", label: "Auto-detect" },
+    { value: "Chinese", label: "Mandarin" },
+    { value: "Chinese,Yue", label: "Cantonese" },
+    { value: "English", label: "English" },
+    { value: "Arabic", label: "Arabic" },
+    { value: "Russian", label: "Russian" },
+    { value: "Spanish", label: "Spanish" },
+    { value: "French", label: "French" },
+    { value: "Portuguese", label: "Portuguese" },
+    { value: "German", label: "German" },
+    { value: "Turkish", label: "Turkish" },
+    { value: "Dutch", label: "Dutch" },
+    { value: "Ukrainian", label: "Ukrainian" },
+    { value: "Vietnamese", label: "Vietnamese" },
+    { value: "Indonesian", label: "Indonesian" },
+    { value: "Japanese", label: "Japanese" },
+    { value: "Italian", label: "Italian" },
+    { value: "Korean", label: "Korean" },
+    { value: "Thai", label: "Thai" },
+    { value: "Polish", label: "Polish" },
+    { value: "Romanian", label: "Romanian" },
+    { value: "Greek", label: "Greek" },
+    { value: "Czech", label: "Czech" },
+    { value: "Finnish", label: "Finnish" },
+    { value: "Hindi", label: "Hindi" },
+    { value: "Bulgarian", label: "Bulgarian" },
+    { value: "Danish", label: "Danish" },
+    { value: "Hebrew", label: "Hebrew" },
+    { value: "Malay", label: "Malay" },
+    { value: "Persian", label: "Persian" },
+    { value: "Slovak", label: "Slovak" },
+    { value: "Swedish", label: "Swedish" },
+    { value: "Croatian", label: "Croatian" },
+    { value: "Filipino", label: "Filipino" },
+    { value: "Hungarian", label: "Hungarian" },
+    { value: "Norwegian", label: "Norwegian" },
+    { value: "Slovenian", label: "Slovenian" },
+    { value: "Catalan", label: "Catalan" },
+    { value: "Nynorsk", label: "Norwegian Nynorsk" },
+    { value: "Tamil", label: "Tamil" },
+    { value: "Afrikaans", label: "Afrikaans" },
 ];
 
 const MINIMAX_PREVIEW_TEXT: Record<string, string> = {
@@ -137,17 +137,17 @@ const MINIMAX_PREVIEW_TEXT: Record<string, string> = {
 };
 
 const DEFAULT_MINIMAX_VOICES = [
-    { id: "male-qn-qingse", name: "青涩青年音 (male-qn-qingse)" },
-    { id: "female-shaonv", name: "少女音 (female-shaonv)" },
-    { id: "female-yujie", name: "御姐音 (female-yujie)" },
-    { id: "male-qn-badao", name: "霸道青年音 (male-qn-badao)" },
-    { id: "Wise_Woman", name: "知性女音 (Wise_Woman)" },
-    { id: "Friendly_Person", name: "亲切和蔼 (Friendly_Person)" },
-    { id: "Calm_Woman", name: "冷静女音 (Calm_Woman)" },
-    { id: "Cantonese_GentleLady", name: "粤语温柔女声 (Cantonese_GentleLady)" },
-    { id: "Cantonese_PlayfulMan", name: "粤语活泼男声 (Cantonese_PlayfulMan)" },
-    { id: "Cantonese_CuteGirl", name: "粤语可爱女孩 (Cantonese_CuteGirl)" },
-    { id: "Cantonese_KindWoman", name: "粤语善良女声 (Cantonese_KindWoman)" },
+    { id: "male-qn-qingse", name: "Youthful Young Man (male-qn-qingse)" },
+    { id: "female-shaonv", name: "Young Girl (female-shaonv)" },
+    { id: "female-yujie", name: "Mature Lady (female-yujie)" },
+    { id: "male-qn-badao", name: "Domineering Young Man (male-qn-badao)" },
+    { id: "Wise_Woman", name: "Intellectual Woman (Wise_Woman)" },
+    { id: "Friendly_Person", name: "Warm and Friendly (Friendly_Person)" },
+    { id: "Calm_Woman", name: "Calm Woman (Calm_Woman)" },
+    { id: "Cantonese_GentleLady", name: "Cantonese Gentle Lady (Cantonese_GentleLady)" },
+    { id: "Cantonese_PlayfulMan", name: "Cantonese Playful Man (Cantonese_PlayfulMan)" },
+    { id: "Cantonese_CuteGirl", name: "Cantonese Cute Girl (Cantonese_CuteGirl)" },
+    { id: "Cantonese_KindWoman", name: "Cantonese Kind Woman (Cantonese_KindWoman)" },
 ];
 
 const DEFAULT_OPENAI_VOICES = [
@@ -252,7 +252,7 @@ export function VoiceSettings() {
     const addConfig = useCallback(() => {
         const newConfig: VoiceApiConfig = {
             id: `voice-${Date.now()}`,
-            name: "新语音配置",
+            name: "New Voice Configuration",
             provider: "Minimax",
             apiKey: "",
             baseUrl: DEFAULT_MINIMAX_BASE_URL,
@@ -274,7 +274,7 @@ export function VoiceSettings() {
                 className="inline-flex h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] bg-black px-4 text-xs font-bold text-white shadow-sm transition-all hover:bg-gray-800 hover:shadow-md active:scale-95 focus:outline-none"
             >
                 <Plus size={15} strokeWidth={1.8} />
-                <span>新增语音方案</span>
+                <span>Add Voice Configuration</span>
             </button>
         );
         return () => setSubpageRightAction("voice", null);
@@ -356,27 +356,27 @@ export function VoiceSettings() {
         setCloneError("");
         const voiceId = cloneVoiceId.trim();
         if (!config.apiKey.trim()) {
-            setCloneError("请先填写 Minimax API Key");
+            setCloneError("Please enter your Minimax API Key first");
             return;
         }
         if (!voiceId || !/^[A-Za-z0-9_-]{4,64}$/.test(voiceId)) {
-            setCloneError("Voice ID 只能包含英文、数字、下划线和连字符，长度 4-64");
+            setCloneError("Voice ID can only contain letters, numbers, underscores, and hyphens, 4-64 characters long");
             return;
         }
         if (!cloneFile) {
-            setCloneError("请上传一段音频文件");
+            setCloneError("Please upload an audio file");
             return;
         }
 
         if (cloneFile.size > 20 * 1024 * 1024) {
-            setCloneError("音频文件超过 20MB,请压缩后再试(30 秒左右的干净人声即可)");
+            setCloneError("Audio file exceeds 20MB. Please compress it and try again (about 30 seconds of clean voice audio is enough)");
             return;
         }
 
         setIsCloning(true);
         try {
-            // 浏览器直连 MiniMax(和 TTS 同路),不走服务端中转:
-            // 避开 Netlify 函数 ~6MB 请求体和 10s 超时限制,本地 dev 也不依赖出网代理。
+            // Connect directly to MiniMax from the browser (same path as TTS), not routed through the server:
+            // avoids the Netlify function's ~6MB request body and 10s timeout limits, and local dev doesn't need an outbound proxy either.
             const base = (config.baseUrl || DEFAULT_MINIMAX_BASE_URL).replace(/\/$/, "");
             const auth = { Authorization: `Bearer ${config.apiKey.trim()}` };
             const readBaseRespError = (payload: Record<string, unknown> | null): string | null => {
@@ -391,7 +391,7 @@ export function VoiceSettings() {
                 try { return JSON.parse(text) as Record<string, unknown>; } catch { return null; }
             };
 
-            // 1) 上传克隆样本
+            // 1) Upload the cloning sample
             const uploadForm = new FormData();
             uploadForm.set("purpose", "voice_clone");
             uploadForm.set("file", cloneFile, cloneFile.name || "voice-sample.mp3");
@@ -400,15 +400,15 @@ export function VoiceSettings() {
             const uploadData = parseJson(uploadText);
             const uploadError = readBaseRespError(uploadData);
             if (!uploadResponse.ok || uploadError) {
-                throw new Error(uploadError || `样本上传失败 (HTTP ${uploadResponse.status}) ${uploadText.slice(0, 200)}`);
+                throw new Error(uploadError || `Sample upload failed (HTTP ${uploadResponse.status}) ${uploadText.slice(0, 200)}`);
             }
             const fileRecord = (uploadData?.file ?? {}) as Record<string, unknown>;
             const fileId = fileRecord.file_id ?? uploadData?.file_id ?? uploadData?.id;
             if (fileId === undefined || fileId === null || fileId === "") {
-                throw new Error(`上传结果里没有 file_id: ${uploadText.slice(0, 200)}`);
+                throw new Error(`No file_id in upload result: ${uploadText.slice(0, 200)}`);
             }
 
-            // 2) 发起克隆
+            // 2) Start the clone
             const cloneResponse = await fetch(`${base}/voice_clone`, {
                 method: "POST",
                 headers: { ...auth, "Content-Type": "application/json" },
@@ -418,12 +418,12 @@ export function VoiceSettings() {
             const cloneData = parseJson(cloneText);
             const cloneRespError = readBaseRespError(cloneData);
             if (!cloneResponse.ok || cloneRespError) {
-                throw new Error(cloneRespError || `克隆失败 (HTTP ${cloneResponse.status}) ${cloneText.slice(0, 200)}`);
+                throw new Error(cloneRespError || `Cloning failed (HTTP ${cloneResponse.status}) ${cloneText.slice(0, 200)}`);
             }
             const nextVoiceId = voiceId;
             const clonedVoice: VoiceOption = {
                 id: nextVoiceId,
-                name: `克隆音色 (${nextVoiceId})`,
+                name: `Cloned Voice (${nextVoiceId})`,
                 createdAt: Date.now(),
             };
             updateConfig(config.id, {
@@ -458,7 +458,7 @@ export function VoiceSettings() {
             if (config.provider === "Minimax") {
                 if (!config.apiKey.trim()) {
                     setFetchedVoices(prev => ({ ...prev, [config.id]: config.customVoices || [] }));
-                    setFetchError(prev => ({ ...prev, [config.id]: "填写 API Key 后可同步账户已克隆音色" }));
+                    setFetchError(prev => ({ ...prev, [config.id]: "Enter your API Key to sync cloned voices from your account" }));
                     return;
                 }
                 const response = await fetch("/api/voice/minimax-voices", {
@@ -471,7 +471,7 @@ export function VoiceSettings() {
                 });
                 const data = await response.json().catch(() => ({}));
                 if (!response.ok) {
-                    throw new Error(data.message || data.error || `同步失败 (${response.status})`);
+                    throw new Error(data.message || data.error || `Sync failed (${response.status})`);
                 }
                 const clonedVoices = Array.isArray(data.voices) ? data.voices as VoiceOption[] : [];
                 const nextCustomVoices = uniqueOptions([...clonedVoices, ...(config.customVoices || [])]);
@@ -481,7 +481,7 @@ export function VoiceSettings() {
             } else if (config.provider === "OpenAI") {
                 setFetchedVoices(prev => ({ ...prev, [config.id]: DEFAULT_OPENAI_VOICES }));
             } else {
-                throw new Error("该服务商暂不支持拉取模型列表");
+                throw new Error("This provider does not support fetching the voice list yet");
             }
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -511,13 +511,13 @@ export function VoiceSettings() {
 
         try {
             const previewText = config.provider === "Minimax" && config.languageBoost
-                ? MINIMAX_PREVIEW_TEXT[config.languageBoost] || "你好，很高兴认识你。这是一段语音试听。"
-                : "你好，我现在是" + (config.defaultVoice || "默认") + "音色。很高兴认识你。";
+                ? MINIMAX_PREVIEW_TEXT[config.languageBoost] || "Hello, nice to meet you. This is a voice preview."
+                : "Hello, I'm now using the " + (config.defaultVoice || "default") + " voice. Nice to meet you.";
             const blob = await synthesizeSpeech(
                 previewText,
                 config,
             );
-            if (!blob) throw new Error("当前语音配置未返回真实音频");
+            if (!blob) throw new Error("This voice configuration did not return real audio");
             const url = URL.createObjectURL(blob);
 
             const audio = new Audio(url);
@@ -535,7 +535,7 @@ export function VoiceSettings() {
             await audio.play();
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);
-            alert(`语音测试失败: ${msg}`);
+            alert(`Voice test failed: ${msg}`);
             setPlayingVoiceId(null);
         }
     };
@@ -553,12 +553,12 @@ export function VoiceSettings() {
                     <div className="ui-icon-circle">
                         <Play size={24} />
                     </div>
-                    <span className="menu-label font-semibold">没有语音配置</span>
+                    <span className="menu-label font-semibold">No voice configuration</span>
                     <span className="menu-desc max-w-[240px]">
-                        配置语音 API 以启用语音通话和回复播报。
+                        Configure a voice API to enable voice calls and reply narration.
                     </span>
                     <button onClick={addConfig} className="ui-btn ui-btn-primary rounded-[20px] mt-2">
-                        <Plus size={16} /> 添加配置
+                        <Plus size={16} /> Add Configuration
                     </button>
                 </div>
             ) : (
@@ -570,7 +570,7 @@ export function VoiceSettings() {
                             style={{ aspectRatio: "3 / 2", padding: "12px", justifyContent: "space-between" }}
                             role="button"
                             tabIndex={0}
-                            aria-label={`编辑 ${config.name || config.provider}`}
+                            aria-label={`Edit ${config.name || config.provider}`}
                             onClick={() => setEditingId(config.id)}
                             onKeyDown={(event) => {
                                 if (event.target !== event.currentTarget) return;
@@ -582,7 +582,7 @@ export function VoiceSettings() {
                         >
                             <div className="min-w-0 flex flex-col gap-1">
                                 <span className="truncate text-[calc(14.4px*var(--app-text-scale,1))] font-bold leading-tight text-[var(--c-text-title)]">{config.name || config.provider}</span>
-                                <span className="menu-desc truncate">{config.defaultVoice || config.model || config.provider || "未设置音色"}</span>
+                                <span className="menu-desc truncate">{config.defaultVoice || config.model || config.provider || "No voice set"}</span>
                             </div>
                             <div className="flex gap-2 shrink-0 items-center justify-end">
                                 <button
@@ -617,7 +617,7 @@ export function VoiceSettings() {
                     <div className="modal-sheet" data-ui="modal-sheet">
                         <div className="modal-header" data-ui="modal-header">
                             <button onClick={() => { if (isNewConfig && editingId) removeConfig(editingId); setIsNewConfig(false); setEditingId(null); }} className="modal-header-btn modal-header-btn-muted"><X size={18} /></button>
-                            <span className="modal-header-title">{isNewConfig ? "添加语音配置" : "编辑语音配置"}</span>
+                            <span className="modal-header-title">{isNewConfig ? "Add Voice Configuration" : "Edit Voice Configuration"}</span>
                             <button onClick={() => { setIsNewConfig(false); setEditingId(null); }} className="modal-header-btn modal-header-btn-action"><Check size={18} /></button>
                         </div>
 
@@ -628,16 +628,16 @@ export function VoiceSettings() {
                                 return (
                                     <div className="flex flex-col gap-4">
                                         <div className="flex flex-col gap-1">
-                                            <label className="menu-desc ml-1">配置名称 (Name)</label>
+                                            <label className="menu-desc ml-1">Configuration Name</label>
                                             <Input
                                                 type="text"
                                                 value={config.name || ""}
                                                 onChange={(e) => updateConfig(config.id, { name: e.target.value })}
-                                                placeholder="例如: 我的语音助手"
+                                                placeholder="e.g. My Voice Assistant"
                                             />
                                         </div>
                                         <div className="flex flex-col gap-1">
-                                            <label className="menu-desc ml-1">服务商 (Provider)</label>
+                                            <label className="menu-desc ml-1">Provider</label>
                                             <select
                                                 value={providerSelectValue(config)}
                                                 onChange={(e) => updateProvider(config.id, e.target.value)}
@@ -655,13 +655,13 @@ export function VoiceSettings() {
                                                 type="password"
                                                 value={config.apiKey}
                                                 onChange={(e) => updateConfig(config.id, { apiKey: e.target.value })}
-                                                placeholder="输入密钥..."
+                                                placeholder="Enter API key..."
                                             />
                                         </div>
                                         {config.provider === "OpenAI" && (
                                             <>
                                                 <div className="flex flex-col gap-1">
-                                                    <label className="menu-desc ml-1">接口地址 (Base URL)</label>
+                                                    <label className="menu-desc ml-1">Endpoint (Base URL)</label>
                                                     <Input
                                                         type="text"
                                                         value={config.baseUrl || ""}
@@ -670,22 +670,22 @@ export function VoiceSettings() {
                                                     />
                                                 </div>
                                                 <div className="flex flex-col gap-1">
-                                                    <label className="menu-desc ml-1">语音模型 (TTS Model)</label>
+                                                    <label className="menu-desc ml-1">Voice Model (TTS Model)</label>
                                                     {manualModelIds[config.id] ? (
                                                         <div className="flex gap-2">
                                                             <Input
                                                                 type="text"
                                                                 value={config.model || ""}
                                                                 onChange={(e) => updateConfig(config.id, { model: e.target.value })}
-                                                                placeholder="手动输入模型 ID"
+                                                                placeholder="Manually enter model ID"
                                                                 className="flex-1"
                                                             />
                                                             <button
                                                                 type="button"
                                                                 onClick={() => setManualModelIds(prev => ({ ...prev, [config.id]: false }))}
                                                                 className="ui-icon-btn"
-                                                                aria-label="返回模型下拉选择"
-                                                                title="返回模型下拉选择"
+                                                                aria-label="Back to model dropdown"
+                                                                title="Back to model dropdown"
                                                             >
                                                                 <List size={20} />
                                                             </button>
@@ -704,7 +704,7 @@ export function VoiceSettings() {
                                                         >
                                                             <option value="tts-1">tts-1</option>
                                                             <option value="tts-1-hd">tts-1-hd</option>
-                                                            <option value="__manual__">手动输入...</option>
+                                                            <option value="__manual__">Manual entry...</option>
                                                         </select>
                                                     )}
                                                 </div>
@@ -714,7 +714,7 @@ export function VoiceSettings() {
                                         {config.provider === "Minimax" && (
                                             <>
                                                 <div className="flex flex-col gap-1">
-                                                    <label className="menu-desc ml-1">朗读语言</label>
+                                                    <label className="menu-desc ml-1">Speech Language</label>
                                                     <select
                                                         value={config.languageBoost || ""}
                                                         onChange={(e) => updateConfig(config.id, { languageBoost: e.target.value || undefined })}
@@ -726,7 +726,7 @@ export function VoiceSettings() {
                                                     </select>
                                                 </div>
                                                 <div className="flex flex-col gap-1">
-                                                    <label className="menu-desc ml-1">语音模型 (TTS Model)</label>
+                                                    <label className="menu-desc ml-1">Voice Model (TTS Model)</label>
                                                     <div className="flex flex-col gap-2">
                                                         {manualModelIds[config.id] ? (
                                                             <div className="flex gap-2">
@@ -734,15 +734,15 @@ export function VoiceSettings() {
                                                                     type="text"
                                                                     value={config.model || ""}
                                                                     onChange={(e) => updateConfig(config.id, { model: e.target.value })}
-                                                                    placeholder="手动输入模型 ID"
+                                                                    placeholder="Manually enter model ID"
                                                                     className="flex-1"
                                                                 />
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => setManualModelIds(prev => ({ ...prev, [config.id]: false }))}
                                                                     className="ui-icon-btn"
-                                                                    aria-label="返回模型下拉选择"
-                                                                    title="返回模型下拉选择"
+                                                                    aria-label="Back to model dropdown"
+                                                                    title="Back to model dropdown"
                                                                 >
                                                                     <List size={20} />
                                                                 </button>
@@ -762,7 +762,7 @@ export function VoiceSettings() {
                                                                 {DEFAULT_MINIMAX_MODELS.map(model => (
                                                                     <option key={model.id} value={model.id}>{model.name}</option>
                                                                 ))}
-                                                                <option value="__manual__">手动输入...</option>
+                                                                <option value="__manual__">Manual entry...</option>
                                                             </select>
                                                         )}
                                                     </div>
@@ -771,7 +771,7 @@ export function VoiceSettings() {
                                         )}
 
                                         <div className="flex flex-col gap-1">
-                                            <label className="menu-desc ml-1">默认音色 (Default Voice) 或 自定义 Voice ID</label>
+                                            <label className="menu-desc ml-1">Default Voice or Custom Voice ID</label>
                                             <div className="flex flex-col gap-2">
                                                 <div className="flex gap-2">
                                                     {manualVoiceIds[config.id] ? (
@@ -780,15 +780,15 @@ export function VoiceSettings() {
                                                                 type="text"
                                                                 value={config.defaultVoice}
                                                                 onChange={(e) => updateConfig(config.id, { defaultVoice: e.target.value })}
-                                                                placeholder={config.provider === "OpenAI" ? "alloy" : "male-qn-qingse 或克隆 Voice ID"}
+                                                                placeholder={config.provider === "OpenAI" ? "alloy" : "male-qn-qingse or cloned Voice ID"}
                                                                 className="flex-1"
                                                             />
                                                             <button
                                                                 type="button"
                                                                 onClick={() => setManualVoiceIds(prev => ({ ...prev, [config.id]: false }))}
                                                                 className="ui-icon-btn"
-                                                                aria-label="返回音色下拉选择"
-                                                                title="返回音色下拉选择"
+                                                                aria-label="Back to voice dropdown"
+                                                                title="Back to voice dropdown"
                                                             >
                                                                 <List size={20} />
                                                             </button>
@@ -811,7 +811,7 @@ export function VoiceSettings() {
                                                                     {options.map(v => (
                                                                         <option key={v.id} value={v.id}>{v.name}</option>
                                                                     ))}
-                                                                    <option value="__manual__">手动输入...</option>
+                                                                    <option value="__manual__">Manual entry...</option>
                                                                 </select>
                                                             );
                                                         })()
@@ -832,7 +832,7 @@ export function VoiceSettings() {
                                                         className="ui-btn ui-btn ui-btn-soft-action w-full"
                                                     >
                                                         <RefreshCw size={16} className={isFetching[config.id] ? "animate-spin" : ""} />
-                                                        {isFetching[config.id] ? "同步中..." : config.provider === "Minimax" ? "同步音色列表" : "显示默认音色"}
+                                                        {isFetching[config.id] ? "Syncing..." : config.provider === "Minimax" ? "Sync Voice List" : "Show Default Voices"}
                                                     </button>
                                                     {config.provider === "Minimax" && (
                                                         <button
@@ -841,7 +841,7 @@ export function VoiceSettings() {
                                                             className="ui-btn ui-btn-soft-action w-full"
                                                         >
                                                             <Upload size={16} />
-                                                            上传音频克隆音色
+                                                            Upload Audio to Clone Voice
                                                         </button>
                                                     )}
                                                 </div>
@@ -856,7 +856,7 @@ export function VoiceSettings() {
                                         </div>
 
                                         <div className="ui-toggle-row">
-                                            <span className="menu-label font-medium">启用语音合成 (TTS)</span>
+                                            <span className="menu-label font-medium">Enable Text-to-Speech (TTS)</span>
                                             <Toggle checked={config.enableTTS} onChange={(v) => updateConfig(config.id, { enableTTS: v })} />
                                         </div>
                                     </div>
@@ -875,24 +875,24 @@ export function VoiceSettings() {
                         <div className="modal-expand" data-ui="modal-dialog" style={{ width: "min(420px, calc(100% - 32px))", maxHeight: "82%" }}>
                             <div className="modal-header" data-ui="modal-header">
                                 <button onClick={closeCloneModal} disabled={isCloning} className="modal-header-btn modal-header-btn-muted"><X size={18} /></button>
-                                <span className="modal-header-title">克隆 Minimax 音色</span>
+                                <span className="modal-header-title">Clone Minimax Voice</span>
                                 <button onClick={submitClone} disabled={isCloning} className="modal-header-btn modal-header-btn-action"><Check size={18} /></button>
                             </div>
 
                             <div className="modal-body hide-scrollbar" data-ui="modal-body">
                                 <div className="flex flex-col gap-4">
                                     <div className="flex flex-col gap-1">
-                                        <label className="menu-desc ml-1">新 Voice ID</label>
+                                        <label className="menu-desc ml-1">New Voice ID</label>
                                         <Input
                                             type="text"
                                             value={cloneVoiceId}
                                             onChange={(e) => setCloneVoiceId(e.target.value)}
-                                            placeholder="例如 voice_xxx"
+                                            placeholder="e.g. voice_xxx"
                                             disabled={isCloning}
                                         />
                                     </div>
                                     <div className="flex flex-col gap-1">
-                                        <label className="menu-desc ml-1">音频样本</label>
+                                        <label className="menu-desc ml-1">Audio Sample</label>
                                         <input
                                             type="file"
                                             accept="audio/mpeg,audio/mp3,audio/mp4,audio/x-m4a,audio/wav,.mp3,.m4a,.wav"
@@ -900,9 +900,9 @@ export function VoiceSettings() {
                                             disabled={isCloning}
                                             className="ui-input"
                                         />
-                                        <span className="menu-desc ml-1">建议上传 10-30 秒、声音清晰、背景噪音少的音频。</span>
+                                        <span className="menu-desc ml-1">We recommend uploading 10-30 seconds of clear audio with minimal background noise.</span>
                                         <span className="ml-1 text-xs font-medium text-red-500">
-                                            克隆音色初次使用将会扣除 9.9 元 Minimax token 费用（包含试听）。
+                                            The first use of a cloned voice will deduct a 9.9 RMB Minimax token fee (including preview).
                                         </span>
                                     </div>
 
@@ -920,7 +920,7 @@ export function VoiceSettings() {
                                         className="ui-btn ui-btn-primary w-full"
                                     >
                                         {isCloning ? <RefreshCw size={16} className="animate-spin" /> : <Upload size={16} />}
-                                        {isCloning ? "正在克隆..." : "开始克隆并写入 Voice ID"}
+                                        {isCloning ? "Cloning..." : "Start Cloning and Save Voice ID"}
                                     </button>
                                 </div>
                             </div>
@@ -931,12 +931,12 @@ export function VoiceSettings() {
 
             {confirmDeleteId && (
                 <ConfirmDialog
-                    title="确认删除？"
-                    message="删除配置后无法恢复。是否继续？"
+                    title="Confirm Delete?"
+                    message="This configuration cannot be recovered after deletion. Continue?"
                     icon={AlertCircle}
                     variant="danger"
-                    confirmLabel="确认删除"
-                    cancelLabel="取消"
+                    confirmLabel="Confirm Delete"
+                    cancelLabel="Cancel"
                     onConfirm={() => {
                         removeConfig(confirmDeleteId);
                         setConfirmDeleteId(null);

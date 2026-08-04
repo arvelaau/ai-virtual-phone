@@ -40,53 +40,58 @@ export type MemorySearchResult = {
  * Default summarization prompt template.
  * Placeholders: {{char}}, {{earliest}}, {{latest}}, {{events}}
  */
-export const DEFAULT_SUMMARIZATION_PROMPT = `你是一个记忆整理助手。根据以下事件记录，创建一段简洁的事实性总结。
+export const DEFAULT_SUMMARIZATION_PROMPT = `You are a memory-organizing assistant. Based on the event log below, write a concise, factual summary.
 
-角色：{{char}}
-时间跨度：{{earliest}} 至 {{latest}}
+Character: {{char}}
+Time span: {{earliest}} to {{latest}}
 
-事件记录：
+Event log:
 {{events}}
 
-要求：
-- 用第三人称描述{{char}}和用户之间的互动
-- 保留关键事实：提到的名字、做出的承诺、情感变化、关系里程碑
-- 保留用户分享的具体信息（生日、偏好、习惯）
-- 保留朋友圈等非聊天事件中的关键信息
-- 100-200字
-- 不要包含格式标记
+Requirements:
+- Describe the interactions between {{char}} and the user in the third person
+- Preserve key facts: names mentioned, promises made, emotional shifts, relationship milestones
+- Preserve specific details the user shared (birthdays, preferences, habits)
+- Preserve key information from non-chat events such as Moments posts
+- 100-200 words
+- Do not include any formatting markup
 
-总结：`;
+Summary:`;
 
 /**
  * Default core-memory summarization prompt template.
  * Placeholders: {{char}}, {{earliest}}, {{latest}}, {{events}}
  */
-export const DEFAULT_CORE_MEMORY_PROMPT = `你是一个核心记忆整理助手。请根据以下长期记忆记录，为{{char}}整理一段“核心记忆”总结。
+export const DEFAULT_CORE_MEMORY_PROMPT = `You are a core-memory assistant. Based on the long-term memory records below, write a "core memory" summary for {{char}}.
 
-角色：{{char}}
-时间跨度：{{earliest}} 至 {{latest}}
+Character: {{char}}
+Time span: {{earliest}} to {{latest}}
 
-长期记忆记录：
+Long-term memory records:
 {{events}}
 
-要求：
-- 突出最关键、最稳定、最影响关系判断的事实
-- 确认在一起 / 确认分手 / 复合
-- 订婚 / 结婚 / 离婚
-- 恋爱周年、结婚纪念日、在一起多久
-- 明确的长期关系身份（如恋人、前任、配偶）
-- 共同生活的重要里程碑（如同居、见家长、共同养宠物）
-- 普通日常聊天
-- 一般情绪波动
-- 暂时性的矛盾或暧昧
-- 普通偏好信息
-- 任何不确定、推测性的内容
-- 用第三人称，事实性描述
-- 80-180字
-- 不要使用 JSON、列表符号、标题或格式标记
+Goal: highlight the most critical and most stable facts — the ones that most affect how the relationship is judged.
 
-核心记忆总结：`;
+Include:
+- Confirmed getting together / confirmed breakup / getting back together
+- Engagement / marriage / divorce
+- Dating anniversaries, wedding anniversaries, how long they have been together
+- Explicit long-term relationship roles (e.g. partner, ex, spouse)
+- Major shared-life milestones (e.g. moving in together, meeting the family, adopting a pet together)
+
+Exclude:
+- Ordinary day-to-day chitchat
+- General mood swings
+- Temporary conflicts or ambiguity
+- Ordinary preference information
+- Anything uncertain or speculative
+
+Format:
+- Third person, factual description
+- 80-180 words
+- Do not use JSON, list markers, headings, or formatting markup
+
+Core memory summary:`;
 
 export const DEFAULT_MEMORY_CONFIG: MemoryConfig = {
     autoSummarizeEnabled: true,

@@ -14,15 +14,15 @@ import {
 const PLAY_MODE_ICONS: Record<PlayMode, { svg: string; label: string }> = {
     sequence: {
         svg: `<path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>`,
-        label: "顺序播放",
+        label: "Sequential",
     },
     shuffle: {
         svg: `<path d="M18 4l3 3-3 3M18 14l3 3-3 3M3 7h3a5 5 0 0 1 5 5 5 5 0 0 0 5 5h5M21 7h-5a5 5 0 0 0-3.16 1.13M3 17h3a5 5 0 0 0 3.16-1.13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
-        label: "随机播放",
+        label: "Shuffle",
     },
     "repeat-one": {
         svg: `<path d="M17 2l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><text x="12" y="15" text-anchor="middle" fill="currentColor" font-size="8" font-weight="bold">1</text>`,
-        label: "单曲循环",
+        label: "Repeat One",
     },
 };
 
@@ -77,7 +77,7 @@ export default function MusicPlayer() {
         if (musicLoadingFallbackRef.current) clearTimeout(musicLoadingFallbackRef.current);
         musicToastTimerRef.current = null;
         setPendingPlayTrackId(trackId);
-        setMusicToast("加载音乐中...");
+        setMusicToast("Loading music...");
         musicLoadingFallbackRef.current = setTimeout(() => {
             setMusicToast(null);
             setPendingPlayTrackId(null);
@@ -261,7 +261,7 @@ export default function MusicPlayer() {
             const nid = parseInt(target.id.replace("netease_", ""), 10);
             const url = await getNeteasePlayUrl(nid);
             if (!url) {
-                showMusicToast("加载失败，请稍后重试");
+                showMusicToast("Failed to load, please try again later");
                 return;
             }
             player.playUrl(url, target);
@@ -293,7 +293,7 @@ export default function MusicPlayer() {
             {musicToast && (
                 <div className="music-toast-overlay">
                     <div className="music-toast-chip">
-                        {musicToast === "加载音乐中..." ? (
+                        {musicToast === "Loading music..." ? (
                             <span className="ui-loading-toast-content">
                                 <span className="ui-loading-spinner" />
                                 <span>{musicToast}</span>
@@ -352,7 +352,7 @@ export default function MusicPlayer() {
                         </div>
                     ) : (
                         <div className="music-player-lyrics" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <div className="music-player-lyric-line" data-active="">{"暂无歌词"}</div>
+                            <div className="music-player-lyric-line" data-active="">{"No lyrics yet"}</div>
                         </div>
                     )
                 ) : (
@@ -467,8 +467,8 @@ export default function MusicPlayer() {
                 <div className="music-queue-overlay" onClick={() => setShowQueue(false)}>
                     <div className="music-queue-drawer" onClick={e => e.stopPropagation()}>
                         <div className="music-queue-header">
-                            <span>播放列表</span>
-                            <span className="music-queue-count">{player.queue.length}首</span>
+                            <span>Queue</span>
+                            <span className="music-queue-count">{player.queue.length} songs</span>
                             <button className="music-playlist-picker-close" onClick={() => setShowQueue(false)}>
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                             </button>
@@ -514,22 +514,22 @@ export default function MusicPlayer() {
                 <div className="music-playlist-picker-overlay" onClick={() => setShowPlaylistPicker(false)}>
                     <div className="music-playlist-picker" onClick={e => e.stopPropagation()}>
                         <div className="music-playlist-picker-header">
-                            <span>收藏到歌单</span>
+                            <span>Save to Playlist</span>
                             <button className="music-playlist-picker-close" onClick={() => setShowPlaylistPicker(false)}>
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                             </button>
                         </div>
                         <div className="music-playlist-picker-list">
                             {loadingPlaylists ? (
-                                <div className="music-playlist-picker-loading">加载歌单...</div>
+                                <div className="music-playlist-picker-loading">Loading playlists...</div>
                             ) : playlists.length === 0 ? (
-                                <div className="music-playlist-picker-loading">没有找到歌单</div>
+                                <div className="music-playlist-picker-loading">No playlists found</div>
                             ) : playlists.map(pl => (
                                 <button key={pl.id} className="music-playlist-picker-item" onClick={() => handleAddToPlaylist(pl)}>
                                     <img src={pl.coverUrl} alt="" className="music-playlist-picker-cover" />
                                     <div className="music-playlist-picker-info">
                                         <div className="music-playlist-picker-name">{pl.name}</div>
-                                        <div className="music-playlist-picker-count">{pl.trackCount}首</div>
+                                        <div className="music-playlist-picker-count">{pl.trackCount} songs</div>
                                     </div>
                                 </button>
                             ))}

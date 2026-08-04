@@ -56,6 +56,7 @@ import {
   WALLET_UPDATED_EVENT,
 } from "@/lib/wallet-storage";
 import type { WalletState } from "@/lib/wallet-types";
+import { DEFAULT_PAYMENT_REQUEST_LABEL } from "@/lib/rich-tag-builders";
 
 type ShoppingAppProps = {
   onClose: (isBusy?: boolean) => void;
@@ -108,9 +109,9 @@ const SHOPPING_TABS: Array<{ id: ShoppingTabId; label: string; icon: LucideIcon 
 ];
 
 const SHOPPING_SECTION_SEARCH_PLACEHOLDERS: Record<ShoppingSectionSearchTabId, string> = {
-  orders: "搜索订单",
-  cart: "搜索购物车",
-  account: "搜索收藏",
+  orders: "Search orders",
+  cart: "Search cart",
+  account: "Search favorites",
 };
 
 function isShoppingSectionSearchTab(tab: ShoppingTabId): tab is ShoppingSectionSearchTabId {
@@ -146,7 +147,7 @@ function formatShoppingDateTime(date: Date): string {
 
 function getWalletCardDisplayNumber(value: string): string {
   const tail = value.replace(/\D/g, "").slice(-4);
-  return tail ? `尾号 ${tail}` : value;
+  return tail ? `Ending in ${tail}` : value;
 }
 
 function getStableShoppingHash(value: string): number {
@@ -298,7 +299,7 @@ function toProductDetail(
     title: item.title,
     merchantLabel: item.merchantLabel,
     priceLabel: item.priceLabel,
-    tagLabel: "tagLabel" in item ? item.tagLabel : defaults?.tagLabel ?? "商品",
+    tagLabel: "tagLabel" in item ? item.tagLabel : defaults?.tagLabel ?? "Product",
     subtitle: item.subtitle,
     detail: item.detail,
     previewIcon: item.previewIcon,
@@ -339,7 +340,7 @@ function mergeShoppingProducts(...groups: ShoppingProduct[][]): ShoppingProduct[
 function productAsCartItem(product: ShoppingProductDetail | ShoppingProduct, quantity = 1): ShoppingCartItem {
   return {
     ...baseProduct(product),
-    tagLabel: "购物车",
+    tagLabel: "Cart",
     quantityLabel: cartQuantityLabel(quantity),
   };
 }
@@ -362,8 +363,8 @@ function buildOrderFromCart(
   const now = new Date();
   const id = `shop_order_${now.getTime()}_${Math.random().toString(36).slice(2, 7)}`;
   const summaryTitles = cartItems.slice(0, 3).map(item => normalizeCheckPhoneText(item.title));
-  const summary = summaryTitles.join("、") + (cartItems.length > 3 ? ` 等 ${cartItems.length} 件商品` : "");
-  const merchantLabel = cartItems.length === 1 ? cartItems[0]?.merchantLabel ?? "SHOP" : `${cartItems.length} 件商品`;
+  const summary = summaryTitles.join(", ") + (cartItems.length > 3 ? ` and ${cartItems.length} items total` : "");
+  const merchantLabel = cartItems.length === 1 ? cartItems[0]?.merchantLabel ?? "SHOP" : `${cartItems.length} items`;
   return {
     id,
     statusLabel: options.statusLabel ?? "待发货",
@@ -371,7 +372,7 @@ function buildOrderFromCart(
     totalLabel,
     merchantLabel,
     summary,
-    note: options.note ?? `已结算购物车中的 ${cartItems.length} 件商品。`,
+    note: options.note ?? `Checked out ${cartItems.length} item(s) from the cart.`,
     shippingTimeline: options.skipShipping ? [] : buildShippingTimeline(id, now, settings),
     paymentStatus: options.paymentStatus,
     paymentRequestId: options.paymentRequestId,
@@ -524,9 +525,9 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
     () => selectedPaymentSourceId === WALLET_BALANCE_ACCOUNT_ID
       ? {
           id: WALLET_BALANCE_ACCOUNT_ID,
-          title: "余额支付",
+          title: "Balance Payment",
           balance: getWalletBalance(walletState),
-          description: "红包、转账也默认使用余额",
+          description: "Red Envelopes and Transfers also use balance by default",
         }
       : (() => {
           const card = walletState.cards.find(item => item.id === selectedPaymentSourceId) ?? walletState.cards[0];
@@ -535,7 +536,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                 id: card.id,
                 title: card.title,
                 balance: card.balance,
-                description: `${getWalletCardDisplayNumber(card.maskedNumber)} · 银行卡`,
+                description: `${getWalletCardDisplayNumber(card.maskedNumber)} · Bank Card`,
               }
             : null;
         })(),
@@ -546,11 +547,11 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
   const savedIds = useMemo(() => new Set(state.savedItems.map(item => item.id)), [state.savedItems]);
   const cartIds = useMemo(() => new Set(state.cartItems.map(item => item.id)), [state.cartItems]);
   const loading = loadingTask !== null;
-  const loadingLabel = loadingTask === "search" ? "正在搜索新物品" : "正在刷新商品";
+  const loadingLabel = loadingTask === "search" ? "Searching for new items" : "Refreshing products";
   const catalogCategories: ShoppingCategory[] = state.catalog.categories.length > 0
     ? state.catalog.categories
     : state.catalog.recommendations.length > 0
-      ? [{ id: "featured", title: "精选推荐", subtitle: "为你推荐", items: state.catalog.recommendations }]
+      ? [{ id: "featured", title: "Featured Picks", subtitle: "Recommended for you", items: state.catalog.recommendations }]
       : [];
   const visibleCatalogCategories = selectedCategoryId === "all"
     ? catalogCategories
@@ -568,24 +569,24 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
     : visibleCatalogCategories.some(category => category.items.length > 0);
   const hasVisibleHomeContent = hasVisibleSearchResults || hasVisibleHomeProducts;
   const selectedCategoryLabel = selectedCategoryId === "all"
-    ? "全部"
+    ? "All"
     : selectedCategoryId === "search"
-      ? `搜索：${state.searchResult?.query ?? ""}`
-      : SHOPPING_RECOMMENDATION_CATEGORIES.find(category => category.id === selectedCategoryId)?.title ?? "该分类";
+      ? `Search: ${state.searchResult?.query ?? ""}`
+      : SHOPPING_RECOMMENDATION_CATEGORIES.find(category => category.id === selectedCategoryId)?.title ?? "this category";
   const emptyHomeTitle = selectedCategoryId === "all"
     ? normalizedHomeSearchQuery
-      ? `暂无“${searchInput.trim()}”相关已有商品`
-      : "暂无商品内容"
+      ? `No existing items found for "${searchInput.trim()}"`
+      : "No products yet"
     : selectedCategoryId === "search"
-      ? `暂无“${state.searchResult?.query ?? searchInput.trim()}”相关商品`
-      : `暂无${selectedCategoryLabel}商品`;
+      ? `No products found for "${state.searchResult?.query ?? searchInput.trim()}"`
+      : `No products in ${selectedCategoryLabel} yet`;
   const emptyHomeHint = selectedCategoryId === "search"
-    ? "可换个关键词搜索，或点刷新生成分类推荐"
+    ? "Try a different keyword, or tap refresh to generate category picks"
     : selectedCategoryId === "all"
       ? normalizedHomeSearchQuery
-        ? "可点击搜索新物品生成相关商品，或换个关键词"
-        : "可搜索商品，或点刷新生成分类推荐"
-      : "可切回全部，或点刷新生成分类推荐";
+        ? "Tap Search New Items to generate related products, or try a different keyword"
+        : "Search for products, or tap refresh to generate category picks"
+      : "Switch back to All, or tap refresh to generate category picks";
   const activeOrderShipping = activeOrder ? resolveOrderShipping(activeOrder, nowTick) : null;
   const normalizedCartSearchQuery = normalizeShoppingSearchValue(sectionSearchInputs.cart);
   const normalizedOrderSearchQuery = normalizeShoppingSearchValue(sectionSearchInputs.orders);
@@ -720,7 +721,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
   }
 
   function clearAllShoppingTraces() {
-    // 保留设置（提示词/配送时间），其余全部重置：商城目录、搜索结果、收藏与喜欢、购物车、订单
+    // Keep settings (prompts/delivery time), reset everything else: catalog, search results, favorites, cart, orders
     persist(current => ({ ...createDefaultShoppingState(), settings: current.settings }));
     setSelectedProduct(null);
     setSelectedOrderId(null);
@@ -779,7 +780,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
         ...current,
         savedItems: exists
           ? current.savedItems.filter(saved => saved.id !== item.id)
-          : [{ ...item, tagLabel: "收藏" }, ...current.savedItems],
+          : [{ ...item, tagLabel: "Saved" }, ...current.savedItems],
       };
     });
   }
@@ -863,7 +864,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
     if (state.cartItems.length === 0) return;
     const target = paymentRequestTargets.find(item => item.id === selectedPaymentRequestTargetId);
     if (!target) {
-      setPaymentRequestError("请选择代付对象。");
+      setPaymentRequestError("Please choose who to ask to pay.");
       return;
     }
     const paymentRequestedAt = new Date().toISOString();
@@ -874,7 +875,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
       state.settings,
       {
         statusLabel: "待代付",
-        note: `已向 ${target.name} 发起代付请求。`,
+        note: `Sent a payment request to ${target.name}.`,
         skipShipping: true,
         paymentStatus: "payment_requested",
         paymentRequestId,
@@ -903,7 +904,10 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
         paymentPayerId: target.id,
         paymentPayerName: target.name,
         paymentRequestedAt,
-        label: "代付请求",
+        // Must stay identical to DEFAULT_PAYMENT_REQUEST_LABEL in
+        // lib/rich-tag-builders.ts — the parser sets the same label for an
+        // AI-sent request, and the two paths should be indistinguishable.
+        label: DEFAULT_PAYMENT_REQUEST_LABEL,
         status: "pending",
       },
     });
@@ -926,27 +930,27 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
     const order = buildOrderFromCart(state.cartItems, formatShoppingAmount(cartTotals.totalPayment), state.settings);
     const paymentSource = selectedPaymentSource;
     if (!paymentSource) {
-      setPaymentError("请选择付款方式。");
+      setPaymentError("Please choose a payment method.");
       return;
     }
     const paymentResult = payWithWalletAccount({
       accountId: paymentSource.id,
       amount: cartTotals.totalPayment,
-      title: "购物付款",
-      detail: `购物订单：${order.summary}`,
-      category: "购物",
+      title: "Shopping Payment",
+      detail: `Shopping order: ${order.summary}`,
+      category: "Shopping",
       relatedOrderId: order.id,
     });
     if (!paymentResult.ok || !paymentResult.transaction) {
       setWalletState(paymentResult.state);
-      setPaymentError(paymentResult.error ?? "付款失败。");
+      setPaymentError(paymentResult.error ?? "Payment failed.");
       return;
     }
     setWalletState(paymentResult.state);
     const paidOrder: ShoppingOrder = {
       ...order,
       paymentCardId: paymentSource.id,
-      paymentCardLabel: paymentSource.id === WALLET_BALANCE_ACCOUNT_ID ? "余额支付" : `${paymentSource.title}（${paymentSource.description.replace(" · 银行卡", "")}）`,
+      paymentCardLabel: paymentSource.id === WALLET_BALANCE_ACCOUNT_ID ? "Balance Payment" : `${paymentSource.title} (${paymentSource.description.replace(" · Bank Card", "")})`,
       paymentTransactionId: paymentResult.transaction.id,
       paidAt: paymentResult.transaction.createdAt,
     };
@@ -990,7 +994,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
             openTranslation();
           }}
         >
-          中文
+          Chinese
         </span>
       </span>
     );
@@ -1000,7 +1004,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
     ? selectedProduct.tagLabel
     : activeOrder
       ? activeOrderShipping?.statusLabel ?? activeOrder.statusLabel
-      : "分类推荐与心动清单";
+      : "Category picks & wishlist";
 
   const backAction = selectedProduct
     ? () => {
@@ -1049,7 +1053,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
       >
         <button
           type="button"
-          aria-label={isSaved ? "取消收藏" : "收藏"}
+          aria-label={isSaved ? "Remove from favorites" : "Add to favorites"}
           onClick={(event) => {
             event.stopPropagation();
             toggleSave(item);
@@ -1084,7 +1088,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
           <span style={{ fontSize: "calc(14px*var(--app-text-scale,1))", color: "#222", fontWeight: "bold" }}>{item.priceLabel}</span>
           <button
             type="button"
-            aria-label={recentlyAdded ? "已加入购物车" : inCart ? "再次加入购物车" : "加入购物车"}
+            aria-label={recentlyAdded ? "Added to cart" : inCart ? "Add to cart again" : "Add to cart"}
             onClick={(event) => {
               event.stopPropagation();
               addToCart(item);
@@ -1120,7 +1124,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
         {!selectedProduct && !activeOrder && selectedTab === "home" ? (
           <>
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <button type="button" aria-label="返回" onClick={backAction} style={{ width: "40px", height: "40px", borderRadius: "50%", border: "1px solid #eaeaea", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#333" }}>
+              <button type="button" aria-label="Back" onClick={backAction} style={{ width: "40px", height: "40px", borderRadius: "50%", border: "1px solid #eaeaea", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#333" }}>
                 <ChevronLeft size={22} strokeWidth={2.5} />
               </button>
               <div style={{ display: "flex", flexDirection: "column" }}>
@@ -1129,17 +1133,17 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <button type="button" aria-label="清空购物痕迹" onClick={() => setClearConfirmOpen(true)} style={{ width: "40px", height: "40px", borderRadius: "50%", border: "1px solid #eaeaea", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#333" }}>
+              <button type="button" aria-label="Clear shopping traces" onClick={() => setClearConfirmOpen(true)} style={{ width: "40px", height: "40px", borderRadius: "50%", border: "1px solid #eaeaea", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#333" }}>
                 <Trash2 size={18} strokeWidth={2.2} />
               </button>
-              <button type="button" aria-label="提示词设置" onClick={() => openPromptSettings()} style={{ width: "40px", height: "40px", borderRadius: "50%", border: "1px solid #eaeaea", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#333" }}>
+              <button type="button" aria-label="Prompt settings" onClick={() => openPromptSettings()} style={{ width: "40px", height: "40px", borderRadius: "50%", border: "1px solid #eaeaea", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#333" }}>
                 <MoreHorizontal size={21} strokeWidth={2.35} />
               </button>
             </div>
           </>
         ) : (
           <>
-            <button type="button" aria-label="返回" onClick={backAction} style={{ width: "40px", height: "40px", borderRadius: "50%", border: "1px solid #eaeaea", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#333" }}>
+            <button type="button" aria-label="Back" onClick={backAction} style={{ width: "40px", height: "40px", borderRadius: "50%", border: "1px solid #eaeaea", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#333" }}>
               <ChevronLeft size={22} strokeWidth={2.5} />
             </button>
             <div style={{ flex: 1, minWidth: 0, marginLeft: "12px", display: "flex", alignItems: "center", background: "#fff", borderRadius: "20px", padding: "0 14px", height: "40px", color: "#999", fontSize: "calc(13px*var(--app-text-scale,1))", gap: "10px", boxShadow: "0 3px 12px rgba(0,0,0,0.018)" }}>
@@ -1173,7 +1177,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
       {cartFeedback ? (
         <div key={cartFeedback.id} className="cp-shopping-cart-toast" role="status" aria-live="polite">
           <ShoppingCart size={16} />
-          <span>已加入购物车</span>
+          <span>Added to cart</span>
         </div>
       ) : null}
 
@@ -1200,7 +1204,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                 <form onSubmit={handleSearch} style={{ display: "flex", alignItems: "center", background: "#fff", borderRadius: "22px", padding: "0 8px 0 14px", minHeight: "40px", color: "#999", fontSize: "calc(13px*var(--app-text-scale,1))", gap: "8px", boxShadow: "0 3px 12px rgba(0,0,0,0.018)" }}>
                   <Search size={17} />
                   <input
-                    aria-label="搜索商品"
+                    aria-label="Search products"
                     value={searchInput}
                     onChange={event => {
                       const nextValue = event.target.value;
@@ -1209,17 +1213,17 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                         setSelectedCategoryId("all");
                       }
                     }}
-                    placeholder="搜索商品"
+                    placeholder="Search products"
                     disabled={loading || blackMarketTransition}
                     style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", color: "#222", fontSize: "calc(13px*var(--app-text-scale,1))", height: "38px" }}
                   />
                   <button type="submit" disabled={!searchInput.trim() || loading || blackMarketTransition} style={{ border: "none", background: searchInput.trim() && !loading && !blackMarketTransition ? "#ff6b00" : "#eee", color: searchInput.trim() && !loading && !blackMarketTransition ? "#fff" : "#aaa", borderRadius: "16px", height: "30px", padding: "0 12px", minWidth: "88px", fontSize: "calc(12px*var(--app-text-scale,1))", fontWeight: 700, whiteSpace: "nowrap" }}>
-                    搜索新物品
+                    Search New Items
                   </button>
                 </form>
                 <div
                   role="tablist"
-                  aria-label="商品分类"
+                  aria-label="Product categories"
                   style={{
                     display: "flex",
                     gap: "8px",
@@ -1230,8 +1234,8 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                   }}
                 >
                   {[
-                    { id: "all", title: "全部" },
-                    ...(state.searchResult?.items.length ? [{ id: "search", title: `搜索：${state.searchResult.query}` }] : []),
+                    { id: "all", title: "All" },
+                    ...(state.searchResult?.items.length ? [{ id: "search", title: `Search: ${state.searchResult.query}` }] : []),
                     ...SHOPPING_RECOMMENDATION_CATEGORIES,
                   ].map(category => {
                     const active = selectedCategoryId === category.id;
@@ -1321,12 +1325,12 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                   <h2 style={{ fontSize: "calc(19px*var(--app-text-scale,1))", fontWeight: "bold", color: "#222", margin: "0 0 8px 4px" }}>Cart</h2>
                   {state.cartItems.length === 0 ? (
                     <div className="cp-shopping-status cp-empty-copy" style={{ minHeight: "220px" }}>
-                      <p>购物车是空的</p>
+                      <p>Your cart is empty</p>
                     </div>
                   ) : null}
                   {state.cartItems.length > 0 && filteredCartItems.length === 0 ? (
                     <div className="cp-shopping-status cp-empty-copy" style={{ minHeight: "220px" }}>
-                      <p>没有找到相关购物车商品</p>
+                      <p>No matching cart items found</p>
                     </div>
                   ) : null}
                   {filteredCartItems.map(item => (
@@ -1351,7 +1355,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                           <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", minWidth: 0, gap: "8px" }}>
                               <strong style={{ flex: "1 1 0", fontSize: "calc(13px*var(--app-text-scale,1))", color: "#222", fontWeight: 600, display: "block", minWidth: 0 }}>{renderShoppingCardText(item.title)}</strong>
-                              <button type="button" aria-label="移出购物车" onClick={(event) => {
+                              <button type="button" aria-label="Remove from cart" onClick={(event) => {
                                 event.stopPropagation();
                                 setConfirmCartDeleteItemId(item.id);
                               }} style={{ border: "none", background: "transparent", color: "#ff6b00", padding: 0 }}>
@@ -1362,7 +1366,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "12px" }}>
                               <span style={{ fontSize: "calc(14px*var(--app-text-scale,1))", color: "#222", fontWeight: "bold" }}>{item.priceLabel}</span>
                               <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#f9f9f9", borderRadius: "14px", padding: "4px 8px" }}>
-                                <button type="button" aria-label={quantity > 1 ? "减少数量" : "删除商品"} onClick={(event) => {
+                                <button type="button" aria-label={quantity > 1 ? "Decrease quantity" : "Remove item"} onClick={(event) => {
                                   event.stopPropagation();
                                   if (quantity > 1) {
                                     changeCartQuantity(item.id, -1);
@@ -1373,7 +1377,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                                   <Minus size={12} />
                                 </button>
                                 <span style={{ fontSize: "calc(12px*var(--app-text-scale,1))", fontWeight: 500 }}>{quantity}</span>
-                                <button type="button" aria-label="增加数量" onClick={(event) => {
+                                <button type="button" aria-label="Increase quantity" onClick={(event) => {
                                   event.stopPropagation();
                                   changeCartQuantity(item.id, 1);
                                 }} style={{ border: "none", background: "transparent", color: "#333", padding: 0, display: "flex" }}>
@@ -1404,7 +1408,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                           style={{ width: "100%", background: "#fff7ed", color: "#b45309", borderRadius: "24px", padding: "13px 0", fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 800, border: "1px solid rgba(255,107,0,0.18)", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
                         >
                           <HeartHandshake size={16} strokeWidth={2.4} />
-                          请TA代付
+                          Ask Someone to Pay
                         </button>
                       </div>
                     </div>
@@ -1417,12 +1421,12 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                   <h2 style={{ fontSize: "calc(19px*var(--app-text-scale,1))", fontWeight: "bold", color: "#222", margin: "0 0 8px 4px" }}>Orders</h2>
                   {state.orders.length === 0 ? (
                     <div className="cp-shopping-status cp-empty-copy" style={{ minHeight: "220px" }}>
-                      <p>暂无订单</p>
+                      <p>No orders yet</p>
                     </div>
                   ) : null}
                   {state.orders.length > 0 && filteredOrders.length === 0 ? (
                     <div className="cp-shopping-status cp-empty-copy" style={{ minHeight: "220px" }}>
-                      <p>没有找到相关订单</p>
+                      <p>No matching orders found</p>
                     </div>
                   ) : null}
                   {filteredOrders.map(order => {
@@ -1469,12 +1473,12 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                   <h2 style={{ fontSize: "calc(19px*var(--app-text-scale,1))", fontWeight: "bold", color: "#222", margin: "0 0 8px 4px" }}>Favorites</h2>
                   {state.savedItems.length === 0 ? (
                     <div className="cp-shopping-status cp-empty-copy" style={{ minHeight: "220px" }}>
-                      <p>暂无收藏</p>
+                      <p>No favorites yet</p>
                     </div>
                   ) : null}
                   {state.savedItems.length > 0 && filteredSavedItems.length === 0 ? (
                     <div className="cp-shopping-status cp-empty-copy" style={{ minHeight: "220px" }}>
-                      <p>没有找到相关收藏</p>
+                      <p>No matching favorites found</p>
                     </div>
                   ) : null}
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "16px" }}>
@@ -1510,7 +1514,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
             {selectedTab === "home" ? (
               <button
                 type="button"
-                aria-label="刷新首页推荐"
+                aria-label="Refresh home recommendations"
                 onClick={() => setConfirmRefreshOpen(true)}
                 disabled={loading}
                 style={{
@@ -1540,11 +1544,11 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
         {selectedProduct && (
           <div style={{ position: "absolute", inset: 0, zIndex: 20, background: "#fff", display: "flex", flexDirection: "column", overflowY: "auto" }}>
             <header style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", height: "var(--page-header-content-height, 42px)", marginTop: "var(--page-header-safe-top, 48px)", padding: "1px 24px", background: "#fff" }}>
-              <button type="button" aria-label="返回" onClick={backAction} style={{ background: "#fff", width: "34px", height: "34px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "#333", border: "1px solid #eee", boxShadow: "0 2px 10px rgba(0,0,0,0.05)" }}>
+              <button type="button" aria-label="Back" onClick={backAction} style={{ background: "#fff", width: "34px", height: "34px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "#333", border: "1px solid #eee", boxShadow: "0 2px 10px rgba(0,0,0,0.05)" }}>
                 <ChevronLeft size={20} />
               </button>
               <strong style={{ position: "absolute", left: "50%", bottom: "20px", transform: "translateX(-50%)", fontSize: "calc(16px*var(--app-text-scale,1))", color: "#222", fontWeight: 600 }}>Product Details</strong>
-              <button type="button" aria-label={savedIds.has(selectedProduct.id) ? "取消收藏" : "收藏"} onClick={() => toggleSave(selectedProduct)} style={{ background: savedIds.has(selectedProduct.id) ? "#ff6b00" : "#fff", width: "34px", height: "34px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: savedIds.has(selectedProduct.id) ? "#fff" : "#333", border: "1px solid #eee", boxShadow: "0 2px 10px rgba(0,0,0,0.05)" }}>
+              <button type="button" aria-label={savedIds.has(selectedProduct.id) ? "Remove from favorites" : "Add to favorites"} onClick={() => toggleSave(selectedProduct)} style={{ background: savedIds.has(selectedProduct.id) ? "#ff6b00" : "#fff", width: "34px", height: "34px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: savedIds.has(selectedProduct.id) ? "#fff" : "#333", border: "1px solid #eee", boxShadow: "0 2px 10px rgba(0,0,0,0.05)" }}>
                 <Heart size={17} fill={savedIds.has(selectedProduct.id) ? "white" : "none"} />
               </button>
             </header>
@@ -1607,7 +1611,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
         {activeOrder && (
           <div style={{ position: "absolute", inset: 0, zIndex: 20, background: "#f8f9fa", display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <header style={{ flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "var(--page-header-safe-top, 48px) 24px 16px", background: "#fff", borderBottom: "1px solid #f0f0f0", zIndex: 1 }}>
-              <button type="button" aria-label="返回" onClick={backAction} style={{ width: "40px", height: "40px", borderRadius: "50%", border: "1px solid #eaeaea", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#333" }}>
+              <button type="button" aria-label="Back" onClick={backAction} style={{ width: "40px", height: "40px", borderRadius: "50%", border: "1px solid #eaeaea", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#333" }}>
                 <ChevronLeft size={20} strokeWidth={2.5} />
               </button>
               <strong style={{ fontSize: "calc(16px*var(--app-text-scale,1))", color: "#222" }}>Order Details</strong>
@@ -1632,17 +1636,17 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                   <span style={{ fontSize: "calc(12px*var(--app-text-scale,1))", color: "#999" }}>Payment</span>
                   <span style={{ fontSize: "calc(12px*var(--app-text-scale,1))", color: "#222", fontWeight: 500, textAlign: "right" }}>
                     {activeOrder.paymentStatus === "payment_requested"
-                      ? `等待${activeOrder.payerCharacterName || "TA"}代付`
+                      ? `Waiting for ${activeOrder.payerCharacterName || "them"} to pay`
                       : activeOrder.paymentStatus === "payment_declined"
-                        ? `${activeOrder.payerCharacterName || "TA"}已拒绝代付`
-                        : activeOrder.paymentCardLabel ?? "未记录付款方式"}
+                        ? `${activeOrder.payerCharacterName || "They"} declined to pay`
+                        : activeOrder.paymentCardLabel ?? "No payment method recorded"}
                   </span>
                 </div>
               </div>
 
               {activeOrderShipping?.timeline.length ? (
                 <div style={{ background: "#fff", borderRadius: "20px", padding: "20px", boxShadow: "0 4px 20px rgba(0,0,0,0.02)" }}>
-                  <h4 style={{ fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: "bold", color: "#222", margin: "0 0 16px 0" }}>物流进度</h4>
+                  <h4 style={{ fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: "bold", color: "#222", margin: "0 0 16px 0" }}>Shipping Progress</h4>
                   <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                     {activeOrderShipping.timeline.map((event, index) => {
                       const eventTime = new Date(event.timestamp).getTime();
@@ -1658,7 +1662,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                           </div>
                           <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", minWidth: 0 }}>
                             <span style={{ fontSize: "calc(12px*var(--app-text-scale,1))", color: completed ? "#222" : "#999", fontWeight: current ? 700 : 500 }}>{event.label}</span>
-                            <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: completed ? "#666" : "#aaa", whiteSpace: "nowrap" }}>{completed ? event.timeLabel : `预计 ${event.timeLabel}`}</span>
+                            <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: completed ? "#666" : "#aaa", whiteSpace: "nowrap" }}>{completed ? event.timeLabel : `Est. ${event.timeLabel}`}</span>
                           </div>
                         </div>
                       );
@@ -1712,9 +1716,9 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
 
       {translationPreview && (
         <div className="cp-shopping-translation-overlay" role="presentation" onClick={() => setTranslationPreview(null)}>
-          <div className="cp-shopping-translation-sheet" role="dialog" aria-modal="true" aria-label="中文翻译" onClick={event => event.stopPropagation()}>
+          <div className="cp-shopping-translation-sheet" role="dialog" aria-modal="true" aria-label="Chinese translation" onClick={event => event.stopPropagation()}>
             <div className="cp-shopping-translation-head">
-              <span>中文翻译</span>
+              <span>Chinese Translation</span>
               <button type="button" onClick={() => setTranslationPreview(null)}>Close</button>
             </div>
             <p className="cp-shopping-translation-original">{translationPreview.original}</p>
@@ -1726,19 +1730,19 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
 
       {clearConfirmOpen && (
         <div className="cp-shopping-translation-overlay" role="presentation" onClick={() => setClearConfirmOpen(false)}>
-          <div className="cp-shopping-translation-sheet" role="dialog" aria-modal="true" aria-label="清空购物痕迹" onClick={event => event.stopPropagation()} style={{ maxWidth: "320px" }}>
+          <div className="cp-shopping-translation-sheet" role="dialog" aria-modal="true" aria-label="Clear shopping traces" onClick={event => event.stopPropagation()} style={{ maxWidth: "320px" }}>
             <div className="cp-shopping-translation-head">
-              <span>清空购物痕迹</span>
+              <span>Clear Shopping Traces</span>
             </div>
             <p style={{ margin: "4px 0 16px", fontSize: "calc(13.5px*var(--app-text-scale,1))", lineHeight: 1.8, color: "#555" }}>
-              是否确定清除所有购物页面痕迹？将清空商城、订单、收藏与喜欢，且无法恢复。
+              Are you sure you want to clear all shopping page traces? This will clear the catalog, orders, and favorites, and cannot be undone.
             </p>
             <div style={{ display: "flex", gap: "10px" }}>
               <button type="button" onClick={() => setClearConfirmOpen(false)} style={{ flex: 1, height: "40px", borderRadius: "12px", border: "1px solid #e5e5e5", background: "#fff", color: "#555", fontSize: "calc(14px*var(--app-text-scale,1))" }}>
-                取消
+                Cancel
               </button>
               <button type="button" onClick={clearAllShoppingTraces} style={{ flex: 1, height: "40px", borderRadius: "12px", border: "none", background: "#e5484d", color: "#fff", fontWeight: 600, fontSize: "calc(14px*var(--app-text-scale,1))" }}>
-                确认清空
+                Confirm Clear
               </button>
             </div>
           </div>
@@ -1747,15 +1751,15 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
 
       {promptOpen && (
         <div className="cp-shopping-translation-overlay" role="presentation" onClick={() => setPromptOpen(false)}>
-          <div className="cp-shopping-translation-sheet" role="dialog" aria-modal="true" aria-label="购物提示词" onClick={event => event.stopPropagation()} style={{ maxHeight: "74vh" }}>
+          <div className="cp-shopping-translation-sheet" role="dialog" aria-modal="true" aria-label="Shopping prompts" onClick={event => event.stopPropagation()} style={{ maxHeight: "74vh" }}>
             <div className="cp-shopping-translation-head">
-              <span>购物设置</span>
+              <span>Shopping Settings</span>
               <button type="button" onClick={() => setPromptOpen(false)}>Close</button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
               {([
-                { id: "prompts" as const, label: "提示词" },
-                { id: "shipping" as const, label: "物流时间" },
+                { id: "prompts" as const, label: "Prompts" },
+                { id: "shipping" as const, label: "Delivery Time" },
               ]).map(tab => {
                 const active = settingsTab === tab.id;
                 return (
@@ -1780,12 +1784,12 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
               <>
                 <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "12px", background: "#fff" }}>
                   <div style={{ marginBottom: "10px" }}>
-                    <strong style={{ display: "block", fontSize: "calc(12px*var(--app-text-scale,1))", color: "#222", lineHeight: 1.25 }}>提示词</strong>
-                    <span style={{ display: "block", fontSize: "calc(11px*var(--app-text-scale,1))", color: "#999", marginTop: "3px", lineHeight: 1.35 }}>点击条目展开编辑</span>
+                    <strong style={{ display: "block", fontSize: "calc(12px*var(--app-text-scale,1))", color: "#222", lineHeight: 1.25 }}>Prompts</strong>
+                    <span style={{ display: "block", fontSize: "calc(11px*var(--app-text-scale,1))", color: "#999", marginTop: "3px", lineHeight: 1.35 }}>Tap an entry to expand and edit</span>
                   </div>
                   {([
-                    { id: "refresh" as const, label: "首页刷新", value: promptDrafts.refreshPrompt },
-                    { id: "search" as const, label: "搜索结果", value: promptDrafts.searchPrompt },
+                    { id: "refresh" as const, label: "Home Refresh", value: promptDrafts.refreshPrompt },
+                    { id: "search" as const, label: "Search Results", value: promptDrafts.searchPrompt },
                   ]).map(promptItem => {
                     const isOpen = expandedPrompts.has(promptItem.id);
                     return (
@@ -1820,14 +1824,14 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
               <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "12px", background: "#fff" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "10px" }}>
                 <div style={{ minWidth: 0 }}>
-                  <strong style={{ display: "block", fontSize: "calc(12px*var(--app-text-scale,1))", color: "#222", lineHeight: 1.25 }}>物流时间模拟</strong>
-                  <span style={{ display: "block", fontSize: "calc(11px*var(--app-text-scale,1))", color: "#999", marginTop: "3px", lineHeight: 1.35 }}>新订单会在该范围内自动到货</span>
+                  <strong style={{ display: "block", fontSize: "calc(12px*var(--app-text-scale,1))", color: "#222", lineHeight: 1.25 }}>Delivery Time Simulation</strong>
+                  <span style={{ display: "block", fontSize: "calc(11px*var(--app-text-scale,1))", color: "#999", marginTop: "3px", lineHeight: 1.35 }}>New orders will auto-arrive within this range</span>
                 </div>
-                <button type="button" onClick={resetDeliveryDraft} style={{ flex: "0 0 auto", border: "1px solid #eee", background: "#fafafa", color: "#666", borderRadius: "14px", padding: "7px 10px", fontSize: "calc(11px*var(--app-text-scale,1))" }}>默认</button>
+                <button type="button" onClick={resetDeliveryDraft} style={{ flex: "0 0 auto", border: "1px solid #eee", background: "#fafafa", color: "#666", borderRadius: "14px", padding: "7px 10px", fontSize: "calc(11px*var(--app-text-scale,1))" }}>Default</button>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                 <label style={{ display: "flex", flexDirection: "column", gap: "6px", minWidth: 0 }}>
-                  <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#777" }}>最短到货（分钟）</span>
+                  <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#777" }}>Min Delivery (minutes)</span>
                   <input
                     type="number"
                     min={1}
@@ -1838,7 +1842,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                   />
                 </label>
                 <label style={{ display: "flex", flexDirection: "column", gap: "6px", minWidth: 0 }}>
-                  <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#777" }}>最长到货（分钟）</span>
+                  <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#777" }}>Max Delivery (minutes)</span>
                   <input
                     type="number"
                     min={1}
@@ -1853,9 +1857,9 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
             )}
             <div style={{ display: "flex", gap: "10px", justifyContent: "space-between", marginTop: "14px" }}>
               <button type="button" onClick={settingsTab === "prompts" ? resetPromptDraft : resetDeliveryDraft} style={{ border: "1px solid #eee", background: "#fff", color: "#555", borderRadius: "16px", padding: "9px 14px", fontSize: "calc(12px*var(--app-text-scale,1))" }}>
-                {settingsTab === "prompts" ? "恢复默认提示词" : "恢复默认时间"}
+                {settingsTab === "prompts" ? "Restore Default Prompts" : "Restore Default Time"}
               </button>
-              <button type="button" onClick={handleSavePrompt} style={{ border: "none", background: "#ff6b00", color: "#fff", borderRadius: "16px", padding: "9px 18px", fontSize: "calc(12px*var(--app-text-scale,1))", fontWeight: 700 }}>保存</button>
+              <button type="button" onClick={handleSavePrompt} style={{ border: "none", background: "#ff6b00", color: "#fff", borderRadius: "16px", padding: "9px 18px", fontSize: "calc(12px*var(--app-text-scale,1))", fontWeight: 700 }}>Save</button>
             </div>
           </div>
         </div>
@@ -1866,9 +1870,9 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
           setConfirmCheckoutOpen(false);
           setPaymentError(null);
         }}>
-          <div className="cp-shopping-translation-sheet" role="dialog" aria-modal="true" aria-label="选择付款方式" onClick={event => event.stopPropagation()}>
+          <div className="cp-shopping-translation-sheet" role="dialog" aria-modal="true" aria-label="Choose payment method" onClick={event => event.stopPropagation()}>
             <div className="cp-shopping-translation-head">
-              <span>选择付款方式</span>
+              <span>Choose Payment Method</span>
               <button type="button" onClick={() => {
                 setConfirmCheckoutOpen(false);
                 setPaymentError(null);
@@ -1877,7 +1881,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
 
             <div style={{ background: "#fff7ed", border: "1px solid rgba(255,107,0,0.14)", borderRadius: "18px", padding: "14px 16px", marginBottom: "14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#9a5a18", fontWeight: 700 }}>应付金额</span>
+                <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#9a5a18", fontWeight: 700 }}>Amount Due</span>
                 <strong style={{ fontSize: "calc(22px*var(--app-text-scale,1))", color: "#222", lineHeight: 1 }}>{formatShoppingAmount(cartTotals.totalPayment)}</strong>
               </div>
               <CreditCard size={24} color="#ff6b00" />
@@ -1887,15 +1891,15 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
               {[
                 {
                   id: WALLET_BALANCE_ACCOUNT_ID,
-                  title: "余额支付",
-                  description: "红包、转账默认使用余额",
+                  title: "Balance Payment",
+                  description: "Red Envelopes and Transfers default to balance",
                   balance: getWalletBalance(walletState),
                   icon: <CreditCard size={20} />,
                 },
                 ...walletState.cards.map(card => ({
                   id: card.id,
                   title: card.title,
-                  description: `${getWalletCardDisplayNumber(card.maskedNumber)} · 银行卡`,
+                  description: `${getWalletCardDisplayNumber(card.maskedNumber)} · Bank Card`,
                   balance: card.balance,
                   icon: <WalletCards size={20} />,
                 })),
@@ -1928,10 +1932,10 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                     </div>
                     <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "3px" }}>
                       <strong style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "#222" }}>{source.title}</strong>
-                      <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#888" }}>{source.description} · 可用 {formatWalletAmount(source.balance)}</span>
+                      <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#888" }}>{source.description} · Available {formatWalletAmount(source.balance)}</span>
                     </div>
                     {insufficient ? (
-                      <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#ef4444", fontWeight: 700, whiteSpace: "nowrap" }}>余额不足</span>
+                      <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#ef4444", fontWeight: 700, whiteSpace: "nowrap" }}>Insufficient balance</span>
                     ) : active ? (
                       <Check size={18} color="#ff6b00" strokeWidth={3} />
                     ) : null}
@@ -1943,7 +1947,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
             {paymentError || (selectedPaymentSource && !selectedPaymentSourceCanPay) ? (
               <div style={{ marginTop: "12px", borderRadius: "14px", background: "#fef2f2", color: "#b91c1c", padding: "10px 12px", display: "flex", gap: "8px", alignItems: "flex-start", fontSize: "calc(12px*var(--app-text-scale,1))", lineHeight: 1.4 }}>
                 <AlertCircle size={15} style={{ flexShrink: 0, marginTop: "1px" }} />
-                <span>{paymentError ?? "该付款方式余额不足，无法完成付款。"}</span>
+                <span>{paymentError ?? "This payment method has insufficient balance to complete payment."}</span>
               </div>
             ) : null}
 
@@ -1951,8 +1955,8 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
               <button type="button" onClick={() => {
                 setConfirmCheckoutOpen(false);
                 setPaymentError(null);
-              }} style={{ flex: 1, border: "1px solid #eee", background: "#fff", color: "#555", borderRadius: "18px", padding: "12px 0", fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 700 }}>取消</button>
-              <button type="button" disabled={!selectedPaymentSource || !selectedPaymentSourceCanPay} onClick={handleCheckout} style={{ flex: 1.4, border: "none", background: selectedPaymentSource && selectedPaymentSourceCanPay ? "#ff6b00" : "#eee", color: selectedPaymentSource && selectedPaymentSourceCanPay ? "#fff" : "#aaa", borderRadius: "18px", padding: "12px 0", fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 800 }}>确认付款</button>
+              }} style={{ flex: 1, border: "1px solid #eee", background: "#fff", color: "#555", borderRadius: "18px", padding: "12px 0", fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 700 }}>Cancel</button>
+              <button type="button" disabled={!selectedPaymentSource || !selectedPaymentSourceCanPay} onClick={handleCheckout} style={{ flex: 1.4, border: "none", background: selectedPaymentSource && selectedPaymentSourceCanPay ? "#ff6b00" : "#eee", color: selectedPaymentSource && selectedPaymentSourceCanPay ? "#fff" : "#aaa", borderRadius: "18px", padding: "12px 0", fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 800 }}>Confirm Payment</button>
             </div>
           </div>
         </div>
@@ -1967,12 +1971,12 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
             className="cp-shopping-translation-sheet"
             role="dialog"
             aria-modal="true"
-            aria-label="选择代付对象"
+            aria-label="Choose who to ask to pay"
             onClick={event => event.stopPropagation()}
             style={{ maxHeight: "min(78vh, 560px)", overflow: "hidden", display: "flex", flexDirection: "column" }}
           >
             <div className="cp-shopping-translation-head" style={{ flexShrink: 0 }}>
-              <span>请TA代付</span>
+              <span>Ask Someone to Pay</span>
               <button type="button" onClick={() => {
                 setPaymentRequestOpen(false);
                 setPaymentRequestError(null);
@@ -1981,7 +1985,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
 
             <div style={{ background: "#fff7ed", border: "1px solid rgba(255,107,0,0.14)", borderRadius: "18px", padding: "14px 16px", marginBottom: "14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexShrink: 0 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: "3px", minWidth: 0 }}>
-                <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#9a5a18", fontWeight: 700 }}>代付金额</span>
+                <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#9a5a18", fontWeight: 700 }}>Payment Amount</span>
                 <strong style={{ fontSize: "calc(22px*var(--app-text-scale,1))", color: "#222", lineHeight: 1 }}>{formatShoppingAmount(cartTotals.totalPayment)}</strong>
               </div>
               <HeartHandshake size={24} color="#ff6b00" />
@@ -1989,7 +1993,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
 
             {paymentRequestTargets.length === 0 ? (
               <div className="cp-shopping-status cp-empty-copy" style={{ minHeight: "120px" }}>
-                <p>暂无可选择的角色</p>
+                <p>No characters available to choose</p>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "10px", overflowY: "auto", paddingRight: "2px", flex: "1 1 auto", minHeight: 0 }}>
@@ -2025,7 +2029,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                       </div>
                       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "3px" }}>
                         <strong style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "#222" }}>{target.name}</strong>
-                        <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#888" }}>发送代付请求到聊天</span>
+                        <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#888" }}>Send a payment request to chat</span>
                       </div>
                       {active ? <Check size={18} color="#ff6b00" strokeWidth={3} /> : null}
                     </button>
@@ -2045,8 +2049,8 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
               <button type="button" onClick={() => {
                 setPaymentRequestOpen(false);
                 setPaymentRequestError(null);
-              }} style={{ flex: 1, border: "1px solid #eee", background: "#fff", color: "#555", borderRadius: "18px", padding: "12px 0", fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 700 }}>取消</button>
-              <button type="button" disabled={!selectedPaymentRequestTargetId} onClick={sendPaymentRequest} style={{ flex: 1.4, border: "none", background: selectedPaymentRequestTargetId ? "#ff6b00" : "#eee", color: selectedPaymentRequestTargetId ? "#fff" : "#aaa", borderRadius: "18px", padding: "12px 0", fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 800 }}>发送请求</button>
+              }} style={{ flex: 1, border: "1px solid #eee", background: "#fff", color: "#555", borderRadius: "18px", padding: "12px 0", fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 700 }}>Cancel</button>
+              <button type="button" disabled={!selectedPaymentRequestTargetId} onClick={sendPaymentRequest} style={{ flex: 1.4, border: "none", background: selectedPaymentRequestTargetId ? "#ff6b00" : "#eee", color: selectedPaymentRequestTargetId ? "#fff" : "#aaa", borderRadius: "18px", padding: "12px 0", fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 800 }}>Send Request</button>
             </div>
           </div>
         </div>
@@ -2054,11 +2058,11 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
 
       {confirmCartDeleteItemId && (
         <ConfirmDialog
-          title="确认删除商品？"
-          message="该商品会从购物车中删除。"
+          title="Remove this item?"
+          message="This item will be removed from your cart."
           variant="danger"
-          confirmLabel="删除"
-          cancelLabel="取消"
+          confirmLabel="Remove"
+          cancelLabel="Cancel"
           onConfirm={confirmRemoveCartItem}
           onCancel={() => setConfirmCartDeleteItemId(null)}
         />
@@ -2066,11 +2070,11 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
 
       {confirmRefreshOpen && (
         <ConfirmDialog
-          title="刷新首页推荐？"
-          message="将重新生成首页分类推荐。收藏、购物车和订单不会受影响。"
+          title="Refresh home recommendations?"
+          message="This will regenerate the home category picks. Favorites, cart, and orders will not be affected."
           variant="action"
-          confirmLabel="刷新"
-          cancelLabel="取消"
+          confirmLabel="Refresh"
+          cancelLabel="Cancel"
           onConfirm={() => {
             setConfirmRefreshOpen(false);
             void handleRefresh();

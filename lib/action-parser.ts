@@ -42,6 +42,33 @@ export type ActionContext = {
 
 const ACTION_TAGS = ["朋友圈", "群消息", "评论", "回复", "消息", "私信"] as const;
 
+/**
+ * Dual-recognition aliases: canonical Chinese type → accepted spellings.
+ * The legacy Chinese token must keep matching FOREVER (it is baked into saved
+ * history and into lib/builtin-preset.ts); the English one is the going-forward
+ * form. `ActionTag.type` always carries the CANONICAL CHINESE value, so the
+ * dispatcher switch and every downstream consumer stay untouched.
+ * See PROTOCOL-MIGRATION-PLAN.md.
+ */
+const ACTION_TAG_ALIASES: Record<(typeof ACTION_TAGS)[number], readonly string[]> = {
+    "朋友圈": ["朋友圈", "Moments"],
+    "群消息": ["群消息", "GroupMessage"],
+    "评论": ["评论", "Comment"],
+    "回复": ["回复", "Reply"],
+    "消息": ["消息", "Message"],
+    "私信": ["私信", "DirectMessage"],
+};
+
+/**
+ * Flat alias list, longest-first. Length ordering is what keeps "群消息" from
+ * being shadowed by "消息" (and "GroupMessage"/"DirectMessage" by "Message").
+ * A stable sort means the original Chinese ordering is preserved exactly.
+ */
+const ACTION_TAG_MATCHERS: ReadonlyArray<{ alias: string; canonical: string }> =
+    ACTION_TAGS
+        .flatMap(canonical => ACTION_TAG_ALIASES[canonical].map(alias => ({ alias, canonical })))
+        .sort((a, b) => b.alias.length - a.alias.length);
+
 function normalizeActionQuotes(text: string): string {
     return text.replace(/[\u201C\u201D\u2018\u2019\u300C\u300D]/g, "\"");
 }
@@ -54,25 +81,30 @@ function unwrapActionTarget(text: string): string {
     return trimmed;
 }
 
-function parseActionHeader(header: string): { actor?: string; type: string; target?: string } | null {
+/**
+ * `type` is the canonical Chinese name; `rawTag` is the alias as actually written
+ * in the text, which the closing tag must match ([Moments] must close with
+ * [/Moments], not [/朋友圈]).
+ */
+function parseActionHeader(header: string): { actor?: string; type: string; rawTag: string; target?: string } | null {
     let rest = normalizeActionQuotes(header).trim();
     let actor: string | undefined;
 
     const actorMatch = /^"([^"]+)"\s*([\s\S]*)$/.exec(rest);
     if (actorMatch) {
         const actorRest = actorMatch[2].trim();
-        if (ACTION_TAGS.some(tag => actorRest.startsWith(tag))) {
+        if (ACTION_TAG_MATCHERS.some(({ alias }) => actorRest.startsWith(alias))) {
             actor = actorMatch[1].trim();
             rest = actorRest;
         }
     }
 
-    const type = ACTION_TAGS.find(tag => rest.startsWith(tag));
-    if (!type) return null;
+    const matched = ACTION_TAG_MATCHERS.find(({ alias }) => rest.startsWith(alias));
+    if (!matched) return null;
 
-    const targetText = rest.slice(type.length).trim();
+    const targetText = rest.slice(matched.alias.length).trim();
     const target = targetText ? unwrapActionTarget(targetText) : undefined;
-    return { actor: actor || undefined, type, target };
+    return { actor: actor || undefined, type: matched.canonical, rawTag: matched.alias, target };
 }
 
 function removeActionRanges(text: string, ranges: Array<{ start: number; end: number }>): string {
@@ -102,7 +134,10 @@ function collectActionBlocks(text: string, requireClosingTag: boolean): {
         if (!parsed) continue;
 
         const contentStart = openTagPattern.lastIndex;
-        const closingTag = `[/${parsed.type}]`;
+        // Close with the SAME alias that opened the block, so [Moments]…[/朋友圈]
+        // is not treated as a valid pair.
+        const { rawTag, ...tag } = parsed;
+        const closingTag = `[/${rawTag}]`;
         const closingStart = text.indexOf(closingTag, contentStart);
 
         if (closingStart < 0) {
@@ -111,14 +146,14 @@ function collectActionBlocks(text: string, requireClosingTag: boolean): {
             const content = text.slice(contentStart).trim();
             if (!content) continue;
 
-            actions.push({ ...parsed, content, rawText: text.slice(match.index) });
+            actions.push({ ...tag, content, rawText: text.slice(match.index) });
             ranges.push({ start: match.index, end: text.length });
             break;
         }
 
         const end = closingStart + closingTag.length;
         const content = text.slice(contentStart, closingStart).trim();
-        actions.push({ ...parsed, content, rawText: text.slice(match.index, end) });
+        actions.push({ ...tag, content, rawText: text.slice(match.index, end) });
         ranges.push({ start: match.index, end });
         openTagPattern.lastIndex = end;
     }
@@ -130,16 +165,17 @@ function collectActionBlocks(text: string, requireClosingTag: boolean): {
  * Extract action tags from LLM output text.
  * Returns the clean text (with all action tags stripped) and an array of parsed actions.
  *
- * Supported formats:
- *   [朋友圈]内容[/朋友圈]                     — single-person
- *   ["角色名"朋友圈]内容[/朋友圈]              — group (actor)
- *   [评论 "关键词"]内容[/评论]                  — single-person
- *   ["角色名"评论 "关键词"]内容[/评论]          — group (actor + target)
- *   [回复 "关键词"]内容[/回复]                  — single-person
- *   ["角色名"回复 "关键词"]内容[/回复]          — group (actor + target)
- *   [消息]内容[/消息]                          — single-person
- *   ["角色名"私信]内容[/私信]                  — group (actor)
- *   [群消息 "群名"]内容[/群消息]                — cross-context
+ * Supported formats (each tag also accepts its English alias — see
+ * ACTION_TAG_ALIASES; the opening and closing tag must use the SAME spelling):
+ *   [朋友圈]body[/朋友圈]            / [Moments]body[/Moments]                — single-person
+ *   ["actor"朋友圈]body[/朋友圈]     / ["actor"Moments]body[/Moments]         — group (actor)
+ *   [评论 "keyword"]body[/评论]      / [Comment "keyword"]body[/Comment]      — single-person
+ *   ["actor"评论 "keyword"]…         / ["actor"Comment "keyword"]…            — group (actor + target)
+ *   [回复 "keyword"]body[/回复]      / [Reply "keyword"]body[/Reply]          — single-person
+ *   ["actor"回复 "keyword"]…         / ["actor"Reply "keyword"]…              — group (actor + target)
+ *   [消息]body[/消息]                / [Message]body[/Message]                — single-person
+ *   ["actor"私信]body[/私信]         / ["actor"DirectMessage]body[/…]         — group (actor)
+ *   [群消息 "group"]body[/群消息]    / [GroupMessage "group"]body[/…]         — cross-context
  */
 export function parseActionTags(text: string): {
     cleanText: string;
@@ -177,8 +213,10 @@ export function parseActionTags(text: string): {
  * Add new action tag names here as features are added.
  */
 const KNOWN_ACTION_TAGS = [
-    // 中文方括号格式
+    // legacy Chinese bracket format
     "朋友圈", "评论", "回复", "消息", "群消息", "私信",
+    // going-forward English bracket format (see ACTION_TAG_ALIASES)
+    "Moments", "Comment", "Reply", "Message", "GroupMessage", "DirectMessage",
     // XML 格式 (AI 偶尔幻觉输出)
     "action_chat_message", "action_moments_post",
     "action_comment", "action_reply",
@@ -188,8 +226,8 @@ const KNOWN_ACTION_TAGS = [
     "group_chat_rich_actions", "action_group_chat_message",
     // 合并前旧标签名
     "chat_context", "chat_format", "chat_rich_actions", "chat_output_format",
-    // 加好友
-    "add_friend_prompt", "添加好友",
+    // add friend
+    "add_friend_prompt", "添加好友", "AddFriend",
 ];
 
 /**

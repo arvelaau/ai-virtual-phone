@@ -27,14 +27,14 @@ type CheckPhoneXiaohongshuPageProps = {
 type XiaohongshuTabId = "home" | "video" | "publish" | "messages" | "profile";
 
 const XHS_TABS: Array<{ id: XiaohongshuTabId; label: string; icon?: typeof House }> = [
-  { id: "home", label: "首页" },
-  { id: "video", label: "视频" },
-  { id: "publish", label: "发布" }, // 特殊处理
-  { id: "messages", label: "消息" },
-  { id: "profile", label: "我" },
+  { id: "home", label: "Home" },
+  { id: "video", label: "Video" },
+  { id: "publish", label: "Post" }, // special handling
+  { id: "messages", label: "Messages" },
+  { id: "profile", label: "Me" },
 ];
 
-const XHS_DECOR_CATEGORIES = ["推荐", "视频", "直播", "短剧", "穿搭", "彩妆"] as const;
+const XHS_DECOR_CATEGORIES = ["Recommended", "Video", "Live", "Shorts", "Outfits", "Makeup"] as const;
 const XHS_READ_THREADS_STORAGE_PREFIX = "checkphone:xiaohongshu:readThreads";
 
 function getReadThreadsStorageKey(characterId: string, snapshotUpdatedAt: string): string {
@@ -57,7 +57,7 @@ function saveReadThreadIds(characterId: string, snapshotUpdatedAt: string, ids: 
 }
 
 function formatCount(count: number): string {
-  if (count >= 10000) return `${(count / 10000).toFixed(count >= 100000 ? 0 : 1).replace(/\.0$/, "")}万`;
+  if (count >= 10000) return `${(count / 10000).toFixed(count >= 100000 ? 0 : 1).replace(/\.0$/, "")}w`;
   if (count >= 1000) return `${(count / 1000).toFixed(1).replace(/\.0$/, "")}k`;
   return String(count);
 }
@@ -97,10 +97,10 @@ function getVisibleEngagementCounts(note: CheckPhoneXiaohongshuNote): {
 }
 
 function formatXiaohongshuRelativeTime(ageMinutes: number): string {
-  if (ageMinutes < 60) return `${Math.max(1, ageMinutes)}分钟前`;
-  if (ageMinutes < 1440) return `${Math.max(1, Math.round(ageMinutes / 60))}小时前`;
-  if (ageMinutes < 43200) return `${Math.max(1, Math.round(ageMinutes / 1440))}天前`;
-  return `${Math.max(1, Math.round(ageMinutes / 43200))}个月前`;
+  if (ageMinutes < 60) return `${Math.max(1, ageMinutes)}m ago`;
+  if (ageMinutes < 1440) return `${Math.max(1, Math.round(ageMinutes / 60))}h ago`;
+  if (ageMinutes < 43200) return `${Math.max(1, Math.round(ageMinutes / 1440))}d ago`;
+  return `${Math.max(1, Math.round(ageMinutes / 43200))}mo ago`;
 }
 
 function makeXiaohongshuNoteTimeLabel(note: CheckPhoneXiaohongshuNote): string {
@@ -118,7 +118,7 @@ function makeXiaohongshuNoteTimeLabel(note: CheckPhoneXiaohongshuNote): string {
     engagementScore >= 80 ? pickAge(180, 1440) :
     pickAge(20, 480);
 
-  return `发布于 ${formatXiaohongshuRelativeTime(ageMinutes)}`;
+  return `Posted ${formatXiaohongshuRelativeTime(ageMinutes)}`;
 }
 
 function makeXiaohongshuNumericId(seed: string): string {
@@ -282,7 +282,7 @@ function getCommentReplyTargetName(
 
 function XiaohongshuCommentList({ comments }: { comments: CheckPhoneXiaohongshuNote["comments"] }) {
   if (comments.length === 0) {
-    return <div className="cp-xhs-mini-empty">还没有人评论，快来抢沙发~</div>;
+    return <div className="cp-xhs-mini-empty">No comments yet, be the first!</div>;
   }
 
   const orderedComments = orderCommentsForDisplay(comments);
@@ -301,7 +301,7 @@ function XiaohongshuCommentList({ comments }: { comments: CheckPhoneXiaohongshuN
                 {comment.authorName}
                 {replyTargetName ? (
                   <>
-                    <span className="cp-xhs-comment-reply-label">回复</span>
+                    <span className="cp-xhs-comment-reply-label">Reply</span>
                     {replyTargetName}
                   </>
                 ) : null}
@@ -594,7 +594,7 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
       while (left <= right) {
         const middle = Math.floor((left + right) / 2);
         const candidate = activeVideoCaption.slice(0, middle).trimEnd();
-        measureNode.textContent = `${candidate}...  展开`;
+        measureNode.textContent = `${candidate}...  Expand`;
         if (measureNode.scrollHeight <= maxHeight) {
           best = candidate;
           left = middle + 1;
@@ -800,8 +800,8 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
             <div className="cp-xhs-video-author-row">
               <div className="cp-xhs-video-author-avatar">{note.authorName.slice(0, 1)}</div>
               <strong>{note.authorName}</strong>
-              <button type="button">关注</button>
-              <time>{makeXiaohongshuNoteTimeLabel(note).replace(/^发布于\s*/, "")}</time>
+              <button type="button">Follow</button>
+              <time>{makeXiaohongshuNoteTimeLabel(note).replace(/^Posted\s*/, "")}</time>
             </div>
             <h3><CheckPhoneBilingualText text={note.title} tone="light" /></h3>
             <div className="cp-xhs-video-caption-wrap">
@@ -832,7 +832,7 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
                       onTouchStart={(event) => event.stopPropagation()}
                       onTouchEnd={(event) => event.stopPropagation()}
                     >
-                      {videoCaptionExpanded ? "收起" : "展开"}
+                      {videoCaptionExpanded ? "Collapse" : "Expand"}
                     </button>
                   </>
                 ) : null}
@@ -852,23 +852,23 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
 
   return (
     <div className="cp-xhs-module">
-      {/* 只有在非详情页时才显示全局的 Appbar */}
+      {/* Only show the global Appbar when not on a detail page */}
       {(!payload || (!activeNote && !activeThread && selectedTab !== "profile")) && (
         <header className={`cp-xhs-appbar ${selectedTab === "messages" && !activeThread ? "cp-xhs-appbar--messages" : ""}`}>
           {renderRootBackButton()}
           <div className="cp-xhs-header-stack">
             {!activeNote && !activeThread && selectedTab === "home" ? (
               <>
-                <div className="cp-xhs-header-title">关注</div>
-                <div className="cp-xhs-header-title is-active">发现</div>
-                <div className="cp-xhs-header-title">附近</div>
+                <div className="cp-xhs-header-title">Following</div>
+                <div className="cp-xhs-header-title is-active">Discover</div>
+                <div className="cp-xhs-header-title">Nearby</div>
               </>
             ) : !activeThread && selectedTab === "messages" ? (
-              <div className="cp-xhs-header-title is-active">消息</div>
+              <div className="cp-xhs-header-title is-active">Messages</div>
             ) : selectedTab === "video" ? (
-              <div className="cp-xhs-header-title is-active">视频</div>
+              <div className="cp-xhs-header-title is-active">Video</div>
             ) : (
-              <div className="cp-xhs-header-title is-active">{payload?.headerTitle || "小红书"}</div>
+              <div className="cp-xhs-header-title is-active">{payload?.headerTitle || "Xiaohongshu"}</div>
             )}
           </div>
           {renderRootActions()}
@@ -877,7 +877,7 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
 
       {loading && (
         <div className="cp-refresh-indicator cp-refresh-indicator--floating" aria-live="polite">
-          <span className="cp-refresh-indicator-text">正在刷新小红书</span>
+          <span className="cp-refresh-indicator-text">Refreshing Xiaohongshu</span>
           <span className="cp-refresh-indicator-dots" aria-hidden="true">
             <i></i><i></i><i></i>
           </span>
@@ -889,14 +889,14 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
 
         {loaded && !payload && !loading && (
           <div className="cp-xhs-status cp-empty-copy">
-            <p>暂无小红书内容</p>
-            <span className="cp-xhs-hint">点刷新同步推荐视频消息和个人主页</span>
+            <p>No Xiaohongshu content yet</p>
+            <span className="cp-xhs-hint">Tap refresh to sync recommendations, videos, messages, and your profile</span>
           </div>
         )}
 
         {error ? (
           <CheckPhoneDebugErrorCard
-            title="暂时无法解析小红书内容。"
+            title="Unable to parse Xiaohongshu content right now."
             error={error}
             debugParseMode={debugParseMode}
             debugParseError={debugParseError}
@@ -960,7 +960,7 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
                           <span className="cp-xhs-overview-badge">{formatBadgeCount(payload.messageOverview.likesAndSavesCount)}</span>
                         ) : null}
                       </div>
-                      <span>赞和收藏</span>
+                      <span>Likes & Saves</span>
                     </div>
                     <div className="cp-xhs-overview-card">
                       <div className="cp-xhs-overview-icon-wrapper">
@@ -969,7 +969,7 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
                           <span className="cp-xhs-overview-badge">{formatBadgeCount(payload.messageOverview.newFollowersCount)}</span>
                         ) : null}
                       </div>
-                      <span>新增关注</span>
+                      <span>New Followers</span>
                     </div>
                     <div className="cp-xhs-overview-card">
                       <div className="cp-xhs-overview-icon-wrapper">
@@ -978,7 +978,7 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
                           <span className="cp-xhs-overview-badge">{formatBadgeCount(payload.messageOverview.commentsAndMentionsCount)}</span>
                         ) : null}
                       </div>
-                      <span>评论和@</span>
+                      <span>Comments & Mentions</span>
                     </div>
                   </div>
                   <div className="cp-xhs-thread-list">
@@ -992,7 +992,7 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
                           onClick={() => handleThreadOpen(thread)}
                         >
                           <div className={`cp-xhs-thread-avatar cp-xhs-thread-avatar--tone-${(index % 6) + 1}`}>
-                            {thread.type === "group" ? "群" : thread.name.slice(0, 1)}
+                            {thread.type === "group" ? "G" :thread.name.slice(0, 1)}
                           </div>
                           <div className="cp-xhs-thread-meta">
                             <div className="cp-xhs-thread-text">
@@ -1026,8 +1026,8 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
                       </div>
                       <div className="cp-xhs-profile-meta">
                         <h3>{payload.profile.name}<ChevronDown size={16} strokeWidth={2.3} /></h3>
-                        <span>小红书号：{xiaohongshuNumericId}</span>
-                        <span>IP 属地：未知</span>
+                        <span>Xiaohongshu ID: {xiaohongshuNumericId}</span>
+                        <span>IP Location: Unknown</span>
                       </div>
                     </div>
                     <div className="cp-xhs-profile-bio">
@@ -1036,32 +1036,32 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
                     </div>
                     <div className="cp-xhs-profile-actions">
                       <div className="cp-xhs-profile-stats">
-                        <div><strong>{formatCount(payload.profile.followingCount)}</strong><span>关注</span></div>
-                        <div><strong>{formatCount(payload.profile.followerCount)}</strong><span>粉丝</span></div>
-                        <div><strong>{formatCount(payload.profile.likedAndSavedCount)}</strong><span>获赞与收藏</span></div>
+                        <div><strong>{formatCount(payload.profile.followingCount)}</strong><span>Following</span></div>
+                        <div><strong>{formatCount(payload.profile.followerCount)}</strong><span>Followers</span></div>
+                        <div><strong>{formatCount(payload.profile.likedAndSavedCount)}</strong><span>Likes & Saves</span></div>
                       </div>
-                      <button type="button" className="cp-xhs-profile-edit">编辑资料</button>
+                      <button type="button" className="cp-xhs-profile-edit">Edit Profile</button>
                       <button type="button" className="cp-xhs-profile-settings" aria-label="Profile settings"><Settings size={20} strokeWidth={2.2} /></button>
                     </div>
                     <div className="cp-xhs-profile-tools">
-                      <div><strong>创作灵感</strong><span>学创作找灵感</span></div>
-                      <div><strong>RED 创作大赛</strong><span>为新生代好作品助力</span></div>
-                      <div><strong>浏览记录</strong><span>看过的笔记</span></div>
+                      <div><strong>Creative Inspiration</strong><span>Learn & find inspiration</span></div>
+                      <div><strong>RED Creator Contest</strong><span>Boosting great work from new creators</span></div>
+                      <div><strong>Browsing History</strong><span>Notes you've viewed</span></div>
                     </div>
                   </div>
                   <div className="cp-xhs-profile-content">
                     <div className="cp-xhs-profile-tabs">
-                      <span className="is-active">笔记</span>
-                      <span>评论</span>
-                      <span>收藏</span>
-                      <span>赞过</span>
+                      <span className="is-active">Notes</span>
+                      <span>Comments</span>
+                      <span>Saved</span>
+                      <span>Liked</span>
                       <Search size={20} strokeWidth={2.3} />
                     </div>
                     <div className="cp-xhs-profile-promo">
                       <div>RED</div>
-                      <strong>欢迎热爱创作的你来投稿</strong>
-                      <span>百亿流量助力，快来参与吧</span>
-                      <button type="button">去投稿</button>
+                      <strong>Calling all creators — submit your work</strong>
+                      <span>Billions of views up for grabs, join now</span>
+                      <button type="button">Submit</button>
                     </div>
                     <div className="cp-xhs-waterfall-grid">
                       <div className="cp-xhs-waterfall-column">
@@ -1080,7 +1080,7 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
               )}
             </div>
 
-            <nav className="cp-xhs-tabbar" aria-label="小红书导航">
+            <nav className="cp-xhs-tabbar" aria-label="Xiaohongshu navigation">
               {XHS_TABS.map((tab) => {
                 const active = selectedTab === tab.id;
                 if (tab.id === "publish") {
@@ -1089,7 +1089,7 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
                       key={tab.id}
                       type="button"
                       className="cp-xhs-tab-publish"
-                      aria-label="发布"
+                      aria-label="Post"
                     >
                       <div className="cp-xhs-tab-publish-inner">
                         <Plus size={20} strokeWidth={3} />
@@ -1145,7 +1145,7 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
             {renderVideoMovingLayer(activeNote, videoMovableStyle)}
 
             <footer className="cp-xhs-video-actions">
-              <div className="cp-xhs-video-input">说点什么...</div>
+              <div className="cp-xhs-video-input">Say something...</div>
               <button type="button" className={`cp-xhs-video-action ${activeNote.liked ? "is-active" : ""}`} aria-label="Like">
                 <Heart size={24} strokeWidth={2.1} fill={activeNote.liked ? "currentColor" : "none"} />
                 <span>{formatCount(activeNoteEngagementCounts?.likeCount ?? activeNote.likeCount)}</span>
@@ -1165,7 +1165,7 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
                 <section className="cp-xhs-video-comments-sheet" onClick={(event) => event.stopPropagation()}>
                   <div className="cp-xhs-video-comments-handle" aria-hidden="true" />
                   <header>
-                    <strong>评论 {formatCount(activeNoteEngagementCounts?.commentCount ?? activeNote.commentCount)}</strong>
+                    <strong>Comments {formatCount(activeNoteEngagementCounts?.commentCount ?? activeNote.commentCount)}</strong>
                     <button type="button" onClick={() => setVideoCommentsOpen(false)} aria-label="Close comments">×</button>
                   </header>
                   <div className="cp-xhs-comment-list">
@@ -1187,7 +1187,7 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
                 <div className="cp-xhs-detail-avatar">{activeNote.authorName.slice(0, 1)}</div>
                 <span className="cp-xhs-detail-name">{activeNote.authorName}</span>
               </div>
-              <button className="cp-xhs-detail-follow">关注</button>
+              <button className="cp-xhs-detail-follow">Follow</button>
               <button className="cp-xhs-detail-share">
                 <Share size={20} strokeWidth={2} />
               </button>
@@ -1204,18 +1204,18 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
               </div>
 
               <div className="cp-xhs-comment-section">
-                <div className="cp-xhs-comment-count">共 {formatCount(activeNoteEngagementCounts?.commentCount ?? activeNote.commentCount)} 条评论</div>
+                <div className="cp-xhs-comment-count">{formatCount(activeNoteEngagementCounts?.commentCount ?? activeNote.commentCount)} comments total</div>
                 <div className="cp-xhs-comment-list">
                   <XiaohongshuCommentList comments={activeNote.comments} />
                 </div>
               </div>
             </article>
 
-            {/* 底部固定互动栏 */}
+            {/* Fixed bottom interaction bar */}
             <div className="cp-xhs-detail-bottom-bar">
               <div className="cp-xhs-input-box">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                说点什么...
+                Say something...
               </div>
               <div className="cp-xhs-action-icons">
                 <button className={`cp-xhs-action-btn ${activeNote.liked ? "is-liked" : ""}`}>
@@ -1223,7 +1223,7 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
                   <span>{formatCount(activeNoteEngagementCounts?.likeCount ?? activeNote.likeCount)}</span>
                 </button>
                 <button className={`cp-xhs-action-btn ${activeNote.saved ? "is-saved" : ""}`}>
-                  {/* 收藏图标 (Star) */}
+                  {/* Save icon (Star) */}
                   <svg width="22" height="22" viewBox="0 0 24 24" fill={activeNote.saved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
                   <span>{formatCount(activeNoteEngagementCounts?.saveCount ?? activeNote.saveCount)}</span>
                 </button>
@@ -1243,7 +1243,7 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
                 <ChevronLeft size={28} strokeWidth={2.4} />
               </button>
               <div className="cp-xhs-thread-title-block">
-                <div className="cp-xhs-thread-avatar cp-xhs-thread-avatar--header">{activeThread.type === "group" ? "群" : activeThread.name.slice(0, 1)}</div>
+                <div className="cp-xhs-thread-avatar cp-xhs-thread-avatar--header">{activeThread.type === "group" ? "G" :activeThread.name.slice(0, 1)}</div>
                 <strong>{activeThread.name}</strong>
               </div>
               <button type="button" className="cp-xhs-thread-nav-button" aria-label="More">
@@ -1254,8 +1254,8 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
             <div className="cp-xhs-thread-messages">
               {activeThread.type === "direct" ? (
                 <div className="cp-xhs-thread-follow-card">
-                  <span>对方已关注你，回关方便联系</span>
-                  <button type="button">回关</button>
+                  <span>They're already following you, follow back to stay in touch</span>
+                  <button type="button">Follow Back</button>
                   <i aria-hidden="true">×</i>
                 </div>
               ) : null}
@@ -1285,11 +1285,11 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
 
             <div className="cp-xhs-thread-composer">
               <div className="cp-xhs-thread-quick-replies" aria-hidden="true">
-                {["hello", "谢谢宝", "嗯", "在干嘛", "喜欢"].map((item) => <span key={item}>{item}</span>)}
+                {["hello", "thanks babe", "mhm", "what's up", "love it"].map((item) => <span key={item}>{item}</span>)}
               </div>
               <div className="cp-xhs-thread-inputbar">
                 <button type="button" aria-label="Voice"><Mic size={24} strokeWidth={2.4} /></button>
-                <div className="cp-xhs-thread-input-placeholder">发消息...</div>
+                <div className="cp-xhs-thread-input-placeholder">Send a message...</div>
                 <button type="button" aria-label="Emoji"><Smile size={24} strokeWidth={2.4} /></button>
                 <button type="button" aria-label="More"><CirclePlus size={25} strokeWidth={2.4} /></button>
               </div>
@@ -1300,11 +1300,11 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
 
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空小红书内容？"
-          message="确认后会清空当前小红书缓存。之后重新刷新时，不会再带入旧小红书内容。"
+          title="Clear Xiaohongshu content?"
+          message="Confirming will clear the current Xiaohongshu cache. New content won't include the old Xiaohongshu content after the next refresh."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Confirm Clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

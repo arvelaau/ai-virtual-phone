@@ -37,8 +37,8 @@ function formatTakeoutTime(iso: string): string {
     minute: "2-digit",
     hour12: false,
   });
-  if (value >= todayStart) return `今天 ${hhmm}`;
-  if (value >= yesterdayStart) return `昨天 ${hhmm}`;
+  if (value >= todayStart) return `Today ${hhmm}`;
+  if (value >= yesterdayStart) return `Yesterday ${hhmm}`;
   return value.toLocaleDateString("zh-CN", {
     month: "2-digit",
     day: "2-digit",
@@ -62,7 +62,7 @@ function getTakeoutItemIcon(item: RenderableTakeoutItem, orderIcon: string): str
 function buildOrderPreview(order: CheckPhoneTakeoutOrder): string {
   if (order.items.length === 1) return getTakeoutItemName(order.items[0] ?? "");
   const first = getTakeoutItemName(order.items[0] ?? "");
-  return `${first} 等 ${order.items.length} 件`;
+  return `${first} and ${order.items.length} items`;
 }
 
 export function CheckPhoneTakeoutPage({ character, onBack }: CheckPhoneTakeoutPageProps) {
@@ -210,7 +210,7 @@ export function CheckPhoneTakeoutPage({ character, onBack }: CheckPhoneTakeoutPa
           }}
         >
           <Search size={16} />
-          <span>{payload?.headerTitle || "搜索我的订单"}</span>
+          <span>{payload?.headerTitle || "Search my orders"}</span>
         </div>
         <div style={{ display: "flex", gap: "16px", marginLeft: "4px" }}>
           <button
@@ -231,7 +231,7 @@ export function CheckPhoneTakeoutPage({ character, onBack }: CheckPhoneTakeoutPa
             }}
           >
             <RotateCcw size={18} strokeWidth={2} className={loading ? "cp-spin" : ""} />
-            <span>刷新</span>
+            <span>Refresh</span>
           </button>
           <button
             type="button"
@@ -251,14 +251,14 @@ export function CheckPhoneTakeoutPage({ character, onBack }: CheckPhoneTakeoutPa
             }}
           >
             <Eraser size={18} strokeWidth={2} />
-            <span>清空</span>
+            <span>Clear</span>
           </button>
         </div>
       </header>
 
       {loading && (
         <div className="cp-refresh-indicator cp-refresh-indicator--floating" aria-live="polite">
-          <span className="cp-refresh-indicator-text">正在刷新外卖</span>
+          <span className="cp-refresh-indicator-text">Refreshing takeout...</span>
           <span className="cp-refresh-indicator-dots" aria-hidden="true">
             <i></i><i></i><i></i>
           </span>
@@ -266,18 +266,18 @@ export function CheckPhoneTakeoutPage({ character, onBack }: CheckPhoneTakeoutPa
       )}
 
       <div className="cp-takeout-body" style={{ marginTop: 0 }}>
-        {!loaded && <div className="cp-takeout-status">正在同步订单...</div>}
+        {!loaded && <div className="cp-takeout-status">Syncing orders...</div>}
 
         {loaded && !payload && !loading && (
           <div className="cp-takeout-status cp-empty-copy">
-            <p>暂无外卖内容</p>
-            <span className="cp-takeout-hint">点刷新同步最近订单</span>
+            <p>No takeout content yet</p>
+            <span className="cp-takeout-hint">Tap refresh to sync recent orders</span>
           </div>
         )}
 
         {error ? (
           <CheckPhoneDebugErrorCard
-            title="暂时无法解析外卖内容。"
+            title="Unable to parse takeout content right now."
             error={error}
             debugParseMode={debugParseMode}
             debugParseError={debugParseError}
@@ -291,14 +291,14 @@ export function CheckPhoneTakeoutPage({ character, onBack }: CheckPhoneTakeoutPa
           <>
             <section className="cp-takeout-hero">
               <div className="cp-takeout-hero-copy">
-                <h2>外卖</h2>
-                <p>生活的片段，藏在每一单里。</p>
+                <h2>Takeout</h2>
+                <p>Fragments of life, hidden in every order.</p>
               </div>
 
               <div
                 className="cp-takeout-tabs"
                 role="tablist"
-                aria-label="外卖分类"
+                aria-label="Takeout categories"
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
@@ -328,8 +328,8 @@ export function CheckPhoneTakeoutPage({ character, onBack }: CheckPhoneTakeoutPa
 
             {visibleOrders.length === 0 ? (
               <div className="cp-takeout-status">
-                <p>这个分类下暂时没有订单。</p>
-                <span className="cp-takeout-hint">切换上方分类，或刷新同步最近订单。</span>
+                <p>No orders in this category yet.</p>
+                <span className="cp-takeout-hint">Switch categories above, or refresh to sync recent orders.</span>
               </div>
             ) : (
           <div className="cp-takeout-list">
@@ -353,10 +353,10 @@ export function CheckPhoneTakeoutPage({ character, onBack }: CheckPhoneTakeoutPa
                   <div className="cp-takeout-order-price">{formatAmount(order.amount)}</div>
                 </div>
                 <div className="cp-takeout-order-footer">
-                  <div className="cp-takeout-order-time">下单: {formatTakeoutTime(order.createdAt)}</div>
+                  <div className="cp-takeout-order-time">Ordered: {formatTakeoutTime(order.createdAt)}</div>
                   <div className="cp-takeout-order-actions">
-                    <div className="cp-takeout-btn">更多</div>
-                    <div className="cp-takeout-btn cp-takeout-btn-primary">再来一单</div>
+                    <div className="cp-takeout-btn">More</div>
+                    <div className="cp-takeout-btn cp-takeout-btn-primary">Order again</div>
                   </div>
                 </div>
               </button>
@@ -370,11 +370,11 @@ export function CheckPhoneTakeoutPage({ character, onBack }: CheckPhoneTakeoutPa
           <div className="cp-takeout-detail-backdrop" onClick={() => setSelectedOrderId(null)}>
             <div className="cp-takeout-detail" onClick={(event) => event.stopPropagation()}>
               <div className="cp-takeout-detail-topbar" style={{ position: "sticky", top: 0, zIndex: 10, background: "#f5f5f5" }}>
-                <button type="button" onClick={() => setSelectedOrderId(null)} aria-label="返回">
+                <button type="button" onClick={() => setSelectedOrderId(null)} aria-label="Back">
                   <ChevronLeft size={24} strokeWidth={2.5} />
                 </button>
                 <div style={{ display: 'flex', gap: '16px' }}>
-                  <button type="button" style={{ fontSize: 'calc(14px*var(--app-text-scale,1))', fontWeight: 500 }}>联系客服</button>
+                  <button type="button" style={{ fontSize: 'calc(14px*var(--app-text-scale,1))', fontWeight: 500 }}>Contact support</button>
                 </div>
               </div>
 
@@ -382,16 +382,16 @@ export function CheckPhoneTakeoutPage({ character, onBack }: CheckPhoneTakeoutPa
                 {activeOrder.status === "已完成" ? "订单已完成" :
                  activeOrder.status === "已取消" ? "订单已取消" : activeOrder.status}
                 <div style={{ fontSize: 'calc(13px*var(--app-text-scale,1))', color: '#666', marginTop: '4px', fontWeight: 'normal' }}>
-                  感谢您对我们的信任，期待再次光临。
+                  Thank you for your trust -- we look forward to serving you again.
                 </div>
               </div>
 
               <div className="cp-takeout-detail-actions">
-                <button type="button" className="cp-takeout-btn" style={{ whiteSpace: "nowrap", padding: "6px 8px", fontSize: "calc(11px*var(--app-text-scale,1))" }}>更多</button>
-                <button type="button" className="cp-takeout-btn" style={{ whiteSpace: "nowrap", padding: "6px 8px", fontSize: "calc(11px*var(--app-text-scale,1))" }}>申请售后</button>
-                <button type="button" className="cp-takeout-btn" style={{ whiteSpace: "nowrap", padding: "6px 8px", fontSize: "calc(11px*var(--app-text-scale,1))" }}>联系商家</button>
-                <button type="button" className="cp-takeout-btn" style={{ whiteSpace: "nowrap", padding: "6px 8px", fontSize: "calc(11px*var(--app-text-scale,1))" }}>致电骑手</button>
-                <button type="button" className="cp-takeout-btn cp-takeout-btn-primary" style={{ whiteSpace: "nowrap", padding: "6px 8px", fontSize: "calc(11px*var(--app-text-scale,1))" }}>再来一单</button>
+                <button type="button" className="cp-takeout-btn" style={{ whiteSpace: "nowrap", padding: "6px 8px", fontSize: "calc(11px*var(--app-text-scale,1))" }}>More</button>
+                <button type="button" className="cp-takeout-btn" style={{ whiteSpace: "nowrap", padding: "6px 8px", fontSize: "calc(11px*var(--app-text-scale,1))" }}>Request after-sales</button>
+                <button type="button" className="cp-takeout-btn" style={{ whiteSpace: "nowrap", padding: "6px 8px", fontSize: "calc(11px*var(--app-text-scale,1))" }}>Contact merchant</button>
+                <button type="button" className="cp-takeout-btn" style={{ whiteSpace: "nowrap", padding: "6px 8px", fontSize: "calc(11px*var(--app-text-scale,1))" }}>Call rider</button>
+                <button type="button" className="cp-takeout-btn cp-takeout-btn-primary" style={{ whiteSpace: "nowrap", padding: "6px 8px", fontSize: "calc(11px*var(--app-text-scale,1))" }}>Order again</button>
               </div>
 
               <div className="cp-takeout-detail-card">
@@ -417,16 +417,16 @@ export function CheckPhoneTakeoutPage({ character, onBack }: CheckPhoneTakeoutPa
                 </div>
 
                 <div className="cp-takeout-detail-fee">
-                  <span>打包费</span>
+                  <span>Packaging fee</span>
                   <span>¥1</span>
                 </div>
                 <div className="cp-takeout-detail-fee">
-                  <span>配送费</span>
-                  <span>免配送费</span>
+                  <span>Delivery fee</span>
+                  <span>Free delivery</span>
                 </div>
 
                 <div className="cp-takeout-detail-total">
-                  实付款 <strong>{formatAmount(activeOrder.amount)}</strong>
+                  Total paid <strong>{formatAmount(activeOrder.amount)}</strong>
                 </div>
               </div>
 
@@ -434,13 +434,13 @@ export function CheckPhoneTakeoutPage({ character, onBack }: CheckPhoneTakeoutPa
                 <div className="cp-takeout-detail-section">
                   {activeOrder.scenario && (
                     <>
-                      <h4>情境记录</h4>
+                      <h4>Scenario notes</h4>
                       <p style={{ marginBottom: '16px' }}><CheckPhoneBilingualText text={activeOrder.scenario} tone="takeout" /></p>
                     </>
                   )}
                   {activeOrder.innerVoice && (
                     <>
-                      <h4>心声</h4>
+                      <h4>Inner thoughts</h4>
                       <p><CheckPhoneBilingualText text={activeOrder.innerVoice} tone="takeout" /></p>
                     </>
                   )}
@@ -449,14 +449,14 @@ export function CheckPhoneTakeoutPage({ character, onBack }: CheckPhoneTakeoutPa
 
               {activeOrder.note ? (
                 <div className="cp-takeout-detail-section">
-                  <h4>订单备注</h4>
+                  <h4>Order note</h4>
                   <p><CheckPhoneBilingualText text={activeOrder.note} tone="takeout" /></p>
                 </div>
               ) : null}
 
               {activeOrder.review ? (
                 <div className="cp-takeout-detail-section">
-                  <h4>评价</h4>
+                  <h4>Review</h4>
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
                     <StickyNote size={14} style={{ marginTop: 2, flexShrink: 0, color: '#999' }} />
                     <p><CheckPhoneBilingualText text={activeOrder.review} tone="takeout" /></p>
@@ -470,11 +470,11 @@ export function CheckPhoneTakeoutPage({ character, onBack }: CheckPhoneTakeoutPa
 
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空外卖内容？"
-          message="确认后会清空这位角色已生成的外卖缓存。之后重新刷新时，不会再带入旧内容。"
+          title="Clear takeout content?"
+          message="Confirming will clear this character's generated takeout cache. Refreshing again afterward will not bring back the old content."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Confirm clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

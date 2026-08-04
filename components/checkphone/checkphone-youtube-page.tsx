@@ -398,7 +398,7 @@ export function CheckPhoneYoutubePage({ character, onBack }: CheckPhoneYoutubePa
 
         {error ? (
           <CheckPhoneDebugErrorCard
-            title="暂时无法解析 YouTube 内容。"
+            title="Unable to parse YouTube content."
             error={error}
             debugParseMode={debugParseMode}
             debugParseError={debugParseError}
@@ -551,11 +551,11 @@ export function CheckPhoneYoutubePage({ character, onBack }: CheckPhoneYoutubePa
 
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空 YouTube 内容？"
-          message="确认后会清空当前 YouTube 缓存。之后重新刷新时，不会再带入旧 YouTube 内容。"
+          title="Clear YouTube content?"
+          message="This clears the current YouTube cache. The next refresh will not reuse old YouTube content."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

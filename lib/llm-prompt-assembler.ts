@@ -17,6 +17,42 @@ import { formatCharacterRelationsForPrompt } from "./character-world-storage";
 import { buildCharacterTimeContext, buildGroupTimeContext, type CharacterTimeContext } from "./character-time";
 import { formatShoppingPaymentRequestHistory } from "./shopping-payment-request";
 import { buildGroupAdminBracketText } from "./group-admin";
+import {
+    TAG_ACCEPT_PAYMENT_REQUEST,
+    TAG_CLAIM_RED_PACKET,
+    TAG_CLAIM_TRANSFER,
+    TAG_DECLINE_PAYMENT_REQUEST,
+    TAG_DECLINE_RED_PACKET,
+    TAG_DECLINE_TRANSFER,
+    buildAcceptPaymentRequestFromTag,
+    buildClaimRedPacketFromTag,
+    buildClaimTransferFromTag,
+    DEFAULT_CONTACT_NAME,
+    DEFAULT_GIFT_NAME,
+    DEFAULT_LOCATION_NAME,
+    DEFAULT_MUSIC_TITLE,
+    DEFAULT_PHOTO_DESCRIPTION,
+    DEFAULT_RED_PACKET_BLESSING,
+    DEFAULT_STICKER_NAME,
+    DEFAULT_TRANSFER_NOTE,
+    DEFAULT_VOICE_NOTE_TEXT,
+    buildContactCardTag,
+    buildDeclinePaymentRequestFromTag,
+    buildDeclineRedPacketFromTag,
+    buildDeclineTransferFromTag,
+    buildGiftTag,
+    buildLocationTag,
+    buildMusicShareTag,
+    buildMusicTag,
+    buildPhotoTag,
+    buildPokeSelfTag,
+    buildPokeTag,
+    buildQuoteTag,
+    buildRedPacketTag,
+    buildStickerTag,
+    buildTransferTag,
+    buildVoiceNoteTag,
+} from "./rich-tag-builders";
 
 export type LLMMessageRole = "system" | "user" | "assistant" | "tool";
 export type LLMToolCallPayload = { id: string; name: string; args: Record<string, unknown>; thoughtSignature?: string };
@@ -163,9 +199,8 @@ function isImageGenerationMediaMessage(msg: ChatMessage): boolean {
 }
 
 function formatPhotoDirective(msg: ChatMessage, prefix = ""): string {
-    const description = msg.mediaData?.label?.trim() || "图片";
-    const mode = msg.mediaData?.useReferenceImage === true ? "使用参考图" : "不使用参考图";
-    return `${prefix}[照片:${mode}:${description}]`;
+    const description = msg.mediaData?.label?.trim() || DEFAULT_PHOTO_DESCRIPTION;
+    return `${prefix}${buildPhotoTag(description, msg.mediaData?.useReferenceImage === true)}`;
 }
 
 function formatImageGenerationDirective(msg: ChatMessage, prefix = ""): string {
@@ -1334,24 +1369,15 @@ export function assemblePromptPayload(input: AssemblerInput): LLMMessage[] {
 export function formatRichMediaForHistory(msg: ChatMessage, userName: string, charName: string, isGroup?: boolean): string {
     const d = msg.mediaData;
     switch (msg.mediaType) {
-        case "red_packet": {
-            const cnt = d?.count;
-            return isGroup && cnt && cnt > 1
-                ? `[红包:${d?.amount ?? 0}:${cnt}:${d?.label ?? "恭喜发财"}]`
-                : `[红包:${d?.amount ?? 0}:${d?.label ?? "恭喜发财"}]`;
-        }
-        case "transfer": {
-            const sn = d?.senderName;
-            const rn = d?.recipientName;
-            return isGroup && sn && rn
-                ? `[转账:${d?.amount ?? 0}:${d?.label ?? "转账"}:${sn}:${rn}]`
-                : `[转账:${d?.amount ?? 0}:${d?.label ?? "转账"}]`;
-        }
+        case "red_packet":
+            return buildRedPacketTag(d?.amount ?? 0, d?.label ?? DEFAULT_RED_PACKET_BLESSING, isGroup ? d?.count : undefined);
+        case "transfer":
+            return isGroup
+                ? buildTransferTag(d?.amount ?? 0, d?.label ?? DEFAULT_TRANSFER_NOTE, d?.senderName, d?.recipientName)
+                : buildTransferTag(d?.amount ?? 0, d?.label ?? DEFAULT_TRANSFER_NOTE);
         case "gift": {
-            const giftName = d?.giftName || d?.label || "礼物";
-            return isGroup && d?.recipientName
-                ? `[礼物:${giftName}:${d.recipientName}]`
-                : `[礼物:${giftName}]`;
+            const giftName = d?.giftName || d?.label || DEFAULT_GIFT_NAME;
+            return buildGiftTag(giftName, isGroup ? d?.recipientName : undefined);
         }
         case "payment_request":
             return formatShoppingPaymentRequestHistory({
@@ -1361,7 +1387,7 @@ export function formatRichMediaForHistory(msg: ChatMessage, userName: string, ch
                 itemsText: d?.paymentRequestItemsText,
             });
         case "contact_card":
-            return `[名片:${d?.contactCardName || d?.label || "联系人"}]`;
+            return buildContactCardTag(d?.contactCardName || d?.label || DEFAULT_CONTACT_NAME);
         case "app_card": {
             const historyText = d?.appHistoryText?.trim();
             if (historyText) return historyText;
@@ -1378,32 +1404,27 @@ export function formatRichMediaForHistory(msg: ChatMessage, userName: string, ch
             }
             return msg.content;
         case "audio":
-            return `[语音条:${d?.label ?? "语音消息"}]`;
+            return buildVoiceNoteTag(d?.label ?? DEFAULT_VOICE_NOTE_TEXT);
         case "location":
-            return `[位置:${d?.label ?? "位置"}]`;
+            return buildLocationTag(d?.label ?? DEFAULT_LOCATION_NAME);
         case "group_admin_notice":
             return d?.adminAction
                 ? buildGroupAdminBracketText(d.adminAction, d.adminActorName || charName, d.adminTargetName || "", d.adminMuteMinutes)
                 : msg.content;
         case "poke": {
             if (isGroup) {
-                return `[${d?.pokeSender || charName}拍了拍${d?.pokeTarget || userName}]`;
+                return buildPokeTag(d?.pokeSender || charName, d?.pokeTarget || userName);
             }
-            const pokeTarget = d?.pokeTarget || (msg.role === "assistant" ? userName : charName);
-            return `[我拍了拍${pokeTarget}]`;
+            return buildPokeSelfTag(d?.pokeTarget || (msg.role === "assistant" ? userName : charName));
         }
         case "sticker":
-            return `[表情包:${d?.label ?? "表情"}]`;
+            return buildStickerTag(d?.label ?? DEFAULT_STICKER_NAME);
         case "quote":
-            return `[引用:${d?.quotePreview ?? ""}]${msg.content}`;
-        case "music": {
-            const artist = d?.musicArtist ? `-${d.musicArtist}` : "";
-            return `[音乐:${d?.musicTitle ?? d?.label ?? "未知歌曲"}${artist}]`;
-        }
-        case "music_share": {
-            const mTitle = d?.musicTitle || "未知歌曲";
-            return `[音乐分享:${mTitle}]`;
-        }
+            return `${buildQuoteTag(d?.quotePreview ?? "")}${msg.content}`;
+        case "music":
+            return buildMusicTag(d?.musicTitle ?? d?.label ?? DEFAULT_MUSIC_TITLE, d?.musicArtist);
+        case "music_share":
+            return buildMusicShareTag(d?.musicTitle || DEFAULT_MUSIC_TITLE);
         case "xiaohongshu_note_share":
             return formatXiaohongshuShareForPrompt({
                 author: d?.xiaohongshuAuthor,
@@ -1412,23 +1433,23 @@ export function formatRichMediaForHistory(msg: ChatMessage, userName: string, ch
                 description: d?.xiaohongshuDescription,
             });
         case "accept_red_packet":
-            if (isGroup && d?.claimer && d?.owner) return `[${d.claimer}领取了${d.owner}的红包]`;
-            return "[领取红包]";
+            if (isGroup && d?.claimer && d?.owner) return buildClaimRedPacketFromTag(d.claimer, d.owner);
+            return TAG_CLAIM_RED_PACKET;
         case "decline_red_packet":
-            if (isGroup && d?.claimer && d?.owner) return `[${d.claimer}退回了${d.owner}的红包]`;
-            return "[拒收红包]";
+            if (isGroup && d?.claimer && d?.owner) return buildDeclineRedPacketFromTag(d.claimer, d.owner);
+            return TAG_DECLINE_RED_PACKET;
         case "accept_transfer":
-            if (isGroup && d?.claimer && d?.owner) return `[${d.claimer}领取了${d.owner}的转账]`;
-            return "[领取转账]";
+            if (isGroup && d?.claimer && d?.owner) return buildClaimTransferFromTag(d.claimer, d.owner);
+            return TAG_CLAIM_TRANSFER;
         case "decline_transfer":
-            if (isGroup && d?.claimer && d?.owner) return `[${d.claimer}退回了${d.owner}的转账]`;
-            return "[拒收转账]";
+            if (isGroup && d?.claimer && d?.owner) return buildDeclineTransferFromTag(d.claimer, d.owner);
+            return TAG_DECLINE_TRANSFER;
         case "accept_payment_request":
-            if (isGroup && d?.claimer && d?.owner) return `[${d.claimer}接受了${d.owner}的代付]`;
-            return "[接受代付]";
+            if (isGroup && d?.claimer && d?.owner) return buildAcceptPaymentRequestFromTag(d.claimer, d.owner);
+            return TAG_ACCEPT_PAYMENT_REQUEST;
         case "decline_payment_request":
-            if (isGroup && d?.claimer && d?.owner) return `[${d.claimer}拒绝了${d.owner}的代付]`;
-            return "[拒绝代付]";
+            if (isGroup && d?.claimer && d?.owner) return buildDeclinePaymentRequestFromTag(d.claimer, d.owner);
+            return TAG_DECLINE_PAYMENT_REQUEST;
         default:
             return msg.content;
     }
@@ -2163,7 +2184,10 @@ export function assembleGroupPromptPayload(input: GroupAssemblerInput): LLMMessa
 
     // 3. Feature-tagged prompts from preset
     if (hasPromptOrder) {
-        const memberNameStr = memberNames || members.map(m => m.character.name).join("、");
+        // Separator matches what group-chat-engine.ts:468 passes in — this is the fallback
+        // for the same value, and the two drifting apart would make {{char}} read
+        // differently depending on which caller built the payload.
+        const memberNameStr = memberNames || members.map(m => m.character.name).join(", ");
 
         // Create a macro engine for group-level prompts ({{char}} = all member names)
         const groupEngine = new MacroEngine(memberNameStr, resolvedUserName);

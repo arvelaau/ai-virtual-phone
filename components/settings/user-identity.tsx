@@ -21,21 +21,21 @@ export type UserIdentity = {
 const DEFAULT_IDENTITIES: UserIdentity[] = [
     {
         id: "identity-1",
-        name: "李斯特",
-        bio: "一个普通的上班族，喜欢在周末去咖啡馆看书。",
-        gender: "男",
+        name: "Alex",
+        bio: "An ordinary office worker who likes reading at cafes on weekends.",
+        gender: "Male",
         age: "26",
-        occupation: "程序员",
-        customSettings: "性格温和，说话带有一点理性逻辑。",
+        occupation: "Programmer",
+        customSettings: "Mild-mannered, speaks with a touch of rational logic.",
     },
     {
         id: "identity-2",
-        name: "匿名用户",
-        bio: "神秘的过客。",
+        name: "Anonymous User",
+        bio: "A mysterious passerby.",
         gender: "保密",
-        age: "未知",
-        occupation: "自由职业者",
-        customSettings: "说话简短，带有神秘色彩。",
+        age: "Unknown",
+        occupation: "Freelancer",
+        customSettings: "Speaks briefly, with a mysterious flair.",
     }
 ];
 
@@ -86,7 +86,7 @@ export function UserIdentitySettings() {
     const addIdentity = useCallback(() => {
         const newIdentity: UserIdentity = {
             id: `identity-${Date.now()}`,
-            name: "新身份",
+            name: "New Identity",
             bio: "",
             gender: "保密",
             age: "",
@@ -106,7 +106,7 @@ export function UserIdentitySettings() {
                 className="inline-flex h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] bg-black px-4 text-xs font-bold text-white shadow-sm transition-all hover:bg-gray-800 hover:shadow-md active:scale-95 focus:outline-none"
             >
                 <Plus size={15} strokeWidth={1.8} />
-                <span>新增身份</span>
+                <span>New Identity</span>
             </button>
         );
         return () => setSubpageRightAction("identity", null);
@@ -136,12 +136,12 @@ export function UserIdentitySettings() {
                     <div className="ui-icon-circle">
                         <User size={24} />
                     </div>
-                    <span className="menu-label font-semibold">没有身份卡片</span>
+                    <span className="menu-label font-semibold">No identity cards yet</span>
                     <span className="menu-desc max-w-[240px]">
-                        在此管理您的个人身份信息，以便 AI 能够更好地了解您。
+                        Manage your personal identity info here so the AI can get to know you better.
                     </span>
                     <button onClick={addIdentity} className="ui-btn ui-btn-primary rounded-[20px] mt-2">
-                        <Plus size={16} /> 添加身份
+                        <Plus size={16} /> Add Identity
                     </button>
                 </div>
             ) : (
@@ -153,7 +153,7 @@ export function UserIdentitySettings() {
                             style={{ aspectRatio: "3 / 2", padding: "12px", justifyContent: "space-between" }}
                             role="button"
                             tabIndex={0}
-                            aria-label={`编辑 ${identity.name || "身份"}`}
+                            aria-label={`Edit ${identity.name || "Identity"}`}
                             onClick={() => setEditingId(identity.id)}
                             onKeyDown={(event) => {
                                 if (event.target !== event.currentTarget) return;
@@ -164,8 +164,8 @@ export function UserIdentitySettings() {
                             }}
                         >
                             <div className="min-w-0 flex flex-col gap-1">
-                                <span className="truncate text-[calc(14.4px*var(--app-text-scale,1))] font-bold leading-tight text-[var(--c-text-title)]">{identity.name || "未命名身份"}</span>
-                                <span className="menu-desc truncate">{identity.occupation || identity.bio || identity.gender || "未填写身份信息"}</span>
+                                <span className="truncate text-[calc(14.4px*var(--app-text-scale,1))] font-bold leading-tight text-[var(--c-text-title)]">{identity.name || "Unnamed Identity"}</span>
+                                <span className="menu-desc truncate">{identity.occupation || identity.bio || identity.gender || "No identity info filled in"}</span>
                             </div>
                             <div className="flex items-end justify-between gap-2">
                                 {identity.avatarUrl ? (
@@ -210,7 +210,7 @@ export function UserIdentitySettings() {
                     <div className="modal-sheet" data-ui="modal-sheet">
                         <div className="modal-header" data-ui="modal-header">
                             <button onClick={() => { if (isNewIdentity && editingId) removeIdentity(editingId); setIsNewIdentity(false); setEditingId(null); }} className="modal-header-btn modal-header-btn-muted"><X size={18} /></button>
-                            <span className="modal-header-title">{isNewIdentity ? "添加身份" : "编辑身份"}</span>
+                            <span className="modal-header-title">{isNewIdentity ? "Add Identity" : "Edit Identity"}</span>
                             <button onClick={() => { setIsNewIdentity(false); setEditingId(null); }} className="modal-header-btn modal-header-btn-action"><Check size={18} /></button>
                         </div>
 
@@ -249,7 +249,7 @@ export function UserIdentitySettings() {
                                                 ) : (
                                                     <>
                                                         <User size={28} className="text-[var(--c-icon-active)]" />
-                                                        <span className="ts-10 mt-[2px] text-[var(--c-icon-active)]">点击上传</span>
+                                                        <span className="ts-10 mt-[2px] text-[var(--c-icon-active)]">Tap to upload</span>
                                                     </>
                                                 )}
                                             </div>
@@ -259,7 +259,7 @@ export function UserIdentitySettings() {
                                                     type="text"
                                                     value={identity.avatarUrl?.startsWith("data:") ? "" : (identity.avatarUrl || "")}
                                                     onChange={(e) => updateIdentity(identity.id, { avatarUrl: e.target.value })}
-                                                    placeholder="或粘贴图片URL..."
+                                                    placeholder="Or paste an image URL..."
                                                     className="flex-1 ts-12 px-[10px] py-[6px]"
                                                 />
                                             </div>
@@ -267,70 +267,73 @@ export function UserIdentitySettings() {
 
                                         <div className="flex gap-3">
                                             <div className="flex flex-col gap-1 flex-1 min-w-0">
-                                                <label className="menu-desc ml-1">名字 (Name)</label>
+                                                <label className="menu-desc ml-1">Name</label>
                                                 <Input
                                                     type="text"
                                                     value={identity.name}
                                                     onChange={(e) => updateIdentity(identity.id, { name: e.target.value })}
-                                                    placeholder="您希望AI怎么称呼您..."
+                                                    placeholder="What would you like the AI to call you..."
                                                     className="font-medium"
                                                 />
                                             </div>
                                             <div className="flex flex-col gap-1 w-[90px] shrink-0">
-                                                <label className="menu-desc ml-1">性别</label>
+                                                <label className="menu-desc ml-1">Gender</label>
                                                 <select
                                                     value={identity.gender}
                                                     onChange={(e) => updateIdentity(identity.id, { gender: e.target.value })}
                                                     className="ui-select"
                                                 >
-                                                    <option value="保密">保密</option>
-                                                    <option value="男">男</option>
-                                                    <option value="女">女</option>
-                                                    <option value="其他">其他</option>
+                                                    {/* "保密" (undisclosed) must stay in this exact Chinese string -- lib/llm-prompt-assembler.ts,
+                                                        lib/calendar-engine.ts, and lib/custom-app-host-api.ts compare identity.gender !== "保密"
+                                                        to decide whether to include gender in AI prompts. */}
+                                                    <option value="保密">Prefer not to say</option>
+                                                    <option value="Male">Male</option>
+                                                    <option value="Female">Female</option>
+                                                    <option value="Other">Other</option>
                                                 </select>
                                             </div>
                                         </div>
 
                                         <div className="flex gap-3">
                                             <div className="flex flex-col gap-1 flex-1 min-w-0">
-                                                <label className="menu-desc ml-1">年龄 (Age)</label>
+                                                <label className="menu-desc ml-1">Age</label>
                                                 <input
                                                     type="text"
                                                     value={identity.age}
                                                     onChange={(e) => updateIdentity(identity.id, { age: e.target.value })}
-                                                    placeholder="例如: 24, 未知"
+                                                    placeholder="e.g. 24, Unknown"
                                                     className="ui-input"
                                                 />
                                             </div>
                                             <div className="flex flex-col gap-1 flex-1 min-w-0">
-                                                <label className="menu-desc ml-1">职业 (Occupation)</label>
+                                                <label className="menu-desc ml-1">Occupation</label>
                                                 <input
                                                     type="text"
                                                     value={identity.occupation}
                                                     onChange={(e) => updateIdentity(identity.id, { occupation: e.target.value })}
-                                                    placeholder="例如: 学生, 自由职业"
+                                                    placeholder="e.g. Student, Freelancer"
                                                     className="ui-input"
                                                 />
                                             </div>
                                         </div>
 
                                         <div className="flex flex-col gap-1">
-                                            <label className="menu-desc ml-1">简介 (Bio)</label>
+                                            <label className="menu-desc ml-1">Bio</label>
                                             <textarea
                                                 value={identity.bio}
                                                 onChange={(e) => updateIdentity(identity.id, { bio: e.target.value })}
-                                                placeholder="简单描述一下自己，这会作为AI了解您的基础背景..."
+                                                placeholder="Briefly describe yourself; this will be the AI's basic background info about you..."
                                                 rows={3}
                                                 className="ui-textarea"
                                             />
                                         </div>
 
                                         <div className="flex flex-col gap-1">
-                                            <label className="menu-desc ml-1">自定义设定 (Custom Settings)</label>
+                                            <label className="menu-desc ml-1">Custom Settings</label>
                                             <textarea
                                                 value={identity.customSettings}
                                                 onChange={(e) => updateIdentity(identity.id, { customSettings: e.target.value })}
-                                                placeholder="更深度的性格爱好描述，对话的特殊要求等..."
+                                                placeholder="Deeper personality/interests, special conversation requirements, etc..."
                                                 rows={4}
                                                 className="ui-textarea"
                                             />
@@ -345,12 +348,12 @@ export function UserIdentitySettings() {
 
             {confirmDeleteId && (
                 <ConfirmDialog
-                    title="确认删除？"
-                    message="删除身份卡片后无法恢复。是否继续？"
+                    title="Confirm deletion?"
+                    message="Deleting an identity card cannot be undone. Continue?"
                     icon={AlertCircle}
                     variant="danger"
-                    confirmLabel="确认删除"
-                    cancelLabel="取消"
+                    confirmLabel="Confirm delete"
+                    cancelLabel="Cancel"
                     onConfirm={() => {
                         removeIdentity(confirmDeleteId);
                         setConfirmDeleteId(null);

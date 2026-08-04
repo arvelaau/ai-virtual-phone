@@ -23,10 +23,10 @@ type CheckPhoneReadingPageProps = {
 type ReadingTabId = "current" | "highlights" | "library" | "notes";
 
 const READING_TABS: Array<{ id: ReadingTabId; label: string; icon: typeof BookOpenText }> = [
-  { id: "current", label: "在读", icon: BookOpenText },
-  { id: "highlights", label: "书摘", icon: Highlighter },
-  { id: "library", label: "书架", icon: LibraryBig },
-  { id: "notes", label: "笔记", icon: NotebookText },
+  { id: "current", label: "Reading", icon: BookOpenText },
+  { id: "highlights", label: "Highlights", icon: Highlighter },
+  { id: "library", label: "Shelf", icon: LibraryBig },
+  { id: "notes", label: "Notes", icon: NotebookText },
 ];
 
 const READING_HEADER_COPY: Record<ReadingTabId, { title: string; subtitle: string }> = {
@@ -226,7 +226,7 @@ export function CheckPhoneReadingPage({ character, onBack }: CheckPhoneReadingPa
 
       {loading && (
         <div className="cp-refresh-indicator cp-refresh-indicator--floating" aria-live="polite">
-          <span className="cp-refresh-indicator-text">正在刷新阅读</span>
+          <span className="cp-refresh-indicator-text">Refreshing reading</span>
           <span className="cp-refresh-indicator-dots" aria-hidden="true">
             <i></i><i></i><i></i>
           </span>
@@ -238,8 +238,8 @@ export function CheckPhoneReadingPage({ character, onBack }: CheckPhoneReadingPa
 
         {loaded && !payload && !loading && (
           <div className="cp-reading-status cp-empty-copy">
-            <p>暂无阅读内容</p>
-            <span className="cp-reading-hint">点刷新同步在读书摘书架和笔记</span>
+            <p>No reading content yet</p>
+            <span className="cp-reading-hint">Tap refresh to sync current books, highlights, shelf, and notes</span>
           </div>
         )}
 
@@ -263,7 +263,7 @@ export function CheckPhoneReadingPage({ character, onBack }: CheckPhoneReadingPa
               {selectedTab === "current" && (
                 <section className="cp-reading-stage">
                   <div className="cp-reading-profile-card">
-                    <p><CheckPhoneBilingualText text={payload.profile.status || payload.profile.summary || "最近的阅读痕迹"} tone="reading" /></p>
+                    <p><CheckPhoneBilingualText text={payload.profile.status || payload.profile.summary || "Recent reading activity"} tone="reading" /></p>
                     <time>{[character.name, payload.profile.updatedLabel].filter(Boolean).join(" · ")}</time>
                   </div>
                   <div className="cp-reading-book-stack">
@@ -286,7 +286,7 @@ export function CheckPhoneReadingPage({ character, onBack }: CheckPhoneReadingPa
                         <strong><CheckPhoneBilingualText text={item.quote} tone="reading" /></strong>
                         <p><CheckPhoneBilingualText text={item.note} tone="reading" /></p>
                         <div className="cp-reading-meta-row">
-                          <span><CheckPhoneBilingualText text={book?.title || "未知书籍"} tone="reading" /></span>
+                          <span><CheckPhoneBilingualText text={book?.title || "Unknown Book"} tone="reading" /></span>
                           <em>{item.chapterLabel}</em>
                         </div>
                       </article>
@@ -315,7 +315,7 @@ export function CheckPhoneReadingPage({ character, onBack }: CheckPhoneReadingPa
                         <strong><CheckPhoneBilingualText text={item.title} tone="reading" /></strong>
                         <p><CheckPhoneBilingualText text={item.body} tone="reading" /></p>
                         <div className="cp-reading-meta-row">
-                          <span><CheckPhoneBilingualText text={book?.title || "未知书籍"} tone="reading" /></span>
+                          <span><CheckPhoneBilingualText text={book?.title || "Unknown Book"} tone="reading" /></span>
                           <em>{item.updatedLabel}</em>
                         </div>
                       </article>
@@ -325,7 +325,7 @@ export function CheckPhoneReadingPage({ character, onBack }: CheckPhoneReadingPa
               )}
             </div>
 
-            <nav className="cp-reading-tabbar" aria-label="阅读导航">
+            <nav className="cp-reading-tabbar" aria-label="Reading Navigation">
               {READING_TABS.map((tab) => {
                 const Icon = tab.icon;
                 const active = selectedTab === tab.id;
@@ -357,7 +357,7 @@ export function CheckPhoneReadingPage({ character, onBack }: CheckPhoneReadingPa
             className="cp-reading-book-modal"
             role="dialog"
             aria-modal="true"
-            aria-label={`${activeBook.title} 详情`}
+            aria-label={`${activeBook.title} Details`}
             onClick={(event) => event.stopPropagation()}
           >
             <button
@@ -388,7 +388,7 @@ export function CheckPhoneReadingPage({ character, onBack }: CheckPhoneReadingPa
                 <div className="cp-reading-related cp-reading-book-modal-related">
                   {activeBookHighlights.length > 0 && (
                     <>
-                      <div className="cp-reading-section-head">相关书摘</div>
+                      <div className="cp-reading-section-head">Related Highlights</div>
                       {activeBookHighlights.map((item) => (
                         <div key={item.id} className="cp-reading-related-card">
                           <strong><CheckPhoneBilingualText text={item.quote} tone="reading" /></strong>
@@ -399,7 +399,7 @@ export function CheckPhoneReadingPage({ character, onBack }: CheckPhoneReadingPa
                   )}
                   {activeBookNotes.length > 0 && (
                     <>
-                      <div className="cp-reading-section-head">相关笔记</div>
+                      <div className="cp-reading-section-head">Related Notes</div>
                       {activeBookNotes.map((item) => (
                         <div key={item.id} className="cp-reading-related-card">
                           <strong><CheckPhoneBilingualText text={item.title} tone="reading" /></strong>
@@ -417,11 +417,11 @@ export function CheckPhoneReadingPage({ character, onBack }: CheckPhoneReadingPa
 
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空阅读内容？"
-          message="确认后会清空当前阅读缓存。之后重新刷新时，不会再带入旧阅读内容。"
+          title="Clear reading content?"
+          message="Once confirmed, the current reading cache will be cleared. Future refreshes will no longer bring back the old reading content."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Confirm Clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

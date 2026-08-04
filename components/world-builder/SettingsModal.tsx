@@ -9,7 +9,7 @@ export interface SceneSettings {
   doubleSide: boolean;
   snap: boolean;
   bloom: boolean;
-  /** 角色化身漫步动画（弱机可关；同屏最多 3 个化身活动） */
+  /** Character avatar wandering animation (can be disabled on weak devices; at most 3 avatars active on-screen at once) */
   avatarMotion?: boolean;
   globalBrightness: number;
   globalWarmth: number;
@@ -17,8 +17,8 @@ export interface SceneSettings {
 }
 
 export const THEMES: { name: string; bg: string; light: boolean }[] = [
-  { name: "奶白", bg: "radial-gradient(circle at 50% 50%, #fff 0%, #f5f0eb 50%, #e8e0d8 100%)", light: true },
-  { name: "深空", bg: "radial-gradient(circle at 50% 50%, #706560 0%, #4a4540 40%, #353030 100%)", light: false },
+  { name: "Cream", bg: "radial-gradient(circle at 50% 50%, #fff 0%, #f5f0eb 50%, #e8e0d8 100%)", light: true },
+  { name: "Deep Space", bg: "radial-gradient(circle at 50% 50%, #706560 0%, #4a4540 40%, #353030 100%)", light: false },
 ];
 
 export function isLightTheme(theme: string): boolean {
@@ -28,8 +28,9 @@ export function isLightTheme(theme: string): boolean {
 const STORAGE_KEY = "wb-settings";
 
 const DEFAULT_SETTINGS: SceneSettings = {
-  // 默认关闭重负载选项（阴影/环境反射），弱机不闪退；想要画质的用户可在偏好设置开。
-  // 双面渲染保持开：它不是显存大户，关了反而会让部分模型出现破面/空洞。
+  // Heavy-load options (shadows/environment reflection) are off by default so weak devices don't crash;
+  // users who want better visuals can enable them in preferences.
+  // Double-sided rendering stays on: it isn't a big VRAM cost, and turning it off can cause broken faces/holes on some models.
   shadows: false,
   hdri: false,
   doubleSide: true,
@@ -90,12 +91,12 @@ export default function SettingsModal({ open, settings, onUpdate, onClose }: Pro
     <div className="wb-modal-overlay" onClick={onClose}>
       <div className="wb-modal" onClick={(e) => e.stopPropagation()}>
         <div className="wb-modal-header">
-          <span>偏好设置</span>
+          <span>Preferences</span>
           <button className="wb-float-close" onClick={onClose}>✕</button>
         </div>
 
         <div className="wb-modal-section">
-          <label className="wb-modal-label">主题色</label>
+          <label className="wb-modal-label">Theme Color</label>
           <div className="wb-theme-list">
             {THEMES.map((t) => (
               <button
@@ -109,15 +110,15 @@ export default function SettingsModal({ open, settings, onUpdate, onClose }: Pro
           </div>
         </div>
 
-        <Toggle label="阴影" value={settings.shadows} onChange={(v) => onUpdate({ shadows: v })} />
-        <Toggle label="化身走动" value={settings.avatarMotion !== false} onChange={(v) => onUpdate({ avatarMotion: v })} />
-        <Toggle label="环境反射" value={settings.hdri} onChange={(v) => onUpdate({ hdri: v })} />
-        <Toggle label="双面渲染" value={settings.doubleSide} onChange={(v) => onUpdate({ doubleSide: v })} />
-        <Toggle label="物体吸附" value={settings.snap} onChange={(v) => onUpdate({ snap: v })} />
-        <Toggle label="光晕效果" value={settings.bloom} onChange={(v) => onUpdate({ bloom: v })} />
+        <Toggle label="Shadows" value={settings.shadows} onChange={(v) => onUpdate({ shadows: v })} />
+        <Toggle label="Avatar Wandering" value={settings.avatarMotion !== false} onChange={(v) => onUpdate({ avatarMotion: v })} />
+        <Toggle label="Environment Reflection" value={settings.hdri} onChange={(v) => onUpdate({ hdri: v })} />
+        <Toggle label="Double-Sided Rendering" value={settings.doubleSide} onChange={(v) => onUpdate({ doubleSide: v })} />
+        <Toggle label="Object Snapping" value={settings.snap} onChange={(v) => onUpdate({ snap: v })} />
+        <Toggle label="Bloom Effect" value={settings.bloom} onChange={(v) => onUpdate({ bloom: v })} />
 
         <div className="wb-setting-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
-          <span>亮度 {settings.globalBrightness.toFixed(1)}</span>
+          <span>Brightness {settings.globalBrightness.toFixed(1)}</span>
           <input type="range" className="wb-scale-slider" min={0.3} max={3} step="any"
             value={settings.globalBrightness}
             onChange={(e) => onUpdate({ globalBrightness: parseFloat(e.target.value) })}
@@ -125,7 +126,7 @@ export default function SettingsModal({ open, settings, onUpdate, onClose }: Pro
         </div>
 
         <div className="wb-setting-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
-          <span>色温 {settings.globalWarmth > 0 ? "暖" : settings.globalWarmth < 0 ? "冷" : "中性"}</span>
+          <span>Color Temperature {settings.globalWarmth > 0 ? "Warm" : settings.globalWarmth < 0 ? "Cool" : "Neutral"}</span>
           <input type="range" className="wb-scale-slider" min={-1} max={1} step="any"
             value={settings.globalWarmth}
             onChange={(e) => onUpdate({ globalWarmth: parseFloat(e.target.value) })}
@@ -133,7 +134,7 @@ export default function SettingsModal({ open, settings, onUpdate, onClose }: Pro
         </div>
 
         <div className="wb-modal-hint" style={{ marginTop: 12 }}>
-          关闭选项可提升性能
+          Turning off options can improve performance
         </div>
       </div>
     </div>

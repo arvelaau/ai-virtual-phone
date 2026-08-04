@@ -44,17 +44,19 @@ function buildSyntheticUserCharacter(identity: UserIdentity | null): Character {
   const now = new Date().toISOString();
   const personaLines = [
     identity?.bio?.trim(),
-    identity?.occupation ? `职业：${identity.occupation}` : "",
-    identity?.age ? `年龄：${identity.age}` : "",
-    identity?.gender && identity.gender !== "保密" ? `性别：${identity.gender}` : "",
+    identity?.occupation ? `Occupation: ${identity.occupation}` : "",
+    identity?.age ? `Age: ${identity.age}` : "",
+    // "保密" (undisclosed) is a cross-file sentinel also compared in
+    // lib/llm-prompt-assembler.ts and lib/custom-app-host-api.ts — do not translate.
+    identity?.gender && identity.gender !== "保密" ? `Gender: ${identity.gender}` : "",
     identity?.customSettings?.trim(),
   ].filter(Boolean);
 
   return {
     id: "__calendar_user__",
-    name: identity?.name?.trim() || "用户",
+    name: identity?.name?.trim() || "User",
     avatar: identity?.avatarUrl || null,
-    persona: personaLines.join("\n") || "这是用户本人。",
+    persona: personaLines.join("\n") || "This is the user themselves.",
     wechatID: "",
     createdAt: now,
     updatedAt: now,
@@ -98,7 +100,13 @@ function parseScheduleLines(rawText: string, weekStart: string): CalendarSchedul
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !weekDates.has(date)) continue;
     if (!startTime || !endTime || !isCalendarTimeRangeAllowed(startTime, endTime)) continue;
 
-    const location = parts[4] === "无" ? "" : parts[4];
+    // "No location" sentinel. The prompt (lib/builtin-preset.ts, calendar block)
+    // now teaches "none", but the legacy Chinese "无" must keep working for any
+    // model still following an older/custom preset. Accept both, plus a bare dash.
+    const locationRaw = parts[4];
+    const isNoLocation = locationRaw === "无"
+        || /^(none|n\/a|-|—)$/i.test(locationRaw.trim());
+    const location = isNoLocation ? "" : locationRaw;
     const title = parts.slice(5).join("|");
     if (!title.trim()) continue;
 
@@ -123,13 +131,13 @@ async function resolveCalendarAssemblerInput(
   const activeSlot = resolveBinding(bindings, ownerType === "character" ? ownerId : undefined, "calendar");
 
   if (!activeSlot.apiConfigId) {
-    throw new Error("未绑定日历 API，请先在配置绑定中为日历设置 API。");
+    throw new Error("No calendar API is bound. Set one for Calendar in the binding settings first.");
   }
 
   const apiConfigs = loadApiConfigs();
   const apiConfig = apiConfigs.find(entry => entry.id === activeSlot.apiConfigId);
   if (!apiConfig) {
-    throw new Error("日历 API 配置不存在。");
+    throw new Error("The calendar API configuration no longer exists.");
   }
 
   const presets = loadPresets();
@@ -153,7 +161,7 @@ async function resolveCalendarAssemblerInput(
       : buildSyntheticUserCharacter(resolveUserIdentity(undefined, "calendar"));
 
   if (!character) {
-    throw new Error("日历目标不存在。");
+    throw new Error("The calendar target no longer exists.");
   }
 
   const memConfig = loadMemoryConfig();
@@ -210,19 +218,20 @@ export async function generateWeeklyCalendarSchedule(
   weekStart: string,
 ): Promise<{ success: boolean; error?: string; items?: CalendarScheduleItem[] }> {
   if (ownerType !== "character") {
-    return { success: false, error: "用户日程不支持 AI 生成，请手动填写。" };
+    return { success: false, error: "AI generation is not supported for the user's own schedule — please fill it in manually." };
   }
-  // 先清掉本周旧的 AI 生成条目（保留手动条目），让随后的 marker 组装读不到旧结果——
-  // 否则旧日程会进提示词被模型原样照抄，"重新生成"永远一字不差。失败时恢复。
+  // Clear this week's previously AI-generated entries first (manual ones are kept) so the
+  // marker assembly below cannot see the old result — otherwise the old schedule lands in
+  // the prompt and the model copies it verbatim, making "regenerate" a no-op. Restored on failure.
   const removedGenerated = clearGeneratedWeekItems(ownerType, ownerId, weekStart);
   const restoreRemoved = () => restoreCalendarWeekItems(ownerType, ownerId, weekStart, removedGenerated);
   try {
     const resolved = await resolveCalendarAssemblerInput(ownerType, ownerId, weekStart);
     const weekDates = getWeekDates(weekStart);
     const triggerInstruction = [
-      `请为${resolved.ownerName}生成 ${weekDates[0]} 到 ${weekDates[6]} 这一周的日程安排。`,
-      "请参考已有日程，生成这一周的完整日程安排。",
-      `仅安排 ${String(CALENDAR_HOUR_START).padStart(2, "0")}:00 到 ${String(CALENDAR_HOUR_END).padStart(2, "0")}:00 之间的事项。`,
+      `Generate the schedule for ${resolved.ownerName} for the week of ${weekDates[0]} to ${weekDates[6]}.`,
+      "Take the existing schedule into account and produce a complete plan for this week.",
+      `Only schedule activities between ${String(CALENDAR_HOUR_START).padStart(2, "0")}:00 and ${String(CALENDAR_HOUR_END).padStart(2, "0")}:00.`,
     ].join("\n");
 
     const messages: LLMMessage[] = [
@@ -239,14 +248,14 @@ export async function generateWeeklyCalendarSchedule(
       resolved.preset,
       messages,
       resolved.regexes,
-      { characterName: `日历:${resolved.ownerName}` },
+      { characterName: `Calendar: ${resolved.ownerName}` },
       { appId: "calendar", appTags: ["calendar"] },
     );
 
     const items = parseScheduleLines(rawText, weekStart);
     if (items.length === 0) {
       restoreRemoved();
-      return { success: false, error: "日历生成结果为空，或格式无法解析。" };
+      return { success: false, error: "The calendar result was empty, or its format could not be parsed." };
     }
 
     cloneWeekPlanWithManualEdits(ownerType, ownerId, weekStart, items);
@@ -254,7 +263,7 @@ export async function generateWeeklyCalendarSchedule(
   } catch (error) {
     restoreRemoved();
     const err = error as ChatEngineError | Error;
-    return { success: false, error: err?.message || "生成日历失败" };
+    return { success: false, error: err?.message || "Failed to generate the calendar" };
   }
 }
 
@@ -264,14 +273,14 @@ export async function previewCalendarPromptPayload(
   weekStart: string,
 ): Promise<{ messages: LLMMessage[]; characterName: string; model: string; presetName: string }> {
   if (ownerType !== "character") {
-    throw new Error("用户日程不支持 AI 生成预览。");
+    throw new Error("AI generation preview is not supported for the user's own schedule.");
   }
   const resolved = await resolveCalendarAssemblerInput(ownerType, ownerId, weekStart);
   const weekDates = getWeekDates(weekStart);
   const triggerInstruction = [
-    `请为${resolved.ownerName}生成 ${weekDates[0]} 到 ${weekDates[6]} 这一周的日程安排。`,
-    "请参考已有日程，生成这一周的完整日程安排。",
-    `仅安排 ${String(CALENDAR_HOUR_START).padStart(2, "0")}:00 到 ${String(CALENDAR_HOUR_END).padStart(2, "0")}:00 之间的事项。`,
+    `Generate the schedule for ${resolved.ownerName} for the week of ${weekDates[0]} to ${weekDates[6]}.`,
+    "Take the existing schedule into account and produce a complete plan for this week.",
+    `Only schedule activities between ${String(CALENDAR_HOUR_START).padStart(2, "0")}:00 and ${String(CALENDAR_HOUR_END).padStart(2, "0")}:00.`,
   ].join("\n");
 
   const messages: LLMMessage[] = [
@@ -286,9 +295,9 @@ export async function previewCalendarPromptPayload(
   const apiMessages = previewMessagesForApi(resolved.apiConfig, resolved.preset, messages);
   return {
     messages: apiMessages,
-    characterName: `日历:${resolved.ownerName}`,
+    characterName: `Calendar: ${resolved.ownerName}`,
     model: resolved.apiConfig.defaultModel,
-    presetName: resolved.preset?.name ?? "(无预设)",
+    presetName: resolved.preset?.name ?? "(no preset)",
   };
 }
 

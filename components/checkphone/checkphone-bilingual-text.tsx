@@ -106,7 +106,7 @@ export function CheckPhoneBilingualText({
         onKeyDown={handleKeyDown}
         aria-expanded={expanded}
       >
-        {expanded ? "收起中文" : "中文"}
+        {expanded ? "Hide Chinese" : "Chinese"}
       </span>
       {expanded && variant === "inline" ? (
         <>

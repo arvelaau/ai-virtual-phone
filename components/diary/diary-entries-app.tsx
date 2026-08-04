@@ -75,7 +75,7 @@ type DiaryEntryDragScrollLock = {
 
 function formatEntryTime(value: string): string {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value || "未知时间";
+  if (Number.isNaN(date.getTime())) return value || "Unknown time";
   return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
 }
 
@@ -100,7 +100,7 @@ function getEntryMarkers(entry: DiaryEntry): string[] {
   ].map(item => item.trim()).filter(Boolean))).slice(0, 4);
 }
 
-function DiaryWritingStatus({ label = "写入中" }: { label?: string }) {
+function DiaryWritingStatus({ label = "Writing" }: { label?: string }) {
   return (
     <span className="diary-writing-status" aria-label={label}>
       <span>{label}</span>
@@ -167,11 +167,11 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
       saveDiaryEntryFontAssetId(null);
       setDiaryFontAssetId(null);
       setDiaryFontDataUrl(null);
-      notify("日记字体资源丢失，已恢复默认字体");
+      notify("Diary font asset was lost, reverted to the default font");
     }).catch(() => {
       if (cancelled) return;
       setDiaryFontDataUrl(null);
-      notify("日记字体加载失败，暂时使用默认字体");
+      notify("Failed to load diary font, using the default font for now");
     });
     return () => { cancelled = true; };
   }, [diaryFontAssetId, notify]);
@@ -197,14 +197,14 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
       const assetId = await saveThemeAssetFromBlob(file, "font");
       const dataUrl = await getThemeAssetDataUrl(assetId);
       if (!dataUrl) {
-        throw new Error("字体资源没有保存成功");
+        throw new Error("Failed to save the font asset");
       }
       saveDiaryEntryFontAssetId(assetId);
       setDiaryFontAssetId(assetId);
       setDiaryFontDataUrl(dataUrl);
-      notify(`日记字体已上传：${file.name}`);
+      notify(`Diary font uploaded: ${file.name}`);
     } catch (error) {
-      notify("日记字体上传失败：" + String(error));
+      notify("Failed to upload diary font: " + String(error));
     }
   }, [notify]);
 
@@ -220,7 +220,7 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
     setDiaryFontAssetId(null);
     setDiaryFontDataUrl(null);
     setDiaryFontScale(1);
-    notify("已恢复默认日记字体");
+    notify("Reverted to the default diary font");
   }, [notify]);
 
   const diaryEntryStyle = useMemo(() => {
@@ -237,7 +237,7 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
     setActiveEntry(current => current?.id === entry.id ? null : current);
     setDeleteCandidateEntry(current => current?.id === entry.id ? null : current);
     refreshEntries();
-    notify(`已删除 ${entry.characterName} 的日记。`);
+    notify(`Deleted ${entry.characterName}'s diary entry.`);
   }, [notify, refreshEntries]);
 
   useEffect(() => {
@@ -270,7 +270,7 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
   const generateForCharacters = useCallback(async (characterIds: string[], trigger: DiaryEntryTrigger = "manual") => {
     const targets = resolveTargets(characterIds);
     if (targets.length === 0) {
-      notify("找不到角色。");
+      notify("Character not found.");
       return;
     }
 
@@ -316,11 +316,11 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
 
       refreshEntries();
       if (createdEntries.length === 1 && failedNames.length === 0) {
-        notify(`${createdEntries[0].characterName} 写了一篇日记。`);
+        notify(`${createdEntries[0].characterName} wrote a diary entry.`);
       } else if (createdEntries.length > 0) {
-        notify(`已生成 ${createdEntries.length} 篇日记${failedNames.length ? `，${failedNames.length} 个失败` : ""}。`);
+        notify(`Generated ${createdEntries.length} diary entries${failedNames.length ? `, ${failedNames.length} failed` : ""}.`);
       } else {
-        notify(failedNames.length ? `日记生成失败：${failedNames.join("、")}` : "日记生成失败。");
+        notify(failedNames.length ? `Diary generation failed: ${failedNames.join(", ")}` : "Diary generation failed.");
       }
     } finally {
       setGeneratingCharacterIds(prev => prev.filter(id => !targetIds.includes(id)));
@@ -595,7 +595,7 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
       {generatingCharacterIds.length > 0 && (
         <div className="diary-generating-toast" role="status">
           <span className="diary-generating-toast-spinner" aria-hidden="true" />
-          正在生成日记{generatingCharacterIds.length > 1 ? `（${generatingCharacterIds.length} 篇）` : ""}…
+          Generating diary entries{generatingCharacterIds.length > 1 ? ` (${generatingCharacterIds.length})` : ""}…
         </div>
       )}
       <header className="diary-app-header diary-entry-header">
@@ -603,13 +603,13 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
           type="button"
           className="diary-icon-btn"
           onClick={() => (activeBook ? setActiveCharacterId(null) : onBack())}
-          aria-label="返回"
+          aria-label="Back"
         >
           <ChevronLeft size={20} />
         </button>
         <div>
-          <h1>{activeBook ? `${activeBook.characterName} 的日记` : "日记"}</h1>
-          <p>{activeBook ? `共 ${activeBook.entries.length} 篇手写日常` : "每个角色一本，点开翻阅"}</p>
+          <h1>{activeBook ? `${activeBook.characterName}'s Diary` : "Diary"}</h1>
+          <p>{activeBook ? `${activeBook.entries.length} handwritten entries` : "One book per character, tap to browse"}</p>
         </div>
         <input
           ref={fontFileRef}
@@ -623,12 +623,12 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
             type="button"
             className="note-wall-menu-btn diary-font-upload-btn"
             onClick={() => setFontPanelOpen(true)}
-            aria-label="日记字体设置"
-            title="日记字体设置"
+            aria-label="Diary Font Settings"
+            title="Diary Font Settings"
           >
             <span className="diary-font-upload-mark" aria-hidden="true">Aa</span>
           </button>
-          <button type="button" className="note-wall-menu-btn" onClick={() => setTimerSettingsOpen(true)} aria-label="日记设置">
+          <button type="button" className="note-wall-menu-btn" onClick={() => setTimerSettingsOpen(true)} aria-label="Diary Settings">
             <DotsThree size={28} weight="bold" />
           </button>
         </span>
@@ -638,9 +638,9 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
         {entries.length === 0 ? (
           <div className="diary-entry-empty">
             <NotebookPen size={34} strokeWidth={1.5} />
-            <h2>还没有日记</h2>
-            <p>让角色先写一篇，纸面会从这里开始铺开。</p>
-            <button type="button" onClick={() => setWritePanelOpen(true)}>让TA写一篇</button>
+            <h2>No diary entries yet</h2>
+            <p>Have a character write one first, and the pages will start unfolding here.</p>
+            <button type="button" onClick={() => setWritePanelOpen(true)}>Have Them Write One</button>
           </div>
         ) : activeBook ? (
           <div className="diary-entry-list">
@@ -693,12 +693,12 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
             onClick={() => generateForCharacters([activeBook.characterId])}
           >
             <WandSparkles size={18} strokeWidth={1.7} />
-            {activeBookBusy ? <DiaryWritingStatus /> : <span>让TA写</span>}
+            {activeBookBusy ? <DiaryWritingStatus /> : <span>Have Them Write</span>}
           </button>
         ) : (
           <button type="button" className="diary-entry-write-btn" onClick={() => setWritePanelOpen(true)}>
             <WandSparkles size={18} strokeWidth={1.7} />
-            <span>让TA写</span>
+            <span>Have Them Write</span>
           </button>
         )
       ) : null}
@@ -749,13 +749,13 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
             <div className="nw-delete-confirm-icon">
               <Trash2 size={24} strokeWidth={1.8} />
             </div>
-            <h2 id="diary-entry-delete-title">删除日记</h2>
-            <p>这篇日记会被删除，对应的短期记忆事件也会消失。</p>
+            <h2 id="diary-entry-delete-title">Delete Diary Entry</h2>
+            <p>This diary entry will be deleted, along with its corresponding short-term memory event.</p>
             <div>
-              <button type="button" className="nw-secondary-btn" onClick={() => setDeleteCandidateEntry(null)}>取消</button>
+              <button type="button" className="nw-secondary-btn" onClick={() => setDeleteCandidateEntry(null)}>Cancel</button>
               <button type="button" className="nw-danger-btn" onClick={() => deleteEntry(deleteCandidateEntry)}>
                 <span className="note-wall-primary-content">
-                  <span>删除</span>
+                  <span>Delete</span>
                 </span>
               </button>
             </div>
@@ -815,10 +815,10 @@ function DiaryBookCover({ book, busy, onOpen }: { book: DiaryBook; busy: boolean
           {book.avatar ? <img src={book.avatar} alt="" /> : <Bot size={20} />}
         </span>
         <strong>{book.characterName}</strong>
-        <em>{busy ? <DiaryWritingStatus /> : "的日记本"}</em>
+        <em>{busy ? <DiaryWritingStatus /> : "Diary"}</em>
       </span>
       <span className="diary-book-meta">
-        <span>{book.entries.length} 篇</span>
+        <span>{book.entries.length} entries</span>
         <time>{formatEntryTime(latest.createdAt)}</time>
       </span>
     </button>
@@ -903,22 +903,22 @@ function DiaryEntryFontPanel({
       <section className="diary-font-panel" onClick={event => event.stopPropagation()}>
         <header>
           <div>
-            <h2>日记字体</h2>
-            <p>{hasCustomFont ? "已使用自定义字体" : "当前使用默认手写字体"}</p>
+            <h2>Diary Font</h2>
+            <p>{hasCustomFont ? "Using a custom font" : "Currently using the default handwriting font"}</p>
           </div>
-          <button type="button" className="diary-icon-btn" onClick={onClose} aria-label="关闭">
+          <button type="button" className="diary-icon-btn" onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
         </header>
 
         <button type="button" className="diary-font-upload-action" onClick={onUpload}>
           <span className="diary-font-upload-mark" aria-hidden="true">Aa</span>
-          <span>上传字体</span>
+          <span>Upload Font</span>
         </button>
 
         <label className="diary-font-size-control">
           <span>
-            <strong>字号</strong>
+            <strong>Font Size</strong>
             <em>{Math.round(scale * 100)}%</em>
           </span>
           <input
@@ -932,7 +932,7 @@ function DiaryEntryFontPanel({
         </label>
 
         <button type="button" className="diary-font-reset-btn" onClick={onReset}>
-          恢复默认
+          Restore Default
         </button>
       </section>
     </div>
@@ -962,10 +962,10 @@ function DiaryEntryTimerSettingsPanel({ characters, settings, generatingCharacte
       <section className="diary-entry-settings" onClick={event => event.stopPropagation()}>
         <header>
           <div>
-            <h2>定时写日记</h2>
-            <p>默认一天一次；未选择角色时，会按全部角色处理。</p>
+            <h2>Scheduled Diary Writing</h2>
+            <p>Once a day by default; if no characters are selected, all characters are used.</p>
           </div>
-          <button type="button" className="diary-icon-btn" onClick={onClose} aria-label="关闭">
+          <button type="button" className="diary-icon-btn" onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
         </header>
@@ -974,7 +974,7 @@ function DiaryEntryTimerSettingsPanel({ characters, settings, generatingCharacte
           <label className="diary-entry-toggle-row">
             <span>
               <Clock3 size={17} />
-              定时写日记
+              Scheduled Diary Writing
             </span>
             <input
               type="checkbox"
@@ -983,7 +983,7 @@ function DiaryEntryTimerSettingsPanel({ characters, settings, generatingCharacte
             />
           </label>
           <label className="diary-entry-number-field">
-            <span>间隔小时</span>
+            <span>Interval (hours)</span>
             <input
               type="number"
               min={1}
@@ -996,8 +996,8 @@ function DiaryEntryTimerSettingsPanel({ characters, settings, generatingCharacte
 
         <section className="diary-entry-character-section">
           <div className="diary-entry-section-title">
-            <strong>定时角色</strong>
-            <span>{settings.characterIds.length ? `已选 ${settings.characterIds.length} 个` : "默认全部"}</span>
+            <strong>Scheduled Characters</strong>
+            <span>{settings.characterIds.length ? `${settings.characterIds.length} selected` : "All by default"}</span>
           </div>
           <CharacterAvatarGrid
             characters={characters}
@@ -1044,10 +1044,10 @@ function DiaryEntryWritePanel({ characters, generatingCharacterIds, onGenerateMa
       <section className="diary-entry-settings diary-entry-write-panel" onClick={event => event.stopPropagation()}>
         <header>
           <div>
-            <h2>让TA写一篇</h2>
-            <p>选择角色后确认，会并行生成日记。</p>
+            <h2>Have Them Write One</h2>
+            <p>Select characters and confirm to generate diary entries in parallel.</p>
           </div>
-          <button type="button" className="diary-icon-btn" onClick={onClose} aria-label="关闭">
+          <button type="button" className="diary-icon-btn" onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
         </header>
@@ -1069,7 +1069,7 @@ function DiaryEntryWritePanel({ characters, generatingCharacterIds, onGenerateMa
           >
             <span className="note-wall-primary-content">
               {confirming ? <span className="note-wall-primary-spinner" aria-hidden="true" /> : null}
-              <span>{confirming ? <DiaryWritingStatus /> : `确认让 ${selectedImmediateIds.length} 个角色写日记`}</span>
+              <span>{confirming ? <DiaryWritingStatus /> : `Confirm ${selectedImmediateIds.length} character(s) writing diary entries`}</span>
             </span>
           </button>
         ) : null}
@@ -1085,7 +1085,7 @@ function CharacterAvatarGrid({ characters, selectedIds, busyIds, disabled, onTog
   disabled: boolean;
   onToggle: (characterId: string) => void;
 }) {
-  if (characters.length === 0) return <p className="diary-entry-empty-line">暂无角色。</p>;
+  if (characters.length === 0) return <p className="diary-entry-empty-line">No characters yet.</p>;
 
   return (
     <div className="diary-entry-character-grid">
@@ -1124,11 +1124,11 @@ function DiaryEntryDetail({ entry, onClose }: { entry: DiaryEntry; onClose: () =
         <div className="diary-entry-detail-scroll">
           <header>
             <div>
-              <span>日记详情</span>
+              <span>Diary Entry</span>
               <h2>{entry.title}</h2>
             </div>
             <div className="diary-entry-detail-top">
-              <button type="button" onClick={onClose}>关闭</button>
+              <button type="button" onClick={onClose}>Close</button>
               {markers.length > 0 ? (
                 <span className="diary-entry-detail-markers">
                   {markers.map(marker => <span key={marker} className="diary-entry-marker">{marker}</span>)}

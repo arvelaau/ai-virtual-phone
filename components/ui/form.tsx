@@ -102,7 +102,7 @@ export function AvatarUpload({
       ) : (
         <span className="ui-avatar-upload-placeholder">+</span>
       )}
-      <span className="ui-avatar-upload-overlay">更换</span>
+      <span className="ui-avatar-upload-overlay">Change</span>
     </button>
   );
 }

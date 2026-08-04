@@ -134,9 +134,9 @@ export function CheckPhoneBrowserPage({ character, onBack }: CheckPhoneBrowserPa
           <div className="cp-unified-title-stack">
             <div className="cp-unified-title-row">
               <i className="cp-unified-blink"></i>
-              <span className="cp-unified-title">{payload?.headerTitle || "浏览器"}</span>
+              <span className="cp-unified-title">{payload?.headerTitle || "Browser"}</span>
             </div>
-            <div className="cp-unified-subtitle">{payload?.headerSubtitle || "历史记录与收藏夹"}</div>
+            <div className="cp-unified-subtitle">{payload?.headerSubtitle || "History and Bookmarks"}</div>
           </div>
 
           <div className="cp-unified-header-right">
@@ -165,7 +165,7 @@ export function CheckPhoneBrowserPage({ character, onBack }: CheckPhoneBrowserPa
 
       {loading && (
         <div className="cp-refresh-indicator cp-refresh-indicator--floating" aria-live="polite">
-          <span className="cp-refresh-indicator-text">正在刷新浏览器</span>
+          <span className="cp-refresh-indicator-text">Refreshing browser</span>
           <span className="cp-refresh-indicator-dots" aria-hidden="true">
             <i></i><i></i><i></i>
           </span>
@@ -184,14 +184,14 @@ export function CheckPhoneBrowserPage({ character, onBack }: CheckPhoneBrowserPa
 
         {loaded && !payload && !loading && (
           <div className="cp-browser-status cp-empty-copy">
-            <p>暂无浏览内容</p>
-            <span className="cp-browser-hint">点刷新同步历史记录和收藏夹</span>
+            <p>No browsing content yet</p>
+            <span className="cp-browser-hint">Tap refresh to sync history and bookmarks</span>
           </div>
         )}
 
         {error ? (
           <CheckPhoneDebugErrorCard
-            title="暂时无法解析浏览器内容。"
+            title="Unable to parse browser content right now."
             error={error}
             debugParseMode={debugParseMode}
             debugParseError={debugParseError}
@@ -208,14 +208,14 @@ export function CheckPhoneBrowserPage({ character, onBack }: CheckPhoneBrowserPa
                 className={`cp-folder-tab ${activeTab === 'history' ? 'active' : ''}`}
                 onClick={() => setActiveTab('history')}
               >
-                历史记录
+                History
               </button>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className={`cp-folder-tab ${activeTab === 'bookmarks' ? 'active' : ''}`}
                 onClick={() => setActiveTab('bookmarks')}
               >
-                收藏夹
+                Bookmarks
               </button>
             </div>
 
@@ -234,10 +234,10 @@ export function CheckPhoneBrowserPage({ character, onBack }: CheckPhoneBrowserPa
               </div>
               <div className="cp-browser-list">
               {activeTab === 'history' && history.length === 0 && (
-                <div className="cp-browser-empty-list">无历史记录</div>
+                <div className="cp-browser-empty-list">No history</div>
               )}
               {activeTab === 'bookmarks' && bookmarks.length === 0 && (
-                <div className="cp-browser-empty-list">无收藏记录</div>
+                <div className="cp-browser-empty-list">No bookmarks</div>
               )}
 
               {activeTab === 'history' && history.map((item) => {
@@ -266,13 +266,13 @@ export function CheckPhoneBrowserPage({ character, onBack }: CheckPhoneBrowserPa
                       <div className="cp-browser-item-details">
                         {item.context && (
                           <div className="cp-browser-history-note">
-                            <b>情境</b>
+                            <b>Context</b>
                             <span><CheckPhoneBilingualText text={item.context} tone="browser" /></span>
                           </div>
                         )}
                         {item.innerThought && (
                           <div className="cp-browser-history-note cp-note-thought">
-                            <b>内心</b>
+                            <b>Inner Thought</b>
                             <span><CheckPhoneBilingualText text={item.innerThought} tone="browser" /></span>
                           </div>
                         )}
@@ -322,11 +322,11 @@ export function CheckPhoneBrowserPage({ character, onBack }: CheckPhoneBrowserPa
       </div>
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空浏览器内容？"
-          message="确认后会清空当前浏览器缓存。之后重新刷新时，不会再带入旧浏览内容。"
+          title="Clear browser content?"
+          message="Once confirmed, the current browser cache will be cleared. Future refreshes will no longer bring back the old browsing content."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Confirm Clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

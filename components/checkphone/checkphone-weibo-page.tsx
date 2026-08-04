@@ -52,15 +52,15 @@ type CheckPhoneWeiboPageProps = {
 type WeiboTabId = "home" | "trending" | "messages" | "profile";
 
 const WEIBO_TABS: Array<{ id: WeiboTabId; label: string; icon: any }> = [
-  { id: "home", label: "微博", icon: House },
-  { id: "trending", label: "发现", icon: Search },
-  { id: "messages", label: "消息", icon: MessageSquare },
-  { id: "profile", label: "我", icon: UserRound },
+  { id: "home", label: "Weibo", icon: House },
+  { id: "trending", label: "Discover", icon: Search },
+  { id: "messages", label: "Messages", icon: MessageSquare },
+  { id: "profile", label: "Me", icon: UserRound },
 ];
 
 function formatCount(count: number): string {
   if (count >= 10000)
-    return `${(count / 10000).toFixed(count >= 100000 ? 0 : 1).replace(/\.0$/, "")}万`;
+    return `${(count / 10000).toFixed(count >= 100000 ? 0 : 1).replace(/\.0$/, "")}w`;
   if (count >= 1000) return `${(count / 1000).toFixed(1).replace(/\.0$/, "")}k`;
   return String(count);
 }
@@ -262,7 +262,7 @@ function WeiboPostCard({
                   </span>
                 )}
               </div>
-              <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#999" }}>来自 {post.tone === "graphite" ? "iPhone客户端" : "微博"}</div>
+              <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#999" }}>From {post.tone === "graphite" ? "iPhone Client" : "Weibo"}</div>
             </div>
           </div>
           <ChevronDown size={16} color="#ccc" />
@@ -307,7 +307,7 @@ function WeiboPostCard({
         >
           <WeiboRepostIcon />
           <span>
-            {post.repostCount > 0 ? formatCount(post.repostCount) : "转发"}
+            {post.repostCount > 0 ? formatCount(post.repostCount) : "Repost"}
           </span>
         </div>
         <div
@@ -325,7 +325,7 @@ function WeiboPostCard({
         >
           <MessageSquare size={16} />
           <span>
-            {post.commentCount > 0 ? formatCount(post.commentCount) : "评论"}
+            {post.commentCount > 0 ? formatCount(post.commentCount) : "Comment"}
           </span>
         </div>
         <div
@@ -340,7 +340,7 @@ function WeiboPostCard({
           }}
         >
           <ThumbsUp size={16} />
-          <span>{post.likeCount > 0 ? formatCount(post.likeCount) : "赞"}</span>
+          <span>{post.likeCount > 0 ? formatCount(post.likeCount) : "Like"}</span>
         </div>
       </div>
     </button>
@@ -507,12 +507,12 @@ export function CheckPhoneWeiboPage({
     : activeThread
       ? activeThread.tagLabel
       : selectedTab === "trending"
-        ? "今天值得停留的话题"
+        ? "Topics worth your time today"
         : selectedTab === "messages"
-          ? "评论、@与站内私信"
+          ? "Comments, mentions & DMs"
           : selectedTab === "profile"
-            ? payload?.profile.handle || "个人主页"
-            : payload?.headerSubtitle || "正在刷新的话题";
+            ? payload?.profile.handle || "Profile"
+            : payload?.headerSubtitle || "Refreshing topics";
 
   const backAction = activePost
     ? () => setSelectedPostId(null)
@@ -650,10 +650,10 @@ export function CheckPhoneWeiboPage({
                 }}
               >
                 {activePost
-                  ? "微博正文"
+                  ? "Post"
                   : activeThread
                     ? activeThread.name
-                    : "微博"}
+                    : "Weibo"}
               </div>
             </div>
             <div
@@ -677,7 +677,7 @@ export function CheckPhoneWeiboPage({
                     lineHeight: 1,
                   }}
                 >
-                  设置
+                  Settings
                 </button>
               ) : (
                 <MoreHorizontal size={24} color="#666" />
@@ -704,7 +704,7 @@ export function CheckPhoneWeiboPage({
                   position: "relative",
                 }}
               >
-                推荐
+                Recommended
                 <div
                   style={{
                     position: "absolute",
@@ -762,7 +762,7 @@ export function CheckPhoneWeiboPage({
                 paddingTop: "20px",
               }}
             >
-              话题热搜
+              Trending Topics
             </div>
           </div>
         ) : selectedTab === "messages" ? (
@@ -780,7 +780,7 @@ export function CheckPhoneWeiboPage({
               <span
                 style={{ fontSize: "calc(16px*var(--app-text-scale,1))", color: "#666", fontWeight: 400 }}
               >
-                动态
+                Updates
               </span>
               <span
                 style={{
@@ -790,7 +790,7 @@ export function CheckPhoneWeiboPage({
                   position: "relative",
                 }}
               >
-                消息
+                Messages
                 <div
                   style={{
                     position: "absolute",
@@ -828,7 +828,7 @@ export function CheckPhoneWeiboPage({
           className="cp-refresh-indicator cp-refresh-indicator--floating"
           aria-live="polite"
         >
-          <span className="cp-refresh-indicator-text">正在刷新微博</span>
+          <span className="cp-refresh-indicator-text">Refreshing Weibo</span>
           <span className="cp-refresh-indicator-dots" aria-hidden="true">
             <i></i>
             <i></i>
@@ -842,14 +842,14 @@ export function CheckPhoneWeiboPage({
 
         {loaded && !payload && !loading && (
           <div className="cp-weibo-status cp-empty-copy">
-            <p>暂无微博内容</p>
-            <span className="cp-weibo-hint">点刷新同步首页热搜消息和个人主页</span>
+            <p>No Weibo content yet</p>
+            <span className="cp-weibo-hint">Tap refresh to sync the home feed, trending topics, messages, and profile</span>
           </div>
         )}
 
         {error ? (
           <CheckPhoneDebugErrorCard
-            title="暂时无法解析微博内容。"
+            title="Unable to parse Weibo content right now."
             error={error}
             debugParseMode={debugParseMode}
             debugParseError={debugParseError}
@@ -902,7 +902,7 @@ export function CheckPhoneWeiboPage({
                         borderBottom: "2px solid #f46200",
                       }}
                     >
-                      我的
+                      My Feed
                     </span>
                     <span
                       style={{
@@ -911,7 +911,7 @@ export function CheckPhoneWeiboPage({
                         padding: "12px 0",
                       }}
                     >
-                      热搜
+                      Trending
                     </span>
                     <span
                       style={{
@@ -920,7 +920,7 @@ export function CheckPhoneWeiboPage({
                         padding: "12px 0",
                       }}
                     >
-                      社会
+                      Society
                     </span>
                     <span
                       style={{
@@ -929,7 +929,7 @@ export function CheckPhoneWeiboPage({
                         padding: "12px 0",
                       }}
                     >
-                      科技
+                      Tech
                     </span>
                   </div>
                   <div
@@ -940,7 +940,7 @@ export function CheckPhoneWeiboPage({
                       background: "#f9f9f9",
                     }}
                   >
-                    热搜雷达，发现你关心的热点
+                    Trending radar — discover what you care about
                   </div>
                   {payload.trendingTopics.map((topic, index) => (
                     <article
@@ -1013,7 +1013,7 @@ export function CheckPhoneWeiboPage({
 	                              flex: "0 0 auto",
 	                            }}
                           >
-                            新
+                            New
                           </span>
                         )}
                       </div>
@@ -1064,7 +1064,7 @@ export function CheckPhoneWeiboPage({
                       <span
 	                        style={{ fontSize: "calc(15px*var(--app-text-scale,1))", color: "#333", flex: 1 }}
                       >
-                        @我的
+                        @Mentions
                       </span>
                       <ChevronLeft
                         size={18}
@@ -1103,7 +1103,7 @@ export function CheckPhoneWeiboPage({
                       <span
 	                        style={{ fontSize: "calc(15px*var(--app-text-scale,1))", color: "#333", flex: 1 }}
                       >
-                        评论
+                        Comments
                       </span>
                       <ChevronLeft
                         size={18}
@@ -1137,7 +1137,7 @@ export function CheckPhoneWeiboPage({
                       <span
 	                        style={{ fontSize: "calc(15px*var(--app-text-scale,1))", color: "#333", flex: 1 }}
                       >
-                        赞
+                        Likes
                       </span>
                       <ChevronLeft
                         size={18}
@@ -1319,7 +1319,7 @@ export function CheckPhoneWeiboPage({
                               lineHeight: 1,
                             }}
                           >
-                            红包
+                            Red Envelope
                           </span>
                         </div>
                         <div
@@ -1333,7 +1333,7 @@ export function CheckPhoneWeiboPage({
                             textOverflow: "ellipsis",
                           }}
                         >
-                          简介：<CheckPhoneBilingualText text={payload.profile.bio || "暂无简介"} tone="weibo" />
+                          Bio: <CheckPhoneBilingualText text={payload.profile.bio || "No bio yet"} tone="weibo" />
                         </div>
                         <div
                           style={{
@@ -1348,7 +1348,7 @@ export function CheckPhoneWeiboPage({
                             fontWeight: 500,
                           }}
                         >
-                          在线 ›
+                          Online ›
                         </div>
                       </div>
                     </div>
@@ -1362,10 +1362,10 @@ export function CheckPhoneWeiboPage({
                       }}
                     >
                       {[
-                        ["微博", formatCount(payload.myPosts.length)],
-                        ["视频", "0"],
-                        ["关注", formatCount(payload.profile.followingCount)],
-                        ["粉丝", formatCount(payload.profile.followerCount)],
+                        ["Posts", formatCount(payload.myPosts.length)],
+                        ["Videos", "0"],
+                        ["Following", formatCount(payload.profile.followingCount)],
+                        ["Followers", formatCount(payload.profile.followerCount)],
                       ].map(([label, value]) => (
                         <div key={label}>
                           <div
@@ -1414,7 +1414,7 @@ export function CheckPhoneWeiboPage({
                       }}
                     >
                       <Search size={14} strokeWidth={2} />
-                      <span>搜索我的微博</span>
+                      <span>Search my Weibo</span>
                     </div>
                   </div>
                   <div
@@ -1439,7 +1439,7 @@ export function CheckPhoneWeiboPage({
 
             <nav
               className="cp-weibo-tabbar"
-              aria-label="微博导航"
+              aria-label="Weibo navigation"
               style={{
                 display: "flex",
                 justifyContent: "space-around",
@@ -1576,7 +1576,7 @@ export function CheckPhoneWeiboPage({
                             {comment.authorName}
                           </strong>
                           {index === 0 ? (
-                            <span style={{ color: "#ff8a00", fontSize: "calc(11px*var(--app-text-scale,1))", fontWeight: 700 }}>首评</span>
+                            <span style={{ color: "#ff8a00", fontSize: "calc(11px*var(--app-text-scale,1))", fontWeight: 700 }}>Top comment</span>
                           ) : null}
                         </div>
                         <p
@@ -1588,7 +1588,7 @@ export function CheckPhoneWeiboPage({
                             whiteSpace: "pre-wrap",
                           }}
                         >
-                          {replyTargetName ? `回复 ${replyTargetName}：` : ""}
+                          {replyTargetName ? `Reply to ${replyTargetName}: ` : ""}
                           <CheckPhoneBilingualText text={comment.text} tone="weibo" variant="inline" />
                         </p>
                         <div
@@ -1601,7 +1601,7 @@ export function CheckPhoneWeiboPage({
                             fontSize: "calc(11px*var(--app-text-scale,1))",
                           }}
                         >
-                          <span>来自微博</span>
+                          <span>From Weibo</span>
                           <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: "4px" }}>
                             <WeiboRepostIcon size={16} />
                           </span>
@@ -1627,7 +1627,7 @@ export function CheckPhoneWeiboPage({
                       color: "#999",
                     }}
                   >
-                    这条微博暂时还没有评论。
+                    No comments on this post yet.
                   </div>
                 )}
               </div>
@@ -1795,7 +1795,7 @@ export function CheckPhoneWeiboPage({
                     paddingBottom: "8px",
                   }}
                 >
-                  {["星愿展馆", "晚上好", "续火花", "送爱心"].map((label) => (
+                  {["Wish Gallery", "Good evening", "Keep the spark", "Send love"].map((label) => (
                     <button
                       key={label}
                       type="button"
@@ -1824,7 +1824,7 @@ export function CheckPhoneWeiboPage({
                 >
                   <button
                     type="button"
-                    aria-label="语音"
+                    aria-label="Voice"
                     style={{
                       width: "32px",
                       height: "32px",
@@ -1882,11 +1882,11 @@ export function CheckPhoneWeiboPage({
 
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空微博内容？"
-          message="确认后会清空当前微博缓存。之后重新刷新时，不会再带入旧微博内容。"
+          title="Clear Weibo content?"
+          message="This will clear the current Weibo cache. Old content won't be carried over the next time you refresh."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

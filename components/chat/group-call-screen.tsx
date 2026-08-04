@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { ChatSession, ChatMessage, loadChatMessages, pushChatMessage, getLatestCharacterStateValues } from "@/lib/chat-storage";
+import { buildCallCancelTag, buildCallHangupTag, buildCallInitiateGroupTag, buildCallRejectTag } from "@/lib/call-tag-patterns";
 import { generateGroupChatCompletion } from "@/lib/group-chat-engine";
 import { parseAIResponse } from "@/lib/rich-message-parser";
 import { resolveUserIdentity } from "@/lib/settings-storage";
@@ -151,7 +152,9 @@ export function GroupCallScreen({ type, session, characters, onEnd, initiator = 
         const lastMsg = messagesRef.current[messagesRef.current.length - 1];
         const initRole = initiator === "character" ? "assistant" : "user";
         if (!lastMsg || !(lastMsg.content.includes(`发起了${callTypeLabel}`))) {
-            const callMsg = `[我向群聊发起了${callTypeLabel}]`;
+            // Group initiate: group-ness rides on the TARGET, not the call type
+            // (mirrors [我向群聊发起了语音通话]) — see lib/call-tag-patterns.ts.
+            const callMsg = buildCallInitiateGroupTag(isVideo ? "video" : "voice");
             const initCharId = initiator === "character" ? characters.find(c => c.name === initiatorName)?.id : undefined;
             const sysMsg = pushChatMessage({
                 sessionId: session.id, role: initRole, content: callMsg,
@@ -377,7 +380,7 @@ export function GroupCallScreen({ type, session, characters, onEnd, initiator = 
 
         pushChatMessage({
             sessionId: session.id, role: "user",
-            content: `[我挂断了群${callTypeLabel}](时长 ${formatTime(callDuration)})`,
+            content: buildCallHangupTag(isVideo ? "video" : "voice", true, formatTime(callDuration)),
         });
 
         setTimeout(() => onEnd(), 1500);
@@ -493,7 +496,7 @@ export function GroupCallScreen({ type, session, characters, onEnd, initiator = 
                         onClick={() => {
                             pushChatMessage({
                                 sessionId: session.id, role: "user",
-                                content: `[我拒绝了群${callTypeLabel}]`,
+                                content: buildCallRejectTag(isVideo ? "video" : "voice", true),
                             });
                             onEnd();
                         }}
@@ -518,7 +521,7 @@ export function GroupCallScreen({ type, session, characters, onEnd, initiator = 
                     onClick={() => {
                         pushChatMessage({
                             sessionId: session.id, role: "user",
-                            content: `[我取消了群${callTypeLabel}]`,
+                            content: buildCallCancelTag(isVideo ? "video" : "voice", true),
                         });
                         onEnd();
                     }}

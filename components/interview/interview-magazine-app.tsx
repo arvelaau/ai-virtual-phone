@@ -89,26 +89,7 @@ type InterviewResumeAction =
       currentTheme: string;
     };
 
-const THEME_CHIPS = ["关系的暗面", "一次漫长的告别", "未完成的愿望", "被误解的瞬间", "选择的代价", "夜里真实的自己"];
-const CHINESE_DIGITS = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
-
-function formatChineseOrdinalNumber(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return String(value);
-  if (value < 10) return CHINESE_DIGITS[value];
-  if (value < 20) return `十${value % 10 === 0 ? "" : CHINESE_DIGITS[value % 10]}`;
-  if (value < 100) {
-    const tens = Math.floor(value / 10);
-    const ones = value % 10;
-    return `${CHINESE_DIGITS[tens]}十${ones === 0 ? "" : CHINESE_DIGITS[ones]}`;
-  }
-  if (value < 1000) {
-    const hundreds = Math.floor(value / 100);
-    const rest = value % 100;
-    return `${CHINESE_DIGITS[hundreds]}百${rest === 0 ? "" : formatChineseOrdinalNumber(rest)}`;
-  }
-  return String(value);
-}
-
+const THEME_CHIPS = ["The Dark Side of Relationships", "A Long Farewell", "An Unfinished Wish", "A Misunderstood Moment", "The Cost of Choice", "Your True Self at Night"];
 function resolveSuggestedIdentityId(characterIds: string[], identities: UserIdentity[]): string {
   if (identities.length === 0) return "";
   const resolved = characterIds
@@ -139,19 +120,19 @@ function getIssueGuestNames(issue: InterviewIssue): string[] {
 }
 
 function getIssueParticipantText(issue: InterviewIssue): string {
-  return `${getIssueGuestNames(issue).join("、")} · ${issue.userName || "共同受访者"}`;
+  return `${getIssueGuestNames(issue).join(", ")} · ${issue.userName || "Co-interviewee"}`;
 }
 
 function getDraftParticipantText(draft: InterviewDraft): string {
   const names = draft.characterNames.length > 0 ? draft.characterNames : draft.characterIds;
-  return `${names.join("、") || "嘉宾"}${draft.userName ? ` · ${draft.userName}` : ""}`;
+  return `${names.join(", ") || "Guest"}${draft.userName ? ` · ${draft.userName}` : ""}`;
 }
 
 function getDraftStatusText(status: InterviewDraftStatus): string {
-  if (status === "error") return "录制中断";
-  if (status === "awaiting_user") return "等待回应";
-  if (status === "done") return "待成刊";
-  return "已暂停";
+  if (status === "error") return "Recording interrupted";
+  if (status === "awaiting_user") return "Awaiting response";
+  if (status === "done") return "Ready to publish";
+  return "Paused";
 }
 
 function getIssueCharacterNameMap(issue: InterviewIssue): Record<string, string> {
@@ -399,7 +380,7 @@ export function InterviewMagazineApp({ onClose }: Props) {
     setTheme(trimmedTheme);
     setScreen("interview");
     setPhase("opening");
-    setPendingLabel(`主持人 ${INTERVIEW_MAGAZINE_HOST_NAME}`);
+    setPendingLabel(`Host ${INTERVIEW_MAGAZINE_HOST_NAME}`);
     armResumeAction({ type: "opening", theme: trimmedTheme });
 
     try {
@@ -437,7 +418,7 @@ export function InterviewMagazineApp({ onClose }: Props) {
     const activeTheme = currentTheme ?? theme;
     const answeringCharacter = characters.find((character) => character.id === answeringCharacterId) ?? activeCharacter;
     setPhase("character");
-    setPendingLabel(answeringCharacter?.name || "嘉宾");
+    setPendingLabel(answeringCharacter?.name || "Guest");
     armResumeAction({
       type: "character",
       question,
@@ -457,20 +438,20 @@ export function InterviewMagazineApp({ onClose }: Props) {
       round,
       lastUserAnswer,
       // @ts-ignore - legacy signature missing phase
-      phase: "嘉宾回答",
+      phase: "The guest answers",
     });
     if (!isInterviewRunCurrent(runId)) return;
     const withAnswer = [...baseMessages, makeInterviewMessage("character", answer, {
       kind: "answer",
       speakerCharacterId: answeringCharacterId,
-      speakerName: answeringCharacter?.name || "嘉宾",
+      speakerName: answeringCharacter?.name || "Guest",
     })];
     setMessages(withAnswer);
     setCharacterRounds(round);
 
     if (round >= maxCharacterTurns) {
-      const thanksLabel = selectedCharacterIds.length > 1 ? "各位" : "两位";
-      setMessages([...withAnswer, makeInterviewMessage("host", `感谢${thanksLabel}。本期访谈到这里告一段落。`, { kind: "outro" })]);
+      const thanksLabel = selectedCharacterIds.length > 1 ? "everyone" : "both of you";
+      setMessages([...withAnswer, makeInterviewMessage("host", `Thank you, ${thanksLabel}. This episode's interview draws to a close here.`, { kind: "outro" })]);
       setPhase("done");
       setPendingLabel("");
       clearResumeAction();
@@ -478,7 +459,7 @@ export function InterviewMagazineApp({ onClose }: Props) {
     }
 
     setPhase("host");
-    setPendingLabel(`主持人 ${INTERVIEW_MAGAZINE_HOST_NAME}`);
+    setPendingLabel(`Host ${INTERVIEW_MAGAZINE_HOST_NAME}`);
     armResumeAction({ type: "hostToUser", baseMessages: withAnswer, currentTheme: activeTheme });
     const nextQuestion = await generateHostQuestion({
       theme: activeTheme,
@@ -486,7 +467,7 @@ export function InterviewMagazineApp({ onClose }: Props) {
       userIdentityId,
       transcript: withAnswer,
       target: "user",
-      phase: "嘉宾刚刚回答完，主持人需要把问题转向共同受访者",
+      phase: "The guest has just finished answering; the host should turn the question to the co-interviewee",
     });
     if (!isInterviewRunCurrent(runId)) return;
     setMessages([...withAnswer, makeInterviewMessage("host", nextQuestion.question, { kind: "question", target: "user" })]);
@@ -503,7 +484,7 @@ export function InterviewMagazineApp({ onClose }: Props) {
     const withUserAnswer = [...messages, makeInterviewMessage("user", answer, { kind: "answer" })];
     setMessages(withUserAnswer);
     setPhase("host");
-    setPendingLabel(`主持人 ${INTERVIEW_MAGAZINE_HOST_NAME}`);
+    setPendingLabel(`Host ${INTERVIEW_MAGAZINE_HOST_NAME}`);
     const latestSpeakerId = [...withUserAnswer].reverse().find((message) => message.role === "character")?.speakerCharacterId;
     const fallbackTargetCharacterId = getNextCharacterId(latestSpeakerId);
     armResumeAction({
@@ -522,14 +503,14 @@ export function InterviewMagazineApp({ onClose }: Props) {
         userIdentityId,
         transcript: withUserAnswer,
         target: "character",
-        phase: "用户刚刚回答完，主持人需要把问题抛回嘉宾",
+        phase: "The user has just finished answering; the host should throw the question back to a guest",
         fallbackTargetCharacterId,
       });
       if (!isInterviewRunCurrent(runId)) return;
       const targetCharacterId = nextQuestion.targetCharacterId || fallbackTargetCharacterId;
       const targetCharacterName = nextQuestion.targetCharacterName
         || characters.find((character) => character.id === targetCharacterId)?.name
-        || "嘉宾";
+        || "Guest";
       const withQuestion = [...withUserAnswer, makeInterviewMessage("host", nextQuestion.question, {
         kind: "question",
         target: "character",
@@ -556,8 +537,8 @@ export function InterviewMagazineApp({ onClose }: Props) {
 
     try {
       if (action.type === "finish") {
-        const thanksLabel = selectedCharacterIds.length > 1 ? "各位" : "两位";
-        setMessages([...action.baseMessages, makeInterviewMessage("host", `感谢${thanksLabel}。本期访谈到这里告一段落。`, { kind: "outro" })]);
+        const thanksLabel = selectedCharacterIds.length > 1 ? "everyone" : "both of you";
+        setMessages([...action.baseMessages, makeInterviewMessage("host", `Thank you, ${thanksLabel}. This episode's interview draws to a close here.`, { kind: "outro" })]);
         setPhase("done");
         setPendingLabel("");
         clearResumeAction();
@@ -574,7 +555,7 @@ export function InterviewMagazineApp({ onClose }: Props) {
       if (action.type === "opening") {
         setTheme(action.theme);
         setPhase("opening");
-        setPendingLabel(`主持人 ${INTERVIEW_MAGAZINE_HOST_NAME}`);
+        setPendingLabel(`Host ${INTERVIEW_MAGAZINE_HOST_NAME}`);
         armResumeAction(action);
         const opening = await generateHostOpening(action.theme, selectedCharacterIds, userIdentityId);
         const initialMessages = [
@@ -607,7 +588,7 @@ export function InterviewMagazineApp({ onClose }: Props) {
 
       if (action.type === "hostToUser") {
         setPhase("host");
-        setPendingLabel(`主持人 ${INTERVIEW_MAGAZINE_HOST_NAME}`);
+        setPendingLabel(`Host ${INTERVIEW_MAGAZINE_HOST_NAME}`);
         armResumeAction(action);
         const nextQuestion = await generateHostQuestion({
           theme: action.currentTheme,
@@ -615,7 +596,7 @@ export function InterviewMagazineApp({ onClose }: Props) {
           userIdentityId,
           transcript: action.baseMessages,
           target: "user",
-          phase: "嘉宾刚刚回答完，主持人需要把问题转向共同受访者",
+          phase: "The guest has just finished answering; the host should turn the question to the co-interviewee",
         });
         if (!isInterviewRunCurrent(runId)) return;
         setMessages([...action.baseMessages, makeInterviewMessage("host", nextQuestion.question, { kind: "question", target: "user" })]);
@@ -626,7 +607,7 @@ export function InterviewMagazineApp({ onClose }: Props) {
       }
 
       setPhase("host");
-      setPendingLabel(`主持人 ${INTERVIEW_MAGAZINE_HOST_NAME}`);
+      setPendingLabel(`Host ${INTERVIEW_MAGAZINE_HOST_NAME}`);
       armResumeAction(action);
       const nextQuestion = await generateHostQuestion({
         theme: action.currentTheme,
@@ -634,14 +615,14 @@ export function InterviewMagazineApp({ onClose }: Props) {
         userIdentityId,
         transcript: action.baseMessages,
         target: "character",
-        phase: "用户刚刚回答完，主持人需要把问题抛回嘉宾",
+        phase: "The user has just finished answering; the host should throw the question back to a guest",
         fallbackTargetCharacterId: action.fallbackTargetCharacterId,
       });
       if (!isInterviewRunCurrent(runId)) return;
       const targetCharacterId = nextQuestion.targetCharacterId || action.fallbackTargetCharacterId;
       const targetCharacterName = nextQuestion.targetCharacterName
         || characters.find((character) => character.id === targetCharacterId)?.name
-        || "嘉宾";
+        || "Guest";
       const withQuestion = [...action.baseMessages, makeInterviewMessage("host", nextQuestion.question, {
         kind: "question",
         target: "character",
@@ -852,11 +833,11 @@ function HomeScreen({
   return (
     <>
       <header className="interview-header">
-        <button className="interview-icon-btn" onClick={onClose} aria-label="返回桌面">
+        <button className="interview-icon-btn" onClick={onClose} aria-label="Back to home screen">
           <ChevronLeft size={20} />
         </button>
         <SmallCaps className="text-white/70 tracking-widest">The Interview</SmallCaps>
-        <button className="interview-icon-btn" onClick={() => setArchiveOpen(true)} aria-label="查看往期">
+        <button className="interview-icon-btn" onClick={() => setArchiveOpen(true)} aria-label="View past issues">
           <Menu size={20} />
         </button>
       </header>
@@ -872,15 +853,15 @@ function HomeScreen({
             PRESENCE
           </h1>
           <p className="font-cn text-white/60 tracking-[0.4em] ml-[0.4em] font-light">
-            在场 · 人物特写
+            Presence · Character Close-Up
           </p>
         </section>
 
         {drafts.length > 0 && (
           <section className="mt-4 mb-10 fade-in" style={{ animationDelay: '0.05s' }}>
             <div className="flex items-center justify-between mb-4 px-2">
-              <SmallCaps className="text-white/60">UNFINISHED // 未完成录制</SmallCaps>
-              <span className="text-white/40 text-xs font-serif">{drafts.length} 条</span>
+              <SmallCaps className="text-white/60">UNFINISHED // Unfinished Recordings</SmallCaps>
+              <span className="text-white/40 text-xs font-serif">{drafts.length} items</span>
             </div>
             <div className="flex flex-col gap-4">
               {drafts.map((draft) => (
@@ -895,12 +876,12 @@ function HomeScreen({
                       {draft.theme}
                     </h2>
                     <p className="font-serif italic text-white/60 text-sm line-clamp-2">
-                      {draft.status === "error" ? (draft.error || "API 返回错误，等待继续录制。") : "录制已保存，可从当前位置继续。"}
+                      {draft.status === "error" ? (draft.error || "The API returned an error. Waiting to resume recording.") : "Recording saved. You can continue from where you left off."}
                     </p>
                     <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
                       <span className="text-white/40 text-xs">GUESTS: {getDraftParticipantText(draft)}</span>
                       <span className="inline-flex items-center gap-1 text-white/50 text-xs">
-                        继续 <ChevronRight size={14} />
+                        Continue <ChevronRight size={14} />
                       </span>
                     </div>
                   </button>
@@ -910,7 +891,7 @@ function HomeScreen({
                       event.stopPropagation();
                       setPendingDeleteDraft(draft);
                     }}
-                    aria-label="删除未完成录制"
+                    aria-label="Delete unfinished recording"
                   >
                     <Trash2 size={16} />
                   </button>
@@ -922,8 +903,8 @@ function HomeScreen({
 
         <section className="mt-4 mb-10 fade-in" style={{ animationDelay: '0.1s' }}>
           <div className="flex items-center justify-between mb-4 px-2">
-            <SmallCaps className="text-white/50">ARCHIVES // 往期专栏</SmallCaps>
-            <span className="text-white/40 text-xs font-serif">{issues.length} 期</span>
+            <SmallCaps className="text-white/50">ARCHIVES // Past Issues</SmallCaps>
+            <span className="text-white/40 text-xs font-serif">{issues.length} issues</span>
           </div>
 
           {issues.length === 0 ? (
@@ -984,7 +965,7 @@ function HomeScreen({
             <header className="p-6 pb-4 border-b border-white/10 flex items-center justify-between">
               <div>
                 <SmallCaps className="text-white/50">ARCHIVES</SmallCaps>
-                <div className="text-white/90 font-medium mt-1">往期专访</div>
+                <div className="text-white/90 font-medium mt-1">Past Interviews</div>
               </div>
               <button className="interview-icon-btn" onClick={() => setArchiveOpen(false)}>
                 <X size={20} />
@@ -1010,13 +991,13 @@ function HomeScreen({
           <div className="interview-modal-scrim" onClick={() => setPendingDeleteDraft(null)} />
           <div className="interview-glass-panel p-6 w-full max-w-sm relative z-50 fade-in">
             <SmallCaps className="text-red-300/80 mb-2">DELETE DRAFT</SmallCaps>
-            <h2 className="text-xl font-medium text-white mb-3">删除未完成录制？</h2>
+            <h2 className="text-xl font-medium text-white mb-3">Delete unfinished recording?</h2>
             <p className="text-white/60 text-sm mb-6 leading-relaxed">
-              “{pendingDeleteDraft.theme}” 的采访草稿将被移除，已有实录不会成刊。
+              The interview draft "{pendingDeleteDraft.theme}" will be removed. The existing recording will not be published.
             </p>
             <div className="flex gap-3 justify-end">
-              <button className="px-4 py-2 rounded-full border border-white/10 text-white/70 hover:bg-white/5 text-sm" onClick={() => setPendingDeleteDraft(null)}>取消</button>
-              <button className="px-4 py-2 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 text-sm" onClick={() => { onDeleteDraft(pendingDeleteDraft.id); setPendingDeleteDraft(null); }}>删除</button>
+              <button className="px-4 py-2 rounded-full border border-white/10 text-white/70 hover:bg-white/5 text-sm" onClick={() => setPendingDeleteDraft(null)}>Cancel</button>
+              <button className="px-4 py-2 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 text-sm" onClick={() => { onDeleteDraft(pendingDeleteDraft.id); setPendingDeleteDraft(null); }}>Delete</button>
             </div>
           </div>
         </div>
@@ -1027,13 +1008,13 @@ function HomeScreen({
           <div className="interview-modal-scrim" onClick={() => setPendingDeleteIssue(null)} />
           <div className="interview-glass-panel p-6 w-full max-w-sm relative z-50 fade-in">
             <SmallCaps className="text-red-300/80 mb-2">DELETE ISSUE</SmallCaps>
-            <h2 className="text-xl font-medium text-white mb-3">删除这期刊物？</h2>
+            <h2 className="text-xl font-medium text-white mb-3">Delete this issue?</h2>
             <p className="text-white/60 text-sm mb-6 leading-relaxed">
-              《{pendingDeleteIssue.article.title}》将从往期中移除，删除后无法恢复。
+              "{pendingDeleteIssue.article.title}" will be removed from the archive. This cannot be undone.
             </p>
             <div className="flex gap-3 justify-end">
-              <button className="px-4 py-2 rounded-full border border-white/10 text-white/70 hover:bg-white/5 text-sm" onClick={() => setPendingDeleteIssue(null)}>取消</button>
-              <button className="px-4 py-2 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 text-sm" onClick={() => { onDeleteIssue(pendingDeleteIssue.id); setPendingDeleteIssue(null); }}>删除</button>
+              <button className="px-4 py-2 rounded-full border border-white/10 text-white/70 hover:bg-white/5 text-sm" onClick={() => setPendingDeleteIssue(null)}>Cancel</button>
+              <button className="px-4 py-2 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 text-sm" onClick={() => { onDeleteIssue(pendingDeleteIssue.id); setPendingDeleteIssue(null); }}>Delete</button>
             </div>
           </div>
         </div>
@@ -1086,7 +1067,7 @@ function SetupScreen({
         </button>
         <div className="text-center">
           <SmallCaps className="text-white/50">PREP NEW ISSUE</SmallCaps>
-          <div className="text-white font-medium">策划本期专访</div>
+          <div className="text-white font-medium">Planning This Issue's Interview</div>
         </div>
         <button className="interview-icon-btn" onClick={() => { setDraftHostPrompt(hostPrompt); setDraftMemoryPrompt(memoryPrompt); setPromptEditorOpen(true); }}>
           <PencilLine size={18} />
@@ -1097,7 +1078,7 @@ function SetupScreen({
         <section className="fade-in">
           <div className="flex items-center gap-3 mb-4">
             <span className="text-white/30 text-xs font-mono">01</span>
-            <SmallCaps className="text-white/60">GUESTS // 受访嘉宾</SmallCaps>
+            <SmallCaps className="text-white/60">GUESTS // Interviewees</SmallCaps>
           </div>
           <div className="flex flex-col gap-3">
             {characters.map((character) => {
@@ -1114,7 +1095,7 @@ function SetupScreen({
                       {active ? "● SELECTED" : "TAP TO SELECT"}
                     </SmallCaps>
                   </div>
-                  <p className="text-xs text-white/50 line-clamp-1">{character.personality || character.persona || "嘉宾"}</p>
+                  <p className="text-xs text-white/50 line-clamp-1">{character.personality || character.persona || "Guest"}</p>
                 </button>
               );
             })}
@@ -1124,7 +1105,7 @@ function SetupScreen({
         <section className="fade-in" style={{ animationDelay: '0.1s' }}>
           <div className="flex items-center gap-3 mb-4">
             <span className="text-white/30 text-xs font-mono">02</span>
-            <SmallCaps className="text-white/60">CO-HOST // 共同受访身份</SmallCaps>
+            <SmallCaps className="text-white/60">CO-HOST // Co-Interviewee Identity</SmallCaps>
           </div>
           <select
             className="interview-glass-input w-full px-4 py-3 appearance-none focus:outline-none"
@@ -1132,7 +1113,7 @@ function SetupScreen({
             onChange={(e) => onUserIdentityChange(e.target.value)}
           >
             {userIdentities.length === 0 ? (
-              <option value="" className="bg-stone-900">未绑定身份</option>
+              <option value="" className="bg-stone-900">No identity bound</option>
             ) : userIdentities.map((id) => (
               <option key={id.id} value={id.id} className="bg-stone-900 text-white">{id.name}</option>
             ))}
@@ -1142,13 +1123,13 @@ function SetupScreen({
         <section className="fade-in" style={{ animationDelay: '0.2s' }}>
           <div className="flex items-center gap-3 mb-4">
             <span className="text-white/30 text-xs font-mono">03</span>
-            <SmallCaps className="text-white/60">THEME // 本期主题</SmallCaps>
+            <SmallCaps className="text-white/60">THEME // This Issue's Topic</SmallCaps>
           </div>
           <input
             className="interview-glass-input w-full px-5 py-4 text-lg mb-4"
             value={theme}
             onChange={(e) => onThemeChange(e.target.value)}
-            placeholder="输入采访主题..."
+            placeholder="Enter interview topic..."
           />
           <div className="flex flex-wrap gap-2">
             {THEME_CHIPS.map(chip => {
@@ -1174,7 +1155,7 @@ function SetupScreen({
           onClick={onStart}
         >
           <Radio size={16} className={ready ? "text-white" : "text-white/40"} />
-          <span className={ready ? "text-white font-medium" : "text-white/40"}>BEGIN RECORDING // 开始录制</span>
+          <span className={ready ? "text-white font-medium" : "text-white/40"}>BEGIN RECORDING // Start Recording</span>
         </button>
       </footer>
 
@@ -1185,13 +1166,13 @@ function SetupScreen({
             <header className="flex justify-between items-center mb-6">
               <div>
                 <SmallCaps className="text-white/50">EDITOR PROMPTS</SmallCaps>
-                <div className="text-white text-lg mt-1">提示词设置</div>
+                <div className="text-white text-lg mt-1">Prompt Settings</div>
               </div>
               <button className="interview-icon-btn" onClick={() => setPromptEditorOpen(false)}><X size={20} /></button>
             </header>
             <div className="flex-1 overflow-y-auto flex flex-col gap-6">
               <div className="flex flex-col flex-1">
-                <SmallCaps className="text-white/50 mb-2 block flex-shrink-0">HOST PROMPT // 主持人设定</SmallCaps>
+                <SmallCaps className="text-white/50 mb-2 block flex-shrink-0">HOST PROMPT // Host Persona</SmallCaps>
                 <textarea
                   className="interview-glass-panel !rounded-xl focus:bg-white/[0.08] focus:border-white/25 focus:outline-none transition-all w-full p-4 flex-1 resize-none text-[calc(11px*var(--app-text-scale,1))] leading-relaxed"
                   value={draftHostPrompt}
@@ -1199,7 +1180,7 @@ function SetupScreen({
                 />
               </div>
               <div className="flex flex-col flex-1">
-                <SmallCaps className="text-white/50 mb-2 block flex-shrink-0">MEMORY // 短期记忆</SmallCaps>
+                <SmallCaps className="text-white/50 mb-2 block flex-shrink-0">MEMORY // Short-Term Memory</SmallCaps>
                 <textarea
                   className="interview-glass-panel !rounded-xl focus:bg-white/[0.08] focus:border-white/25 focus:outline-none transition-all w-full p-4 flex-1 resize-none text-[calc(11px*var(--app-text-scale,1))] leading-relaxed"
                   value={draftMemoryPrompt}
@@ -1208,8 +1189,8 @@ function SetupScreen({
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-white/10">
-              <button className="px-5 py-2.5 rounded-full border border-white/10 text-white/70 text-sm" onClick={() => setPromptEditorOpen(false)}>取消</button>
-              <button className="px-5 py-2.5 rounded-full bg-white/10 border border-white/20 text-white text-sm font-medium" onClick={() => { onHostPromptSave(draftHostPrompt); onMemoryPromptSave(draftMemoryPrompt); setPromptEditorOpen(false); }}>保存设置</button>
+              <button className="px-5 py-2.5 rounded-full border border-white/10 text-white/70 text-sm" onClick={() => setPromptEditorOpen(false)}>Cancel</button>
+              <button className="px-5 py-2.5 rounded-full bg-white/10 border border-white/20 text-white text-sm font-medium" onClick={() => { onHostPromptSave(draftHostPrompt); onMemoryPromptSave(draftMemoryPrompt); setPromptEditorOpen(false); }}>Save Settings</button>
             </div>
           </div>
         </div>
@@ -1259,7 +1240,7 @@ function InterviewScreen({
     () => Object.fromEntries(characters.map((c) => [c.id, c.name])),
     [characters],
   );
-  const guestLabel = characters.map(c => c.name).join("、") || "嘉宾";
+  const guestLabel = characters.map(c => c.name).join(", ") || "Guest";
   const turns = messages.filter(m => m.role === 'character').length;
 
   return (
@@ -1271,7 +1252,7 @@ function InterviewScreen({
         <div className="flex flex-col items-center">
           <SmallCaps className="text-white/60 flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
-            ON AIR // 录制中
+            ON AIR // Recording
           </SmallCaps>
           <div className="text-white text-xs opacity-50 font-mono mt-1">ROUND {turns}/{maxCharacterTurns}</div>
         </div>
@@ -1280,7 +1261,7 @@ function InterviewScreen({
 
       <main className="interview-scroll px-4 pt-6 pb-32 scroll-smooth" ref={scrollRef}>
         <div className="text-center mb-10 fade-in">
-          <SmallCaps className="text-white/40">EPISODE // 本期</SmallCaps>
+          <SmallCaps className="text-white/40">EPISODE // This Issue</SmallCaps>
           <h2 className="text-2xl text-white/90 font-bold mt-2 mb-2">{theme}</h2>
           <div className="text-xs text-white/30 font-mono">GUEST: {guestLabel}</div>
           <div className="w-12 h-px bg-white/20 mx-auto mt-6"></div>
@@ -1297,7 +1278,7 @@ function InterviewScreen({
                 <div key={message.id} className="py-6 my-2 border-y border-white/5 bg-gradient-to-r from-transparent via-white/[0.03] to-transparent flex flex-col items-center text-center">
                   <div className="flex items-center gap-2 mb-3">
                     <span className="w-1.5 h-1.5 bg-white/30 rotate-45"></span>
-                    <SmallCaps className="text-white/40 tracking-widest">{isSpecial ? `NARRATOR // 旁白` : `HOST // ${INTERVIEW_MAGAZINE_HOST_NAME}`}</SmallCaps>
+                    <SmallCaps className="text-white/40 tracking-widest">{isSpecial ? `NARRATOR // Narration` : `HOST // ${INTERVIEW_MAGAZINE_HOST_NAME}`}</SmallCaps>
                     <span className="w-1.5 h-1.5 bg-white/30 rotate-45"></span>
                   </div>
                   <p className={`text-[calc(16px*var(--app-text-scale,1))] leading-relaxed max-w-[90%] mx-auto ${isSpecial ? 'text-white/50 italic font-serif' : 'text-white/80 font-medium'}`}>
@@ -1319,7 +1300,7 @@ function InterviewScreen({
               <div key={message.id} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
                 <div className={`interview-glass-panel p-4 max-w-[85%] ${isUser ? 'bg-white/10 border-white/20' : 'bg-white/5 border-white/10'}`}>
                   <SmallCaps className={`mb-1 block ${isUser ? 'text-white/40 text-right' : 'text-white/60'}`}>
-                    {isUser ? 'YOU // 共同受访' : `[ ${speakerName.toUpperCase()} ]`}
+                    {isUser ? 'YOU // Co-Interviewee' : `[ ${speakerName.toUpperCase()} ]`}
                   </SmallCaps>
                   <p className="text-[calc(15px*var(--app-text-scale,1))] leading-relaxed text-white/90 whitespace-pre-wrap">
                     {message.content}
@@ -1338,14 +1319,14 @@ function InterviewScreen({
 
           {phase === "paused" && (
             <div className="interview-glass-panel p-4 bg-white/10 border-white/20 text-white/80">
-              <div className="font-bold text-sm mb-1">PAUSED // 录制已暂停</div>
-              <p className="text-xs opacity-70">点击下方继续按钮，从中断位置接着录制。</p>
+              <div className="font-bold text-sm mb-1">PAUSED // Recording Paused</div>
+              <p className="text-xs opacity-70">Tap the Continue button below to resume recording from where it left off.</p>
             </div>
           )}
 
           {phase === "error" && (
             <div className="interview-glass-panel p-4 bg-red-900/30 border-red-500/30 text-red-200">
-              <div className="font-bold text-sm mb-1">INTERRUPTED // 录制中断</div>
+              <div className="font-bold text-sm mb-1">INTERRUPTED // Recording Interrupted</div>
               <p className="text-xs opacity-80">{error}</p>
             </div>
           )}
@@ -1367,7 +1348,7 @@ function InterviewScreen({
                     onSubmitUserAnswer();
                   }
                 }}
-                placeholder="发送回应..."
+                placeholder="Send a response..."
               />
               <button
                 className={`w-10 h-10 rounded-full flex items-center justify-center transition-all flex-shrink-0 ${userInput.trim() ? 'bg-white text-black' : 'bg-white/10 text-white/30'}`}
@@ -1379,24 +1360,24 @@ function InterviewScreen({
             </div>
             {canWrap && (
               <button className="text-xs font-mono text-white/40 hover:text-white/80 py-1 text-center transition-colors" onClick={onWrap}>
-                [ 提前结稿 // WRAP NOW ]
+                [ WRAP EARLY // WRAP NOW ]
               </button>
             )}
           </div>
         ) : phase === "done" ? (
           <button className="interview-primary-btn w-full bg-white text-black border-transparent shadow-[0_0_20px_rgba(255,255,255,0.3)]" onClick={onWrap}>
             <Sparkles size={16} />
-            <span className="font-bold">结稿成刊 // COMPOSE ARTICLE</span>
+            <span className="font-bold">WRAP & PUBLISH // COMPOSE ARTICLE</span>
           </button>
         ) : phase === "paused" ? (
           <div className="flex flex-col gap-3">
             <button className="interview-primary-btn w-full bg-white text-black border-transparent shadow-[0_0_20px_rgba(255,255,255,0.22)]" onClick={onContinue}>
               <Radio size={16} />
-              <span className="font-bold">继续录制 // CONTINUE</span>
+              <span className="font-bold">RESUME RECORDING // CONTINUE</span>
             </button>
             {canWrap ? (
               <button className="text-xs font-mono text-white/40 hover:text-white/80 py-1 text-center transition-colors" onClick={onWrap}>
-                [ 保留实录并成刊 // WRAP NOW ]
+                [ KEEP TRANSCRIPT & PUBLISH // WRAP NOW ]
               </button>
             ) : null}
           </div>
@@ -1405,12 +1386,12 @@ function InterviewScreen({
             {canContinue ? (
               <button className="interview-primary-btn w-full bg-white text-black border-transparent shadow-[0_0_20px_rgba(255,255,255,0.22)]" onClick={onContinue}>
                 <Radio size={16} />
-                <span className="font-bold">继续录制 // CONTINUE</span>
+                <span className="font-bold">RESUME RECORDING // CONTINUE</span>
               </button>
             ) : null}
             {canWrap ? (
               <button className="interview-primary-btn w-full bg-red-500/20 text-red-100 border-red-500/30" onClick={onWrap}>
-                <span>保留实录并成刊</span>
+                <span>Keep Transcript & Publish</span>
               </button>
             ) : null}
           </div>
@@ -1419,8 +1400,8 @@ function InterviewScreen({
             <button
               className="interview-pulse-glow w-14 h-14 rounded-full flex items-center justify-center bg-white/10 border border-white/20 text-white/70 backdrop-blur-md transition-all active:scale-95"
               onClick={onPause}
-              aria-label="暂停录制"
-              title="暂停录制"
+              aria-label="Pause recording"
+              title="Pause recording"
             >
               <Pause size={18} />
             </button>
@@ -1438,9 +1419,9 @@ function GeneratingScreen({ onBack }: { onBack: () => void }) {
         <Loader2 size={32} className="interview-spin text-white/80 mb-6" />
         <SmallCaps className="text-white/40 mb-2">COMPOSING ISSUE</SmallCaps>
         <div className="font-display text-2xl text-white font-bold tracking-widest mb-2">IN PRESS</div>
-        <p className="text-white/50 text-sm">正在整理实录与排版，请稍候...</p>
+        <p className="text-white/50 text-sm">Compiling the transcript and laying out the pages, please wait...</p>
         <button className="mt-8 text-white/30 text-xs font-mono hover:text-white/60 transition-colors" onClick={onBack}>
-          [ CANCEL // 取消 ]
+          [ CANCEL ]
         </button>
       </div>
     </div>
@@ -1455,7 +1436,7 @@ function ArticleScreen({
   onBack: () => void;
 }) {
   const guestNames = getIssueGuestNames(issue);
-  const guestLabel = guestNames.join("、") || issue.characterName;
+  const guestLabel = guestNames.join(", ") || issue.characterName;
 
   return (
     <div className="absolute inset-0 bg-[#0a0a0a] z-40 overflow-hidden flex flex-col">
@@ -1527,7 +1508,7 @@ function ArticleScreen({
           )}
 
           <div className="mt-16 pt-8 border-t border-white/5">
-            <SmallCaps className="text-white/30 mb-4 block">TRANSCRIPT // 原始访谈实录</SmallCaps>
+            <SmallCaps className="text-white/30 mb-4 block">TRANSCRIPT // Raw Interview Transcript</SmallCaps>
             <details className="group">
               <summary className="text-white/40 text-sm font-mono hover:text-white/70 transition-colors cursor-pointer flex items-center gap-2 outline-none select-none">
                 <ChevronRight size={16} className="group-open:rotate-90 transition-transform" />
@@ -1540,7 +1521,7 @@ function ArticleScreen({
           </div>
 
           <div className="mt-20 pt-8 border-t border-white/10 text-center">
-            <SmallCaps className="text-white/30 block mb-2">END // 完</SmallCaps>
+            <SmallCaps className="text-white/30 block mb-2">END // The End</SmallCaps>
             <div className="text-white/20 text-xs font-mono">{new Date(issue.createdAt).toLocaleDateString("en-US")}</div>
           </div>
         </article>

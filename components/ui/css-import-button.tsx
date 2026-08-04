@@ -60,7 +60,7 @@ function normalizeImportedCSS(value: string): string {
     ? fencedBlocks.map((match) => match[1].trim()).filter(Boolean).join("\n\n")
     : normalized;
 
-  if (!css) throw new Error("文件中没有可导入的 CSS 内容");
+  if (!css) throw new Error("No importable CSS content found in the file");
   return css;
 }
 
@@ -68,7 +68,7 @@ async function readDocxText(file: File): Promise<string> {
   const { default: JSZip } = await import("jszip");
   const zip = await JSZip.loadAsync(await file.arrayBuffer());
   const documentXml = await zip.file("word/document.xml")?.async("string");
-  if (!documentXml) throw new Error("无法读取该 DOCX 文件");
+  if (!documentXml) throw new Error("Unable to read this DOCX file");
 
   return decodeXmlText(documentXml
     .replace(/<w:tab\b[^>]*\/>/g, "\t")
@@ -81,12 +81,12 @@ async function readCSSImportFile(file: File): Promise<string> {
   const extension = getExtension(file.name);
   if (!SUPPORTED_EXTENSIONS.has(extension)) {
     if (extension === "doc") {
-      throw new Error("暂不支持旧版 .doc，请另存为 .docx 或 .txt 后导入");
+      throw new Error("Legacy .doc is not supported yet. Please save as .docx or .txt before importing");
     }
-    throw new Error("仅支持 .css、.txt 和 .docx 文件");
+    throw new Error("Only .css, .txt, and .docx files are supported");
   }
   if (file.size > MAX_CSS_IMPORT_SIZE) {
-    throw new Error("文件不能超过 512 KB");
+    throw new Error("File must not exceed 512 KB");
   }
 
   const content = extension === "docx" ? await readDocxText(file) : await file.text();
@@ -136,7 +136,7 @@ export function CSSImportButton({ onImport, buttonStyle }: CSSImportButtonProps)
       setPendingImport({ fileName: file.name, css });
     } catch (error) {
       console.error("[CSSImport] import failed:", error);
-      showNotice(error instanceof Error ? error.message : "CSS 文件读取失败");
+      showNotice(error instanceof Error ? error.message : "Failed to read CSS file");
     }
   }, []);
 
@@ -144,7 +144,7 @@ export function CSSImportButton({ onImport, buttonStyle }: CSSImportButtonProps)
     if (!pendingImport) return;
     onImport(pendingImport.css);
     setPendingImport(null);
-    showNotice("CSS 已导入，请检查后点击「应用」");
+    showNotice("CSS imported. Please review it, then click \"Apply\"");
   }, [onImport, pendingImport]);
 
   const renderButton = (inHeader: boolean) => (
@@ -152,8 +152,8 @@ export function CSSImportButton({ onImport, buttonStyle }: CSSImportButtonProps)
       type="button"
       data-css-import-button=""
       className={inHeader ? "page-back-btn" : undefined}
-      aria-label="导入 CSS 文件"
-      title="导入 CSS 文件"
+      aria-label="Import CSS file"
+      title="Import CSS file"
       style={inHeader ? undefined : { ...defaultButtonStyle, ...buttonStyle }}
       onClick={() => fileInputRef.current?.click()}
     >
@@ -175,12 +175,12 @@ export function CSSImportButton({ onImport, buttonStyle }: CSSImportButtonProps)
       {headerSlot ? createPortal(renderButton(true), headerSlot) : null}
       {pendingImport && portalTarget ? createPortal(
         <ConfirmDialog
-          title="导入 CSS"
-          message={`将导入「${pendingImport.fileName}」，并覆盖输入框中的现有内容。是否继续？`}
+          title="Import CSS"
+          message={`This will import "${pendingImport.fileName}" and overwrite the existing content in the input field. Continue?`}
           icon={Upload}
           variant="action"
-          confirmLabel="确认导入"
-          cancelLabel="取消"
+          confirmLabel="Confirm Import"
+          cancelLabel="Cancel"
           onConfirm={confirmImport}
           onCancel={() => setPendingImport(null)}
         />,

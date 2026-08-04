@@ -37,7 +37,7 @@ function clampFloatingPosition(value: number, max: number): number {
 
 function itemName<T extends { id: string; name?: string }>(items: T[], id?: string): string {
     if (!id) return "";
-    return items.find(item => item.id === id)?.name || "已删除的配置";
+    return items.find(item => item.id === id)?.name || "Deleted config";
 }
 
 function getStatusSafeTop(element: HTMLElement): number {
@@ -266,15 +266,15 @@ export function QuickActionFloat() {
 
     const characterDisabled = scope === "character" && characters.length === 0;
     const inheritApiLabel = scope === "global"
-        ? "未设置"
+        ? "Not set"
         : inheritedApiName
-            ? `继承全局：${inheritedApiName}`
-            : "继承全局";
+            ? `Inherited from global: ${inheritedApiName}`
+            : "Inherited from global";
     const inheritWorldBookLabel = scope === "global"
-        ? "未设置"
+        ? "Not set"
         : inheritedWorldBookNames.length > 0
-            ? `继承全局：${inheritedWorldBookNames.join("、")}`
-            : "继承全局";
+            ? `Inherited from global: ${inheritedWorldBookNames.join(", ")}`
+            : "Inherited from global";
     const popoverStyle: CSSProperties | undefined = popoverPosition
         ? { left: popoverPosition.left, top: popoverPosition.top }
         : undefined;
@@ -285,7 +285,7 @@ export function QuickActionFloat() {
                 ref={floatingButtonRef}
                 type="button"
                 className="prompt-viewer-float-button quick-action-float-button"
-                aria-label="打开快捷操作"
+                aria-label="Open quick actions"
                 data-positioned={floatingPosition ? "" : undefined}
                 data-dragging={draggingFloatingButton ? "" : undefined}
                 onPointerDown={handleFloatingPointerDown}
@@ -304,43 +304,43 @@ export function QuickActionFloat() {
                     data-positioned={popoverPosition ? "" : undefined}
                     style={popoverStyle}
                     role="dialog"
-                    aria-label="快捷操作"
+                    aria-label="Quick actions"
                     onClick={event => event.stopPropagation()}
                 >
                     <div className="quick-action-header">
                         <div className="quick-action-title">
                             <span className="quick-action-title-icon"><SlidersHorizontal size={18} /></span>
                             <div>
-                                <h3>快捷操作</h3>
-                                <p>{scope === "global" ? "全局默认" : selectedCharacter?.name || "角色默认"}</p>
+                                <h3>Quick Actions</h3>
+                                <p>{scope === "global" ? "Global defaults" : selectedCharacter?.name || "Character defaults"}</p>
                             </div>
                         </div>
-                        <button type="button" className="quick-action-icon-btn" onClick={() => setOpen(false)} aria-label="关闭快捷操作">
+                        <button type="button" className="quick-action-icon-btn" onClick={() => setOpen(false)} aria-label="Close quick actions">
                             <X size={18} />
                         </button>
                     </div>
 
                     <div className="quick-action-body">
-                        <div className="quick-action-tabs" role="tablist" aria-label="绑定范围">
+                        <div className="quick-action-tabs" role="tablist" aria-label="Binding scope">
                             <button
                                 type="button"
                                 data-active={scope === "global"}
                                 onClick={() => setScope("global")}
                             >
-                                全局
+                                Global
                             </button>
                             <button
                                 type="button"
                                 data-active={scope === "character"}
                                 onClick={() => setScope("character")}
                             >
-                                角色
+                                Character
                             </button>
                         </div>
 
                         {scope === "character" ? (
                             <label className="quick-action-select-wrap">
-                                <span><UserRound size={15} />角色</span>
+                                <span><UserRound size={15} />Character</span>
                                 <div className="quick-action-select-shell">
                                     <select
                                         value={selectedCharId}
@@ -348,7 +348,7 @@ export function QuickActionFloat() {
                                         disabled={characters.length === 0}
                                     >
                                         {characters.length === 0 ? (
-                                            <option value="">暂无角色</option>
+                                            <option value="">No characters yet</option>
                                         ) : characters.map(character => (
                                             <option key={character.id} value={character.id}>{character.name}</option>
                                         ))}
@@ -361,7 +361,7 @@ export function QuickActionFloat() {
                         <section className="quick-action-section" data-disabled={characterDisabled ? "" : undefined}>
                             <div className="quick-action-section-heading">
                                 <span><Code2 size={16} />API</span>
-                                {currentSlot.apiConfigId ? <small>{itemName(apiConfigs, currentSlot.apiConfigId)}</small> : <small>{scope === "global" ? "未设置" : "继承"}</small>}
+                                {currentSlot.apiConfigId ? <small>{itemName(apiConfigs, currentSlot.apiConfigId)}</small> : <small>{scope === "global" ? "Not set" : "Inherited"}</small>}
                             </div>
                             <div className="quick-action-option-list">
                                 <button
@@ -375,7 +375,7 @@ export function QuickActionFloat() {
                                     {!currentSlot.apiConfigId ? <Check size={15} /> : null}
                                 </button>
                                 {apiConfigs.length === 0 ? (
-                                    <div className="quick-action-empty">暂无 API 配置</div>
+                                    <div className="quick-action-empty">No API configs yet</div>
                                 ) : apiConfigs.map(api => (
                                     <button
                                         type="button"
@@ -394,14 +394,14 @@ export function QuickActionFloat() {
 
                         <section className="quick-action-section" data-disabled={characterDisabled ? "" : undefined}>
                             <div className="quick-action-section-heading">
-                                <span><BookOpen size={16} />世界书</span>
+                                <span><BookOpen size={16} />World Book</span>
                                 <button
                                     type="button"
                                     className="quick-action-clear-btn"
                                     disabled={characterDisabled || selectedWorldBookIds.length === 0}
                                     onClick={() => updateWorldBooks([])}
                                 >
-                                    清空
+                                    Clear
                                 </button>
                             </div>
                             <button
@@ -415,7 +415,7 @@ export function QuickActionFloat() {
                                 {selectedWorldBookIds.length === 0 ? <Check size={15} /> : null}
                             </button>
                             {worldBooks.length === 0 ? (
-                                <div className="quick-action-empty">暂无世界书</div>
+                                <div className="quick-action-empty">No world books yet</div>
                             ) : (
                                 <div className="quick-action-chip-grid">
                                     {worldBooks.map(book => {

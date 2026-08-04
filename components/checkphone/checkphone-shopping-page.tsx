@@ -76,7 +76,7 @@ function toProductDetail(
     title: item.title,
     merchantLabel: item.merchantLabel,
     priceLabel: item.priceLabel,
-    tagLabel: "tagLabel" in item ? item.tagLabel : defaults?.tagLabel ?? "商品",
+    tagLabel: "tagLabel" in item ? item.tagLabel : defaults?.tagLabel ?? "Product",
     detailLabel: defaults?.detailLabel ?? "Description",
     subtitle: item.subtitle,
     detail: item.detail,
@@ -231,7 +231,7 @@ export function CheckPhoneShoppingPage({ character, onBack }: CheckPhoneShopping
     ? selectedProduct.tagLabel
     : activeOrder
       ? activeOrder.statusLabel
-      : payload?.headerSubtitle || "最近的订单与心动";
+      : payload?.headerSubtitle || "Recent orders and favorites";
 
   const backAction = selectedProduct
     ? () => {
@@ -274,7 +274,7 @@ export function CheckPhoneShoppingPage({ character, onBack }: CheckPhoneShopping
             openTranslation();
           }}
         >
-          中文
+          Chinese
         </span>
       </span>
     );
@@ -317,7 +317,7 @@ export function CheckPhoneShoppingPage({ character, onBack }: CheckPhoneShopping
 
       {loading && (
         <div className="cp-refresh-indicator cp-refresh-indicator--floating" aria-live="polite">
-          <span className="cp-refresh-indicator-text">正在刷新购物</span>
+          <span className="cp-refresh-indicator-text">Refreshing shopping</span>
           <span className="cp-refresh-indicator-dots" aria-hidden="true">
             <i></i><i></i><i></i>
           </span>
@@ -329,8 +329,8 @@ export function CheckPhoneShoppingPage({ character, onBack }: CheckPhoneShopping
 
         {loaded && !payload && !loading && (
           <div className="cp-shopping-status cp-empty-copy">
-            <p>暂无购物内容</p>
-            <span className="cp-shopping-hint">点刷新同步最近浏览收藏购物车和订单</span>
+            <p>No shopping content yet</p>
+            <span className="cp-shopping-hint">Tap refresh to sync recently viewed, favorites, cart, and orders</span>
           </div>
         )}
 
@@ -675,11 +675,11 @@ export function CheckPhoneShoppingPage({ character, onBack }: CheckPhoneShopping
             className="cp-shopping-translation-sheet"
             role="dialog"
             aria-modal="true"
-            aria-label="中文翻译"
+            aria-label="Chinese Translation"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="cp-shopping-translation-head">
-              <span>中文翻译</span>
+              <span>Chinese Translation</span>
               <button type="button" onClick={() => setTranslationPreview(null)}>
                 Close
               </button>
@@ -692,11 +692,11 @@ export function CheckPhoneShoppingPage({ character, onBack }: CheckPhoneShopping
       )}
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空购物内容？"
-          message="确认后会清空当前购物缓存。之后重新刷新时，不会再带入旧购物内容。"
+          title="Clear shopping content?"
+          message="This clears the current shopping cache. The next refresh will not reuse old shopping content."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

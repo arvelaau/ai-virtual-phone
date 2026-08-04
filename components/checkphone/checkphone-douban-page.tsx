@@ -34,10 +34,10 @@ type CheckPhoneDoubanPageProps = {
   onBack: () => void;
 };
 
-const DOUBAN_TOP_TABS = ["主页", "动态", "书影音", "相册"];
+const DOUBAN_TOP_TABS = ["Home", "Feed", "Books/Movies/Music", "Albums"];
 
 function formatCount(count: number): string {
-  if (count >= 10000) return `${(count / 10000).toFixed(count >= 100000 ? 0 : 1).replace(/\.0$/, "")}万`;
+  if (count >= 1000000) return `${(count / 1000000).toFixed(count >= 10000000 ? 0 : 1).replace(/\.0$/, "")}M`;
   if (count >= 1000) return `${(count / 1000).toFixed(1).replace(/\.0$/, "")}k`;
   return String(Math.max(0, Math.round(count)));
 }
@@ -54,8 +54,8 @@ function formatAbsoluteTime(iso: string): string {
     minute: "2-digit",
     hour12: false,
   });
-  if (value >= todayStart) return `今天 ${timeText}`;
-  if (value >= yesterdayStart) return `昨天 ${timeText}`;
+  if (value >= todayStart) return `Today ${timeText}`;
+  if (value >= yesterdayStart) return `Yesterday ${timeText}`;
   return value.toLocaleDateString("zh-CN", {
     month: "2-digit",
     day: "2-digit",
@@ -70,7 +70,7 @@ function formatJoinedAt(iso?: string): string {
 }
 
 function getInitial(name: string): string {
-  return name.trim().slice(0, 1).toUpperCase() || "豆";
+  return name.trim().slice(0, 1).toUpperCase() || "D";
 }
 
 function getActivityVisual(item: CheckPhoneDoubanActivityItem) {
@@ -138,8 +138,8 @@ function ActivityCard({ item }: { item: CheckPhoneDoubanActivityItem }) {
         <p className="cp-douban-activity-body"><CheckPhoneBilingualText text={item.body} tone="douban" /></p>
 
         <div className="cp-douban-activity-foot">
-          <span>{formatCount(item.reactionCount)} 回应</span>
-          <span>{formatCount(item.commentCount)} 评论</span>
+          <span>{formatCount(item.reactionCount)} reactions</span>
+          <span>{formatCount(item.commentCount)} comments</span>
         </div>
       </div>
     </article>
@@ -244,7 +244,7 @@ export function CheckPhoneDoubanPage({ character, onBack }: CheckPhoneDoubanPage
           <ChevronLeft size={22} strokeWidth={2.2} />
         </button>
         <div className="cp-douban-header-stack">
-          <div className="cp-douban-header-title">豆瓣</div>
+          <div className="cp-douban-header-title">Douban</div>
         </div>
         <div className="cp-appbar-actions">
           <button type="button" className="cp-douban-nav-btn" onClick={handleRefresh} disabled={loading} aria-label="Refresh">
@@ -264,7 +264,7 @@ export function CheckPhoneDoubanPage({ character, onBack }: CheckPhoneDoubanPage
 
       {loading && (
         <div className="cp-refresh-indicator cp-refresh-indicator--floating" aria-live="polite">
-          <span className="cp-refresh-indicator-text">正在刷新豆瓣</span>
+          <span className="cp-refresh-indicator-text">Refreshing Douban</span>
           <span className="cp-refresh-indicator-dots" aria-hidden="true">
             <i></i><i></i><i></i>
           </span>
@@ -272,18 +272,18 @@ export function CheckPhoneDoubanPage({ character, onBack }: CheckPhoneDoubanPage
       )}
 
       <div className="cp-douban-body">
-        {!loaded && <div className="cp-douban-status">正在同步豆瓣...</div>}
+        {!loaded && <div className="cp-douban-status">Syncing Douban...</div>}
 
         {loaded && !payload && !loading && (
           <div className="cp-douban-status cp-empty-copy">
-            <p>暂无豆瓣内容</p>
-            <span className="cp-douban-hint">点刷新同步个人主页和动态</span>
+            <p>No Douban content yet</p>
+            <span className="cp-douban-hint">Tap refresh to sync profile and feed</span>
           </div>
         )}
 
         {error ? (
           <CheckPhoneDebugErrorCard
-            title="暂时无法解析豆瓣内容。"
+            title="Unable to parse Douban content right now."
             error={error}
             debugParseMode={debugParseMode}
             debugParseError={debugParseError}
@@ -309,21 +309,21 @@ export function CheckPhoneDoubanPage({ character, onBack }: CheckPhoneDoubanPage
                       />
                     </p>
                     <span>
-                      {[profile.location, profile.joinedAt ? `注册时间 ${formatJoinedAt(profile.joinedAt)}` : ""].filter(Boolean).join("  |  ")}
+                      {[profile.location, profile.joinedAt ? `Joined ${formatJoinedAt(profile.joinedAt)}` : ""].filter(Boolean).join("  |  ")}
                     </span>
                   </div>
                 </div>
                 <div className="cp-douban-profile-stats">
-                  <div><span>关注</span><strong>{formatCount(profile.followingCount)}</strong></div>
-                  <div><span>被关注</span><strong>{formatCount(profile.followerCount)}</strong></div>
-                  <div><span>想看</span><strong>{formatCount(profile.wantWatchCount)}</strong></div>
-                  <div><span>想读</span><strong>{formatCount(profile.wantReadCount)}</strong></div>
+                  <div><span>Following</span><strong>{formatCount(profile.followingCount)}</strong></div>
+                  <div><span>Followers</span><strong>{formatCount(profile.followerCount)}</strong></div>
+                  <div><span>Want to Watch</span><strong>{formatCount(profile.wantWatchCount)}</strong></div>
+                  <div><span>Want to Read</span><strong>{formatCount(profile.wantReadCount)}</strong></div>
                 </div>
               </section>
 
               <nav className="cp-douban-top-tabs" aria-label="Douban profile tabs">
                 {DOUBAN_TOP_TABS.map((tab) => (
-                  <span key={tab} className={tab === "动态" ? "is-active" : ""}>{tab}</span>
+                  <span key={tab} className={tab === "Feed" ? "is-active" : ""}>{tab}</span>
                 ))}
               </nav>
 
@@ -333,11 +333,11 @@ export function CheckPhoneDoubanPage({ character, onBack }: CheckPhoneDoubanPage
             </div>
 
             <nav className="cp-douban-bottom-nav" aria-label="Douban navigation">
-              <span><Home size={18} strokeWidth={1.8} />首页</span>
-              <span><BookOpen size={18} strokeWidth={1.8} />书影音</span>
-              <span><UsersRound size={18} strokeWidth={1.8} />小组</span>
-              <span><Store size={18} strokeWidth={1.8} />市集</span>
-              <span className="is-active"><UserRound size={18} strokeWidth={1.8} />我的</span>
+              <span><Home size={18} strokeWidth={1.8} />Home</span>
+              <span><BookOpen size={18} strokeWidth={1.8} />Books/Movies/Music</span>
+              <span><UsersRound size={18} strokeWidth={1.8} />Groups</span>
+              <span><Store size={18} strokeWidth={1.8} />Marketplace</span>
+              <span className="is-active"><UserRound size={18} strokeWidth={1.8} />Me</span>
             </nav>
           </>
         )}
@@ -345,11 +345,11 @@ export function CheckPhoneDoubanPage({ character, onBack }: CheckPhoneDoubanPage
 
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空豆瓣内容？"
-          message="确认后会清空当前豆瓣缓存。之后重新刷新时，不会再带入旧豆瓣内容。"
+          title="Clear Douban content?"
+          message="This clears the current Douban cache. Refreshing again won't bring back the old content."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Confirm Clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

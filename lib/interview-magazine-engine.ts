@@ -124,12 +124,12 @@ export function makeInterviewMessage(
   };
 }
 
-function joinChineseNames(names: string[]): string {
+function joinGuestNames(names: string[]): string {
   const cleaned = names.map((name) => name.trim()).filter(Boolean);
-  if (cleaned.length === 0) return "嘉宾";
+  if (cleaned.length === 0) return "the guest";
   if (cleaned.length === 1) return cleaned[0];
-  if (cleaned.length === 2) return `${cleaned[0]}和${cleaned[1]}`;
-  return `${cleaned.slice(0, -1).join("、")}和${cleaned[cleaned.length - 1]}`;
+  if (cleaned.length === 2) return `${cleaned[0]} and ${cleaned[1]}`;
+  return `${cleaned.slice(0, -1).join(", ")} and ${cleaned[cleaned.length - 1]}`;
 }
 
 function normalizeCharacterIds(characterIds: string | string[]): string[] {
@@ -143,17 +143,17 @@ export function formatInterviewTranscript(
   userName: string,
   characterNameById?: Record<string, string>,
 ): string {
-  if (messages.length === 0) return "（暂无采访实录）";
+  if (messages.length === 0) return "(no interview transcript yet)";
   return messages
     .map((message) => {
-      if (message.role === "host") return `主持人 ${INTERVIEW_MAGAZINE_HOST_NAME}：${message.content}`;
+      if (message.role === "host") return `Host ${INTERVIEW_MAGAZINE_HOST_NAME}: ${message.content}`;
       if (message.role === "character") {
         const speakerName = message.speakerName
           || (message.speakerCharacterId ? characterNameById?.[message.speakerCharacterId] : undefined)
           || characterName;
-        return `${speakerName}：${message.content}`;
+        return `${speakerName}: ${message.content}`;
       }
-      return `${userName}：${message.content}`;
+      return `${userName}: ${message.content}`;
     })
     .join("\n");
 }
@@ -197,23 +197,23 @@ function resolveInterviewUserIdentity(characterIds: string[], userIdentityId?: s
 
 function formatCharacterCard(snapshot: InterviewCharacterSnapshot): string {
   return [
-    `姓名：${snapshot.name}`,
-    `人设：${snapshot.persona || "（未填写）"}`,
-    `性格：${snapshot.personality || "（未填写）"}`,
-    `标签：${snapshot.tags.length > 0 ? snapshot.tags.join("、") : "（无）"}`,
+    `Name: ${snapshot.name}`,
+    `Persona: ${snapshot.persona || "(not provided)"}`,
+    `Personality: ${snapshot.personality || "(not provided)"}`,
+    `Tags: ${snapshot.tags.length > 0 ? snapshot.tags.join(", ") : "(none)"}`,
   ].join("\n");
 }
 
 function formatUserSnapshot(snapshot: InterviewUserSnapshot | null): string {
-  if (!snapshot) return "（未提供共同受访者资料）";
+  if (!snapshot) return "(no co-interviewee profile provided)";
   return [
-    `姓名：${snapshot.name || "用户"}`,
-    snapshot.gender ? `性别：${snapshot.gender}` : "",
-    snapshot.age ? `年龄：${snapshot.age}` : "",
-    snapshot.occupation ? `职业：${snapshot.occupation}` : "",
-    snapshot.bio ? `简介：${snapshot.bio}` : "",
-    snapshot.customSettings ? `补充设定：${snapshot.customSettings}` : "",
-  ].filter(Boolean).join("\n") || "（未提供共同受访者资料）";
+    `Name: ${snapshot.name || "User"}`,
+    snapshot.gender ? `Gender: ${snapshot.gender}` : "",
+    snapshot.age ? `Age: ${snapshot.age}` : "",
+    snapshot.occupation ? `Occupation: ${snapshot.occupation}` : "",
+    snapshot.bio ? `Bio: ${snapshot.bio}` : "",
+    snapshot.customSettings ? `Additional setting: ${snapshot.customSettings}` : "",
+  ].filter(Boolean).join("\n") || "(no co-interviewee profile provided)";
 }
 
 function snapshotWorldBooks(worldBooks: WorldBookConfig[]): InterviewWorldBookSnapshot[] {
@@ -231,18 +231,18 @@ function snapshotWorldBooks(worldBooks: WorldBookConfig[]): InterviewWorldBookSn
 }
 
 function formatWorldBooks(snapshot: InterviewWorldBookSnapshot[]): string {
-  if (snapshot.length === 0) return "（未提供补充资料）";
+  if (snapshot.length === 0) return "(no supplementary material provided)";
   const lines: string[] = [];
   for (const book of snapshot) {
-    lines.push(`【${book.name}】`);
+    lines.push(`[${book.name}]`);
     if (book.entries.length === 0) {
-      lines.push("（无启用词条）");
+      lines.push("(no enabled entries)");
       continue;
     }
     book.entries.forEach((entry, index) => {
-      lines.push(`${index + 1}. 关键词：${entry.key || "（无）"}`);
-      if (entry.comment) lines.push(`说明：${entry.comment}`);
-      lines.push(`内容：${entry.content}`);
+      lines.push(`${index + 1}. Keyword: ${entry.key || "(none)"}`);
+      if (entry.comment) lines.push(`Note: ${entry.comment}`);
+      lines.push(`Content: ${entry.content}`);
     });
   }
   return lines.join("\n");
@@ -254,7 +254,7 @@ export function loadInterviewContext(characterId: string): InterviewContext {
 
 export function loadInterviewContextForGuests(characterIds: string[], userIdentityId?: string): InterviewContext {
   const ids = normalizeCharacterIds(characterIds);
-  if (ids.length === 0) throw new ChatEngineError("请选择至少一位有效角色。");
+  if (ids.length === 0) throw new ChatEngineError("Please select at least one valid character.");
   const allCharacters = loadCharacters();
   const bindings = loadBindingConfig();
   const presets = loadPresets();
@@ -263,15 +263,15 @@ export function loadInterviewContextForGuests(characterIds: string[], userIdenti
   const allRegexes = loadRegexes();
   const guests = ids.map((id) => {
     const character = allCharacters.find((item) => item.id === id);
-    if (!character) throw new ChatEngineError(`找不到受访角色：${id}`);
+    if (!character) throw new ChatEngineError(`Interview guest not found: ${id}`);
 
     const slot = resolveBinding(bindings, id, INTERVIEW_MAGAZINE_APP_ID);
     if (!slot.apiConfigId) {
-      throw new ChatEngineError(`未给「在场」绑定 ${character.name} 的 API 配置。`);
+      throw new ChatEngineError(`No API configuration is bound to ${character.name} for the Interview app.`);
     }
 
     const apiConfig = apiConfigs.find((config) => config.id === slot.apiConfigId);
-    if (!apiConfig) throw new ChatEngineError(`找不到 ${character.name} 的「在场」API 配置。`);
+    if (!apiConfig) throw new ChatEngineError(`Interview API configuration for ${character.name} not found.`);
 
     let preset = slot.presetId ? presets.find((entry) => entry.id === slot.presetId) ?? null : null;
     if (!preset) preset = presets.find((entry) => entry.builtIn) ?? null;
@@ -313,9 +313,9 @@ export function loadInterviewContextForGuests(characterIds: string[], userIdenti
     characterSnapshot: primaryGuest.characterSnapshot,
     userIdentity,
     userSnapshot,
-    userName: userSnapshot?.name || "用户",
+    userName: userSnapshot?.name || "User",
     guestNames,
-    guestListText: joinChineseNames(guestNames),
+    guestListText: joinGuestNames(guestNames),
     worldBooks: primaryGuest.worldBooks,
     worldBookSnapshot: primaryGuest.worldBookSnapshot,
     guestSnapshots,
@@ -352,23 +352,23 @@ function getOtherGuestNames(context: InterviewContext, currentCharacterId: strin
   const names = context.guests
     .filter((guest) => guest.character.id !== currentCharacterId)
     .map((guest) => guest.character.name);
-  return names.length > 0 ? joinChineseNames(names) : "无";
+  return names.length > 0 ? joinGuestNames(names) : "none";
 }
 
 function formatGuestCards(context: InterviewContext): string {
   return context.guests
     .map((guest, index) => [
-      `【嘉宾 ${index + 1}：${guest.character.name}】`,
+      `[Guest ${index + 1}: ${guest.character.name}]`,
       formatCharacterCard(guest.characterSnapshot),
     ].join("\n"))
     .join("\n\n");
 }
 
 function formatGuestWorldBooks(context: InterviewContext): string {
-  if (context.guests.every((guest) => guest.worldBookSnapshot.length === 0)) return "（未提供补充资料）";
+  if (context.guests.every((guest) => guest.worldBookSnapshot.length === 0)) return "(no supplementary material provided)";
   return context.guests
     .map((guest) => [
-      `【${guest.character.name} 的补充资料】`,
+      `[Supplementary material for ${guest.character.name}]`,
       formatWorldBooks(guest.worldBookSnapshot),
     ].join("\n"))
     .join("\n\n");
@@ -383,10 +383,10 @@ function buildHostBriefing(params: {
   const { context, theme, phase, transcript } = params;
   return [
     "<interview_briefing>",
-    `本期主题：${theme}`,
-    `当前采访阶段：${phase}`,
-    `本期嘉宾：${context.guestListText}`,
-    `共同受访者：${context.userName}`,
+    `Theme of this issue: ${theme}`,
+    `Current interview stage: ${phase}`,
+    `Guests this issue: ${context.guestListText}`,
+    `Co-interviewee: ${context.userName}`,
     "",
     "<guest_reference>",
     formatGuestCards(context),
@@ -439,12 +439,23 @@ function expandMemoryPromptMacros(prompt: string, context: InterviewContext): st
   ).replaceAll(literalUserMacro, "{{user}}");
 }
 
+// The host path calls sendLLMRequest with a null preset (see callHostJson), so it
+// never receives the assembler's global `output_language_rule`. Without the line
+// below the host simply mirrors whatever language the transcript happens to be in
+// — e.g. a guest with a Chinese persona, or a resumed draft with older Chinese
+// turns — so the rule has to be restated locally here.
+const HOST_OUTPUT_LANGUAGE_RULE = [
+  "Always write in English, regardless of the language of anything quoted to you.",
+  "The interview transcript, the guest material and the world book are information about what was said — never a reference for which language to answer in.",
+].join("\n");
+
 function buildHostSystemPrompt(context: InterviewContext, lines: string[]): string {
   return [
     expandInterviewPromptMacros(loadInterviewHostPrompt(), context),
     "",
     ...lines,
-    "输出必须是 JSON，不要 markdown，不要解释。",
+    HOST_OUTPUT_LANGUAGE_RULE,
+    "Output must be JSON — no markdown, no explanation.",
   ].join("\n");
 }
 
@@ -454,30 +465,30 @@ export async function generateHostOpening(
   userIdentityId?: string,
 ): Promise<{ context: InterviewContext; intro: string; question: string; targetCharacterId: string; targetCharacterName: string }> {
   const context = loadInterviewContextForGuests(normalizeCharacterIds(characterIds), userIdentityId);
-  const briefing = buildHostBriefing({ context, theme, phase: "开场，主持人需要介绍本期主题并向嘉宾发出第一问", transcript: [] });
+  const briefing = buildHostBriefing({ context, theme, phase: "Opening — the host introduces this issue's theme and puts the first question to a guest", transcript: [] });
   const result = await callHostJson<HostQuestionResult>(
     context,
     buildHostSystemPrompt(context, [
-      "当前任务：为本期采访开场，并向嘉宾提出第一问。",
-      "你不扮演嘉宾，也不替用户回答。你只负责做足功课、提出有现场感和人物纵深的问题。",
+      "Current task: open this interview and put the first question to a guest.",
+      "You do not play the guests, and you never answer on the user's behalf. Your only job is to do your homework and ask questions with presence and real depth of character.",
     ]),
     [
       briefing,
       "",
-      "请生成开场：",
-      "- intro：30-60 字，像杂志视频栏目的开场白，点出本期主题、嘉宾和共同受访者。",
-      "- question：第一个问嘉宾的问题，35-70 字，具体、锋利、不套话。",
-      `- targetGuest：从本期嘉宾中选择一个被提问者，只能填写这些名字之一：${context.guestNames.join("、")}。`,
+      "Write the opening:",
+      "- intro: 25-45 words, like the opening of a magazine video segment, naming this issue's theme, the guests, and the co-interviewee.",
+      "- question: the first question for a guest, 25-50 words, specific, sharp, no platitudes.",
+      `- targetGuest: choose one guest to address; it must be exactly one of these names: ${context.guestNames.join(", ")}.`,
       "",
-      '返回格式：{"intro":"...","question":"...","targetGuest":"..."}',
+      'Response format: {"intro":"...","question":"...","targetGuest":"..."}',
     ].join("\n"),
   );
   const targetGuest = resolveTargetGuest(context, result?.targetCharacterId || result?.targetGuest);
 
   return {
     context,
-    intro: cleanText(result?.intro, 220) || `欢迎来到《在场》。本期主题是「${theme}」，我们从一个无法绕开的细节开始。`,
-    question: cleanText(result?.question, 220) || `${targetGuest.character.name}，关于「${theme}」，你最先想到的是哪个具体瞬间？`,
+    intro: cleanText(result?.intro, 220) || `Welcome to Presence. This issue's theme is "${theme}", and we begin with a detail there is no way around.`,
+    question: cleanText(result?.question, 220) || `${targetGuest.character.name}, on the subject of "${theme}" — what is the first concrete moment that comes to mind?`,
     targetCharacterId: targetGuest.character.id,
     targetCharacterName: targetGuest.character.name,
   };
@@ -504,31 +515,31 @@ export async function generateHostQuestion(params: {
   const result = await callHostJson<HostQuestionResult>(
     context,
     buildHostSystemPrompt(context, [
-      "当前任务：根据嘉宾材料和已有实录自然追问。",
-      "问题要推动对谈，不要总结，不要代答。",
+      "Current task: ask a natural follow-up based on the guest material and the transcript so far.",
+      "The question must push the conversation forward — do not summarize, do not answer for anyone.",
     ]),
     [
       briefing,
       "",
       params.target === "character"
-        ? `请提出下一问，提问对象需要是本期嘉宾之一。默认可问：${targetLabel}。`
-        : `请提出下一问，提问对象：${targetLabel}。`,
-      "- 问题必须自然承接上一轮回答。",
-      "- 30-70 字。",
-      "- 避免“你怎么看”“有什么感受”这类泛问。",
-      params.target === "user" ? "- 向用户提问时，要把嘉宾刚才的话转成用户可回应的个人经验或判断。" : "- 向嘉宾提问时，要把用户刚才的话抛回给嘉宾，制造真正的对谈。",
-      params.target === "character" ? `- targetGuest：从本期嘉宾中选择一个被提问者，只能填写这些名字之一：${context.guestNames.join("、")}。` : "",
+        ? `Ask the next question, addressed to one of this issue's guests. Default choice: ${targetLabel}.`
+        : `Ask the next question, addressed to: ${targetLabel}.`,
+      "- The question must follow naturally from the previous answer.",
+      "- 20-50 words.",
+      "- Avoid generic prompts like \"what do you think\" or \"how do you feel\".",
+      params.target === "user" ? "- When questioning the user, turn what the guest just said into a personal experience or judgement the user can respond to." : "- When questioning a guest, throw what the user just said back to them, so it becomes a real exchange.",
+      params.target === "character" ? `- targetGuest: choose one guest to address; it must be exactly one of these names: ${context.guestNames.join(", ")}.` : "",
       "",
       params.target === "character"
-        ? '返回格式：{"question":"...","targetGuest":"..."}'
-        : '返回格式：{"question":"..."}',
+        ? 'Response format: {"question":"...","targetGuest":"..."}'
+        : 'Response format: {"question":"..."}',
     ].join("\n"),
   );
   const targetGuest = params.target === "character"
     ? resolveTargetGuest(context, result?.targetCharacterId || result?.targetGuest, params.fallbackTargetCharacterId)
     : undefined;
   return {
-    question: cleanText(result?.question, 240) || `${targetLabel}，你愿意从一个更具体的细节说起吗？`,
+    question: cleanText(result?.question, 240) || `${targetLabel}, would you start from a more specific detail?`,
     targetCharacterId: targetGuest?.character.id,
     targetCharacterName: targetGuest?.character.name,
   };
@@ -570,7 +581,7 @@ export async function generateCharacterInterviewAnswer(params: {
     interviewOtherGuests: getOtherGuestNames(context, guest.character.id),
     interviewQuestion: params.question,
     interviewTranscript: transcript,
-    interviewPhase: "嘉宾回答主持人问题",
+    interviewPhase: "The guest answers the host's question",
     interviewRound: String(params.round),
     interviewUserAnswer: params.lastUserAnswer || "",
     interviewCharacterAnswerHistory: characterAnswerHistory,
@@ -585,7 +596,7 @@ export async function generateCharacterInterviewAnswer(params: {
     { appId: INTERVIEW_MAGAZINE_APP_ID, appTags: ["interview_magazine", "answer"] },
   );
 
-  return cleanText(raw, 1000) || "（沉默了一会儿）这个问题，我需要从一个很小的地方说起。";
+  return cleanText(raw, 1000) || "(a short silence) To answer that, I need to start from something very small.";
 }
 
 export async function previewInterviewMagazinePromptPayload(params: {
@@ -603,15 +614,15 @@ export async function previewInterviewMagazinePromptPayload(params: {
     const briefing = buildHostBriefing({
       context,
       theme: params.theme,
-      phase: "开场，主持人需要介绍本期主题并向嘉宾发出第一问",
+      phase: "Opening — the host introduces this issue's theme and puts the first question to a guest",
       transcript: [],
     });
     const messages: LLMMessage[] = [
       {
         role: "system",
         content: buildHostSystemPrompt(context, [
-          "当前任务：为本期采访开场，并向嘉宾提出第一问。",
-          "你不扮演嘉宾，也不替用户回答。你只负责做足功课、提出有现场感和人物纵深的问题。",
+          "Current task: open this interview and put the first question to a guest.",
+          "You do not play the guests, and you never answer on the user's behalf. Your only job is to do your homework and ask questions with presence and real depth of character.",
         ]),
       },
       {
@@ -619,20 +630,20 @@ export async function previewInterviewMagazinePromptPayload(params: {
         content: [
           briefing,
           "",
-          "请生成开场：",
-          "- intro：30-60 字，像杂志视频栏目的开场白，点出本期主题、嘉宾和共同受访者。",
-          "- question：第一个问嘉宾的问题，35-70 字，具体、锋利、不套话。",
-          `- targetGuest：从本期嘉宾中选择一个被提问者，只能填写这些名字之一：${context.guestNames.join("、")}。`,
+          "Write the opening:",
+          "- intro: 25-45 words, like the opening of a magazine video segment, naming this issue's theme, the guests, and the co-interviewee.",
+          "- question: the first question for a guest, 25-50 words, specific, sharp, no platitudes.",
+          `- targetGuest: choose one guest to address; it must be exactly one of these names: ${context.guestNames.join(", ")}.`,
           "",
-          '返回格式：{"intro":"...","question":"...","targetGuest":"..."}',
+          'Response format: {"intro":"...","question":"...","targetGuest":"..."}',
         ].join("\n"),
       },
     ];
     return {
       messages: previewMessagesForApi(context.apiConfig, null, messages),
-      characterName: "在场主持人·开场",
+      characterName: "Interview Host - Opening",
       model: context.apiConfig.defaultModel,
-      presetName: "(无预设)",
+      presetName: "(no preset)",
     };
   }
   if (params.mode === "host") {
@@ -640,15 +651,15 @@ export async function previewInterviewMagazinePromptPayload(params: {
     const briefing = buildHostBriefing({
       context,
       theme: params.theme,
-      phase: "预览主持人下一问",
+      phase: "Previewing the host's next question",
       transcript,
     });
     const messages: LLMMessage[] = [
       {
         role: "system",
         content: buildHostSystemPrompt(context, [
-          "当前任务：根据嘉宾材料和已有实录自然追问。",
-          "问题要推动对谈，不要总结，不要代答。",
+          "Current task: ask a natural follow-up based on the guest material and the transcript so far.",
+          "The question must push the conversation forward — do not summarize, do not answer for anyone.",
         ]),
       },
       {
@@ -656,29 +667,29 @@ export async function previewInterviewMagazinePromptPayload(params: {
         content: [
           briefing,
           "",
-          `请提出下一问，提问对象需要是本期嘉宾之一。默认可问：${fallbackGuest.character.name}。`,
-          "- 问题必须自然承接上一轮回答。",
-          "- 30-70 字。",
-          "- 避免“你怎么看”“有什么感受”这类泛问。",
-          "- 向嘉宾提问时，要把用户刚才的话抛回给嘉宾，制造真正的对谈。",
-          `- targetGuest：从本期嘉宾中选择一个被提问者，只能填写这些名字之一：${context.guestNames.join("、")}。`,
+          `Ask the next question, addressed to one of this issue's guests. Default choice: ${fallbackGuest.character.name}.`,
+          "- The question must follow naturally from the previous answer.",
+          "- 20-50 words.",
+          "- Avoid generic prompts like \"what do you think\" or \"how do you feel\".",
+          "- When questioning a guest, throw what the user just said back to them, so it becomes a real exchange.",
+          `- targetGuest: choose one guest to address; it must be exactly one of these names: ${context.guestNames.join(", ")}.`,
           "",
-          '返回格式：{"question":"...","targetGuest":"..."}',
+          'Response format: {"question":"...","targetGuest":"..."}',
         ].join("\n"),
       },
     ];
     return {
       messages: previewMessagesForApi(context.apiConfig, null, messages),
-      characterName: "在场主持人",
+      characterName: "Interview Host",
       model: context.apiConfig.defaultModel,
-      presetName: "(无预设)",
+      presetName: "(no preset)",
     };
   }
   if (params.mode === "article") {
     const briefing = buildHostBriefing({
       context,
       theme: params.theme,
-      phase: "采访结束，编辑部将实录整理为杂志专栏",
+      phase: "Interview finished — the editors turn the transcript into a magazine column",
       transcript,
     });
     const memoryPrompt = expandMemoryPromptMacros(loadInterviewMemoryPrompt(), context);
@@ -686,8 +697,8 @@ export async function previewInterviewMagazinePromptPayload(params: {
       {
         role: "system",
         content: buildHostSystemPrompt(context, [
-          "当前任务：以主编视角将采访实录整理成中文杂志专栏。",
-          "你不新增用户事实，不编造参考材料以外的背景。",
+          "Current task: as editor-in-chief, shape the interview transcript into a magazine column.",
+          "Do not invent facts about the user, and do not add background beyond the reference material.",
         ]),
       },
       {
@@ -695,29 +706,29 @@ export async function previewInterviewMagazinePromptPayload(params: {
         content: [
           briefing,
           "",
-          `本期刊号：${params.issueNumber ?? 1}`,
-          "请撰写一篇杂志专栏：",
-          "- title：4-10 字中文主标题，凝练有记忆点。",
-          "- subtitle：18-40 字副标题，像 deck，不要空泛。",
-          "- body：3-5 段，每段 90-180 字。允许场景描写、作者观察、自然引用原话。",
-          "- pullQuote：从嘉宾回答中抽一句 12-36 字的大字引语；多人时优先选最能代表本期主题的一句。",
-          "- qa：精选 3 条 Q&A，问题简短，回答 30-80 字。",
-          "- memorySummary：根据下方“访谈记忆摘要提示词”生成短期记忆摘要，只写摘要正文。",
-          "- memorySummary 中凡是指代共同受访者或用户本人时，必须写作 {{user}}，不要写具体姓名。",
+          `Issue number: ${params.issueNumber ?? 1}`,
+          "Write the magazine column:",
+          "- title: a 2-6 word headline, tight and memorable.",
+          "- subtitle: a 12-25 word standfirst, like a deck — never vague.",
+          "- body: 3-5 paragraphs, 60-120 words each. Scene-setting, the writer's own observations, and natural direct quotes are all welcome.",
+          "- pullQuote: pull one 8-25 word line from a guest's answer as the display quote; with several guests, favour the line that best carries this issue's theme.",
+          "- qa: 3 selected Q&As — short questions, answers of 20-55 words.",
+          "- memorySummary: produce a short-term memory summary following the \"memory summary instruction\" below; write the summary body only.",
+          "- Inside memorySummary, always write {{user}} when referring to the co-interviewee or the user themselves — never a literal name.",
           "",
           "<memory_summary_instruction>",
           memoryPrompt,
           "</memory_summary_instruction>",
           "",
-          '返回格式：{"title":"...","subtitle":"...","body":["..."],"pullQuote":"...","qa":[{"q":"...","a":"..."}],"memorySummary":"..."}',
+          'Response format: {"title":"...","subtitle":"...","body":["..."],"pullQuote":"...","qa":[{"q":"...","a":"..."}],"memorySummary":"..."}',
         ].join("\n"),
       },
     ];
     return {
       messages: previewMessagesForApi(context.apiConfig, null, messages),
-      characterName: "在场主编·专栏",
+      characterName: "Presence Editor - Column",
       model: context.apiConfig.defaultModel,
-      presetName: "(无预设)",
+      presetName: "(no preset)",
     };
   }
 
@@ -732,25 +743,25 @@ export async function previewInterviewMagazinePromptPayload(params: {
     userIdentity: context.userIdentity,
     appId: INTERVIEW_MAGAZINE_APP_ID,
     appTags: ["interview_magazine", "answer"],
-    worldBookActivationContext: `${params.theme}\n${params.question || "请谈谈你此刻最想回应的问题。"}\n${transcriptText}`,
+    worldBookActivationContext: `${params.theme}\n${params.question || "Tell us about the question you most want to answer right now."}\n${transcriptText}`,
     interviewTheme: params.theme,
     interviewHostName: INTERVIEW_MAGAZINE_HOST_NAME,
     interviewGuests: context.guestListText,
     interviewGuestCount: String(context.guests.length),
     interviewCurrentGuest: guest.character.name,
     interviewOtherGuests: getOtherGuestNames(context, guest.character.id),
-    interviewQuestion: params.question || "请谈谈你此刻最想回应的问题。",
+    interviewQuestion: params.question || "Tell us about the question you most want to answer right now.",
     interviewTranscript: transcriptText,
-    interviewPhase: "嘉宾回答主持人问题",
+    interviewPhase: "The guest answers the host's question",
     interviewRound: "1",
     interviewUserAnswer: "",
     interviewCharacterAnswerHistory: "",
   });
   return {
     messages: previewMessagesForApi(guest.apiConfig, guest.preset, llmMessages),
-    characterName: `在场:${guest.character.name}`,
+    characterName: `Presence: ${guest.character.name}`,
     model: guest.apiConfig.defaultModel,
-    presetName: guest.preset?.name ?? "默认预设",
+    presetName: guest.preset?.name ?? "Default preset",
   };
 }
 
@@ -765,41 +776,41 @@ export async function composeInterviewArticle(params: {
   const briefing = buildHostBriefing({
     context,
     theme: params.theme,
-    phase: "采访结束，编辑部将实录整理为杂志专栏",
+    phase: "Interview finished — the editors turn the transcript into a magazine column",
     transcript: params.transcript,
   });
   const memoryPrompt = expandMemoryPromptMacros(loadInterviewMemoryPrompt(), context);
   const result = await callHostJson<Partial<InterviewArticle>>(
     context,
     buildHostSystemPrompt(context, [
-      "当前任务：以主编视角将采访实录整理成中文杂志专栏。",
-      "你不新增用户事实，不编造参考材料以外的背景。",
+      "Current task: as editor-in-chief, shape the interview transcript into a magazine column.",
+      "Do not invent facts about the user, and do not add background beyond the reference material.",
     ]),
     [
       briefing,
       "",
-      `本期刊号：${params.issueNumber}`,
-      "请撰写一篇杂志专栏：",
-      "- title：4-10 字中文主标题，凝练有记忆点。",
-      "- subtitle：18-40 字副标题，像 deck，不要空泛。",
-      "- body：3-5 段，每段 90-180 字。允许场景描写、作者观察、自然引用原话。",
-      "- pullQuote：从嘉宾回答中抽一句 12-36 字的大字引语；多人时优先选最能代表本期主题的一句。",
-      "- qa：精选 3 条 Q&A，问题简短，回答 30-80 字。",
-      "- memorySummary：根据下方“访谈记忆摘要提示词”生成短期记忆摘要，只写摘要正文。",
-      "- memorySummary 中凡是指代共同受访者或用户本人时，必须写作 {{user}}，不要写具体姓名。",
+      `Issue number: ${params.issueNumber}`,
+      "Write the magazine column:",
+      "- title: a 2-6 word headline, tight and memorable.",
+      "- subtitle: a 12-25 word standfirst, like a deck — never vague.",
+      "- body: 3-5 paragraphs, 60-120 words each. Scene-setting, the writer's own observations, and natural direct quotes are all welcome.",
+      "- pullQuote: pull one 8-25 word line from a guest's answer as the display quote; with several guests, favour the line that best carries this issue's theme.",
+      "- qa: 3 selected Q&As — short questions, answers of 20-55 words.",
+      "- memorySummary: produce a short-term memory summary following the \"memory summary instruction\" below; write the summary body only.",
+      "- Inside memorySummary, always write {{user}} when referring to the co-interviewee or the user themselves — never a literal name.",
       "",
       "<memory_summary_instruction>",
       memoryPrompt,
       "</memory_summary_instruction>",
       "",
-      '返回格式：{"title":"...","subtitle":"...","body":["..."],"pullQuote":"...","qa":[{"q":"...","a":"..."}],"memorySummary":"..."}',
+      'Response format: {"title":"...","subtitle":"...","body":["..."],"pullQuote":"...","qa":[{"q":"...","a":"..."}],"memorySummary":"..."}',
     ].join("\n"),
   );
 
-  const fallbackTitle = params.theme.slice(0, 10) || "未命名访谈";
+  const fallbackTitle = params.theme.slice(0, 40) || "Untitled Interview";
   const article: InterviewArticle = {
     title: cleanText(result?.title, 40) || fallbackTitle,
-    subtitle: cleanText(result?.subtitle, 90) || "一次关于沉默、细节与当下的对谈。",
+    subtitle: cleanText(result?.subtitle, 90) || "A conversation about silence, detail, and the present moment.",
     body: cleanArray(result?.body, 5, 420),
     pullQuote: cleanText(result?.pullQuote, 80),
     qa: Array.isArray(result?.qa)
@@ -813,13 +824,13 @@ export async function composeInterviewArticle(params: {
 
   if (article.body.length === 0) {
     article.body = [
-      "采访结束时，现场有短暂的安静。那些答案没有急着成为结论，而是像被放在桌面上的录音笔，仍然带着一点余温。",
-      `围绕「${params.theme}」，${context.guestListText}和${context.userName}把问题推向了更私人、更具体的地方。`,
+      "When the interview ended there was a brief quiet in the room. The answers were in no hurry to become conclusions; they sat there like a recorder left on the table, still slightly warm.",
+      `Around "${params.theme}", ${context.guestListText} and ${context.userName} pushed the questions somewhere more private and more concrete.`,
     ];
   }
 
   if (!article.memorySummary) {
-    article.memorySummary = `围绕「${params.theme}」，${context.guestListText}与{{user}}完成了一期访谈；对谈集中在具体选择、关系张力和未说出口的态度变化上。`;
+    article.memorySummary = `Around "${params.theme}", ${context.guestListText} and {{user}} completed an interview; the conversation centred on concrete choices, relational tension, and unspoken shifts in attitude.`;
   }
 
   return { context, article };

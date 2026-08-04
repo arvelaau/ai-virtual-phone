@@ -1,4 +1,5 @@
 import { jsonrepair } from "jsonrepair";
+import { ACTION_DIRECTIVE_NAMES } from "./text-tool-protocol";
 import {
   DEFAULT_NOTE_WALL_BOARD,
   NOTE_WALL_BOARD_ID,
@@ -388,7 +389,10 @@ function parseJsonLike(content: string): unknown | null {
 
 function parseNoteWallToolCalls(content: string, expectedName: string): Record<string, unknown>[] {
   const calls: Record<string, unknown>[] = [];
-  const pattern = /\[[""\u201C]?([^""\u201D\]]*?)[""\u201D]?\s*(?:执行动作|工具调用)[:：]\s*([^(（\]]+?)\s*[（(]([\s\S]*?)[)）]\]/g;
+  const pattern = new RegExp(
+    `\[[""\u201C]?([^""\u201D\]]*?)[""\u201D]?\s*(?:${ACTION_DIRECTIVE_NAMES})[:：]\s*([^(（\]]+?)\s*[（(]([\s\S]*?)[)）]\]`,
+    "g",
+  );
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(content)) !== null) {
     const name = match[2]?.trim();

@@ -25,13 +25,13 @@ type CheckPhoneAssetsPageProps = {
 function getAccountKindLabel(kind: CheckPhoneAssetAccount["kind"]): string {
   switch (kind) {
     case "cash":
-      return "流动";
+      return "CASH";
     case "savings":
-      return "储蓄";
+      return "SAVINGS";
     case "investment":
-      return "投资";
+      return "INVESTMENT";
     case "credit":
-      return "信用";
+      return "CREDIT";
     default:
       return "";
   }
@@ -255,7 +255,7 @@ export function CheckPhoneAssetsPage({ character, onBack }: CheckPhoneAssetsPage
     ? selectedActivity.category
     : activeAccount
       ? activeAccount.title
-      : payload?.headerSubtitle || "账户与近期变动";
+      : payload?.headerSubtitle || "Accounts and recent activity";
 
   const backAction = selectedActivity
     ? () => {
@@ -363,7 +363,7 @@ export function CheckPhoneAssetsPage({ character, onBack }: CheckPhoneAssetsPage
 
       {loading && (
         <div className="cp-refresh-indicator cp-refresh-indicator--floating" aria-live="polite">
-          <span className="cp-refresh-indicator-text">正在刷新资产</span>
+          <span className="cp-refresh-indicator-text">Refreshing assets</span>
           <span className="cp-refresh-indicator-dots" aria-hidden="true">
             <i></i><i></i><i></i>
           </span>
@@ -375,8 +375,8 @@ export function CheckPhoneAssetsPage({ character, onBack }: CheckPhoneAssetsPage
 
         {loaded && !payload && !loading && (
           <div className="cp-assets-status cp-empty-copy">
-            <p>暂无资产内容</p>
-            <span className="cp-assets-hint">点刷新同步资产记录</span>
+            <p>No assets yet</p>
+            <span className="cp-assets-hint">Tap refresh to sync asset records</span>
           </div>
         )}
 
@@ -388,13 +388,13 @@ export function CheckPhoneAssetsPage({ character, onBack }: CheckPhoneAssetsPage
             {/* Minimalist Hero Integrated Title */}
             <section className="cp-premium-hero">
               <div className="cp-premium-hero-title-wrap">
-                <h1>{payload?.headerTitle || "资产"}</h1>
+                <h1>{payload?.headerTitle || "Assets"}</h1>
                 <span>{subtitle}</span>
               </div>
               <div className="cp-premium-hero-kicker">{payload.headline.totalLabel}</div>
               <div className="cp-premium-hero-amount">{totalAssetsLabel}</div>
               <div className="cp-premium-hero-delta">
-                <span>今日变化</span>
+                <span>Today's Change</span>
                 <b className={getActivityAmountClass(todayDeltaLabel)}>{todayDeltaLabel}</b>
                 <em>{payload.headline.periodLabel}</em>
               </div>
@@ -402,7 +402,7 @@ export function CheckPhoneAssetsPage({ character, onBack }: CheckPhoneAssetsPage
 
             {/* Realistic Old Money Card Stack */}
             <section className="cp-premium-cards-section">
-              <div className="cp-premium-card-stack" role="tablist" aria-label="资产卡片" ref={cardStackRef}>
+              <div className="cp-premium-card-stack" role="tablist" aria-label="Asset cards" ref={cardStackRef}>
               {accounts.map((account) => (
                 <button
                   key={account.id}
@@ -483,19 +483,19 @@ export function CheckPhoneAssetsPage({ character, onBack }: CheckPhoneAssetsPage
                 <div className="cp-ledger-quick-actions">
                   <button className="cp-ledger-btn">
                     <div className="cp-ledger-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><path d="M7 7h.01"/><path d="M17 7h.01"/><path d="M7 17h.01"/><path d="M17 17h.01"/><path d="M7 12h10"/><path d="M12 7v10"/></svg></div>
-                    <span>收付款</span>
+                    <span>Pay/Receive</span>
                   </button>
                   <button className="cp-ledger-btn">
                     <div className="cp-ledger-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg></div>
-                    <span>明细</span>
+                    <span>Details</span>
                   </button>
                   <button className="cp-ledger-btn">
                     <div className="cp-ledger-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
-                    <span>安全</span>
+                    <span>Security</span>
                   </button>
                   <button className="cp-ledger-btn">
                     <div className="cp-ledger-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></div>
-                    <span>管理</span>
+                    <span>Manage</span>
                   </button>
                 </div>
               </section>
@@ -503,7 +503,7 @@ export function CheckPhoneAssetsPage({ character, onBack }: CheckPhoneAssetsPage
 
             <section className="cp-premium-activities">
               <div className="cp-premium-section-title">
-                {activeAccount ? `${activeAccount.title} 流水` : "近期变动"}
+                {activeAccount ? `${activeAccount.title} Activity` : "Recent Activity"}
               </div>
               <div className="cp-premium-activity-list">
                 {(() => {
@@ -519,15 +519,15 @@ export function CheckPhoneAssetsPage({ character, onBack }: CheckPhoneAssetsPage
                     const date = new Date(activity.createdAt);
                     let label = "";
                     if (Number.isNaN(date.getTime())) {
-                      label = "未知";
+                      label = "Unknown";
                     } else if (isSameLocalDay(date, today)) {
-                      label = "今天";
+                      label = "Today";
                     } else if (isSameLocalDay(date, yesterday)) {
-                      label = "昨天";
+                      label = "Yesterday";
                     } else {
-                      label = `${date.getMonth() + 1}月${date.getDate()}日`;
+                      label = `${date.getMonth() + 1}/${date.getDate()}`;
                       if (date.getFullYear() !== today.getFullYear()) {
-                         label = `${date.getFullYear()}年${label}`;
+                         label = `${date.getFullYear()}/${label}`;
                       }
                     }
 
@@ -603,16 +603,16 @@ export function CheckPhoneAssetsPage({ character, onBack }: CheckPhoneAssetsPage
               </div>
               <div className="cp-premium-detail-body">
                 <div className="cp-premium-detail-row">
-                  <span>关联账户</span>
-                  <b>{accounts.find((account) => account.id === selectedActivity.accountId)?.title ?? "账户"}</b>
+                  <span>Linked Account</span>
+                  <b>{accounts.find((account) => account.id === selectedActivity.accountId)?.title ?? "Account"}</b>
                 </div>
                 <div className="cp-premium-detail-row">
-                  <span>交易单号</span>
+                  <span>Transaction No.</span>
                   <b className="cp-mono-text">{generateTransactionNo(selectedActivity)}</b>
                 </div>
                 <div className="cp-premium-detail-divider"></div>
                 <div className="cp-premium-detail-row cp-col-row">
-                  <span>记录说明</span>
+                  <span>Note</span>
                   <p><CheckPhoneBilingualText text={selectedActivity.detail} tone="assets" /></p>
                 </div>
               </div>
@@ -622,11 +622,11 @@ export function CheckPhoneAssetsPage({ character, onBack }: CheckPhoneAssetsPage
       </div>
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空资产内容？"
-          message="确认后会清空当前资产缓存。之后重新刷新时，不会再带入旧资产内容。"
+          title="Clear assets?"
+          message="This clears the current asset cache. Refreshing again won't bring back the old assets."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Confirm Clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

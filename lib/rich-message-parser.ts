@@ -15,6 +15,13 @@ import { parseStateValues, mergeStateValues } from "./state-value-parser";
 import { stripActionShells } from "./action-parser";
 import { stripTextToolDirectives } from "./text-tool-protocol";
 import {
+    DEFAULT_GIFT_MERCHANT_LABEL,
+    DEFAULT_GIFT_PRICE_LABEL,
+    DEFAULT_PAYMENT_REQUEST_LABEL,
+    DEFAULT_RED_PACKET_BLESSING,
+    DEFAULT_TRANSFER_NOTE,
+} from "./rich-tag-builders";
+import {
     formatCustomAppDirectiveSummary,
     getCustomAppDirectiveSyntaxHead,
     loadCustomAppChatDirectives,
@@ -44,11 +51,47 @@ export interface ParsedAIResponse {
 
 const C = "\\s*[：:]\\s*"; // half-width or full-width colon, allowing surrounding spaces
 
+// ── Dual-recognition tag aliases ────────────────────────
+// Every tag accepts a LEGACY Chinese token and a going-forward English token.
+// The Chinese forms must keep matching FOREVER: they are baked into every chat
+// history saved before the migration, and lib/llm-prompt-assembler.ts
+// re-serializes stored messages back into these tags to feed the AI as context.
+// This layer is purely additive — never remove a legacy form.
+// See PROTOCOL-MIGRATION-PLAN.md.
+const alt = (...names: string[]) => `(?:${names.join("|")})`;
+
+const T_RED_PACKET = alt("红包", "RedPacket");
+const T_TRANSFER = alt("转账", "Transfer");
+const T_PAYMENT_REQUEST = alt("代付请求", "PaymentRequest");
+const T_GIFT = alt("礼物", "Gift");
+const T_CONTACT_CARD = alt("名片", "ContactCard");
+const T_PHOTO = alt("照片", "Photo");
+const T_LOCATION = alt("位置", "Location");
+const T_STICKER = alt("表情包", "Sticker");
+const T_QUOTE = alt("引用", "Quote");
+const T_MUSIC = alt("音乐", "Music");
+const T_MUSIC_SHARE = alt("音乐分享", "MusicShare");
+const T_VOICE_NOTE = alt("语音条", "VoiceNote");
+
+/** Block tags (paired [tag]...[/tag]); legacy Chinese + going-forward English.
+ *  Declared in ./block-tags (a leaf module) so prompt-sanitizer can share them
+ *  without closing an import cycle. Re-exported here for existing callers. */
+export { BLOCK_TAG_STATUS_PANEL, BLOCK_TAG_INNER } from "./block-tags";
+import {
+    BLOCK_TAG_STATUS_PANEL,
+    BLOCK_TAG_INNER,
+    closedBlockRegex,
+    orphanCloserRegex,
+    stripReasoningTags,
+    unclosedBlockRegex,
+} from "./block-tags";
+
 function parseMuteMinutes(num?: string, unit?: string): number {
     const n = parseInt(num || "", 10);
     if (!Number.isFinite(n) || n <= 0) return 10;
-    if (unit === "天") return n * 1440;
-    if (unit === "小时") return n * 60;
+    const u = (unit || "").toLowerCase();
+    if (unit === "天" || u.startsWith("day")) return n * 1440;
+    if (unit === "小时" || u.startsWith("hour")) return n * 60;
     return n;
 }
 
@@ -57,32 +100,33 @@ const RICH_PATTERNS: {
     build: (m: RegExpMatchArray) => ParsedMessagePart;
 }[] = [
     {
-        // 3段格式：[红包:金额:个数:留言]
-        regex: new RegExp(`\\[红包${C}(\\d+(?:\\.\\d+)?)${C}(\\d+)${C}([^\\]]*)\\]`),
+        // 3-arg form: [红包:金额:个数:留言] / [RedPacket:amount:count:message]
+        regex: new RegExp(`\\[${T_RED_PACKET}${C}(\\d+(?:\\.\\d+)?)${C}(\\d+)${C}([^\\]]*)\\]`),
         build: (m) => ({
             content: "",
             mediaType: "red_packet",
-            mediaData: { amount: parseFloat(m[1]), count: parseInt(m[2], 10), label: m[3] || "恭喜发财", status: "pending" },
+            mediaData: { amount: parseFloat(m[1]), count: parseInt(m[2], 10), label: m[3] || DEFAULT_RED_PACKET_BLESSING, status: "pending" },
         }),
     },
     {
-        // 2段格式（向后兼容）：[红包:金额:留言]
-        regex: new RegExp(`\\[红包${C}(\\d+(?:\\.\\d+)?)${C}([^\\]]*)\\]`),
+        // 2-arg form (backward compatible): [红包:金额:留言] / [RedPacket:amount:message]
+        regex: new RegExp(`\\[${T_RED_PACKET}${C}(\\d+(?:\\.\\d+)?)${C}([^\\]]*)\\]`),
         build: (m) => ({
             content: "",
             mediaType: "red_packet",
-            mediaData: { amount: parseFloat(m[1]), count: 1, label: m[2] || "恭喜发财", status: "pending" },
+            mediaData: { amount: parseFloat(m[1]), count: 1, label: m[2] || DEFAULT_RED_PACKET_BLESSING, status: "pending" },
         }),
     },
     {
-        // 兼容两种格式：[转账:金额:留言] (1:1) 和 [转账:金额:留言:转账人:收款人] (群聊)
-        regex: /\[转账[：:](\d+(?:\.\d+)?)[：:]([^\]：:]*?)(?:[：:]([^\]：:]*?)[：:]([^\]]*?))?\]/,
+        // Two forms: [转账:金额:留言] (1:1) and [转账:金额:留言:转账人:收款人] (group)
+        // English: [Transfer:amount:message] / [Transfer:amount:message:sender:recipient]
+        regex: new RegExp(`\\[${T_TRANSFER}[：:](\\d+(?:\\.\\d+)?)[：:]([^\\]：:]*?)(?:[：:]([^\\]：:]*?)[：:]([^\\]]*?))?\\]`),
         build: (m) => ({
             content: "",
             mediaType: "transfer",
             mediaData: {
                 amount: parseFloat(m[1]),
-                label: m[2]?.trim() || "转账",
+                label: m[2]?.trim() || DEFAULT_TRANSFER_NOTE,
                 status: "pending" as const,
                 senderName: m[3]?.trim() || "",
                 recipientName: m[4]?.trim() || "",
@@ -90,8 +134,8 @@ const RICH_PATTERNS: {
         }),
     },
     {
-        // [代付请求:总金额:商品名/详情/价格/数量; 商品名/详情/价格/数量]
-        regex: /\[代付请求[：:](\d+(?:\.\d+)?)[：:]([^\]]+)\]/,
+        // [代付请求:总金额:商品名/详情/价格/数量; ...] / [PaymentRequest:total:item/detail/price/qty; ...]
+        regex: new RegExp(`\\[${T_PAYMENT_REQUEST}[：:](\\d+(?:\\.\\d+)?)[：:]([^\\]]+)\\]`),
         build: (m) => ({
             content: "",
             mediaType: "payment_request" as const,
@@ -99,15 +143,16 @@ const RICH_PATTERNS: {
                 amount: parseFloat(m[1]),
                 paymentRequestAmountLabel: m[1],
                 paymentRequestItemsText: m[2].trim(),
-                label: "代付请求",
+                label: DEFAULT_PAYMENT_REQUEST_LABEL,
                 status: "pending" as const,
                 paymentRequestedAt: new Date().toISOString(),
             },
         }),
     },
     {
-        // 群聊赠礼：[礼物:商品名:收礼人]，兼容旧格式：[礼物:商品名:送给收礼人]
-        regex: new RegExp(`\\[礼物${C}([^\\]：:]+)${C}(?:送给)?([^\\]]+)\\]`),
+        // Group gift: [礼物:商品名:收礼人] / [Gift:item:recipient]
+        // (legacy variant also allows the "送给"/"to " prefix before the recipient)
+        regex: new RegExp(`\\[${T_GIFT}${C}([^\\]：:]+)${C}(?:送给|to )?([^\\]]+)\\]`),
         build: (m) => {
             const giftName = m[1].trim();
             return {
@@ -117,16 +162,16 @@ const RICH_PATTERNS: {
                     giftName,
                     label: giftName,
                     recipientName: m[2].trim(),
-                    giftMerchantLabel: "角色赠礼",
-                    giftPriceLabel: "心意礼物",
+                    giftMerchantLabel: DEFAULT_GIFT_MERCHANT_LABEL,
+                    giftPriceLabel: DEFAULT_GIFT_PRICE_LABEL,
                     giftSentAt: new Date().toISOString(),
                 },
             };
         },
     },
     {
-        // 私聊赠礼：[礼物:商品名]
-        regex: new RegExp(`\\[礼物${C}([^\\]]+)\\]`),
+        // 1:1 gift: [礼物:商品名] / [Gift:item]
+        regex: new RegExp(`\\[${T_GIFT}${C}([^\\]]+)\\]`),
         build: (m) => {
             const giftName = m[1].trim();
             return {
@@ -135,17 +180,19 @@ const RICH_PATTERNS: {
                 mediaData: {
                     giftName,
                     label: giftName,
-                    giftMerchantLabel: "角色赠礼",
-                    giftPriceLabel: "心意礼物",
+                    giftMerchantLabel: DEFAULT_GIFT_MERCHANT_LABEL,
+                    giftPriceLabel: DEFAULT_GIFT_PRICE_LABEL,
                     giftSentAt: new Date().toISOString(),
                 },
             };
         },
     },
     {
-        // 推荐联系人名片：[名片:角色名]。名字在渲染时按推荐人同世界实时解析，
-        // 查无此人也放行成卡——点击后可现场生成该角色档案（幻觉转建档）。
-        regex: new RegExp(`\\[名片${C}([^\\]]+)\\]`),
+        // Recommended contact card: [名片:角色名] / [ContactCard:name].
+        // The name is resolved live at render time against the recommender's world;
+        // an unknown name still renders as a card — tapping it can generate that
+        // character's profile on the spot (turning a hallucination into a record).
+        regex: new RegExp(`\\[${T_CONTACT_CARD}${C}([^\\]]+)\\]`),
         build: (m) => ({
             content: "",
             mediaType: "contact_card" as const,
@@ -153,15 +200,19 @@ const RICH_PATTERNS: {
         }),
     },
     {
-        regex: new RegExp(`\\[照片${C}(使用参考图|不使用参考图)${C}([^\\]]+)\\]`),
+        // [照片:使用参考图|不使用参考图:描述] / [Photo:WithRef|NoRef:description]
+        regex: new RegExp(`\\[${T_PHOTO}${C}(使用参考图|不使用参考图|WithRef|NoRef)${C}([^\\]]+)\\]`),
         build: (m) => ({
             content: "",
             mediaType: "image",
-            mediaData: { label: m[2].trim(), useReferenceImage: m[1] === "使用参考图" },
+            mediaData: {
+                label: m[2].trim(),
+                useReferenceImage: m[1] === "使用参考图" || m[1].toLowerCase() === "withref",
+            },
         }),
     },
     {
-        regex: new RegExp(`\\[照片${C}([^\\]]+)\\]`),
+        regex: new RegExp(`\\[${T_PHOTO}${C}([^\\]]+)\\]`),
         build: (m) => ({
             content: "",
             mediaType: "image",
@@ -169,7 +220,7 @@ const RICH_PATTERNS: {
         }),
     },
     {
-        regex: new RegExp(`\\[位置${C}([^\\]]+)\\]`),
+        regex: new RegExp(`\\[${T_LOCATION}${C}([^\\]]+)\\]`),
         build: (m) => ({
             content: "",
             mediaType: "location",
@@ -177,7 +228,8 @@ const RICH_PATTERNS: {
         }),
     },
     {
-        regex: /\[([^\]]+)拍了拍([^\]]+)\]/,
+        // [A拍了拍B] / [A poked B]
+        regex: /\[([^\]]+)(?:拍了拍| poked )([^\]]+)\]/,
         build: (m) => ({
             content: "",
             mediaType: "poke" as const,
@@ -185,7 +237,7 @@ const RICH_PATTERNS: {
         }),
     },
     {
-        regex: new RegExp(`\\[表情包${C}([^\\]]+)\\]`),
+        regex: new RegExp(`\\[${T_STICKER}${C}([^\\]]+)\\]`),
         build: (m) => {
             const name = m[1].trim();
             return {
@@ -196,7 +248,7 @@ const RICH_PATTERNS: {
         },
     },
     {
-        regex: new RegExp(`\\[引用${C}([^\\]]+)\\](.+)`),
+        regex: new RegExp(`\\[${T_QUOTE}${C}([^\\]]+)\\](.+)`),
         build: (m) => ({
             content: m[2].trim(),
             mediaType: "quote" as const,
@@ -204,8 +256,8 @@ const RICH_PATTERNS: {
         }),
     },
     {
-        // [音乐:歌名-歌手] or [音乐:歌名]
-        regex: new RegExp(`\\[音乐${C}([^\\]]+)\\]`),
+        // [音乐:歌名-歌手] / [Music:title-artist] (artist optional)
+        regex: new RegExp(`\\[${T_MUSIC}${C}([^\\]]+)\\]`),
         build: (m) => {
             const raw = m[1].trim();
             const sep = raw.indexOf("-");
@@ -219,8 +271,8 @@ const RICH_PATTERNS: {
         },
     },
     {
-        // [音乐分享:歌名] — AI shares a song as a card
-        regex: new RegExp(`\\[音乐分享${C}([^\\]]+)\\]`),
+        // [音乐分享:歌名] / [MusicShare:title] — AI shares a song as a card
+        regex: new RegExp(`\\[${T_MUSIC_SHARE}${C}([^\\]]+)\\]`),
         build: (m) => {
             const title = m[1].trim();
             return {
@@ -231,8 +283,8 @@ const RICH_PATTERNS: {
         },
     },
     {
-        // [语音条:文字内容] — voice message
-        regex: new RegExp(`\\[语音条${C}([^\\]]+)\\]`),
+        // [语音条:文字内容] / [VoiceNote:text] — voice message
+        regex: new RegExp(`\\[${T_VOICE_NOTE}${C}([^\\]]+)\\]`),
         build: (m) => ({
             content: "",
             mediaType: "audio" as const,
@@ -240,62 +292,95 @@ const RICH_PATTERNS: {
         }),
     },
     {
-        regex: /\[我向[^\]]+发起了语音通话\]/,
+        // [我向X发起了语音通话] / [I started a voice call with X]
+        regex: /\[(?:我向[^\]]+发起了语音通话|I started a voice call with [^\]]+)\]/,
         build: () => ({ content: "", mediaType: "voice_call" as const }),
     },
     {
-        regex: /\[我向[^\]]+发起了视频通话\]/,
+        // [我向X发起了视频通话] / [I started a video call with X]
+        regex: /\[(?:我向[^\]]+发起了视频通话|I started a video call with [^\]]+)\]/,
         build: () => ({ content: "", mediaType: "video_call" as const }),
     },
-    // 群聊带主语宾语的格式（优先匹配）
+    // Group forms carrying subject + object (matched before the bare 1:1 forms).
+    // English keeps the same capture order: m[1] = actor/claimer, m[2] = owner.
     {
-        regex: /\[([^\]]+)领取了([^\]]+)的红包\]/,
-        build: (m) => ({ content: "", mediaType: "accept_red_packet" as const, mediaData: { claimer: m[1]?.trim(), owner: m[2]?.trim() } }),
+        // [A领取了B的红包] / [A claimed the red envelope from B]
+        regex: /\[([^\]]+)(?:领取了([^\]]+)的红包|claimed the red envelope from ([^\]]+))\]/,
+        build: (m) => ({ content: "", mediaType: "accept_red_packet" as const, mediaData: { claimer: m[1]?.trim(), owner: (m[2] || m[3])?.trim() } }),
     },
     {
-        regex: /\[([^\]]+)退回了([^\]]+)的红包\]/,
-        build: (m) => ({ content: "", mediaType: "decline_red_packet" as const, mediaData: { claimer: m[1]?.trim(), owner: m[2]?.trim() } }),
+        // [A退回了B的红包] / [A returned the red envelope from B]
+        regex: /\[([^\]]+)(?:退回了([^\]]+)的红包|returned the red envelope from ([^\]]+))\]/,
+        build: (m) => ({ content: "", mediaType: "decline_red_packet" as const, mediaData: { claimer: m[1]?.trim(), owner: (m[2] || m[3])?.trim() } }),
     },
     {
-        regex: /\[([^\]]+)(?:接受|领取)了([^\]]+)的转账\]/,
-        build: (m) => ({ content: "", mediaType: "accept_transfer" as const, mediaData: { claimer: m[1]?.trim(), owner: m[2]?.trim() } }),
+        // [A接受/领取了B的转账] / [A accepted|claimed the transfer from B]
+        regex: /\[([^\]]+)(?:(?:接受|领取)了([^\]]+)的转账|(?:accepted|claimed) the transfer from ([^\]]+))\]/,
+        build: (m) => ({ content: "", mediaType: "accept_transfer" as const, mediaData: { claimer: m[1]?.trim(), owner: (m[2] || m[3])?.trim() } }),
     },
     {
-        regex: /\[([^\]]+)(?:拒收|退回)了([^\]]+)的转账\]/,
-        build: (m) => ({ content: "", mediaType: "decline_transfer" as const, mediaData: { claimer: m[1]?.trim(), owner: m[2]?.trim() } }),
+        // [A拒收/退回了B的转账] / [A declined|returned the transfer from B]
+        regex: /\[([^\]]+)(?:(?:拒收|退回)了([^\]]+)的转账|(?:declined|returned) the transfer from ([^\]]+))\]/,
+        build: (m) => ({ content: "", mediaType: "decline_transfer" as const, mediaData: { claimer: m[1]?.trim(), owner: (m[2] || m[3])?.trim() } }),
     },
     {
-        regex: /\[([^\]]+)(?:接受|同意|支付|代付)了([^\]]+)的代付\]/,
-        build: (m) => ({ content: "", mediaType: "accept_payment_request" as const, mediaData: { claimer: m[1]?.trim(), owner: m[2]?.trim() } }),
+        // [A接受/同意/支付/代付了B的代付] / [A accepted|approved|paid|covered the payment request from B]
+        regex: /\[([^\]]+)(?:(?:接受|同意|支付|代付)了([^\]]+)的代付|(?:accepted|approved|paid|covered) the payment request from ([^\]]+))\]/,
+        build: (m) => ({ content: "", mediaType: "accept_payment_request" as const, mediaData: { claimer: m[1]?.trim(), owner: (m[2] || m[3])?.trim() } }),
     },
     {
-        regex: /\[([^\]]+)(?:拒绝|拒收|退回)了([^\]]+)的代付\]/,
-        build: (m) => ({ content: "", mediaType: "decline_payment_request" as const, mediaData: { claimer: m[1]?.trim(), owner: m[2]?.trim() } }),
+        // [A拒绝/拒收/退回了B的代付] / [A rejected|declined|returned the payment request from B]
+        regex: /\[([^\]]+)(?:(?:拒绝|拒收|退回)了([^\]]+)的代付|(?:rejected|declined|returned) the payment request from ([^\]]+))\]/,
+        build: (m) => ({ content: "", mediaType: "decline_payment_request" as const, mediaData: { claimer: m[1]?.trim(), owner: (m[2] || m[3])?.trim() } }),
     },
-    // 群管理操作（权限在 processGroupParts 校验，无权限的标签直接丢弃）
+    // Group-admin actions (permissions are validated in processGroupParts;
+    // tags from an unauthorized actor are dropped there).
+    // English forms keep the same capture order: m[1] = actor, then target.
     {
-        regex: /\[([^\]]+?)将群主转让给了?([^\]]+?)\]/,
-        build: (m) => ({ content: "", mediaType: "group_admin_notice" as const, mediaData: { adminAction: "transfer_owner" as const, adminActorName: m[1]?.trim(), adminTargetName: m[2]?.trim() } }),
-    },
-    {
-        regex: /\[([^\]]+?)将([^\]]+?)设为了?管理员\]/,
-        build: (m) => ({ content: "", mediaType: "group_admin_notice" as const, mediaData: { adminAction: "set_admin" as const, adminActorName: m[1]?.trim(), adminTargetName: m[2]?.trim() } }),
-    },
-    {
-        regex: /\[([^\]]+?)取消了([^\]]+?)的管理员\]/,
-        build: (m) => ({ content: "", mediaType: "group_admin_notice" as const, mediaData: { adminAction: "unset_admin" as const, adminActorName: m[1]?.trim(), adminTargetName: m[2]?.trim() } }),
+        // [A将群主转让给了B] / [A transferred group ownership to B]
+        regex: /\[([^\]]+?)(?:将群主转让给了?([^\]]+?)|transferred group ownership to ([^\]]+?))\]/,
+        build: (m) => ({ content: "", mediaType: "group_admin_notice" as const, mediaData: { adminAction: "transfer_owner" as const, adminActorName: m[1]?.trim(), adminTargetName: (m[2] || m[3])?.trim() } }),
     },
     {
-        regex: /\[([^\]]+?)将([^\]]+?)移出了?群聊\]/,
-        build: (m) => ({ content: "", mediaType: "group_admin_notice" as const, mediaData: { adminAction: "kick" as const, adminActorName: m[1]?.trim(), adminTargetName: m[2]?.trim() } }),
+        // [A将B设为了管理员] / [A made B an admin]
+        regex: /\[([^\]]+?)(?:将([^\]]+?)设为了?管理员|made ([^\]]+?) an admin)\]/,
+        build: (m) => ({ content: "", mediaType: "group_admin_notice" as const, mediaData: { adminAction: "set_admin" as const, adminActorName: m[1]?.trim(), adminTargetName: (m[2] || m[3])?.trim() } }),
     },
     {
-        regex: /\[([^\]]+?)邀请([^\]]+?)加入了?群聊\]/,
-        build: (m) => ({ content: "", mediaType: "group_admin_notice" as const, mediaData: { adminAction: "invite" as const, adminActorName: m[1]?.trim(), adminTargetName: m[2]?.trim() } }),
+        // [A取消了B的管理员] / [A removed admin from B]
+        regex: /\[([^\]]+?)(?:取消了([^\]]+?)的管理员|removed admin from ([^\]]+?))\]/,
+        build: (m) => ({ content: "", mediaType: "group_admin_notice" as const, mediaData: { adminAction: "unset_admin" as const, adminActorName: m[1]?.trim(), adminTargetName: (m[2] || m[3])?.trim() } }),
     },
     {
-        // [A将B禁言30分钟]（必须先于下面的宽松模式，否则 "A将B禁言了1天" 会被错误拆分）
+        // [A将B移出了群聊] / [A removed B from the group]
+        regex: /\[([^\]]+?)(?:将([^\]]+?)移出了?群聊|removed ([^\]]+?) from the group)\]/,
+        build: (m) => ({ content: "", mediaType: "group_admin_notice" as const, mediaData: { adminAction: "kick" as const, adminActorName: m[1]?.trim(), adminTargetName: (m[2] || m[3])?.trim() } }),
+    },
+    {
+        // [A邀请B加入了群聊] / [A invited B to the group]
+        regex: /\[([^\]]+?)(?:邀请([^\]]+?)加入了?群聊|invited ([^\]]+?) to the group)\]/,
+        build: (m) => ({ content: "", mediaType: "group_admin_notice" as const, mediaData: { adminAction: "invite" as const, adminActorName: m[1]?.trim(), adminTargetName: (m[2] || m[3])?.trim() } }),
+    },
+    {
+        // [A将B禁言30分钟] (must precede the looser form below, otherwise
+        // "A将B禁言了1天" would be split incorrectly)
         regex: /\[([^\]：:]+?)将([^\]：:]+?)禁言(?:了)?\s*(\d+)?\s*(分钟|小时|天)?\]/,
+        build: (m) => ({
+            content: "",
+            mediaType: "group_admin_notice" as const,
+            mediaData: {
+                adminAction: "mute" as const,
+                adminActorName: m[1]?.trim(),
+                adminTargetName: m[2]?.trim(),
+                adminMuteMinutes: parseMuteMinutes(m[3], m[4]),
+            },
+        }),
+    },
+    {
+        // [A muted B for 30 minutes] / [A muted B] (defaults to 10 minutes).
+        // Kept as its own entry rather than merged into the Chinese pattern so the
+        // number/unit capture arity stays identical on both sides.
+        regex: /\[([^\]：:]+?) muted ([^\]：:]+?)(?: for)?\s*(\d+)?\s*(minutes?|hours?|days?)?\]/,
         build: (m) => ({
             content: "",
             mediaType: "group_admin_notice" as const,
@@ -322,32 +407,48 @@ const RICH_PATTERNS: {
         }),
     },
     {
-        regex: /\[([^\]]+?)解除了([^\]]+?)的禁言\]/,
-        build: (m) => ({ content: "", mediaType: "group_admin_notice" as const, mediaData: { adminAction: "unmute" as const, adminActorName: m[1]?.trim(), adminTargetName: m[2]?.trim() } }),
+        // [A muted B: 30 minutes] — colon form (the name captures exclude colons,
+        // so this cannot collide with the "muted … for …" entry above).
+        regex: /\[([^\]：:]+?) muted ([^\]：:]+?)(?:[：:]\s*(\d+)\s*(minutes?|hours?|days?))?\]/,
+        build: (m) => ({
+            content: "",
+            mediaType: "group_admin_notice" as const,
+            mediaData: {
+                adminAction: "mute" as const,
+                adminActorName: m[1]?.trim(),
+                adminTargetName: m[2]?.trim(),
+                adminMuteMinutes: parseMuteMinutes(m[3], m[4]),
+            },
+        }),
     },
-    // 1:1 简单格式（兼容）
     {
-        regex: /\[领取红包\]/,
+        // [A解除了B的禁言] / [A unmuted B]
+        regex: /\[([^\]]+?)(?:解除了([^\]]+?)的禁言|unmuted ([^\]]+?))\]/,
+        build: (m) => ({ content: "", mediaType: "group_admin_notice" as const, mediaData: { adminAction: "unmute" as const, adminActorName: m[1]?.trim(), adminTargetName: (m[2] || m[3])?.trim() } }),
+    },
+    // Bare 1:1 forms (no subject/object)
+    {
+        regex: /\[(?:领取红包|ClaimRedPacket)\]/,
         build: () => ({ content: "", mediaType: "accept_red_packet" as const }),
     },
     {
-        regex: /\[拒收红包\]/,
+        regex: /\[(?:拒收红包|DeclineRedPacket)\]/,
         build: () => ({ content: "", mediaType: "decline_red_packet" as const }),
     },
     {
-        regex: /\[(?:接受|领取)转账\]/,
+        regex: /\[(?:(?:接受|领取)转账|AcceptTransfer|ClaimTransfer)\]/,
         build: () => ({ content: "", mediaType: "accept_transfer" as const }),
     },
     {
-        regex: /\[拒收转账\]/,
+        regex: /\[(?:拒收转账|DeclineTransfer)\]/,
         build: () => ({ content: "", mediaType: "decline_transfer" as const }),
     },
     {
-        regex: /\[接受代付\]/,
+        regex: /\[(?:接受代付|AcceptPaymentRequest)\]/,
         build: () => ({ content: "", mediaType: "accept_payment_request" as const }),
     },
     {
-        regex: /\[拒绝代付\]/,
+        regex: /\[(?:拒绝代付|DeclinePaymentRequest)\]/,
         build: () => ({ content: "", mediaType: "decline_payment_request" as const }),
     },
 ];
@@ -365,9 +466,9 @@ function syntaxArgLabels(syntax: string | undefined): string[] {
     return parts.slice(1).map((item, index) => (
         item
             .replace(/[<>{}\[\]【】]/g, "")
-            .replace(/^(参数|内容)$/, `参数${index + 1}`)
+            .replace(/^(参数|内容|arg|param|value)$/i, `arg${index + 1}`)
             .slice(0, 24)
-            || `参数${index + 1}`
+            || `arg${index + 1}`
     ));
 }
 
@@ -390,6 +491,8 @@ function buildDirectiveCardTokenMap(ctx: DirectiveCardInterpolationContext): Map
     ctx.args.forEach((arg, index) => {
         const oneBased = String(index + 1);
         tokens.set(`arg${oneBased}`, arg);
+        // LEGACY alias: installed custom apps may still use {{参数1}} in their
+        // card templates. Keep registering it forever — never remove.
         tokens.set(`参数${oneBased}`, arg);
         tokens.set(oneBased, arg);
         const label = ctx.argLabels[index];
@@ -439,17 +542,17 @@ function buildCustomAppDirectivePart(
         title,
         subtitle: "",
         body: "",
-        status: directive.status || "待确认",
+        status: directive.status || "Pending",
         accentColor: directive.accentColor || "",
         sections: args.length > 0 ? [{
             rows: args.map((arg, index) => ({
-                label: argLabels[index] || `参数${index + 1}`,
+                label: argLabels[index] || `arg${index + 1}`,
                 value: arg,
             })),
         }] : [],
         actions: directive.actions && directive.actions.length > 0
             ? directive.actions
-            : [{ label: "查看", style: "default" }],
+            : [{ label: "View", style: "default" }],
     };
     const customLayout = interpolateDirectiveCardLayout(directive.card, {
         args,
@@ -522,22 +625,28 @@ function findCustomAppRichCandidate(segment: string): RichPatternCandidate | nul
 
 // ── Structured hidden block extraction ───────────────────
 
-function extractBracketBlock(text: string, tag: string): { cleaned: string; content: string } {
-    let content = "";
+function extractBracketBlock(text: string, tags: string | string[]): { cleaned: string; content: string } {
+    const aliases = Array.isArray(tags) ? tags : [tags];
+    const bodies: string[] = [];
     let cleaned = text;
-    const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const rx = new RegExp(`\\[${escapedTag}\\]([\\s\\S]*?)\\[\\/${escapedTag}\\]`, "g");
 
-    let match;
-    while ((match = rx.exec(cleaned)) !== null) {
-        const block = match[1].trim();
-        if (!block) continue;
-        if (content) content += "\n\n";
-        content += block;
+    // Well-formed pairs first, then unterminated openers, then orphan closers — the
+    // same order and the same regex builders prompt-sanitizer uses, so the read side
+    // and the prompt-replay side can never disagree about what counts as a block.
+    // Accepting an unterminated opener is what keeps a model that forgets [/InnerThoughts]
+    // from rendering its monologue as a plain chat bubble.
+    for (const build of [closedBlockRegex, unclosedBlockRegex]) {
+        const rx = build(aliases);
+        let match: RegExpExecArray | null;
+        while ((match = rx.exec(cleaned)) !== null) {
+            const block = match[1].trim();
+            if (block) bodies.push(block);
+        }
+        cleaned = cleaned.replace(rx, "").trim();
     }
-    cleaned = cleaned.replace(rx, "").trim();
+    cleaned = cleaned.replace(orphanCloserRegex(aliases), "").trim();
 
-    return { cleaned, content };
+    return { cleaned, content: bodies.join("\n\n") };
 }
 
 // ── Segment parser ──────────────────────────────────────
@@ -575,9 +684,14 @@ function parseSegment(segment: string, parts: ParsedMessagePart[]) {
 // ── Main parser ──────────────────────────────────────────
 
 export function parseAIResponse(rawText: string, previousState: StateValue[]): ParsedAIResponse {
-    // 0. FIRST: extract ```html blocks and <style>+HTML before any processing
+    // 0. FIRST of all: drop literal <think>…</think> the model wrote into its content.
+    // Must run before the ```html / <style> protection below, otherwise a reasoning
+    // block containing markup gets captured as a "real" HTML block and preserved.
+    const deThought = stripReasoningTags(rawText);
+
+    // 0.1. Extract ```html blocks and <style>+HTML before any further processing
     const htmlBlockPlaceholders: { placeholder: string; original: string }[] = [];
-    let protected_ = rawText;
+    let protected_ = deThought;
     // Protect ```html...``` blocks
     protected_ = protected_.replace(/```html\s*\n[\s\S]*?```/g, (match) => {
         const placeholder = `\x00HTML_BLOCK_${htmlBlockPlaceholders.length}\x00`;
@@ -608,19 +722,23 @@ export function parseAIResponse(rawText: string, previousState: StateValue[]): P
     const actionCleaned = stripActionShells(parsedSV.cleanText);
 
     // 2. Extract display-only status panel, then inner monologue
-    const status = extractBracketBlock(actionCleaned, "状态栏");
-    const mono = extractBracketBlock(status.cleaned, "内心");
+    const status = extractBracketBlock(actionCleaned, BLOCK_TAG_STATUS_PANEL);
+    const mono = extractBracketBlock(status.cleaned, BLOCK_TAG_INNER);
 
     // 2.1. Collapse residual blank lines left by tag extraction
     const postCleaned = mono.cleaned.replace(/\n{3,}/g, "\n\n").trim();
 
-    // 2.5. Merge [引用:...] with following reply text even if separated by newlines
-    const mergedText = postCleaned.replace(/(\[引用[：:][^\]]+\])\s*\n+\s*/g, "$1");
+    // 2.5. Merge [引用:...] / [Quote:...] with following reply text even if separated by newlines
+    const mergedText = postCleaned.replace(
+        new RegExp(`(\\[${T_QUOTE}[：:][^\\]]+\\])\\s*\\n+\\s*`, "g"),
+        "$1",
+    );
 
-    // 2.6. Collapse blank lines around [表情包:...] so stickers stay in the same segment as adjacent text
+    // 2.6. Collapse blank lines around [表情包:...] / [Sticker:...] so stickers stay
+    //      in the same segment as adjacent text
     const stickerMerged = mergedText
-        .replace(/\n\n+(?=\[表情包[：:][^\]]+\])/g, "\n")
-        .replace(/(\[表情包[：:][^\]]+\])\n\n+/g, "$1\n");
+        .replace(new RegExp(`\\n\\n+(?=\\[${T_STICKER}[：:][^\\]]+\\])`, "g"), "\n")
+        .replace(new RegExp(`(\\[${T_STICKER}[：:][^\\]]+\\])\\n\\n+`, "g"), "$1\n");
 
     // 3. Split by double newlines (placeholders still in place)
     const segments = stickerMerged.split(/\n\n+/).map(s => s.trim()).filter(Boolean);

@@ -19,12 +19,12 @@ interface VnSelectProps {
 
 // Per-theme gradient params: [saturation1, lightness1, saturation2, lightness2]
 const THEME_GRADIENT: Record<string, [number, number, number, number]> = {
-  default: [30, 18, 25, 8],   // 紫夜：深沉
-  noir:    [5, 12, 5, 5],     // 黑白：近乎灰阶
-  azure:   [35, 20, 30, 10],  // 深蓝：冷调深色
-  ivory:   [20, 82, 15, 75],  // 象牙：暖淡彩
-  sakura:  [25, 80, 20, 72],  // 樱：粉淡彩
-  moss:    [20, 78, 18, 70],  // 青苔：绿淡彩
+  default: [30, 18, 25, 8],   // Purple Night: deep
+  noir:    [5, 12, 5, 5],     // Noir: near grayscale
+  azure:   [35, 20, 30, 10],  // Deep Blue: cool dark tone
+  ivory:   [20, 82, 15, 75],  // Ivory: warm pastel
+  sakura:  [25, 80, 20, 72],  // Sakura: pink pastel
+  moss:    [20, 78, 18, 70],  // Moss: green pastel
 };
 
 type VnPromptPanel = "summary" | "bilingual";
@@ -456,11 +456,11 @@ export function VnSelect({ onClose, onSelect, vnTheme, onThemeChange, onOpenAsse
           <ArrowLeft size={20} />
         </button>
         <div style={{ textAlign: "center" }}>
-          <div className="vns-title">选择角色</div>
+          <div className="vns-title">Select Character</div>
           <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--vn-ui-text-dim)", letterSpacing: "0.2em", textTransform: "uppercase" as const, marginTop: 2 }}>Select Character</div>
         </div>
         <div style={{ width: 40, display: "flex", justifyContent: "flex-end" }}>
-          <button className="vns-back" onClick={openSettings} title="设置" aria-label="设置">
+          <button className="vns-back" onClick={openSettings} title="Settings" aria-label="Settings">
             <MoreHorizontal size={22} strokeWidth={1.7} />
           </button>
         </div>
@@ -468,7 +468,7 @@ export function VnSelect({ onClose, onSelect, vnTheme, onThemeChange, onOpenAsse
 
       {/* ── Character Strips ── */}
       {characters.length === 0 ? (
-        <div className="vns-empty">请先创建角色</div>
+        <div className="vns-empty">Please create a character first</div>
       ) : (
         <div className="vns-strips" ref={scrollRef}>
           {characters.map((char) => (
@@ -490,7 +490,7 @@ export function VnSelect({ onClose, onSelect, vnTheme, onThemeChange, onOpenAsse
               </div>
               {activeId === char.id && (
                 <button className="vns-enter" onClick={(e) => { e.stopPropagation(); onSelect(char.id); }}>
-                  开始
+                  Start
                 </button>
               )}
             </div>
@@ -504,24 +504,24 @@ export function VnSelect({ onClose, onSelect, vnTheme, onThemeChange, onOpenAsse
           <div style={{ width: "100%", maxWidth: 320, maxHeight: "80vh", overflow: "auto", padding: 16, background: "var(--vn-ui-panel)", border: "1px solid var(--vn-ui-border)", borderRadius: 12 }} onClick={(e) => e.stopPropagation()}>
 
             <div className="vns-asset-entry">
-              <div className="vns-asset-entry-title">立绘与场景</div>
-              <div className="vns-asset-entry-desc">管理漫卷中可调用的角色立绘、场景图和显示位置。</div>
+              <div className="vns-asset-entry-title">Sprites & Scenes</div>
+              <div className="vns-asset-entry-desc">Manage the character sprites, scene images, and display positions available in Visual Novel mode.</div>
               <button type="button" className="vns-asset-entry-btn" onClick={openAssetsPage}>
                 <ImagePlus size={15} strokeWidth={1.8} />
-                传送到漫卷资源
+                Go to Visual Novel Assets
               </button>
             </div>
 
-            {/* ── 主题 ── */}
-            <div style={{ fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 500, color: "var(--vn-ui-text)", marginBottom: 10, letterSpacing: "0.05em" }}>主题</div>
+            {/* ── Theme ── */}
+            <div style={{ fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 500, color: "var(--vn-ui-text)", marginBottom: 10, letterSpacing: "0.05em" }}>Theme</div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
               {([
-                { id: "default", color: "#8878b0", name: "紫夜" },
-                { id: "noir", color: "#606060", name: "黑白" },
-                { id: "azure", color: "#6888b8", name: "深蓝" },
-                { id: "ivory", color: "#c8b898", name: "象牙" },
-                { id: "sakura", color: "#c89aaa", name: "樱" },
-                { id: "moss", color: "#7aa878", name: "青苔" },
+                { id: "default", color: "#8878b0", name: "Purple Night" },
+                { id: "noir", color: "#606060", name: "Noir" },
+                { id: "azure", color: "#6888b8", name: "Deep Blue" },
+                { id: "ivory", color: "#c8b898", name: "Ivory" },
+                { id: "sakura", color: "#c89aaa", name: "Sakura" },
+                { id: "moss", color: "#7aa878", name: "Moss" },
               ] as const).map(t => (
                 <button
                   key={t.id}
@@ -541,11 +541,11 @@ export function VnSelect({ onClose, onSelect, vnTheme, onThemeChange, onOpenAsse
             </div>
 
             <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--vn-ui-border)" }}>
-              <div style={{ fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 500, color: "var(--vn-ui-text)", marginBottom: 8, letterSpacing: "0.05em" }}>双语翻译</div>
+              <div style={{ fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 500, color: "var(--vn-ui-text)", marginBottom: 8, letterSpacing: "0.05em" }}>Bilingual Translation</div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
                 <div>
-                  <div style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--vn-ui-text)" }}>对白双语翻译</div>
-                  <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--vn-ui-text-dim)", lineHeight: 1.5 }}>外语对白自动附中文译文，旁白不翻译</div>
+                  <div style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--vn-ui-text)" }}>Dialogue Bilingual Translation</div>
+                  <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--vn-ui-text-dim)", lineHeight: 1.5 }}>Foreign-language dialogue automatically gets a Chinese translation attached; narration is not translated</div>
                 </div>
                 <Toggle checked={bilingualTranslationEnabled} onChange={(checked) => {
                   setBilingualTranslationEnabled(checked);
@@ -556,8 +556,8 @@ export function VnSelect({ onClose, onSelect, vnTheme, onThemeChange, onOpenAsse
                 <>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                     <div>
-                      <div style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--vn-ui-text)" }}>折叠中文译文</div>
-                      <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--vn-ui-text-dim)", lineHeight: 1.5 }}>关闭后默认直接展开中文</div>
+                      <div style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--vn-ui-text)" }}>Collapse Chinese Translation</div>
+                      <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--vn-ui-text-dim)", lineHeight: 1.5 }}>When disabled, Chinese text is shown expanded by default</div>
                     </div>
                     <Toggle checked={collapseBilingualTranslation} onChange={(checked) => {
                       setCollapseBilingualTranslation(checked);
@@ -569,7 +569,7 @@ export function VnSelect({ onClose, onSelect, vnTheme, onThemeChange, onOpenAsse
             </div>
 
             <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--vn-ui-border)" }}>
-              <div style={{ fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 500, color: "var(--vn-ui-text)", marginBottom: 8, letterSpacing: "0.05em" }}>提示词</div>
+              <div style={{ fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 500, color: "var(--vn-ui-text)", marginBottom: 8, letterSpacing: "0.05em" }}>Prompts</div>
               <div className="vns-prompt-stack">
                 <div className="vns-prompt-card" data-open={expandedPromptPanel === "summary" ? "true" : undefined}>
                   <button
@@ -578,13 +578,13 @@ export function VnSelect({ onClose, onSelect, vnTheme, onThemeChange, onOpenAsse
                     aria-expanded={expandedPromptPanel === "summary"}
                     onClick={() => setExpandedPromptPanel(prev => prev === "summary" ? null : "summary")}
                   >
-                    <span className="vns-prompt-title">归档总结提示词</span>
+                    <span className="vns-prompt-title">Archive Summary Prompt</span>
                     <ChevronDown className="vns-prompt-chevron" size={15} strokeWidth={2} />
                   </button>
                   {expandedPromptPanel === "summary" && (
                     <div className="vns-prompt-body">
                       <div className="vns-prompt-helper">
-                        漫卷章节归档时使用。可用变量：{"{{char}}"} 角色名、{"{{user}}"} 用户名。
+                        Used when archiving Visual Novel chapters. Available variables: {"{{char}}"} character name, {"{{user}}"} user name.
                       </div>
                       <textarea
                         style={{
@@ -610,13 +610,13 @@ export function VnSelect({ onClose, onSelect, vnTheme, onThemeChange, onOpenAsse
                       aria-expanded={expandedPromptPanel === "bilingual"}
                       onClick={() => setExpandedPromptPanel(prev => prev === "bilingual" ? null : "bilingual")}
                     >
-                      <span className="vns-prompt-title">双语提示词</span>
+                      <span className="vns-prompt-title">Bilingual Prompt</span>
                       <ChevronDown className="vns-prompt-chevron" size={15} strokeWidth={2} />
                     </button>
                     {expandedPromptPanel === "bilingual" && (
                       <div className="vns-prompt-body">
                         <div className="vns-prompt-helper">
-                          对白需要双语翻译时使用，只影响对白译文，不影响旁白。
+                          Used when dialogue needs bilingual translation; only affects the dialogue translation, not narration.
                         </div>
                         <textarea
                           rows={7}
@@ -647,14 +647,14 @@ export function VnSelect({ onClose, onSelect, vnTheme, onThemeChange, onOpenAsse
                 className="vns-settings-action vns-settings-action-secondary"
                 onClick={resetCurrentPrompt}
               >
-                恢复默认提示词
+                Restore Default Prompt
               </button>
               <button type="button" className="vns-settings-action vns-settings-action-primary" onClick={() => {
                 const config = loadMemoryConfig();
                 saveMemoryConfig({ ...config, vnSummaryPrompt: editingPrompt.trim() });
                 saveVnConfig("bilingualTranslationPrompt", bilingualTranslationPrompt.trim());
                 setShowSettings(false);
-              }}>保存</button>
+              }}>Save</button>
             </div>
           </div>
         </div>

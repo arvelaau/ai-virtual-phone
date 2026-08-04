@@ -7,6 +7,10 @@ import type {
     RestToolPackageConfig,
     McpServerConfig,
 } from "./settings-types";
+// Directive names live in one place — see the note in text-tool-protocol.ts. The
+// executor MUST recognize exactly what the display-stripping parser recognizes,
+// or a directive is hidden from the user and silently never runs.
+import { ACTION_DIRECTIVE_NAMES, FETCH_DIRECTIVE_NAMES } from "./text-tool-protocol";
 import {
     loadCompositeTools,
     loadCompositeToolPackages,
@@ -238,7 +242,10 @@ export type ToolFetch = { actor?: string; name: string };
  */
 export function parseToolFetches(text: string): ToolFetch[] {
     const results: ToolFetch[] = [];
-    const pattern = /\[[""\u201C]?([^""\u201D\]]*?)[""\u201D]?\s*(?:获取指令|获取工具)[:：]\s*([^\]]+?)\s*\]/g;
+    const pattern = new RegExp(
+        `\[[""\u201C]?([^""\u201D\]]*?)[""\u201D]?\s*(?:${FETCH_DIRECTIVE_NAMES})[:：]\s*([^\]]+?)\s*\]`,
+        "g",
+    );
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(text)) !== null) {
         results.push({ actor: match[1]?.trim() || undefined, name: match[2].trim() });
@@ -294,7 +301,9 @@ function parseToolCallAt(text: string, start: number): ParsedToolCallSpan | null
     if (opener < 0) return null;
 
     const header = text.slice(start + 1, opener).trim();
-    const actionMatch = /^(.*?)\s*(?:执行动作|工具调用)\s*[:：]\s*(.+)$/.exec(header);
+    const actionMatch = new RegExp(
+        `^(.*?)\s*(?:${ACTION_DIRECTIVE_NAMES})\s*[:：]\s*(.+)$`,
+    ).exec(header);
     if (!actionMatch) return null;
 
     const actor = cleanToolActor(actionMatch[1] || "");
@@ -4200,12 +4209,20 @@ function waitForAuthCallback(popup: Window, expectedState: string): Promise<stri
 
 // ── Format results for prompt injection ───────
 
+// Header of the synthetic "here are your tool results" user message. It is written
+// into saved chat history, so the legacy Chinese form must stay recognized forever:
+// mascot-engine detects these messages with startsWith(). Producers emit the English
+// form; every consumer must test BOTH via TOOL_RESULT_HEADERS.
+export const TOOL_RESULT_HEADER = "Here are the system processing results:";
+export const TOOL_RESULT_HEADER_LEGACY = "以下是系统处理结果：";
+export const TOOL_RESULT_HEADERS = [TOOL_RESULT_HEADER, TOOL_RESULT_HEADER_LEGACY] as const;
+
 export function formatToolResults(results: ToolResult[]): string {
     const items = results.map(r => {
         if (r.success && r.data) {
             return `<action_result name="${r.name}">${r.data}</action_result>`;
         }
-        return `<action_result name="${r.name}" error="${r.error || "未知错误"}"></action_result>`;
+        return `<action_result name="${r.name}" error="${r.error || "Unknown error"}"></action_result>`;
     }).join("\n");
-    return `以下是系统处理结果：\n${items}\n请基于以上结果，继续以角色身份回复用户。不要重复你之前已经说过的内容，不要再次执行相同的动作。`;
+    return `${TOOL_RESULT_HEADER}\n${items}\nBased on these results, continue replying to the user in character. Do not repeat what you have already said, and do not run the same action again.`;
 }

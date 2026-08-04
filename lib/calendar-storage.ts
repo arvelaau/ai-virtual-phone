@@ -184,7 +184,7 @@ export function formatCalendarScheduleForPrompt(
 ): string {
   const plan = loadCalendarWeekPlan(ownerType, ownerId, weekStart);
   if (!plan || plan.items.length === 0) {
-    return "本周暂无明确日程安排。";
+    return "No specific schedule for this week yet.";
   }
 
   const grouped = new Map<string, CalendarScheduleItem[]>();
@@ -198,18 +198,18 @@ export function formatCalendarScheduleForPrompt(
     .map(date => {
       const items = sortScheduleItems(grouped.get(date) || []);
       if (items.length === 0) {
-        return `${date} ${getWeekdayLabel(date)}：暂无明确安排`;
+        return `${date} ${getWeekdayLabel(date)}: nothing scheduled`;
       }
       const summary = items
-        .map(item => `${item.startTime}-${item.endTime} @${item.location || "未定"} ${item.title}`)
-        .join("；");
-      return `${date} ${getWeekdayLabel(date)}：${summary}`;
+        .map(item => `${item.startTime}-${item.endTime} @${item.location || "TBD"} ${item.title}`)
+        .join("; ");
+      return `${date} ${getWeekdayLabel(date)}: ${summary}`;
     })
     .join("\n");
 }
 
 export function formatCalendarScheduleItemForPrompt(item: Pick<CalendarScheduleItem, "startTime" | "endTime" | "location" | "title">): string {
-  return `${item.startTime}-${item.endTime} @${item.location || "未定"} ${item.title}`;
+  return `${item.startTime}-${item.endTime} @${item.location || "TBD"} ${item.title}`;
 }
 
 export function getCurrentCalendarScheduleForPrompt(
@@ -221,7 +221,7 @@ export function getCurrentCalendarScheduleForPrompt(
   const weekStart = getWeekStartIso(now);
   const currentMinute = now.getHours() * 60 + now.getMinutes();
   const plan = loadCalendarWeekPlan(ownerType, ownerId, weekStart);
-  if (!plan) return "无";
+  if (!plan) return "none";
 
   const activeItems = sortScheduleItems(plan.items).filter(item => {
     if (item.date !== date) return false;
@@ -231,14 +231,15 @@ export function getCurrentCalendarScheduleForPrompt(
     return start <= currentMinute && currentMinute < end;
   });
 
-  if (activeItems.length === 0) return "无";
-  return activeItems.map(formatCalendarScheduleItemForPrompt).join("；");
+  if (activeItems.length === 0) return "none";
+  return activeItems.map(formatCalendarScheduleItemForPrompt).join("; ");
 }
 
 /**
- * 重新生成前清掉本周的 AI 生成条目（保留手动条目）。
- * 否则旧的生成结果会经由日程 marker 进入提示词，被模型原样照抄——
- * 导致"重新生成永远一字不差"。返回被移除的条目，供生成失败时恢复。
+ * Clear this week's AI-generated entries before regenerating (manual ones are kept).
+ * Otherwise the previous result reaches the prompt via the schedule marker and the
+ * model copies it verbatim, so "regenerate" never changes anything. Returns the removed
+ * entries so they can be restored if generation fails.
  */
 export function clearGeneratedWeekItems(
   ownerType: CalendarOwnerType,
@@ -253,7 +254,7 @@ export function clearGeneratedWeekItems(
   return removed;
 }
 
-/** 生成失败时，把 clearGeneratedWeekItems 移除的条目加回本周计划。 */
+/** Put the entries removed by clearGeneratedWeekItems back into the week plan after a failure. */
 export function restoreCalendarWeekItems(
   ownerType: CalendarOwnerType,
   ownerId: string,
@@ -273,10 +274,10 @@ export function buildCalendarScheduleMarker(
   ownerId: string,
   weekStart: string,
 ): string {
-  const ownerLabel = ownerType === "user" ? "用户" : "角色";
+  const ownerLabel = ownerType === "user" ? "User" : "Character";
   return [
-    `当前查看周起始日期：${weekStart}`,
-    `${ownerLabel}本周日程：`,
+    `Week starting: ${weekStart}`,
+    `${ownerLabel} schedule for this week:`,
     formatCalendarScheduleForPrompt(ownerType, ownerId, weekStart),
   ].join("\n");
 }
@@ -343,18 +344,18 @@ export function validateScheduleDraft(item: {
 }): string | null {
   const start = normalizeTime(item.startTime);
   const end = normalizeTime(item.endTime);
-  if (!item.date) return "请选择日期";
-  if (!start || !end) return "请输入正确的时间格式";
-  if (start >= end) return "结束时间需要晚于开始时间";
+  if (!item.date) return "Please pick a date";
+  if (!start || !end) return "Please enter a valid time format";
+  if (start >= end) return "End time must be later than start time";
   if (!isCalendarTimeRangeAllowed(start, end)) {
-    return `日程时间需在 ${String(CALENDAR_HOUR_START).padStart(2, "0")}:00 到 ${String(CALENDAR_HOUR_END).padStart(2, "0")}:00 之间`;
+    return `Schedule times must fall between ${String(CALENDAR_HOUR_START).padStart(2, "0")}:00 and ${String(CALENDAR_HOUR_END).padStart(2, "0")}:00`;
   }
-  if (!item.title.trim()) return "请输入事项";
+  if (!item.title.trim()) return "Please enter an activity";
   return null;
 }
 
 export function getCalendarOwnerLabel(ownerType: CalendarOwnerType, ownerName: string): string {
-  return ownerType === "user" ? `${ownerName}的日程` : `${ownerName}的日程`;
+  return `${ownerName}'s schedule`;
 }
 
 export function getCalendarOwnerKey(ownerType: CalendarOwnerType, ownerId: string): string {

@@ -14,7 +14,7 @@ import { determineBaseUrl, simpleLLMCall } from "@/lib/api-helpers";
 const DEFAULT_CONFIGS: ApiConfig[] = [
     {
         id: "default-openai",
-        name: "OpenAI 官方",
+        name: "OpenAI Official",
         provider: "OpenAI",
         apiKey: "",
         defaultModel: "gpt-4o",
@@ -65,7 +65,7 @@ export function ApiSettings() {
     const addConfig = useCallback(() => {
         const newConfig: ApiConfig = {
             id: `config-${Date.now()}`,
-            name: "新配置",
+            name: "New Config",
             provider: "Custom",
             apiKey: "",
             defaultModel: "",
@@ -86,7 +86,7 @@ export function ApiSettings() {
                 className="inline-flex h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] bg-black px-4 text-xs font-bold text-white shadow-sm transition-all hover:bg-gray-800 hover:shadow-md active:scale-95 focus:outline-none"
             >
                 <Plus size={15} strokeWidth={1.8} />
-                <span>新增API方案</span>
+                <span>Add API Config</span>
             </button>
         );
         return () => setSubpageRightAction("api", null);
@@ -115,8 +115,8 @@ export function ApiSettings() {
 
         try {
             const baseUrl = determineBaseUrl(config);
-            if (!baseUrl) throw new Error("缺少 Base URL");
-            if (!config.apiKey) throw new Error("缺少 API Key");
+            if (!baseUrl) throw new Error("Missing Base URL");
+            if (!config.apiKey) throw new Error("Missing API Key");
 
             // Gemini 原生协议（/v1beta）：URL 用 ?key= 鉴权，响应是 { models: [{ name }] }
             // OpenAI 兼容（/v1）：Authorization: Bearer + 响应是 { data: [{ id }] }
@@ -148,13 +148,13 @@ export function ApiSettings() {
             } else if (Array.isArray(data?.data)) {
                 modelNames = data.data.map((m: { id: string }) => m.id);
             } else {
-                throw new Error("返回数据格式不符合预期");
+                throw new Error("Response data format did not match expectations");
             }
             setFetchedModels(prev => ({ ...prev, [config.id]: modelNames }));
-            setTestResult(prev => ({ ...prev, [config.id]: { success: true, message: `成功获取 ${modelNames.length} 个模型` } }));
+            setTestResult(prev => ({ ...prev, [config.id]: { success: true, message: `Successfully fetched ${modelNames.length} models` } }));
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
-            setTestResult(prev => ({ ...prev, [config.id]: { success: false, message: `拉取失败: ${msg}` } }));
+            setTestResult(prev => ({ ...prev, [config.id]: { success: false, message: `Fetch failed: ${msg}` } }));
             setFetchedModels(prev => ({ ...prev, [config.id]: [] }));
         } finally {
             setIsFetching(prev => ({ ...prev, [config.id]: false }));
@@ -163,7 +163,7 @@ export function ApiSettings() {
 
     const testConnection = async (config: ApiConfig) => {
         if (!config.defaultModel) {
-            setTestResult(prev => ({ ...prev, [config.id]: { success: false, message: "请先输入或选择默认模型" } }));
+            setTestResult(prev => ({ ...prev, [config.id]: { success: false, message: "Please enter or select a default model first" } }));
             return;
         }
 
@@ -174,17 +174,17 @@ export function ApiSettings() {
             // 向量模型配置：测 /embeddings 端点。原来一律测 /chat/completions，
             // 导致 embedding 配置永远 404「测试失败」。
             if (isEmbeddingModelName(config.defaultModel)) {
-                const embedding = await generateEmbedding("你好", config, { throwOnError: true });
-                if (!embedding) throw new Error("接口未返回向量数据");
+                const embedding = await generateEmbedding("Hello", config, { throwOnError: true });
+                if (!embedding) throw new Error("The endpoint did not return vector data");
                 setTestResult(prev => ({
                     ...prev,
-                    [config.id]: { success: true, message: `测试成功! 向量模型可用，维度 ${embedding.length}` },
+                    [config.id]: { success: true, message: `Test succeeded! Vector model is available, dimension ${embedding.length}` },
                 }));
                 return;
             }
             const result = await simpleLLMCall(
                 config,
-                [{ role: "user", content: "你好" }],
+                [{ role: "user", content: "Hello" }],
                 // Cap (not spend): reasoning models (deepseek-reasoner / gemini-pro 等) burn
                 // tokens on hidden reasoning first, so a tiny cap leaves the visible
                 // content empty and the test falsely fails (finishReason=length).
@@ -192,17 +192,17 @@ export function ApiSettings() {
                 { temperature: 0.2, max_tokens: 4096 },
             );
             if (result.error || !result.content) {
-                throw new Error(result.error || "模型返回了空内容");
+                throw new Error(result.error || "The model returned empty content");
             }
             const reply = result.content.replace(/\s+/g, " ").trim();
             const preview = reply.length > 80 ? `${reply.slice(0, 80)}...` : reply;
             setTestResult(prev => ({
                 ...prev,
-                [config.id]: { success: true, message: `测试成功! 模型回复: ${preview}` },
+                [config.id]: { success: true, message: `Test succeeded! Model reply: ${preview}` },
             }));
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
-            setTestResult(prev => ({ ...prev, [config.id]: { success: false, message: `测试失败: ${msg}` } }));
+            setTestResult(prev => ({ ...prev, [config.id]: { success: false, message: `Test failed: ${msg}` } }));
         } finally {
             setIsTesting(prev => ({ ...prev, [config.id]: false }));
         }
@@ -221,12 +221,12 @@ export function ApiSettings() {
                     <div className="ui-icon-circle">
                         <AlertCircle size={24} />
                     </div>
-                    <span className="menu-label font-semibold">没有 API 配置</span>
+                    <span className="menu-label font-semibold">No API configs</span>
                     <span className="menu-desc max-w-[240px]">
-                        配置 API 密钥和模型以连接到 AI 服务。
+                        Configure an API key and model to connect to an AI service.
                     </span>
                     <button onClick={addConfig} className="ui-btn ui-btn-primary rounded-[20px] mt-2">
-                        <Plus size={16} /> 添加配置
+                        <Plus size={16} /> Add Config
                     </button>
                 </div>
             ) : (
@@ -238,7 +238,7 @@ export function ApiSettings() {
                             style={{ aspectRatio: "3 / 2", padding: "12px", justifyContent: "space-between" }}
                             role="button"
                             tabIndex={0}
-                            aria-label={`编辑 ${config.name || config.provider}`}
+                            aria-label={`Edit ${config.name || config.provider}`}
                             onClick={() => setEditingId(config.id)}
                             onKeyDown={(event) => {
                                 if (event.target !== event.currentTarget) return;
@@ -250,7 +250,7 @@ export function ApiSettings() {
                         >
                             <div className="min-w-0 flex flex-col gap-1">
                                 <span className="truncate text-[calc(14.4px*var(--app-text-scale,1))] font-bold leading-tight text-[var(--c-text-title)]">{config.name || config.provider}</span>
-                                <span className="menu-desc truncate">{config.defaultModel || config.provider || "未设置模型"}</span>
+                                <span className="menu-desc truncate">{config.defaultModel || config.provider || "No model set"}</span>
                             </div>
                             <div className="flex gap-2 shrink-0 items-center justify-end">
                                 <button
@@ -285,7 +285,7 @@ export function ApiSettings() {
                     <div className="modal-sheet" data-ui="modal-sheet">
                         <div className="modal-header" data-ui="modal-header">
                             <button onClick={() => { if (isNewConfig && editingId) removeConfig(editingId); setIsNewConfig(false); setEditingId(null); }} className="modal-header-btn modal-header-btn-muted"><X size={18} /></button>
-                            <span className="modal-header-title">{isNewConfig ? "添加配置" : "编辑配置"}</span>
+                            <span className="modal-header-title">{isNewConfig ? "Add Config" : "Edit Config"}</span>
                             <button onClick={() => { setIsNewConfig(false); setEditingId(null); }} className="modal-header-btn modal-header-btn-action"><Check size={18} /></button>
                         </div>
 
@@ -296,16 +296,16 @@ export function ApiSettings() {
                                 return (
                                     <>
                                         <div className="flex flex-col gap-1">
-                                            <label className="menu-desc ml-1">配置名称 (Name)</label>
+                                            <label className="menu-desc ml-1">Config Name</label>
                                             <Input
                                                 type="text"
                                                 value={config.name || ""}
                                                 onChange={(e) => updateConfig(config.id, { name: e.target.value })}
-                                                placeholder="例如: 我的 OpenAI"
+                                                placeholder="e.g. My OpenAI"
                                             />
                                         </div>
                                         <div className="flex flex-col gap-1">
-                                            <label className="menu-desc ml-1">服务商 (Provider)</label>
+                                            <label className="menu-desc ml-1">Provider</label>
                                             <select
                                                 value={config.provider}
                                                 onChange={(e) => updateConfig(config.id, { provider: e.target.value })}
@@ -321,17 +321,17 @@ export function ApiSettings() {
                                                 <option value="Zhipu">Zhipu (GLM)</option>
                                                 <option value="SiliconFlow">SiliconFlow</option>
                                                 <option value="TogetherAI">Together AI</option>
-                                                <option value="Custom">自定义 (Custom)</option>
+                                                <option value="Custom">Custom</option>
                                             </select>
                                         </div>
 
-                                        {/* Custom 必填 Base URL；其他 provider 可选填中转站地址 */}
+                                        {/* Custom requires Base URL; other providers may optionally set a proxy address */}
                                         <div className="flex flex-col gap-1">
                                             <label className="menu-desc ml-1">
-                                                Base URL {config.provider === "Custom" ? "（必填）" : "（可选，留空用官方端点）"}
+                                                Base URL {config.provider === "Custom" ? "(required)" : "(optional, leave blank to use the official endpoint)"}
                                                 {config.provider === "Google" && (
                                                     <span style={{ color: "#888", marginLeft: 6, fontSize: "0.85em" }}>
-                                                        中转站填 https://xxx/v1beta 走原生协议
+                                                        For a proxy, use https://xxx/v1beta to use the native protocol
                                                     </span>
                                                 )}
                                             </label>
@@ -344,7 +344,7 @@ export function ApiSettings() {
                                                         ? "https://api.example.com/v1"
                                                         : config.provider === "Google"
                                                             ? "https://your-proxy.example.com/v1beta"
-                                                            : "默认用官方端点，留空即可"
+                                                            : "Uses the official endpoint by default, leave blank"
                                                 }
                                             />
                                         </div>
@@ -360,7 +360,7 @@ export function ApiSettings() {
                                         </div>
 
                                         <div className="flex flex-col gap-1">
-                                            <label className="menu-desc ml-1">默认模型 (Default Model)</label>
+                                            <label className="menu-desc ml-1">Default Model</label>
                                             <div className="flex gap-2">
                                                 {fetchedModels[config.id] && fetchedModels[config.id].length > 0 ? (
                                                     <select
@@ -368,7 +368,7 @@ export function ApiSettings() {
                                                         onChange={(e) => updateConfig(config.id, { defaultModel: e.target.value })}
                                                         className="ui-select flex-1"
                                                     >
-                                                        <option value="">请选择模型...</option>
+                                                        <option value="">Select a model...</option>
                                                         {fetchedModels[config.id].map(m => (
                                                             <option key={m} value={m}>{m}</option>
                                                         ))}
@@ -392,7 +392,7 @@ export function ApiSettings() {
                                                 className="ui-btn ui-btn ui-btn-soft-action flex-1"
                                             >
                                                 <RefreshCw size={16} className={isFetching[config.id] ? "animate-spin" : ""} />
-                                                {isFetching[config.id] ? "拉取中..." : "拉取模型列表"}
+                                                {isFetching[config.id] ? "Fetching..." : "Fetch Model List"}
                                             </button>
 
                                             <button
@@ -401,7 +401,7 @@ export function ApiSettings() {
                                                 className="ui-btn ui-btn ui-btn-success flex-1"
                                             >
                                                 <Rss size={16} className={isTesting[config.id] ? "animate-spin" : ""} />
-                                                {isTesting[config.id] ? "测试中..." : "测试连接"}
+                                                {isTesting[config.id] ? "Testing..." : "Test Connection"}
                                             </button>
                                         </div>
 
@@ -416,9 +416,9 @@ export function ApiSettings() {
                                             className="ui-toggle-row mt-2 overflow-visible"
                                             style={{ display: "block", position: "relative", height: "auto", flexShrink: 0, padding: "14px 76px 14px 16px" }}
                                         >
-                                            <span className="menu-label font-medium">启用原生工具调用</span>
+                                            <span className="menu-label font-medium">Enable Native Tool Calling</span>
                                             <span className="menu-desc whitespace-normal break-words leading-[1.45]">
-                                                开启后自动选择该服务商可用的原生工具格式（当前：{getNativeToolProtocolLabel(config)}）；关闭后使用文本动作协议。
+                                                When enabled, automatically selects the native tool format available for this provider (currently: {getNativeToolProtocolLabel(config)}); when disabled, uses the text action protocol.
                                             </span>
                                             <span style={{ position: "absolute", top: 0, bottom: 0, right: 16, display: "flex", alignItems: "center" }}>
                                                 <Toggle
@@ -429,14 +429,14 @@ export function ApiSettings() {
                                         </div>
 
                                         <div className="ui-toggle-row mt-2">
-                                            <span className="menu-label font-medium">启用图像识别</span>
+                                            <span className="menu-label font-medium">Enable Image Recognition</span>
                                             <Toggle checked={config.enableImageRecognition} onChange={(v) => updateConfig(config.id, { enableImageRecognition: v })} />
                                         </div>
 
                                         <div className="ui-toggle-row mt-2">
                                             <span className="flex min-w-0 flex-col">
-                                                <span className="menu-label font-medium">防胡言乱语</span>
-                                                <span className="menu-desc">防止没有用户输入时胡言乱语</span>
+                                                <span className="menu-label font-medium">Prevent Rambling</span>
+                                                <span className="menu-desc">Prevents rambling output when there's no user input</span>
                                             </span>
                                             <Toggle
                                                 checked={config.preventEmptyGenerateRambling === true}
@@ -454,12 +454,12 @@ export function ApiSettings() {
 
             {confirmDeleteId && (
                 <ConfirmDialog
-                    title="确认删除？"
-                    message="删除配置后无法恢复。是否继续？"
+                    title="Confirm delete?"
+                    message="This config cannot be recovered after deletion. Continue?"
                     icon={AlertCircle}
                     variant="danger"
-                    confirmLabel="确认删除"
-                    cancelLabel="取消"
+                    confirmLabel="Delete"
+                    cancelLabel="Cancel"
                     onConfirm={() => {
                         removeConfig(confirmDeleteId);
                         setConfirmDeleteId(null);

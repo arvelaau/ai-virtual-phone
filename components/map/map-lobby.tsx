@@ -94,40 +94,40 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
   const promptSections: Array<{ key: PromptEditorKey; label: string; helper: string; placeholder: string; value: string; onChange: (value: string) => void; minHeight?: number }> = [
     {
       key: "scene",
-      label: "场景生成",
-      helper: "场景生成 System Prompt — DM 根据此指令生成场景、NPC 对话和选项。输出格式必须包含: narration, npc_lines, situation, choices, journal, gained, lost, advance, move_to, world_events",
+      label: "Scene Generation",
+      helper: "Scene Generation System Prompt — the DM generates the scene, NPC dialogue, and choices based on this instruction. The output format must include: narration, npc_lines, situation, choices, journal, gained, lost, advance, move_to, world_events",
       placeholder: DEFAULT_DM_SCENE_PROMPT,
       value: dmPrompts.scene,
       onChange: value => setDmPrompts(prev => ({ ...prev, scene: value })),
     },
     {
       key: "resolve",
-      label: "裁决",
-      helper: "裁决 System Prompt — 收到所有角色宣言后，DM 根据此指令统一裁决结果。输出格式同场景生成，本轮声明会自动注入 User Prompt。",
+      label: "Resolution",
+      helper: "Resolution System Prompt — once all character declarations are received, the DM resolves the outcome based on this instruction. Output format matches Scene Generation; this turn's declarations are automatically injected into the User Prompt.",
       placeholder: DEFAULT_DM_RESOLVE_PROMPT,
       value: dmPrompts.resolve,
       onChange: value => setDmPrompts(prev => ({ ...prev, resolve: value })),
     },
     {
       key: "worldGen",
-      label: "世界生成",
-      helper: "世界生成 System Prompt — 用户描述世界观后，AI 根据此指令生成完整世界骨架。输出为 world + regions + main_quest + dm_dossier 的 JSON。",
+      label: "World Generation",
+      helper: "World Generation System Prompt — after the user describes the setting, the AI generates a complete world skeleton based on this instruction. Output is JSON containing world + regions + main_quest + dm_dossier.",
       placeholder: DEFAULT_WORLD_GEN_PROMPT,
       value: dmPrompts.worldGen,
       onChange: value => setDmPrompts(prev => ({ ...prev, worldGen: value })),
     },
     {
       key: "ending",
-      label: "结局",
-      helper: "结局 System Prompt — 主线通关后，DM 根据此指令生成结局。输出 JSON: {paragraphs:[\"段落1\",...], closing:\"收束语\"}",
+      label: "Ending",
+      helper: "Ending System Prompt — after the main quest is completed, the DM generates the ending based on this instruction. Output JSON: {paragraphs:[\"paragraph1\",...], closing:\"closing line\"}",
       placeholder: DEFAULT_DM_ENDING_PROMPT,
       value: dmPrompts.ending,
       onChange: value => setDmPrompts(prev => ({ ...prev, ending: value })),
     },
     {
       key: "summary",
-      label: "总结提示词",
-      helper: "冒险自动总结 Prompt — 达到自动总结间隔后，DM 根据此指令压缩近期日志，生成可长期保留的冒险摘要。",
+      label: "Summary Prompt",
+      helper: "Adventure Auto-Summary Prompt — once the auto-summary interval is reached, the DM compresses recent journal entries based on this instruction to produce a long-term adventure summary.",
       placeholder: DEFAULT_ADVENTURE_SUMMARY_PROMPT,
       value: summaryConfig.prompt || DEFAULT_ADVENTURE_SUMMARY_PROMPT,
       onChange: value => setSummaryConfig(prev => ({ ...prev, prompt: value })),
@@ -135,8 +135,8 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
     },
     {
       key: "bilingual",
-      label: "双语提示词",
-      helper: "角色双语翻译 Prompt — 角色发言需要翻译时使用，只作用于角色发言的中文译文。",
+      label: "Bilingual Prompt",
+      helper: "Character Bilingual Translation Prompt — used when a character's dialogue needs translating; only affects the Chinese translation of character dialogue.",
       placeholder: DEFAULT_ADVENTURE_INTERACTION_CONFIG.bilingualTranslationPrompt,
       value: adventureConfig.bilingualTranslationPrompt,
       onChange: value => setAdventureConfig(prev => ({ ...prev, bilingualTranslationPrompt: value })),
@@ -176,7 +176,7 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
     const firstChar = characters[0];
     const slot = firstChar ? resolveBinding(bindings, firstChar.id, "chat") : null;
     const apiConfig = (slot?.apiConfigId ? apiConfigs.find(c => c.id === slot.apiConfigId) : null) || apiConfigs.find(c => c.apiKey) || apiConfigs[0];
-    if (!apiConfig?.apiKey) { setError("未找到有效的API配置，请先在设置中配置API"); return; }
+    if (!apiConfig?.apiKey) { setError("No valid API configuration found. Please configure an API in Settings first."); return; }
 
     // 1. Create placeholder world immediately
     const now = new Date().toISOString();
@@ -201,11 +201,11 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
     try {
       const vars = {
         world_desc: description,
-        tone: tone || "自由发挥",
+        tone: tone || "Freeform",
         region_count: String(regionCount),
-        main_quest_type: mainQuestType || "自由发挥",
+        main_quest_type: mainQuestType || "Freeform",
         npc_count: String(npcCount),
-        difficulty: difficulty || "适中",
+        difficulty: difficulty || "Moderate",
       };
       const skeleton = await generateWorldSkeleton(description, [], apiConfig, vars);
 
@@ -236,7 +236,7 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
       renderedMap.l3Nodes.forEach((n, i) => { if (n.regionIdx === startRegionIdx) discovered.push(`l3_${i}`); });
       renderedMap.l1Nodes.forEach((n) => { if (!discovered.includes(n.id)) discovered.push(n.id); });
       save.discoveredNodes = discovered;
-      save.journal[0].locationName = renderedMap.l1Nodes[0]?.nameCn || "起点";
+      save.journal[0].locationName = renderedMap.l1Nodes[0]?.nameCn || "Starting Point";
       saveGame(save);
 
       setWorlds(loadMapWorlds());
@@ -300,7 +300,7 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
           <div style={{ display: "flex", gap: 2 }}>
             <button
               type="button"
-              aria-label="冒险设置"
+              aria-label="Adventure settings"
               onClick={() => { const s = loadDMPrompts(); setDmPrompts({ scene: s.scene || DEFAULT_DM_SCENE_PROMPT, resolve: s.resolve || DEFAULT_DM_RESOLVE_PROMPT, worldGen: s.worldGen || DEFAULT_WORLD_GEN_PROMPT, ending: s.ending || DEFAULT_DM_ENDING_PROMPT }); setMode("prompts"); }}
               style={S.btn}
             >
@@ -316,15 +316,15 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
           worlds.length === 0 ? (
             <div style={{ textAlign: "center", padding: "80px 0", color: "rgba(255,255,255,0.2)" }}>
               <div style={{ fontSize: "calc(32px*var(--app-text-scale,1))", marginBottom: 12 }}>🗺</div>
-              <div style={{ fontSize: "calc(13px*var(--app-text-scale,1))" }}>还没有冒险世界</div>
-              <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", marginTop: 4 }}>点击右下角 + 创建一个</div>
+              <div style={{ fontSize: "calc(13px*var(--app-text-scale,1))" }}>No adventure worlds yet</div>
+              <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", marginTop: 4 }}>Tap the + in the bottom right to create one</div>
             </div>
           ) : worlds.map(w => (
             <div key={w.id} style={{ ...S.card, opacity: w.status === "generating" ? 0.6 : 1 }}>
               <div style={{ fontSize: "calc(15px*var(--app-text-scale,1))", fontWeight: 600, marginBottom: 4 }}>
-                {w.skeleton.world.name || "新世界"}
-                {w.status === "generating" && <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,200,100,0.6)", marginLeft: 8, fontWeight: 400 }}>生成中...</span>}
-                {w.status === "failed" && <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,100,80,0.7)", marginLeft: 8, fontWeight: 400 }}>生成失败</span>}
+                {w.skeleton.world.name || "New World"}
+                {w.status === "generating" && <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,200,100,0.6)", marginLeft: 8, fontWeight: 400 }}>Generating...</span>}
+                {w.status === "failed" && <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,100,80,0.7)", marginLeft: 8, fontWeight: 400 }}>Generation failed</span>}
               </div>
               {w.status === "failed" && w.statusMessage && (
                 <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,100,80,0.5)", marginBottom: 6, lineHeight: 1.4 }}>{w.statusMessage.slice(0, 100)}</div>
@@ -333,17 +333,17 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
               <div style={{ display: "flex", gap: 8 }}>
                 {!w.status && (
                   <button onClick={() => handleEnterWorld(w)} style={{ flex: 1, padding: "8px 0", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)", color: "#e0dcd5", fontSize: "calc(12px*var(--app-text-scale,1))", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4, fontFamily: "inherit" }}>
-                    <Play size={12} /> 进入
+                    <Play size={12} /> Enter
                   </button>
                 )}
                 {w.status === "generating" && (
                   <div style={{ flex: 1, padding: "8px 0", textAlign: "center", fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,200,100,0.4)", fontFamily: "monospace", letterSpacing: "0.1em" }}>
-                    世界正在生成中...
+                    World is being generated...
                   </div>
                 )}
                 {w.status === "failed" && (
-                  <button onClick={() => setGenError({ reason: w.statusMessage || "生成失败", raw: w.failureRaw || "" })} style={{ flex: 1, padding: "8px 0", borderRadius: 6, border: "1px solid var(--c-adv-accent-dim)", background: "transparent", color: "var(--c-adv-accent)", fontSize: "calc(12px*var(--app-text-scale,1))", cursor: "pointer", fontFamily: "inherit" }}>
-                    查看失败详情
+                  <button onClick={() => setGenError({ reason: w.statusMessage || "Generation failed", raw: w.failureRaw || "" })} style={{ flex: 1, padding: "8px 0", borderRadius: 6, border: "1px solid var(--c-adv-accent-dim)", background: "transparent", color: "var(--c-adv-accent)", fontSize: "calc(12px*var(--app-text-scale,1))", cursor: "pointer", fontFamily: "inherit" }}>
+                    View failure details
                   </button>
                 )}
                 <button onClick={() => setDeleteConfirmId(w.id)} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid rgba(255,100,80,0.2)", background: "transparent", color: "rgba(255,100,80,0.6)", fontSize: "calc(12px*var(--app-text-scale,1))", cursor: "pointer" }}>
@@ -376,17 +376,17 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
             {/* ── Tome header ornament ── */}
             <div style={{ textAlign: "center", marginBottom: 16 }}>
               <div style={{ fontSize: "calc(9px*var(--app-text-scale,1))", letterSpacing: "0.4em", color: "rgba(200,160,100,0.3)", fontFamily: "monospace" }}>
-                ── 世界创造之书 ──
+                ── Tome of World Creation ──
               </div>
             </div>
 
             {/* ── World description ── */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(200,160,100,0.5)", marginBottom: 6, letterSpacing: "0.08em" }}>
-                世界描述
+                World Description
               </div>
               <textarea value={description} onChange={e => setDescription(e.target.value)}
-                placeholder="在此书写你所构想的世界...&#10;&#10;例如：吸血鬼的黑暗世界，人类在夹缝中求生，几大血族家族争夺王座..."
+                placeholder="Write the world you envision here...&#10;&#10;For example: A dark vampire world where humans struggle to survive in the cracks, and great blood clans vie for the throne..."
                 style={{
                   width: "100%", minHeight: 90, padding: "12px 14px", borderRadius: 10,
                   border: "1px solid rgba(200,160,100,0.12)",
@@ -401,9 +401,9 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
 
             {/* ── Tag sections ── */}
             {([
-              { label: "风格基调", value: tone, setter: setTone, tags: ["轻松", "黑暗", "恐怖", "浪漫", "史诗", "悬疑", "幽默", "治愈", "热血", "荒诞"] },
-              { label: "主线类型", value: mainQuestType, setter: setMainQuestType, tags: ["拯救世界", "解开谜团", "寻找宝藏", "复仇之路", "生存逃脱", "王位之争", "阴谋揭露", "守护家园"] },
-              { label: "难度", value: difficulty, setter: setDifficulty, tags: ["轻松冒险", "适中", "硬核生存", "地狱难度"] },
+              { label: "Tone", value: tone, setter: setTone, tags: ["Lighthearted", "Dark", "Horror", "Romance", "Epic", "Mystery", "Humor", "Healing", "Passionate", "Absurd"] },
+              { label: "Main Quest Type", value: mainQuestType, setter: setMainQuestType, tags: ["Save the World", "Unravel a Mystery", "Search for Treasure", "Path of Revenge", "Survival Escape", "Battle for the Throne", "Expose a Conspiracy", "Defend the Homeland"] },
+              { label: "Difficulty", value: difficulty, setter: setDifficulty, tags: ["Easy Adventure", "Moderate", "Hardcore Survival", "Hell Difficulty"] },
             ] as const).map(section => (
               <div key={section.label} style={{ marginBottom: 14 }}>
                 <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(200,160,100,0.5)", marginBottom: 7, letterSpacing: "0.08em" }}>
@@ -438,7 +438,7 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
                     })}
                   </div>
                   <input value={section.value} onChange={e => section.setter(e.target.value)}
-                    placeholder="自定义..."
+                    placeholder="Custom..."
                     style={{
                       width: "100%", padding: "5px 0", borderRadius: 0,
                       border: "none", borderTop: "1px solid rgba(200,160,100,0.06)",
@@ -456,7 +456,7 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
             {/* ── Sliders ── */}
             <div style={{ display: "flex", gap: 20, marginBottom: 18 }}>
               {([
-                { label: "区域", value: regionCount, setter: setRegionCount, min: 3, max: 10 },
+                { label: "Regions", value: regionCount, setter: setRegionCount, min: 3, max: 10 },
                 { label: "NPC", value: npcCount, setter: setNpcCount, min: 5, max: 20 },
               ] as const).map(s => (
                 <div key={s.label} style={{ flex: 1 }}>
@@ -478,11 +478,11 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
             {/* ── Character selection ── */}
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(200,160,100,0.5)", marginBottom: 7, letterSpacing: "0.08em" }}>
-                同行角色（可不选）
+                Companions (optional)
               </div>
               {characters.length === 0 ? (
                 <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.15)", textAlign: "center", padding: "12px 0" }}>
-                  还没有角色，可以先创建
+                  No characters yet — you can create one first
                 </div>
               ) : (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
@@ -554,7 +554,7 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
                 fontFamily: "inherit",
                 transition: "all 0.3s ease",
               }}>
-              {isGenerating ? "⏳ 世界生成中..." : selectedCharIds.length > 0 ? `✦ 携 ${selectedCharIds.length} 位同伴创造世界 ✦` : "✦ 独自创造世界 ✦"}
+              {isGenerating ? "⏳ Generating world..." : selectedCharIds.length > 0 ? `✦ Create world with ${selectedCharIds.length} companions ✦` : "✦ Create world alone ✦"}
             </button>
 
             {/* ── Tome footer ornament ── */}
@@ -570,14 +570,14 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
         {mode === "prompts" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ ...S.card, marginBottom: 0 }}>
-              <div style={{ ...S.label }}>运行参数</div>
+              <div style={{ ...S.label }}>Runtime Parameters</div>
 
               <div style={{ padding: "2px 0 12px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.3)", marginBottom: 8, letterSpacing: "0.1em" }}>DM 上下文截断（Token）</div>
+                <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.3)", marginBottom: 8, letterSpacing: "0.1em" }}>DM Context Truncation (Tokens)</div>
                 <div style={{ display: "flex", gap: 16 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                      <span style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.3)" }}>日志</span>
+                      <span style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.3)" }}>Journal</span>
                       <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#e8d0a0", fontFamily: "monospace" }}>{dmTokenConfig.journalTokenBudget}</span>
                     </div>
                     <input type="range" className="adv-slider" min={1000} max={100000} step={500}
@@ -587,7 +587,7 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                      <span style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.3)" }}>对话</span>
+                      <span style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.3)" }}>Dialogue</span>
                       <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#e8d0a0", fontFamily: "monospace" }}>{dmTokenConfig.dialogueTokenBudget}</span>
                     </div>
                     <input type="range" className="adv-slider" min={1000} max={100000} step={500}
@@ -599,11 +599,11 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
               </div>
 
               <div style={{ padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                <div style={{ ...S.label }}>冒险自动总结</div>
+                <div style={{ ...S.label }}>Adventure Auto-Summary</div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 6 }}>
-                  <span style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em" }}>自动总结并传入全局记忆间隔</span>
+                  <span style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em" }}>Auto-summarize and feed into global memory interval</span>
                   <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#e8d0a0", fontFamily: "monospace" }}>
-                    {summaryConfig.interval === 0 ? "关闭" : `每 ${summaryConfig.interval} 条`}
+                    {summaryConfig.interval === 0 ? "Off" : `Every ${summaryConfig.interval} entries`}
                   </span>
                 </div>
                 <input
@@ -617,17 +617,17 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
                   style={{ width: "100%" }}
                 />
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                  <span style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.25)" }}>关闭</span>
-                  <span style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.25)" }}>100 条</span>
+                  <span style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.25)" }}>Off</span>
+                  <span style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.25)" }}>100 entries</span>
                 </div>
               </div>
 
               <div style={{ paddingTop: 12 }}>
-                <div style={{ ...S.label }}>双语翻译</div>
+                <div style={{ ...S.label }}>Bilingual Translation</div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: adventureConfig.bilingualTranslationEnabled ? 10 : 0 }}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em" }}>角色双语翻译</div>
-                    <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.3)", marginTop: 3 }}>只作用于角色发言，不影响 DM / NPC / 选项 / 日志</div>
+                    <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em" }}>Character Bilingual Translation</div>
+                    <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.3)", marginTop: 3 }}>Only affects character dialogue; does not affect DM / NPC / choices / journal</div>
                   </div>
                   <Toggle
                     checked={adventureConfig.bilingualTranslationEnabled}
@@ -637,8 +637,8 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
                 {adventureConfig.bilingualTranslationEnabled && (
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em" }}>折叠中文译文</div>
-                      <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.3)", marginTop: 3 }}>关闭后默认展开中文</div>
+                      <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em" }}>Collapse Chinese Translation</div>
+                      <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.3)", marginTop: 3 }}>When off, Chinese is expanded by default</div>
                     </div>
                     <Toggle
                       checked={adventureConfig.collapseBilingualTranslation === true}
@@ -649,7 +649,7 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
               </div>
             </div>
 
-            <div style={{ ...S.label, marginBottom: -4 }}>提示词</div>
+            <div style={{ ...S.label, marginBottom: -4 }}>Prompts</div>
 
             {/* Collapsible prompt editors */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -719,7 +719,7 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
                           }}
                         />
                         <div style={{ fontSize: "calc(9px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.15)", textAlign: "center", marginTop: 6 }}>
-                          当前显示的即为实际使用的提示词，可直接修改
+                          What's shown here is the actual prompt in use — you can edit it directly
                         </div>
                       </div>
                     )}
@@ -737,14 +737,14 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
                 saveAdventureInteractionConfig(adventureConfig);
                 setMode("list");
               }} style={{ ...S.primaryBtn, flex: 1 }}>
-                保存
+                Save
               </button>
               <button onClick={resetCurrentPrompt} style={{
                 flexShrink: 0, padding: "14px 20px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)",
                 background: "transparent", color: "rgba(255,255,255,0.4)", fontSize: "calc(12px*var(--app-text-scale,1))",
                 cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
               }}>
-                重置当前提示词
+                Reset Current Prompt
               </button>
             </div>
           </div>
@@ -755,7 +755,7 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
       {mode === "list" && (
         <button
           type="button"
-          aria-label="创建冒险世界"
+          aria-label="Create adventure world"
           onClick={() => setMode("create")}
           style={{
             position: "absolute",
@@ -784,14 +784,14 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
       {deleteConfirmId && (
         <div onClick={() => setDeleteConfirmId(null)} style={{ position: "absolute", inset: 0, zIndex: 50, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: "rgba(15,12,18,0.98)", borderRadius: 12, border: "1px solid rgba(255,100,80,0.15)", padding: 20, maxWidth: 280, width: "100%", textAlign: "center" }}>
-            <div style={{ fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 600, marginBottom: 8 }}>确认删除？</div>
-            <div style={{ fontSize: "calc(12px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.4)", marginBottom: 16 }}>这个世界的所有数据和存档将被永久删除</div>
+            <div style={{ fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 600, marginBottom: 8 }}>Confirm delete?</div>
+            <div style={{ fontSize: "calc(12px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.4)", marginBottom: 16 }}>All data and saves for this world will be permanently deleted</div>
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={() => setDeleteConfirmId(null)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "transparent", color: "rgba(255,255,255,0.5)", fontSize: "calc(13px*var(--app-text-scale,1))", cursor: "pointer", fontFamily: "inherit" }}>
-                取消
+                Cancel
               </button>
               <button onClick={() => handleDelete(deleteConfirmId)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "none", background: "rgba(255,80,60,0.2)", color: "rgba(255,100,80,0.9)", fontSize: "calc(13px*var(--app-text-scale,1))", cursor: "pointer", fontFamily: "inherit" }}>
-                删除
+                Delete
               </button>
             </div>
           </div>
@@ -810,16 +810,16 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
             }}
           >
             <div style={{ padding: "16px 18px 12px", borderBottom: "1px solid var(--c-adv-accent-dim)" }}>
-              <div style={{ color: "var(--c-adv-accent)", fontSize: "calc(15px*var(--app-text-scale,1))", fontWeight: 600, letterSpacing: "0.04em" }}>⚠ 世界生成失败</div>
+              <div style={{ color: "var(--c-adv-accent)", fontSize: "calc(15px*var(--app-text-scale,1))", fontWeight: 600, letterSpacing: "0.04em" }}>⚠ World Generation Failed</div>
               <div style={{ color: "var(--c-adv-text-dim)", fontSize: "calc(12px*var(--app-text-scale,1))", marginTop: 6, lineHeight: 1.6 }}>{genError.reason}</div>
             </div>
             {genError.raw ? (
               <div style={{ padding: "12px 18px", overflowY: "auto", flex: 1, minHeight: 0 }}>
-                <div style={{ color: "var(--c-adv-text-muted)", fontSize: "calc(10px*var(--app-text-scale,1))", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 6 }}>AI 原始输出</div>
+                <div style={{ color: "var(--c-adv-text-muted)", fontSize: "calc(10px*var(--app-text-scale,1))", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 6 }}>AI Raw Output</div>
                 <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", color: "var(--c-adv-text)", fontSize: "calc(11px*var(--app-text-scale,1))", lineHeight: 1.65, fontFamily: '"Courier New", monospace', background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8, padding: "10px 12px" }}>{genError.raw}</pre>
               </div>
             ) : (
-              <div style={{ padding: "14px 18px", color: "var(--c-adv-text-muted)", fontSize: "calc(11px*var(--app-text-scale,1))", flex: 1 }}>（模型没有返回任何内容，可能是网络中断或请求超时）</div>
+              <div style={{ padding: "14px 18px", color: "var(--c-adv-text-muted)", fontSize: "calc(11px*var(--app-text-scale,1))", flex: 1 }}>(The model returned no content, possibly due to a network interruption or request timeout)</div>
             )}
             <div style={{ display: "flex", gap: 10, padding: "12px 18px 16px", borderTop: "1px solid var(--c-adv-accent-dim)" }}>
               {genError.raw && (
@@ -828,7 +828,7 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
                   onClick={() => { navigator.clipboard?.writeText(genError.raw).catch(() => {}); }}
                   style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "1px solid var(--c-adv-accent-dim)", background: "transparent", color: "var(--c-adv-accent)", fontSize: "calc(12.5px*var(--app-text-scale,1))", cursor: "pointer", fontFamily: "inherit" }}
                 >
-                  复制原始输出
+                  Copy Raw Output
                 </button>
               )}
               <button
@@ -836,7 +836,7 @@ export default function MapLobby({ onClose, onStartGame }: Props) {
                 onClick={() => setGenError(null)}
                 style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "none", background: "var(--c-adv-accent-dim)", color: "var(--c-adv-accent)", fontSize: "calc(12.5px*var(--app-text-scale,1))", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}
               >
-                知道了
+                Got it
               </button>
             </div>
           </div>

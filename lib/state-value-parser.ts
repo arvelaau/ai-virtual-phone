@@ -7,9 +7,19 @@ export type ParseStateResult = {
     stateValues: StateValue[];
 };
 
-/** Rich media tag names that should NOT be treated as state values */
+/**
+ * Rich media tag names that should NOT be treated as state values.
+ * Both the legacy Chinese tokens and the going-forward English ones must be
+ * listed, or e.g. [RedPacket:50:1:msg] would be misread as a state value.
+ * Keep in sync with the alias consts in lib/rich-message-parser.ts.
+ * See PROTOCOL-MIGRATION-PLAN.md.
+ */
 const RICH_MEDIA_NAMES = new Set([
+    // legacy Chinese
     "红包", "转账", "照片", "位置", "表情包", "引用", "语音", "音乐",
+    // going-forward English
+    "RedPacket", "Transfer", "Photo", "Location", "Sticker", "Quote", "VoiceNote", "Music",
+    "PaymentRequest", "Gift", "ContactCard", "MusicShare",
 ]);
 
 /**

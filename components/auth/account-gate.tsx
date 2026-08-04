@@ -17,12 +17,13 @@ type GateStatus = "checking" | "ready" | "signed-out" | "unreachable";
 const SELF_HOSTED_ACCOUNT: AccountProfile = {
   id: "local_user",
   username: "local_user",
-  displayName: "本地用户",
+  displayName: "Local User",
   status: "active",
 };
 
-// 内联兜底：弱网/离线下 SW 可能回退到旧 HTML，外链 CSS 拉不到（旧 hash 已 404），
-// 此时全页无样式，「正在校验账号」会裸排在左上角。内联样式不依赖外部 CSS，保证居中。
+// Inline fallback: on a weak/offline network the SW may fall back to stale HTML, and the linked
+// CSS may fail to load (old hash 404s). In that case the whole page is unstyled and "Verifying
+// account" would render bare in the top-left corner. Inline styles don't depend on external CSS, so centering is guaranteed.
 const gateRootFallbackStyle: CSSProperties = {
   minHeight: "100vh",
   display: "flex",
@@ -69,7 +70,8 @@ export function AccountGate({ children }: AccountGateProps) {
       setError("");
       return;
     }
-    // 网络层失败（超时/断连/切网）：会话 cookie 还在，不应登出——给重试入口
+    // Network-layer failure (timeout/disconnect/network switch): the session cookie is still there,
+    // so we shouldn't log out -- give the user a retry entry point
     if (result.error === ACCOUNT_NETWORK_ERROR) {
       setStatus("unreachable");
       return;
@@ -88,7 +90,7 @@ export function AccountGate({ children }: AccountGateProps) {
     }
 
     void refreshAccount();
-    // 网络恢复（含 WiFi↔流量切换完成）时自动重试校验
+    // Automatically retry verification when the network recovers (including after a WiFi<->cellular switch)
     const onOnline = () => {
       setStatus(current => {
         if (current === "checking" || current === "unreachable") {
@@ -114,7 +116,7 @@ export function AccountGate({ children }: AccountGateProps) {
         activationCode: activationCode.trim() || undefined,
       });
       if (!result.ok || !result.account) {
-        setError(result.error || "登录失败。");
+        setError(result.error || "Login failed.");
         return;
       }
       setAccount(result.account);
@@ -144,13 +146,13 @@ export function AccountGate({ children }: AccountGateProps) {
     return (
       <main className="app-root account-gate-root" style={gateRootFallbackStyle}>
         <section className="account-gate-card account-gate-loading" style={gatePanelFallbackStyle}>
-          <span>网络连接不畅，账号校验失败</span>
+          <span>Poor network connection, account verification failed</span>
           <button
             type="button"
             className="account-gate-retry-btn"
             onClick={() => { setStatus("checking"); void refreshAccount(); }}
           >
-            重试
+            Retry
           </button>
         </section>
       </main>
@@ -162,7 +164,7 @@ export function AccountGate({ children }: AccountGateProps) {
       <main className="app-root account-gate-root" style={gateRootFallbackStyle}>
         <section className="account-gate-panel" aria-live="polite" style={gatePanelFallbackStyle}>
           <Loader2 className="account-gate-spinner" size={24} />
-          <span>正在校验账号...</span>
+          <span>Verifying account...</span>
         </section>
       </main>
     );
@@ -178,45 +180,45 @@ export function AccountGate({ children }: AccountGateProps) {
 
   return (
     <main className="app-root account-gate-root" style={gateRootFallbackStyle}>
-      <section className="account-gate-card" aria-label="账号登录">
+      <section className="account-gate-card" aria-label="Account Login">
         <div className="account-gate-copy">
           <span>AI PHONE ACCESS</span>
-          {serviceError ? <p>账号服务尚未就绪</p> : null}
+          {serviceError ? <p>Account service is not ready yet</p> : null}
         </div>
 
         <form className="account-gate-form" onSubmit={handleSubmit}>
           <label>
-            <span>账号</span>
+            <span>Account</span>
             <input
               value={username}
               onChange={event => setUsername(event.target.value)}
               autoComplete="username"
               inputMode="text"
-              placeholder="例如 user001"
+              placeholder="e.g. user001"
             />
           </label>
           <label>
-            <span>密码</span>
+            <span>Password</span>
             <input
               value={password}
               onChange={event => setPassword(event.target.value)}
               autoComplete="current-password"
               type="password"
-              placeholder="至少 6 位"
+              placeholder="At least 6 characters"
             />
           </label>
           <label>
-            <span>激活码</span>
+            <span>Activation Code</span>
             <input
               value={activationCode}
               onChange={event => setActivationCode(event.target.value)}
               autoComplete="one-time-code"
               inputMode="text"
-              placeholder="首次使用该账号时填写"
+              placeholder="Fill in the first time you use this account"
             />
             {VERIFY_APPLICATIONS_OPEN ? (
               <a className="account-gate-verify-link" href="/verify" target="_blank" rel="noreferrer">
-                没有激活码？申请内测资格 →
+                No activation code? Apply for beta access &rarr;
               </a>
             ) : (
               <span className="account-gate-verify-link" aria-disabled="true">
@@ -227,7 +229,7 @@ export function AccountGate({ children }: AccountGateProps) {
           {error ? <div className="account-gate-error" role="alert">{error}</div> : null}
           <button type="submit" disabled={busy}>
             {busy ? <Loader2 size={18} className="account-gate-spinner" /> : <LogIn size={18} />}
-            <span>{busy ? "处理中" : "登录 / 激活"}</span>
+            <span>{busy ? "Processing" : "Log In / Activate"}</span>
           </button>
         </form>
       </section>

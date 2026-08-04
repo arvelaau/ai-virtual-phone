@@ -60,6 +60,18 @@ export function formatMuteDurationLabel(minutes: number): string {
     return `${minutes}分钟`;
 }
 
+/**
+ * English duration label for the protocol tag (see buildGroupAdminBracketText).
+ * The unit words must stay within what the mute patterns in
+ * lib/rich-message-parser.ts accept: minute(s) / hour(s) / day(s).
+ */
+export function formatMuteDurationLabelEn(minutes: number): string {
+    const unit = (value: number, word: string) => `${value} ${word}${value === 1 ? "" : "s"}`;
+    if (minutes % 1440 === 0 && minutes >= 1440) return unit(minutes / 1440, "day");
+    if (minutes % 60 === 0 && minutes >= 60) return unit(minutes / 60, "hour");
+    return unit(minutes, "minute");
+}
+
 export function formatMuteRemainingLabel(ms: number): string {
     const totalMinutes = Math.ceil(ms / 60000);
     if (totalMinutes >= 1440) return `${Math.ceil(totalMinutes / 1440)}天`;
@@ -186,7 +198,14 @@ export function buildGroupAdminNoticeText(
 /**
  * Canonical protocol tag for prompt history — same bracket format the AI is
  * taught to output, so user actions and AI actions read identically in context
- * (mirrors how [A领取了B的红包] / call tags replay through history).
+ * (mirrors how the red-envelope / call tags replay through history).
+ *
+ * PHASE C1 (protocol migration): this producer now emits the ENGLISH tag form.
+ * Nothing is stored from here — it is regenerated from `mediaData` on every
+ * prompt build (lib/llm-prompt-assembler.ts, lib/short-term-assembler.ts), so
+ * old group-admin messages start rendering as English tags too, which is what we
+ * want for a consistent AI context. The legacy Chinese forms remain permanently
+ * parseable in lib/rich-message-parser.ts. See PROTOCOL-MIGRATION-PLAN.md.
  */
 export function buildGroupAdminBracketText(
     action: GroupAdminAction,
@@ -196,15 +215,16 @@ export function buildGroupAdminBracketText(
 ): string {
     switch (action) {
         case "transfer_owner":
-            // 上帝按钮收回群主：非协议动作，写成事实陈述即可
-            if (actorName === targetName) return `[${actorName}收回了群主身份]`;
-            return `[${actorName}将群主转让给了${targetName}]`;
-        case "set_admin": return `[${actorName}将${targetName}设为了管理员]`;
-        case "unset_admin": return `[${actorName}取消了${targetName}的管理员]`;
-        case "kick": return `[${actorName}将${targetName}移出了群聊]`;
-        case "invite": return `[${actorName}邀请${targetName}加入了群聊]`;
-        case "mute": return `[${actorName}禁言了${targetName}:${formatMuteDurationLabel(muteMinutes || 10)}]`;
-        case "unmute": return `[${actorName}解除了${targetName}的禁言]`;
+            // "Reclaim ownership" god-button: not a protocol action, a plain
+            // factual statement is enough (no parser pattern matches it).
+            if (actorName === targetName) return `[${actorName} reclaimed group ownership]`;
+            return `[${actorName} transferred group ownership to ${targetName}]`;
+        case "set_admin": return `[${actorName} made ${targetName} an admin]`;
+        case "unset_admin": return `[${actorName} removed admin from ${targetName}]`;
+        case "kick": return `[${actorName} removed ${targetName} from the group]`;
+        case "invite": return `[${actorName} invited ${targetName} to the group]`;
+        case "mute": return `[${actorName} muted ${targetName}: ${formatMuteDurationLabelEn(muteMinutes || 10)}]`;
+        case "unmute": return `[${actorName} unmuted ${targetName}]`;
     }
 }
 

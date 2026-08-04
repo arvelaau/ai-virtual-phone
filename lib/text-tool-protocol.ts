@@ -4,8 +4,22 @@ export type TextToolDirectiveSpan = {
     raw: string;
 };
 
-const FETCH_DIRECTIVE_RE = /\[[^\]\r\n]*?(?:获取指令|获取工具)\s*[:：][^\]\r\n]*\]/g;
-const ACTION_HEADER_RE = /(?:执行动作|工具调用)\s*[:：]/;
+// Dual-recognition: the legacy Chinese directive names must keep matching forever
+// (they are taught in lib/builtin-preset.ts and appear in saved history); the
+// English names are the going-forward form. Tag names are case-sensitive, matching
+// the convention used by the other parsers. See PROTOCOL-MIGRATION-PLAN.md.
+//
+// These alternation fragments are the SINGLE SOURCE OF TRUTH for directive names.
+// They are exported because this protocol is re-parsed in several other places
+// (tool-executor, cocreate, group chat, mascot, note wall) — every one of those
+// copies must recognize exactly the same set, or a directive gets stripped from
+// display by one parser and silently ignored by another. Build regexes from these
+// rather than retyping the alternation.
+export const FETCH_DIRECTIVE_NAMES = "获取指令|获取工具|FetchTool";
+export const ACTION_DIRECTIVE_NAMES = "执行动作|工具调用|CallTool";
+
+const FETCH_DIRECTIVE_RE = new RegExp(`\\[[^\\]\\r\\n]*?(?:${FETCH_DIRECTIVE_NAMES})\\s*[:：][^\\]\\r\\n]*\\]`, "g");
+const ACTION_HEADER_RE = new RegExp(`(?:${ACTION_DIRECTIVE_NAMES})\\s*[:：]`);
 
 function findActionDirectiveSpans(text: string): TextToolDirectiveSpan[] {
     const spans: TextToolDirectiveSpan[] = [];

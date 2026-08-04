@@ -149,9 +149,9 @@ const DEFAULT_RUNTIME_TITLE_BAR: RuntimeTitleBarConfig = {
 };
 
 const GAME_MAIN_TABS: Array<{ id: GameMainView; label: string; icon: typeof Gamepad2 }> = [
-  { id: "hall", label: "游戏大厅", icon: Gamepad2 },
-  { id: "studio", label: "创作工坊", icon: Wand2 },
-  { id: "library", label: "我的", icon: Library },
+  { id: "hall", label: "Game Hall", icon: Gamepad2 },
+  { id: "studio", label: "Creator Studio", icon: Wand2 },
+  { id: "library", label: "Mine", icon: Library },
 ];
 
 function isSafeRuntimeCssValue(value: unknown, maxLength = 140): value is string {
@@ -213,9 +213,9 @@ function formatGameRelativeTime(value: string, now: number | null): string {
   if (Number.isNaN(date.getTime())) return value;
   if (now === null) return formatGameDate(value);
   const diffMinutes = Math.max(1, Math.round((now - date.getTime()) / 60000));
-  if (diffMinutes < 60) return `${diffMinutes}分钟前`;
-  if (diffMinutes < 1440) return `${Math.round(diffMinutes / 60)}小时前`;
-  if (diffMinutes < 43200) return `${Math.round(diffMinutes / 1440)}天前`;
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  if (diffMinutes < 1440) return `${Math.round(diffMinutes / 60)}h ago`;
+  if (diffMinutes < 43200) return `${Math.round(diffMinutes / 1440)}d ago`;
   const sameYear = new Date(now).getFullYear() === date.getFullYear();
   return date.toLocaleDateString("zh-CN", sameYear
     ? { month: "2-digit", day: "2-digit" }
@@ -232,7 +232,7 @@ function isInlineImage(value: string): boolean {
 
 function initials(name: string): string {
   const trimmed = name.trim();
-  return trimmed ? trimmed.slice(0, 2).toUpperCase() : "玩家";
+  return trimmed ? trimmed.slice(0, 2).toUpperCase() : "PL";
 }
 
 function displayGameAuthorName(value: string): string {
@@ -339,13 +339,13 @@ function latestInstalledGameTime(items: GameInstalledItem[]): string | undefined
 }
 
 async function compressImageFile(file: File, options: { width: number; height: number; quality: number; fit?: "cover" | "contain" }): Promise<string> {
-  if (!file.type.startsWith("image/")) throw new Error("请选择图片文件。");
+  if (!file.type.startsWith("image/")) throw new Error("Please select an image file.");
   const bitmap = await createImageBitmap(file);
   const canvas = document.createElement("canvas");
   canvas.width = options.width;
   canvas.height = options.height;
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("当前浏览器无法处理图片。");
+  if (!ctx) throw new Error("This browser cannot process images.");
   if (options.fit === "contain") {
     const scale = Math.min(options.width / bitmap.width, options.height / bitmap.height);
     const dw = bitmap.width * scale;
@@ -452,7 +452,7 @@ ${body}
   var api = {
     on: function(eventName, handler){
       var key = String(eventName || '').trim();
-      if (!key || typeof handler !== 'function') throw new Error('AiPhoneGame.on 需要事件名和回调函数');
+      if (!key || typeof handler !== 'function') throw new Error('AiPhoneGame.on requires an event name and a callback function');
       (eventHandlers[key] = eventHandlers[key] || []).push(handler);
       return function(){
         eventHandlers[key] = (eventHandlers[key] || []).filter(function(item){ return item !== handler; });
@@ -590,14 +590,14 @@ function GameIframe({
 }
 
 function parseBridgeMessages(value: unknown): LLMMessage[] {
-  if (!Array.isArray(value)) throw new Error("messages 必须是数组。");
+  if (!Array.isArray(value)) throw new Error("messages must be an array.");
   return value.slice(0, 160).map((item): LLMMessage => {
-    if (!item || typeof item !== "object") throw new Error("messages 内存在无效条目。");
+    if (!item || typeof item !== "object") throw new Error("messages contains an invalid entry.");
     const record = item as Record<string, unknown>;
     const role = record.role === "assistant" || record.role === "user" || record.role === "system"
       ? record.role
       : "user";
-    if (typeof record.content !== "string") throw new Error("当前游戏桥接只允许文本 messages。");
+    if (typeof record.content !== "string") throw new Error("This game bridge only allows text messages.");
     return {
       role,
       content: record.content.slice(0, 120000),
@@ -611,7 +611,7 @@ function assignmentMap(assignments: GameRoleAssignment[]): Map<string, string[]>
 }
 
 function normalizeAssignmentPayload(payload: unknown, slots: GameRoleSlot[], characters: Character[]): GameRoleAssignment[] {
-  if (!payload || typeof payload !== "object") throw new Error("角色选择结果无效。");
+  if (!payload || typeof payload !== "object") throw new Error("Invalid character selection result.");
   const record = payload as Record<string, unknown>;
   const rawSlots = record.slots && typeof record.slots === "object" ? record.slots as Record<string, unknown> : record;
   const characterIds = new Set(characters.map(item => item.id));
@@ -622,7 +622,7 @@ function normalizeAssignmentPayload(payload: unknown, slots: GameRoleSlot[], cha
     const list = Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : [];
     const selected = Array.from(new Set(list.map(item => String(item)).filter(id => characterIds.has(id)))).slice(0, slot.max);
     if (selected.length < slot.min) {
-      throw new Error(`${slot.label} 至少需要选择 ${slot.min} 个角色。`);
+      throw new Error(`${slot.label} requires selecting at least ${slot.min} character(s).`);
     }
     result.push({ slotId: slot.id, characterIds: selected });
   }
@@ -644,11 +644,11 @@ function createTemplateFromDraft(
   const gameHtml = sanitizeHtml(draft.gameHtml);
   const roleSlots = parseGameRoleSlots(draft.roleSlotsText);
   const pickerHtml = roleSlots.length > 0 ? sanitizeHtml(draft.pickerHtml) : GAME_EMPTY_PICKER_HTML;
-  if (!title) throw new Error("游戏标题不能为空。");
-  if (roleSlots.length > 0 && !pickerHtml) throw new Error("启用角色槽位时，角色选择 HTML 不能为空。");
-  if (!gameHtml) throw new Error("游戏 HTML 不能为空。");
+  if (!title) throw new Error("Game title cannot be empty.");
+  if (roleSlots.length > 0 && !pickerHtml) throw new Error("When character slots are enabled, the character selection HTML cannot be empty.");
+  if (!gameHtml) throw new Error("Game HTML cannot be empty.");
   const tags = parseAllowedGameTags(draft.tagsText);
-  if (tags.length === 0) throw new Error("请至少选择一个游戏标签。");
+  if (tags.length === 0) throw new Error("Please select at least one game tag.");
   const now = new Date().toISOString();
   return {
     id: existing?.id || `game_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
@@ -736,7 +736,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
   const postGameEvent = useCallback((event: string, payload: unknown) => {
     gameEventSenderRef.current?.(event, payload);
   }, []);
-  // 组件卸载兜底：退房（房主退房 = 关房）
+  // Unmount fallback: leave the room (host leaving = closing the room)
   useEffect(() => () => {
     gameRoomRef.current?.leave();
     gameRoomRef.current = null;
@@ -800,7 +800,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
       return {
         id: folder.id,
         name: folder.name,
-        description: folder.description || "自定义收藏夹",
+        description: folder.description || "Custom collection",
         colorA: folder.colorA,
         colorB: folder.colorB,
         count: games.length,
@@ -811,8 +811,8 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     return [
       ...(defaultCollectionHidden ? [] : [{
         id: DEFAULT_GAME_COLLECTION_ID,
-        name: "角色互动",
-        description: "加入小柜的游戏会先显示在这里",
+        name: "Character Interaction",
+        description: "Games you add to your library will show up here first",
         colorA: "#c4b5fd",
         colorB: "#f9a8d4",
         count: sortedInstalled.length,
@@ -955,11 +955,11 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
   function createCollectionFolder(): void {
     const name = newCollectionName.trim();
     if (!name) {
-      showNotice("error", "先给收藏夹起个名字");
+      showNotice("error", "Give your collection a name first");
       return;
     }
     if (state.collectionFolders.some(folder => folder.name === name)) {
-      showNotice("info", "已经有同名收藏夹了");
+      showNotice("info", "A collection with that name already exists");
       return;
     }
     const now = new Date().toISOString();
@@ -967,7 +967,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     const folder: GameCollectionFolder = {
       id: `collection_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
       name,
-      description: "自定义收藏夹",
+      description: "Custom collection",
       colorA: colors[0],
       colorB: colors[1],
       gameIds: [],
@@ -978,7 +978,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     setActiveCollectionId(folder.id);
     setNewCollectionName("");
     setNewCollectionOpen(false);
-    showNotice("success", "收藏夹已创建");
+    showNotice("success", "Collection created");
   }
 
   function requestDeleteCollectionFolder(collection: GameLibraryCollection): void {
@@ -1004,7 +1004,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
       if (!deletingDefaultCollection) {
         setCollectionMenuId(null);
         setDeleteCollectionTarget(null);
-        showNotice("error", "没有找到这个分类");
+        showNotice("error", "Could not find this collection");
         return;
       }
     }
@@ -1036,7 +1036,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     });
     setCollectionMenuId(null);
     setDeleteCollectionTarget(null);
-    showNotice("info", removedGames.length > 0 ? "分类和其中游戏已删除" : "分类已删除");
+    showNotice("info", removedGames.length > 0 ? "Collection and its games deleted" : "Collection deleted");
   }
 
   async function loadCommunityGames(showResult = false): Promise<void> {
@@ -1056,13 +1056,13 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
         favoritedByMe: game.favoritedByMe || installedTemplateIds.has(game.id),
       })));
       if (restored.added > 0 && !showResult) {
-        showNotice("success", `已恢复 ${restored.added} 个云端小柜游戏`);
+        showNotice("success", `Restored ${restored.added} game(s) from the cloud library`);
       } else if (showResult) {
-        const suffix = restored.added > 0 ? `，恢复 ${restored.added} 个小柜游戏` : "";
-        showNotice("success", games.length > 0 ? `同步 ${games.length} 个共享游戏${suffix}` : "共享大厅暂时为空");
+        const suffix = restored.added > 0 ? `, restored ${restored.added} library game(s)` : "";
+        showNotice("success", games.length > 0 ? `Synced ${games.length} shared game(s)${suffix}` : "The shared hall is empty for now");
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "共享大厅暂时不可用";
+      const message = err instanceof Error ? err.message : "The shared hall is temporarily unavailable";
       setCommunityError(message);
       if (showResult) showNotice("error", message);
     } finally {
@@ -1090,13 +1090,13 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
       return existing;
     }
     if (!isFullGameTemplate(template)) {
-      showNotice("error", "游戏包还没有加载完成，请稍后再试");
+      showNotice("error", "The game package hasn't finished loading yet, please try again later");
       return null;
     }
     const result = installGameTemplate(template);
     setState(result.state);
     if (!result.ok || !result.installedGame) {
-      showNotice(result.error === "已经安装过这个游戏。" ? "info" : "error", result.error || "安装失败");
+      showNotice(result.error === "已经安装过这个游戏。" ? "info" : "error", result.error || "Install failed");
       return result.installedGame ?? null;
     }
     if (options.countFavorite) void syncFavoriteCount(template, true);
@@ -1116,7 +1116,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     try {
       fullTemplate = await ensureFullGameTemplate(template);
     } catch (err) {
-      showNotice("error", err instanceof Error ? err.message : "游戏详情加载失败");
+      showNotice("error", err instanceof Error ? err.message : "Failed to load game details");
       return;
     }
     const wasInstalled = state.installedGames.some(item => item.remoteTemplateId === template.id);
@@ -1125,7 +1125,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
 
     const collection = libraryCollections.find(item => item.id === collectionId);
     if (!collection) {
-      showNotice("error", "没有找到这个分类");
+      showNotice("error", "Could not find this collection");
       return;
     }
 
@@ -1145,7 +1145,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
 
     setActiveCollectionId(collectionId);
     closeCollectionPicker();
-    showNotice("success", `已加入${collection.name}`);
+    showNotice("success", `Added to ${collection.name}`);
   }
 
   function toggleTemplateLibrary(template: GameTemplate): void {
@@ -1157,11 +1157,11 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     const result = deleteInstalledGame(existing.localId);
     setState(result.state);
     if (!result.ok) {
-      showNotice("error", result.error || "移除失败");
+      showNotice("error", result.error || "Remove failed");
       return;
     }
     void syncFavoriteCount(template, false);
-    showNotice("info", "已从收藏柜移除");
+    showNotice("info", "Removed from your library");
   }
 
   function deleteGameRecord(eventId: string): void {
@@ -1169,10 +1169,10 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     setState(result.state);
     setRecordMenuId(null);
     if (!result.ok) {
-      showNotice("error", result.error || "删除失败");
+      showNotice("error", result.error || "Delete failed");
       return;
     }
-    showNotice("info", "已删除该条游玩记录");
+    showNotice("info", "Play record deleted");
   }
 
   async function handleTemplatePrimaryAction(template: GameTemplate): Promise<void> {
@@ -1184,7 +1184,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     try {
       openCollectionPicker(await ensureFullGameTemplate(template));
     } catch (err) {
-      showNotice("error", err instanceof Error ? err.message : "游戏详情加载失败");
+      showNotice("error", err instanceof Error ? err.message : "Failed to load game details");
     }
   }
 
@@ -1263,7 +1263,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
   function saveDraft(): void {
     const now = new Date().toISOString();
     const id = editingDraftId || createDraftId();
-    const title = draft.title.trim() || "未命名游戏";
+    const title = draft.title.trim() || "Untitled Game";
     const tags = parseAllowedGameTags(draft.tagsText);
     const normalizedDraft = { ...draft, tagsText: (tags.length > 0 ? tags : ["互动"]).join(" ") };
     setDraft(normalizedDraft);
@@ -1280,7 +1280,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
         ...current.filter(item => item.id !== id),
       ]);
     });
-    showNotice("success", "草稿已保存");
+    showNotice("success", "Draft saved");
   }
 
   function editDraft(item: GameHallDraft): void {
@@ -1298,7 +1298,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     setStudioMenuId(null);
     setDrafts(current => saveGameDrafts(current.filter(item => item.id !== id)));
     if (editingDraftId === id) setEditingDraftId(null);
-    showNotice("info", "草稿已删除");
+    showNotice("info", "Draft deleted");
   }
 
   async function editPublished(template: GameTemplate): Promise<void> {
@@ -1306,7 +1306,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     try {
       fullTemplate = await ensureFullGameTemplate(template);
     } catch (err) {
-      showNotice("error", err instanceof Error ? err.message : "游戏详情加载失败");
+      showNotice("error", err instanceof Error ? err.message : "Failed to load game details");
       return;
     }
     setStudioMenuId(null);
@@ -1322,9 +1322,9 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
   async function copyCreatorGuide(): Promise<void> {
     try {
       await navigator.clipboard.writeText(GAME_CREATOR_GUIDE_MD);
-      showNotice("success", "制作说明已复制");
+      showNotice("success", "Guide copied");
     } catch {
-      showNotice("error", "复制失败，请手动选择文本复制");
+      showNotice("error", "Copy failed, please select and copy the text manually");
     }
   }
 
@@ -1332,20 +1332,20 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     if (!file) return;
     const isHtmlFile = /\.(html?|xhtml)$/i.test(file.name) || file.type === "text/html";
     if (!isHtmlFile) {
-      showNotice("error", "请选择 HTML 文件");
+      showNotice("error", "Please select an HTML file");
       return;
     }
     try {
       const text = await file.text();
       const html = text.replace(/^\uFEFF/, "");
       if (!html.trim()) {
-        showNotice("error", "HTML 文件为空");
+        showNotice("error", "HTML file is empty");
         return;
       }
       updateDraft("gameHtml", html);
-      showNotice("success", `已导入 ${file.name}`);
+      showNotice("success", `Imported ${file.name}`);
     } catch {
-      showNotice("error", "读取 HTML 文件失败");
+      showNotice("error", "Failed to read HTML file");
     }
   }
 
@@ -1354,16 +1354,16 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     try {
       const image = await compressImageFile(file, { width: 704, height: 640, quality: 0.84 });
       updateDraft("coverImage", image);
-      showNotice("success", "封面已载入");
+      showNotice("success", "Cover loaded");
     } catch (err) {
-      showNotice("error", err instanceof Error ? err.message : "封面读取失败");
+      showNotice("error", err instanceof Error ? err.message : "Failed to read cover image");
     }
   }
 
   function confirmDeleteCoverImage(): void {
     updateDraft("coverImage", "");
     setCoverDeleteConfirmOpen(false);
-    showNotice("success", "封面已删除");
+    showNotice("success", "Cover removed");
   }
 
   function openProfileEditor(): void {
@@ -1381,9 +1381,9 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     try {
       const image = await compressImageFile(file, { width: 256, height: 256, quality: 0.84, fit: "contain" });
       setProfileDraftAvatar(image);
-      showNotice("success", "头像已载入");
+      showNotice("success", "Avatar loaded");
     } catch (err) {
-      showNotice("error", err instanceof Error ? err.message : "头像读取失败");
+      showNotice("error", err instanceof Error ? err.message : "Failed to read avatar");
     }
   }
 
@@ -1398,9 +1398,9 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
       setProfileDraftAvatar(avatarUrl);
       setDraft(current => ({ ...current, authorName: next.displayName }));
       setProfileEditorOpen(false);
-      showNotice("success", "资料已保存");
+      showNotice("success", "Profile saved");
     } catch (err) {
-      showNotice("error", err instanceof Error ? err.message : "头像保存失败");
+      showNotice("error", err instanceof Error ? err.message : "Failed to save avatar");
     } finally {
       setProfileSaving(false);
     }
@@ -1454,7 +1454,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
         playCount: 0,
       });
     } catch (err) {
-      showNotice("error", err instanceof Error ? err.message : "当前草稿无法试玩");
+      showNotice("error", err instanceof Error ? err.message : "This draft can't be tried right now");
     }
   }
 
@@ -1480,9 +1480,9 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
       setCreatorPageOpen(false);
       setCreatorGuideOpen(false);
       setMainView("studio");
-      showNotice("success", editingTemplate ? "游戏已同步修改" : "游戏已发布到共享大厅");
+      showNotice("success", editingTemplate ? "Game changes synced" : "Game published to the shared hall");
     } catch (err) {
-      showNotice("error", err instanceof Error ? err.message : "发布失败");
+      showNotice("error", err instanceof Error ? err.message : "Publish failed");
     } finally {
       setPublishing(false);
     }
@@ -1492,9 +1492,9 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     try {
       await deleteGameTemplate({ id: template.id, authorId: template.authorId });
       setCommunityGames(current => current.filter(item => item.id !== template.id));
-      showNotice("success", "已从共享大厅删除");
+      showNotice("success", "Removed from the shared hall");
     } catch (err) {
-      showNotice("error", err instanceof Error ? err.message : "删除失败");
+      showNotice("error", err instanceof Error ? err.message : "Delete failed");
     }
   }
 
@@ -1505,7 +1505,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
 
   async function toggleLike(template: GameTemplate): Promise<void> {
     if (template.source !== "community") {
-      showNotice("info", "内置游戏暂不支持点赞");
+      showNotice("info", "Built-in games don't support likes yet");
       return;
     }
     const wasLiked = Boolean(template.likedByMe || state.likedGameIds.includes(template.id));
@@ -1525,7 +1525,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     } catch (err) {
       setState(saveLikedGameIds(state.likedGameIds));
       patchTemplateLocal(template.id, { likedByMe: wasLiked, likeCount: template.likeCount });
-      showNotice("error", err instanceof Error ? err.message : "点赞失败");
+      showNotice("error", err instanceof Error ? err.message : "Like failed");
     }
   }
 
@@ -1537,7 +1537,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
       const comments = await fetchGameComments(template.id);
       setCommentsByGame(current => ({ ...current, [template.id]: comments }));
     } catch (err) {
-      showNotice("error", err instanceof Error ? err.message : "评论加载失败");
+      showNotice("error", err instanceof Error ? err.message : "Failed to load comments");
     } finally {
       setCommentsLoadingId(null);
     }
@@ -1549,7 +1549,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     if (GAME_HALL_COMMENTS_ENABLED && template.source === "community") void ensureCommentsLoaded(template);
     if (template.source === "community" && !isFullGameTemplate(template)) {
       void ensureFullGameTemplate(template).catch(err => {
-        showNotice("error", err instanceof Error ? err.message : "游戏详情加载失败");
+        showNotice("error", err instanceof Error ? err.message : "Failed to load game details");
       });
     }
   }
@@ -1605,7 +1605,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
       setExpandedCommentsGameId(template.id);
       patchTemplateLocal(template.id, { commentCount: result.commentCount });
     } catch (err) {
-      showNotice("error", err instanceof Error ? err.message : "评论发布失败");
+      showNotice("error", err instanceof Error ? err.message : "Failed to post comment");
     } finally {
       setSubmittingCommentIds(current => {
         const next = { ...current };
@@ -1664,9 +1664,9 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     setCommentMenu(null);
     try {
       await navigator.clipboard.writeText(comment.content);
-      showNotice("success", "评论已复制");
+      showNotice("success", "Comment copied");
     } catch {
-      showNotice("error", "复制失败");
+      showNotice("error", "Copy failed");
     }
   }
 
@@ -1691,9 +1691,9 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
       });
       patchTemplateLocal(target.template.id, { commentCount: result.commentCount });
       setCommentDeleteTarget(null);
-      showNotice("success", deletedIds.length > 1 ? "评论和回复已删除" : "评论已删除");
+      showNotice("success", deletedIds.length > 1 ? "Comment and replies deleted" : "Comment deleted");
     } catch (err) {
-      showNotice("error", err instanceof Error ? err.message : "评论删除失败");
+      showNotice("error", err instanceof Error ? err.message : "Failed to delete comment");
     } finally {
       setDeletingCommentIds(current => {
         const next = { ...current };
@@ -1704,7 +1704,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
   }
 
   async function handleBridgeRequest(action: string, payload: unknown): Promise<unknown> {
-    if (!runtimeGame) throw new Error("游戏未启动。");
+    if (!runtimeGame) throw new Error("Game is not running.");
     const template = runtimeGame.templateSnapshot;
     const characters = loadCharacters();
     const characterById = new Map(characters.map(character => [character.id, character]));
@@ -1712,7 +1712,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     const map = assignmentMap(assignments);
     const ensureAdvancedAccess = () => {
       if (!template.allowExternalControl || !advancedAllowed) {
-        throw new Error("该游戏未获得高级游戏权限，不能读取角色包、调用模型或写入游戏记忆。");
+        throw new Error("This game doesn't have advanced game permission, so it can't read character packages, call the model, or write to game memory.");
       }
     };
 
@@ -1724,7 +1724,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
         const cloudAction = action.slice("cloud.".length);
         if (cloudAction === "report") {
           const reportId = String(record.id ?? "").trim();
-          if (!reportId) throw new Error("cloud.report 缺少 id。");
+          if (!reportId) throw new Error("cloud.report is missing an id.");
           await submitContentReport({
             contentType: "online_doc",
             contentId: reportId,
@@ -1733,7 +1733,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
           return true;
         }
         if (!["put", "get", "list", "update", "delete", "takeRandom"].includes(cloudAction)) {
-          throw new Error(`未知云端动作：${action}`);
+          throw new Error(`Unknown cloud action: ${action}`);
         }
         const response = await onlineCloudApi({
           action: cloudAction,
@@ -1807,7 +1807,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
         }
         return { ok: true };
       }
-      if (!current) throw new Error("当前没有已连接的联机房间，请先 room.create 或 room.join。");
+      if (!current) throw new Error("No online room is currently connected. Call room.create or room.join first.");
       if (action === "room.report") {
         await submitContentReport({
           contentType: "online_room",
@@ -1822,7 +1822,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
       }
       if (action === "room.setState") {
         const roomState = record.state ?? record.data;
-        if (!roomState || typeof roomState !== "object" || Array.isArray(roomState)) throw new Error("room.setState 需要对象 state。");
+        if (!roomState || typeof roomState !== "object" || Array.isArray(roomState)) throw new Error("room.setState requires an object state.");
         await current.setState(roomState as Record<string, unknown>);
         return { ok: true };
       }
@@ -1837,7 +1837,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
         gameRoomRef.current = null;
         return { ok: true };
       }
-      throw new Error(`未知联机动作：${action}`);
+      throw new Error(`Unknown online action: ${action}`);
     }
 
     if (action === "listAvailableCharacters") {
@@ -1854,7 +1854,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     if (action === "getPlayerProfile") {
       const identity = resolveUserIdentity(undefined, "game");
       return {
-        name: identity?.name?.trim() || state.displayName || "玩家",
+        name: identity?.name?.trim() || state.displayName || "Player",
       };
     }
 
@@ -1893,7 +1893,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
       } else if (characters.some(character => character.id === target)) {
         ids = [target];
       }
-      if (ids.length === 0) throw new Error(`没有找到角色槽位或角色：${target}`);
+      if (ids.length === 0) throw new Error(`Could not find character slot or character: ${target}`);
       const packages = await Promise.all(ids.map(characterId => buildGameRolePackage({
         characterId,
         slotId: fromSlot ? target : undefined,
@@ -1927,18 +1927,18 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
       }
       const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
       const summary = typeof record.summary === "string" ? record.summary.trim() : "";
-      if (!summary) throw new Error("recordGameEvent 需要 summary。");
+      if (!summary) throw new Error("recordGameEvent requires a summary.");
       const rawCharacterIds = Array.isArray(record.characterIds)
         ? record.characterIds
         : typeof record.characterId === "string"
           ? [record.characterId]
           : [];
       const characterIds = [...new Set(rawCharacterIds.map(id => String(id || "").trim()).filter(Boolean))];
-      if (characterIds.length === 0) throw new Error("recordGameEvent 至少需要一个角色 ID。");
+      if (characterIds.length === 0) throw new Error("recordGameEvent requires at least one character ID.");
       const unknownIds = characterIds.filter(id => !characterById.has(id));
-      if (unknownIds.length > 0) throw new Error(`recordGameEvent 找不到角色：${unknownIds.join(", ")}`);
+      if (unknownIds.length > 0) throw new Error(`recordGameEvent could not find character(s): ${unknownIds.join(", ")}`);
       const playerIdentity = resolveUserIdentity(undefined, "game");
-      const playerName = playerIdentity?.name?.trim() || state.displayName || "玩家";
+      const playerName = playerIdentity?.name?.trim() || state.displayName || "Player";
       let nextState: GameState | null = null;
       let recorded = 0;
       for (const characterId of characterIds) {
@@ -1947,7 +1947,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
         const result = recordGameProjectionEvent({
           localGameId: runtimeGame.localId,
           remoteTemplateId: runtimeGame.remoteTemplateId,
-          templateTitle: String(record.title || template.title || "未命名游戏"),
+          templateTitle: String(record.title || template.title || "Untitled Game"),
           characterId,
           characterName: character.name,
           playerName,
@@ -1983,7 +1983,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
       ? previewGameSaveRef.current
       : loadGameSave(runtimeGame.localId);
 
-    throw new Error(`未知游戏桥接动作：${action}`);
+    throw new Error(`Unknown game bridge action: ${action}`);
   }
 
   function openInstalledGameDetails(item: GameInstalledItem): void {
@@ -2006,7 +2006,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
         </div>
         <div>
           <strong>{template.title}</strong>
-          <span>{compact ? `@${displayGameAuthorName(template.authorName)}` : `${item.playCount > 0 ? `玩过 ${item.playCount} 次` : "还没启动"}`}</span>
+          <span>{compact ? `@${displayGameAuthorName(template.authorName)}` : `${item.playCount > 0 ? `Played ${item.playCount} times` : "Not started yet"}`}</span>
         </div>
       </button>
     );
@@ -2016,7 +2016,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     const item = state.installedGames.find(game => game.localId === entry.localGameId)
       ?? state.installedGames.find(game => game.remoteTemplateId === entry.remoteTemplateId);
     const template = item?.templateSnapshot;
-    const title = template?.title || entry.templateTitle || "未命名游戏";
+    const title = template?.title || entry.templateTitle || "Untitled Game";
     const hasCover = Boolean(template?.coverImage);
     const menuOpen = recordMenuId === entry.id;
     return (
@@ -2030,7 +2030,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
               openInstalledGameDetails(item);
               return;
             }
-            showNotice("info", "这个游戏已不在柜子里");
+            showNotice("info", "This game is no longer in your library");
           }}
         >
           <div className={`game-play-record-cover ${hasCover ? "has-image" : ""}`}>
@@ -2045,7 +2045,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
         <div className="game-collection-menu game-play-record-menu">
           <button
             type="button"
-            aria-label={`${title} 记录操作`}
+            aria-label={`${title} record actions`}
             onClick={() => {
               setCollectionMenuId(null);
               setStudioMenuId(null);
@@ -2061,7 +2061,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                 className="is-danger"
                 onClick={() => deleteGameRecord(entry.id)}
               >
-                删除
+                Delete
               </button>
             </div>
           ) : null}
@@ -2073,7 +2073,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
   function renderLibraryCollection(collection: GameLibraryCollection, index: number) {
     const open = activeCollectionId === collection.id;
     const menuOpen = collectionMenuId === collection.id;
-    const updatedText = collection.updatedAt ? `更新 ${formatGameDate(collection.updatedAt)}` : "还没有游戏";
+    const updatedText = collection.updatedAt ? `Updated ${formatGameDate(collection.updatedAt)}` : "No games yet";
     return (
       <div key={collection.id} className={`game-collection-item ${menuOpen ? "is-menu-open" : ""}`} style={{ animationDelay: `${index * 0.04}s` }}>
         <div className={`game-collection-folder ${open ? "is-open" : ""}`}>
@@ -2083,7 +2083,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
             onClick={() => {
               setCollectionMenuId(null);
               if (collection.games.length === 0) {
-                showNotice("info", "该柜子里没有游戏噢~");
+                showNotice("info", "There are no games in this collection yet~");
                 return;
               }
               setActiveCollectionId(open ? "" : collection.id);
@@ -2098,13 +2098,13 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
             </div>
             <div>
               <strong>{collection.name}</strong>
-              <p>{collection.count} 个收藏 · {updatedText}</p>
+              <p>{collection.count} saved · {updatedText}</p>
             </div>
           </button>
           <div className="game-collection-menu">
             <button
               type="button"
-              aria-label={`${collection.name} 操作`}
+              aria-label={`${collection.name} actions`}
               onClick={() => setCollectionMenuId(menuOpen ? null : collection.id)}
             >
               <MoreHorizontal size={17} />
@@ -2116,7 +2116,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                   className="is-danger"
                   onClick={() => requestDeleteCollectionFolder(collection)}
                 >
-                  删除
+                  Delete
                 </button>
               </div>
             ) : null}
@@ -2168,7 +2168,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
         <button
           type="button"
           className={`game-discover-favorite ${installed ? "is-installed" : ""}`}
-          aria-label={installed ? "从收藏柜移除" : "加入小柜"}
+          aria-label={installed ? "Remove from library" : "Add to library"}
           aria-pressed={installed}
           onClick={() => toggleTemplateLibrary(template)}
         >
@@ -2185,19 +2185,19 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
           className="game-modal-card game-modal-card--collection-picker"
           role="dialog"
           aria-modal="true"
-          aria-label="选择收藏分类"
+          aria-label="Select a collection"
           onClick={event => event.stopPropagation()}
         >
           <div className="game-modal-head">
             <div>
               <span>COLLECTION</span>
-              <strong>加入哪个分类？</strong>
+              <strong>Add to which collection?</strong>
             </div>
-            <button type="button" aria-label="关闭" onClick={closeCollectionPicker}>
+            <button type="button" aria-label="Close" onClick={closeCollectionPicker}>
               <X size={18} />
             </button>
           </div>
-          <div className="game-collection-picker-list" aria-label="收藏分类列表">
+          <div className="game-collection-picker-list" aria-label="Collection list">
             {libraryCollections.map(collection => {
               const included = collectionHasTemplate(collection, template.id);
               return (
@@ -2212,7 +2212,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                   </span>
                   <div>
                     <strong>{collection.name}</strong>
-                    <p>{included ? "已在此分类" : `${collection.count} 个收藏`}</p>
+                    <p>{included ? "Already in this collection" : `${collection.count} saved`}</p>
                   </div>
                 </button>
               );
@@ -2248,14 +2248,14 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
         <div className="game-studio-list-copy">
           <div>
             <strong>{template.title}</strong>
-            <span>已发布</span>
+            <span>Published</span>
           </div>
           <time>{formatGameDate(template.updatedAt)}</time>
         </div>
         <div className="game-studio-card-menu">
           <button
             type="button"
-            aria-label="打开操作菜单"
+            aria-label="Open actions menu"
             onClick={event => {
               event.stopPropagation();
               setStudioMenuId(current => current === menuId ? null : menuId);
@@ -2265,9 +2265,9 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
           </button>
           {menuOpen ? (
             <div className="game-studio-card-menu-pop" onClick={event => event.stopPropagation()}>
-              <button type="button" onClick={() => { setStudioMenuId(null); void editPublished(template); }}>编辑</button>
-              <button type="button" onClick={() => { setStudioMenuId(null); openTemplateDetails(template); }}>查看详情</button>
-              <button type="button" className="is-danger" onClick={() => { setStudioMenuId(null); void deletePublished(template); }}>删除</button>
+              <button type="button" onClick={() => { setStudioMenuId(null); void editPublished(template); }}>Edit</button>
+              <button type="button" onClick={() => { setStudioMenuId(null); openTemplateDetails(template); }}>View Details</button>
+              <button type="button" className="is-danger" onClick={() => { setStudioMenuId(null); void deletePublished(template); }}>Delete</button>
             </div>
           ) : null}
         </div>
@@ -2294,14 +2294,14 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
         <div className="game-studio-list-copy">
           <div>
             <strong>{item.title}</strong>
-            <span>草稿</span>
+            <span>Draft</span>
           </div>
           <time>{formatGameDate(item.updatedAt)}</time>
         </div>
         <div className="game-studio-card-menu">
           <button
             type="button"
-            aria-label="打开操作菜单"
+            aria-label="Open actions menu"
             onClick={event => {
               event.stopPropagation();
               setStudioMenuId(current => current === menuId ? null : menuId);
@@ -2311,8 +2311,8 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
           </button>
           {menuOpen ? (
             <div className="game-studio-card-menu-pop" onClick={event => event.stopPropagation()}>
-              <button type="button" onClick={() => { setStudioMenuId(null); editDraft(item); }}>编辑</button>
-              <button type="button" className="is-danger" onClick={() => { setStudioMenuId(null); deleteDraft(item.id); }}>删除</button>
+              <button type="button" onClick={() => { setStudioMenuId(null); editDraft(item); }}>Edit</button>
+              <button type="button" className="is-danger" onClick={() => { setStudioMenuId(null); deleteDraft(item.id); }}>Delete</button>
             </div>
           ) : null}
         </div>
@@ -2336,7 +2336,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
             className="game-comment-body"
             role="button"
             tabIndex={0}
-            aria-label={`回复 ${comment.authorName} 的评论`}
+            aria-label={`Reply to ${comment.authorName}'s comment`}
             onPointerDown={event => handleCommentPointerDown(event, template, comment)}
             onPointerMove={handleCommentPointerMove}
             onPointerUp={handleCommentPointerEnd}
@@ -2359,7 +2359,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
               <strong>{comment.authorName}</strong>
               {replyTargetName ? (
                 <>
-                  <span className="game-comment-reply-label">回复</span>
+                  <span className="game-comment-reply-label">Reply to</span>
                   <strong className="game-comment-reply-target">{replyTargetName}</strong>
                 </>
               ) : null}
@@ -2370,13 +2370,13 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
               <button
                 type="button"
                 className="game-comment-reply-btn"
-                aria-label={`回复 ${comment.authorName}`}
+                aria-label={`Reply to ${comment.authorName}`}
                 onClick={event => {
                   event.stopPropagation();
                   replyToComment();
                 }}
               >
-                回复
+                Reply
               </button>
             </div>
           </div>
@@ -2394,7 +2394,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     const authorName = displayGameAuthorName(template.authorName);
     const displayTags = gameDisplayTags(template);
     return (
-      <section className="game-detail-page" aria-label="游戏详情">
+      <section className="game-detail-page" aria-label="Game details">
         <article className="game-detail-card game-modal-card--detail">
           <div className="game-modal-author">
             <div className="game-avatar">
@@ -2412,7 +2412,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
             <div className="game-modal-title-row">
               <strong>{template.title}</strong>
               <button type="button" className={`game-modal-title-action ${installed ? "is-primary" : ""}`} onClick={() => void handleTemplatePrimaryAction(template)}>
-                {installed ? <><Play size={12} fill="currentColor" strokeWidth={2.4} />启动游戏</> : <><Plus size={12} strokeWidth={2.6} />加入小柜</>}
+                {installed ? <><Play size={12} fill="currentColor" strokeWidth={2.4} />Launch Game</> : <><Plus size={12} strokeWidth={2.6} />Add to Library</>}
               </button>
             </div>
           </div>
@@ -2438,26 +2438,26 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                   ownerId: template.authorId || "",
                   ownerName: template.authorName || "",
                 })
-                  .then(() => showNotice("success", "已举报，管理员会尽快处理"))
-                  .catch(err => showNotice("error", err instanceof Error ? err.message : "举报失败"));
+                  .then(() => showNotice("success", "Reported. An admin will review it soon"))
+                  .catch(err => showNotice("error", err instanceof Error ? err.message : "Report failed"));
               }}
             >
-              举报该游戏
+              Report this game
             </button>
           ) : null}
           {GAME_HALL_COMMENTS_ENABLED ? (
             <div className={`game-comments game-comments--modal ${commentsExpanded ? "is-open" : ""}`}>
               <div className="game-modal-subhead">
-                <strong>评论</strong>
+                <strong>Comments</strong>
                 <button type="button" onClick={() => toggleTemplateComments(template)} disabled={!canComment}>
-                  <span>{canComment ? `${template.commentCount} 条` : "内置游戏暂不支持评论"}</span>
+                  <span>{canComment ? `${template.commentCount}` : "Built-in games don't support comments yet"}</span>
                   {canComment ? <ChevronDown size={14} /> : null}
                 </button>
               </div>
               {commentsExpanded ? (
                 <>
-                  {canComment && commentsLoadingId === template.id ? <div className="game-comments-empty">评论加载中…</div> : null}
-                  {canComment && commentsLoadingId !== template.id && comments.length === 0 ? <div className="game-comments-empty">还没有评论。</div> : null}
+                  {canComment && commentsLoadingId === template.id ? <div className="game-comments-empty">Loading comments…</div> : null}
+                  {canComment && commentsLoadingId !== template.id && comments.length === 0 ? <div className="game-comments-empty">No comments yet.</div> : null}
                   {commentItems.map(item => renderGameCommentItem(template, item))}
                 </>
               ) : null}
@@ -2484,21 +2484,21 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                 <button
                   type="button"
                   className="game-reply-target-pill"
-                  aria-label="取消回复"
+                  aria-label="Cancel reply"
                   onClick={() => setCommentReplyTargets(current => {
                     const next = { ...current };
                     delete next[template.id];
                     return next;
                   })}
                 >
-                  <span>回复 @{replyTarget.authorName}</span>
+                  <span>Reply to @{replyTarget.authorName}</span>
                   <X size={12} strokeWidth={2.6} />
                 </button>
               ) : null}
               <input
                 value={commentDrafts[template.id] || ""}
                 maxLength={300}
-                placeholder={replyTarget ? `回复 @${replyTarget.authorName}...` : "写评论..."}
+                placeholder={replyTarget ? `Reply to @${replyTarget.authorName}...` : "Write a comment..."}
                 onChange={event => setCommentDrafts(current => ({ ...current, [template.id]: event.target.value }))}
                 onKeyDown={event => {
                   if (event.key === "Enter" && !submittingComment) void submitComment(template);
@@ -2510,28 +2510,28 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                   className={submittingComment ? "is-loading" : ""}
                   disabled={submittingComment}
                   aria-busy={submittingComment}
-                  aria-label={submittingComment ? "评论发送中" : "发送评论"}
+                  aria-label={submittingComment ? "Sending comment" : "Send comment"}
                   onClick={() => void submitComment(template)}
                 >
-                  {submittingComment ? <span className="game-comment-send-spinner" aria-hidden="true" /> : "发送"}
+                  {submittingComment ? <span className="game-comment-send-spinner" aria-hidden="true" /> : "Send"}
                 </button>
               ) : null}
             </div>
           ) : (
-            <div className="game-detail-bottom-input is-disabled" aria-disabled="true">内置游戏暂不支持评论</div>
+            <div className="game-detail-bottom-input is-disabled" aria-disabled="true">Built-in games don't support comments yet</div>
           )
         ) : null}
-        <div className="game-detail-bottom-actions" aria-label="互动数据">
-          <button type="button" className={liked ? "is-active" : ""} onClick={() => void toggleLike(template)} aria-label="点赞">
+        <div className="game-detail-bottom-actions" aria-label="Engagement stats">
+          <button type="button" className={liked ? "is-active" : ""} onClick={() => void toggleLike(template)} aria-label="Like">
             <Heart size={21} strokeWidth={1.8} fill={liked ? "currentColor" : "none"} />
             <span>{template.likeCount}</span>
           </button>
-          <button type="button" className={installed ? "is-active" : ""} onClick={() => toggleTemplateLibrary(template)} aria-pressed={installed} aria-label="收藏">
+          <button type="button" className={installed ? "is-active" : ""} onClick={() => toggleTemplateLibrary(template)} aria-pressed={installed} aria-label="Favorite">
             <Archive size={21} strokeWidth={1.8} />
             <span>{template.favoriteCount}</span>
           </button>
           {GAME_HALL_COMMENTS_ENABLED ? (
-            <button type="button" className={commentsExpanded ? "is-active" : ""} onClick={() => toggleTemplateComments(template)} disabled={!canComment} aria-label="评论">
+            <button type="button" className={commentsExpanded ? "is-active" : ""} onClick={() => toggleTemplateComments(template)} disabled={!canComment} aria-label="Comment">
               <MessageCircle size={21} strokeWidth={1.8} />
               <span>{template.commentCount}</span>
             </button>
@@ -2543,18 +2543,18 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
 
   const runtimeAllowExternal = Boolean(runtimeGame?.templateSnapshot.allowExternalControl && advancedAllowed);
   const headerTitle = selectedTemplate
-    ? "游戏 · 游戏详情"
+    ? "Game · Game Details"
     : creatorPageOpen
     ? editingTemplate
-      ? "游戏 · 编辑游戏"
+      ? "Game · Edit Game"
       : editingDraftId
-        ? "游戏 · 编辑草稿"
-        : "游戏 · 开始一个故事"
+        ? "Game · Edit Draft"
+        : "Game · Start a Story"
     : mainView === "studio"
-      ? "游戏 · 创作工坊"
+      ? "Game · Creator Studio"
       : mainView === "library"
-        ? "游戏 · 我的"
-        : "游戏 · 游戏大厅";
+        ? "Game · Mine"
+        : "Game · Game Hall";
   const runtimeBackButtonStyle: CSSProperties = {
     background: runtimeTitleBar.buttonBackground,
     color: runtimeTitleBar.buttonColor,
@@ -2569,7 +2569,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
       <header className="game-hub-header">
         <button
           type="button"
-          aria-label={selectedTemplate ? "返回上一页" : creatorPageOpen ? "返回创作工坊" : "返回桌面"}
+          aria-label={selectedTemplate ? "Go back" : creatorPageOpen ? "Back to Creator Studio" : "Back to home screen"}
           onClick={selectedTemplate ? closeTemplateDetails : creatorPageOpen ? closeCreatorPage : onClose}
         >
           <ChevronLeft size={22} strokeWidth={2.5} />
@@ -2583,7 +2583,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             className={communityLoading ? "is-spinning" : ""}
-            aria-label={selectedTemplate ? "刷新游戏详情" : "刷新游戏大厅"}
+            aria-label={selectedTemplate ? "Refresh game details" : "Refresh game hall"}
             onClick={() => void loadCommunityGames(true)}
             disabled={communityLoading}
           >
@@ -2602,16 +2602,16 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
             <div className="game-search">
               <input
                 value={hallSearch}
-                placeholder="搜索游戏、作者或标签"
+                placeholder="Search games, authors, or tags"
                 onChange={event => setHallSearch(event.target.value)}
               />
-              <button type="button" aria-label="搜索游戏" onClick={() => void loadCommunityGames(true)}>
+              <button type="button" aria-label="Search games" onClick={() => void loadCommunityGames(true)}>
                 <Search size={16} />
               </button>
             </div>
             <div
               className="game-category-row"
-              aria-label="游戏分类"
+              aria-label="Game categories"
               data-active-index={Math.max(0, GAME_CATEGORY_FILTERS.indexOf(hallCategory))}
             >
               {GAME_CATEGORY_FILTERS.map(category => (
@@ -2632,11 +2632,11 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
           <section className="game-grid">
             <div className="game-section-head">
               <Gamepad2 size={16} />
-              <span>今日推荐</span>
+              <span>Featured Today</span>
               <b>{filteredCatalog.length}</b>
             </div>
             {filteredCatalog.length === 0 ? (
-              <div className="game-empty">游戏大厅暂时空空哒～</div>
+              <div className="game-empty">The game hall is empty for now~</div>
             ) : filteredCatalog.map((template, index) => renderGameCard(template, index))}
           </section>
         ) : null}
@@ -2644,7 +2644,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
         {!selectedTemplate && mainView === "library" ? (
           <section className="game-list">
             <div className="game-library-head">
-              <h2>我的柜子</h2>
+              <h2>My Library</h2>
               <button
                 type="button"
                 className="game-soft-pill-button"
@@ -2654,19 +2654,19 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                 }}
               >
                 <Plus size={13} />
-                新建分类
+                New Collection
               </button>
             </div>
-            <div className="game-collection-list" aria-label="收藏夹列表">
+            <div className="game-collection-list" aria-label="Collection list">
               {libraryCollections.map(renderLibraryCollection)}
             </div>
             <div className="game-recent-played">
               <div className="game-recent-head">
-                <h2><Clock size={14} />最近玩过</h2>
-                <span>{recentPlayedGames.length} 个</span>
+                <h2><Clock size={14} />Recently Played</h2>
+                <span>{recentPlayedGames.length}</span>
               </div>
               {recentPlayedGames.length === 0 ? (
-                <div className="game-empty">还没有启动过收藏柜里的游戏。</div>
+                <div className="game-empty">You haven't launched any games from your library yet.</div>
               ) : (
                 <div className="game-recent-row">
                   {recentPlayedGames.slice(0, 8).map(item => renderCollectionGame(item))}
@@ -2675,13 +2675,13 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
             </div>
             <div className="game-play-records">
               <div className="game-recent-head">
-                <h2><FileText size={14} />最近记录</h2>
-                <span>{recentGameEvents.length} 条</span>
+                <h2><FileText size={14} />Recent Records</h2>
+                <span>{recentGameEvents.length}</span>
               </div>
               {recentGameEvents.length === 0 ? (
-                <div className="game-empty">还没有小游戏回传记录</div>
+                <div className="game-empty">No game activity recorded yet</div>
               ) : (
-                <div className="game-play-record-list" aria-label="最近游戏记录">
+                <div className="game-play-record-list" aria-label="Recent game records">
                   {recentGameEvents.map(renderGameRecord)}
                 </div>
               )}
@@ -2693,7 +2693,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
           <section className="game-studio">
             {!creatorPageOpen ? (
               <>
-              <section className="game-workshop-profilebar" aria-label="创作工坊资料">
+              <section className="game-workshop-profilebar" aria-label="Creator Studio profile">
                 <div className="game-workshop-profile-avatar">
                   {state.avatarUrl ? <img src={state.avatarUrl} alt="" /> : <span>{initials(state.displayName)}</span>}
                 </div>
@@ -2702,27 +2702,27 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                     <strong>{state.displayName}</strong>
                     <button type="button" className="game-soft-pill-button game-profile-edit-pill" onClick={openProfileEditor}>
                       <Pencil size={13} />
-                      编辑资料
+                      Edit Profile
                     </button>
                   </div>
-                  <div className="game-workshop-profile-stats" aria-label="创作数据">
-                    <span>草稿 <b>{drafts.length}</b></span>
+                  <div className="game-workshop-profile-stats" aria-label="Creation stats">
+                    <span>Drafts <b>{drafts.length}</b></span>
                     <i aria-hidden="true" />
-                    <span>已发布 <b>{publishedGames.length}</b></span>
+                    <span>Published <b>{publishedGames.length}</b></span>
                     <i aria-hidden="true" />
-                    <span>收藏 <b>{publishedFavoriteTotal}</b></span>
+                    <span>Favorites <b>{publishedFavoriteTotal}</b></span>
                   </div>
                 </div>
               </section>
 
-              <div className="game-studio-tabs" role="tablist" aria-label="游戏发布管理" data-active-index={studioMode === "drafts" ? 0 : 1}>
-                <button type="button" className={studioMode === "drafts" ? "is-active" : ""} onClick={() => setStudioMode("drafts")}>草稿箱</button>
-                <button type="button" className={studioMode === "published" ? "is-active" : ""} onClick={() => setStudioMode("published")}>已发布</button>
+              <div className="game-studio-tabs" role="tablist" aria-label="Game publishing management" data-active-index={studioMode === "drafts" ? 0 : 1}>
+                <button type="button" className={studioMode === "drafts" ? "is-active" : ""} onClick={() => setStudioMode("drafts")}>Drafts</button>
+                <button type="button" className={studioMode === "published" ? "is-active" : ""} onClick={() => setStudioMode("published")}>Published</button>
               </div>
 
               {studioMode === "published" ? (
                 publishedGames.length === 0 ? (
-                  <div className="game-empty">还没有发布过游戏。</div>
+                  <div className="game-empty">No games published yet.</div>
                 ) : (
                   <div className="game-published-list">
                     {publishedGames.map(renderPublishedStudioCard)}
@@ -2732,7 +2732,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
 
               {studioMode === "drafts" ? (
                 drafts.length === 0 ? (
-                  <div className="game-empty">还没有保存过草稿。</div>
+                  <div className="game-empty">No drafts saved yet.</div>
                 ) : (
                   <div className="game-published-list">
                     {drafts.map(renderDraftStudioCard)}
@@ -2748,40 +2748,40 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                   <div className="game-editing-banner">
                     <span>MODIFYING</span>
                     <strong>{editingTemplate.title}</strong>
-                    <button type="button" onClick={closeCreatorPage}>取消修改</button>
+                    <button type="button" onClick={closeCreatorPage}>Cancel Edit</button>
                   </div>
                 ) : null}
                 {editingDraftId && !editingTemplate ? (
                   <div className="game-drafting-title">
                     <span>DRAFTING</span>
-                    <strong>{draft.title.trim() || drafts.find(item => item.id === editingDraftId)?.title || "未命名草稿"}</strong>
+                    <strong>{draft.title.trim() || drafts.find(item => item.id === editingDraftId)?.title || "Untitled Draft"}</strong>
                   </div>
                 ) : null}
                 <div className="game-studio-panel">
-                  <h3>制作说明</h3>
-                  <p className="game-studio-hint">查看说明全文，把它和你的游戏想法一起交给创作助手。生成一份完整 HTML 后，上传或粘贴到下方即可发布。</p>
+                  <h3>Creation Guide</h3>
+                  <p className="game-studio-hint">View the full guide and hand it to your creation assistant along with your game idea. Once you have a complete HTML file, upload or paste it below to publish.</p>
                   <div className="game-studio-actions">
                     <button type="button" className="game-soft-wide-button" onClick={() => setCreatorGuideOpen(open => !open)}>
                       <FileText size={14} />
-                      {creatorGuideOpen ? "收起制作说明" : "查看制作说明"}
+                      {creatorGuideOpen ? "Hide Guide" : "View Guide"}
                     </button>
                   </div>
                   {creatorGuideOpen ? (
                     <div className="game-guide-box">
                       <textarea className="game-guide-text" value={GAME_CREATOR_GUIDE_MD} rows={16} readOnly spellCheck={false} />
                       <div className="game-studio-actions game-guide-actions">
-                        <button type="button" className="game-soft-wide-button" onClick={() => void copyCreatorGuide()}><Copy size={14} /> 复制全文</button>
+                        <button type="button" className="game-soft-wide-button" onClick={() => void copyCreatorGuide()}><Copy size={14} /> Copy Full Text</button>
                       </div>
                     </div>
                   ) : null}
                 </div>
                 <div className="game-studio-panel">
-                  <h3>游戏档案</h3>
-                  <label>游戏标题<input value={draft.title} onChange={event => updateDraft("title", event.target.value)} /></label>
+                  <h3>Game Profile</h3>
+                  <label>Game Title<input value={draft.title} onChange={event => updateDraft("title", event.target.value)} /></label>
                   <div className="game-meta-row">
-                    <label className="game-play-note-field">食用须知<textarea value={draft.playNote} rows={6} placeholder="像发帖一样写给玩家看的说明、推荐玩法、注意事项。它会显示在列表卡片和游戏详情里。" onChange={event => updateDraft("playNote", event.target.value)} /></label>
+                    <label className="game-play-note-field">Play Notes<textarea value={draft.playNote} rows={6} placeholder="Write it like a post for players — description, recommended way to play, things to note. It will show on the list card and game details." onChange={event => updateDraft("playNote", event.target.value)} /></label>
                     <div className="game-cover-field">
-                      <span>游戏封面</span>
+                      <span>Game Cover</span>
                       <div className={`game-cover-frame ${draft.coverImage ? "has-image" : ""}`}>
                         <div className="game-cover-preview-window">
                           {draft.coverImage ? (
@@ -2793,7 +2793,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                               onClick={() => coverFileInputRef.current?.click()}
                             >
                               <Upload size={14} />
-                              上传封面
+                              Upload Cover
                             </button>
                           )}
                         </div>
@@ -2801,7 +2801,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                           <button
                             type="button"
                             className="game-cover-remove"
-                            aria-label="删除游戏封面"
+                            aria-label="Remove game cover"
                             onClick={() => setCoverDeleteConfirmOpen(true)}
                           >
                             <X size={15} strokeWidth={3} />
@@ -2813,7 +2813,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                         className="game-file-input"
                         type="file"
                         accept="image/png,image/jpeg,image/webp"
-                        aria-label="上传游戏封面"
+                        aria-label="Upload game cover"
                         onChange={event => {
                           const file = event.currentTarget.files?.[0] ?? null;
                           event.currentTarget.value = "";
@@ -2822,8 +2822,8 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                       />
                     </div>
                   </div>
-                  <div className="game-tag-picker" role="group" aria-label="游戏标签">
-                    <span>标签</span>
+                  <div className="game-tag-picker" role="group" aria-label="Game tags">
+                    <span>Tags</span>
                     <div>
                       {GAME_ALLOWED_TAGS.map(tag => {
                         const active = parseAllowedGameTags(draft.tagsText).includes(tag);
@@ -2843,14 +2843,14 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                   </div>
                 </div>
                 <div className="game-studio-panel">
-                  <h3>单文件 HTML</h3>
-                  <p className="game-studio-hint">可以直接上传完整 HTML，也可以手动粘贴。</p>
+                  <h3>Single-file HTML</h3>
+                  <p className="game-studio-hint">Upload a complete HTML file directly, or paste it manually.</p>
                   <input
                     ref={htmlFileInputRef}
                     className="game-file-input"
                     type="file"
                     accept=".html,.htm,text/html"
-                    aria-label="上传 HTML 文件"
+                    aria-label="Upload HTML file"
                     onChange={event => {
                       const file = event.currentTarget.files?.[0] ?? null;
                       event.currentTarget.value = "";
@@ -2858,12 +2858,12 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                     }}
                   />
                   <div className="game-html-import">
-                    <button type="button" className="game-soft-wide-button" onClick={() => htmlFileInputRef.current?.click()}><Upload size={14} /> 上传 HTML</button>
+                    <button type="button" className="game-soft-wide-button" onClick={() => htmlFileInputRef.current?.click()}><Upload size={14} /> Upload HTML</button>
                   </div>
                   <textarea value={draft.gameHtml} rows={18} spellCheck={false} onChange={event => updateDraft("gameHtml", event.target.value)} />
                 </div>
                 <div className="game-studio-panel game-anonymous-section">
-                  <h3>匿名发布</h3>
+                  <h3>Publish Anonymously</h3>
                   <label className="game-studio-check game-studio-switch game-anonymous-publish">
                     <input
                       type="checkbox"
@@ -2871,44 +2871,45 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                       onChange={event => setPublishAnonymously(event.target.checked)}
                     />
                     <span>
-                      <strong>匿名发布</strong>
-                      <em>勾选后，本次发布会显示为匿名，不使用创作工坊设置的昵称和头像。</em>
+                      <strong>Publish Anonymously</strong>
+                      <em>When checked, this publish will show as anonymous, without using the nickname and avatar set in Creator Studio.</em>
                     </span>
                   </label>
                 </div>
                 <div className="game-studio-panel">
-                  <h3>高级游戏权限</h3>
+                  <h3>Advanced Game Permission</h3>
                   <label className="game-studio-check game-studio-switch game-advanced-permission-switch">
                     <input type="checkbox" checked={draft.allowExternalControl} onChange={event => updateDraft("allowExternalControl", event.target.checked)} />
                     <span>
-                      <strong>启用高级游戏权限</strong>
-                      <em>如果 HTML 需要读取角色包、调用模型或写入游戏记忆，请开启。接收方每次启动前都会看到风险确认。</em>
+                      <strong>Enable Advanced Game Permission</strong>
+                      <em>Turn this on if the HTML needs to read character packages, call the model, or write to game memory. Players will see a risk confirmation every time before launching.</em>
                     </span>
                   </label>
                 </div>
                 <div className="game-studio-panel game-publish-actions-panel">
                   <div className="game-studio-actions">
-                    <button type="button" onClick={previewDraft}><Play size={14} /> 试玩</button>
-                    <button type="button" onClick={saveDraft}><Archive size={14} /> 存草稿</button>
+                    <button type="button" onClick={previewDraft}><Play size={14} /> Preview</button>
+                    <button type="button" onClick={saveDraft}><Archive size={14} /> Save Draft</button>
                     <button type="button" className="is-primary" disabled={publishing} onClick={() => void publishDraft()}>
                       <Send size={14} />
-                      {publishing ? "同步中" : editingTemplate ? "保存修改" : "发布共享"}
+                      {publishing ? "Syncing" : editingTemplate ? "Save Changes" : "Publish"}
                     </button>
                   </div>
                 </div>
-                {/* 角色槽位属于旧的模板级选人通路（现行做法是游戏 HTML 内自行选人），
-                    入口不再对新草稿开放；仅在编辑已带槽位的存量作品时显示以保持兼容。 */}
+                {/* Character slots belong to the old template-level picker flow (the current approach lets
+                    players pick characters inside the game HTML); this entry point is no longer open to new
+                    drafts and only shows when editing existing works that already have slots, for compatibility. */}
                 {parseGameRoleSlots(draft.roleSlotsText).length > 0 ? (
                   <details className="game-advanced-details" open={advancedStudioOpen} onToggle={event => setAdvancedStudioOpen(event.currentTarget.open)}>
-                    <summary>高级设置：角色槽位与独立选择页（旧版兼容）</summary>
+                    <summary>Advanced settings: character slots and standalone selection page (legacy compatibility)</summary>
                     <div className="game-studio-panel">
-                      <h3>角色槽位 JSON</h3>
-                      <p className="game-studio-hint">该作品使用了旧版角色槽位机制，此处保留编辑能力。清空为 [] 后将改为游戏内自行选人。</p>
+                      <h3>Character Slots JSON</h3>
+                      <p className="game-studio-hint">This work uses the legacy character slot mechanism; editing is preserved here. Clear it to [] to switch to in-game character selection.</p>
                       <textarea value={draft.roleSlotsText} rows={10} spellCheck={false} onChange={event => updateDraft("roleSlotsText", event.target.value)} />
                     </div>
                     <div className="game-studio-panel">
-                      <h3>独立角色选择 HTML</h3>
-                      <p className="game-studio-hint">只有上方角色槽位不为空时才会使用。</p>
+                      <h3>Standalone Character Selection HTML</h3>
+                      <p className="game-studio-hint">Only used when the character slots above are not empty.</p>
                       <textarea value={draft.pickerHtml} rows={12} spellCheck={false} onChange={event => updateDraft("pickerHtml", event.target.value)} />
                     </div>
                   </details>
@@ -2920,13 +2921,13 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
       </main>
 
       {!selectedTemplate && !creatorPageOpen && mainView === "studio" ? (
-        <button type="button" className="game-studio-fab" aria-label="新建游戏" onClick={openCreatorPage}>
+        <button type="button" className="game-studio-fab" aria-label="New Game" onClick={openCreatorPage}>
           <Plus size={26} strokeWidth={2.6} />
         </button>
       ) : null}
 
       {!selectedTemplate && !creatorPageOpen ? (
-        <nav className="game-bottom-nav" aria-label="游戏导航">
+        <nav className="game-bottom-nav" aria-label="Game navigation">
           <div className="game-bottom-tabs" data-active-index={Math.max(0, GAME_MAIN_TABS.findIndex(tab => tab.id === mainView))}>
             {GAME_MAIN_TABS.map(tab => {
               const Icon = tab.icon;
@@ -2963,14 +2964,14 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
             className="game-modal-card game-modal-card--profile-editor"
             role="dialog"
             aria-modal="true"
-            aria-label="编辑资料"
+            aria-label="Edit Profile"
             onClick={event => event.stopPropagation()}
           >
             <div className="game-modal-head">
               <div>
                 <span>PROFILE</span>
               </div>
-              <button type="button" aria-label="关闭" disabled={profileSaving} onClick={closeProfileEditor}>
+              <button type="button" aria-label="Close" disabled={profileSaving} onClick={closeProfileEditor}>
                 <X size={18} />
               </button>
             </div>
@@ -2980,7 +2981,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                 className="game-file-input"
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
-                aria-label="上传头像"
+                aria-label="Upload avatar"
                 onChange={event => {
                   const file = event.currentTarget.files?.[0] ?? null;
                   event.currentTarget.value = "";
@@ -2993,14 +2994,14 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                 onClick={() => avatarFileInputRef.current?.click()}
               >
                 {profileDraftAvatar ? <img src={profileDraftAvatar} alt="" /> : <span>{initials(profileDraftName || state.displayName)}</span>}
-                <em>上传头像</em>
+                <em>Upload Avatar</em>
               </button>
               <label>
-                <span>昵称</span>
+                <span>Nickname</span>
                 <input
                   value={profileDraftName}
                   maxLength={40}
-                  placeholder="输入游戏大厅昵称"
+                  placeholder="Enter your game hall nickname"
                   onChange={event => setProfileDraftName(event.target.value)}
                   onKeyDown={event => {
                     if (event.key === "Enter") void saveProfileEditor();
@@ -3009,9 +3010,9 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
               </label>
             </div>
             <div className="game-modal-actions">
-              <button type="button" disabled={profileSaving} onClick={closeProfileEditor}>取消</button>
+              <button type="button" disabled={profileSaving} onClick={closeProfileEditor}>Cancel</button>
               <button type="button" className="is-primary" disabled={profileSaving} onClick={() => void saveProfileEditor()}>
-                {profileSaving ? "保存中" : "保存"}
+                {profileSaving ? "Saving" : "Save"}
               </button>
             </div>
           </section>
@@ -3028,22 +3029,22 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
             className="game-modal-card game-modal-card--cover-delete"
             role="dialog"
             aria-modal="true"
-            aria-label="删除游戏封面"
+            aria-label="Delete game cover"
             onClick={event => event.stopPropagation()}
           >
             <div className="game-modal-head">
               <div>
                 <span>DELETE</span>
-                <strong>是否删除该图片</strong>
+                <strong>Delete this image?</strong>
               </div>
-              <button type="button" aria-label="关闭" onClick={() => setCoverDeleteConfirmOpen(false)}>
+              <button type="button" aria-label="Close" onClick={() => setCoverDeleteConfirmOpen(false)}>
                 <X size={18} />
               </button>
             </div>
-            <p className="game-delete-copy">删除后会恢复为默认封面展示。</p>
+            <p className="game-delete-copy">After deleting, the default cover will be shown instead.</p>
             <div className="game-modal-actions">
-              <button type="button" onClick={() => setCoverDeleteConfirmOpen(false)}>取消</button>
-              <button type="button" className="is-danger" onClick={confirmDeleteCoverImage}>确认删除</button>
+              <button type="button" onClick={() => setCoverDeleteConfirmOpen(false)}>Cancel</button>
+              <button type="button" className="is-danger" onClick={confirmDeleteCoverImage}>Confirm Delete</button>
             </div>
           </section>
         </div>
@@ -3067,7 +3068,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
               className="game-comment-menu-btn"
               onClick={() => void handleCopyGameComment(commentMenu.comment)}
             >
-              复制
+              Copy
             </button>
             {canDeleteGameComment(commentMenu.template, commentMenu.comment) ? (
               <button
@@ -3080,7 +3081,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                   requestDeleteGameComment(template, comment);
                 }}
               >
-                删除
+                Delete
               </button>
             ) : null}
             <button
@@ -3097,11 +3098,11 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                   ownerId: comment.authorId || "",
                   ownerName: comment.authorName || "",
                 })
-                  .then(() => showNotice("success", "已举报，管理员会尽快处理"))
-                  .catch(err => showNotice("error", err instanceof Error ? err.message : "举报失败"));
+                  .then(() => showNotice("success", "Reported. An admin will review it soon"))
+                  .catch(err => showNotice("error", err instanceof Error ? err.message : "Report failed"));
               }}
             >
-              举报
+              Report
             </button>
           </div>
         </div>
@@ -3117,33 +3118,33 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
             className="game-modal-card game-modal-card--comment-delete"
             role="dialog"
             aria-modal="true"
-            aria-label="删除评论"
+            aria-label="Delete comment"
             onClick={event => event.stopPropagation()}
           >
             <div className="game-modal-head">
               <div>
                 <span>DELETE</span>
-                <strong>删除这条评论？</strong>
+                <strong>Delete this comment?</strong>
               </div>
-              <button type="button" aria-label="关闭" onClick={() => setCommentDeleteTarget(null)}>
+              <button type="button" aria-label="Close" onClick={() => setCommentDeleteTarget(null)}>
                 <X size={18} />
               </button>
             </div>
             <p className="game-delete-copy">
-              删除后不会再显示在这个游戏下面。
+              Once deleted, it will no longer show under this game.
               {(commentsByGame[commentDeleteTarget.template.id] ?? []).some(item => item.parentId === commentDeleteTarget.comment.id)
-                ? " 这条评论下的回复也会一起删除。"
+                ? " Replies to this comment will be deleted as well."
                 : ""}
             </p>
             <div className="game-modal-actions">
-              <button type="button" onClick={() => setCommentDeleteTarget(null)}>取消</button>
+              <button type="button" onClick={() => setCommentDeleteTarget(null)}>Cancel</button>
               <button
                 type="button"
                 className="is-danger"
                 disabled={Boolean(deletingCommentIds[commentDeleteTarget.comment.id])}
                 onClick={() => void confirmDeleteGameComment()}
               >
-                {deletingCommentIds[commentDeleteTarget.comment.id] ? "删除中" : "确认删除"}
+                {deletingCommentIds[commentDeleteTarget.comment.id] ? "Deleting" : "Confirm Delete"}
               </button>
             </div>
           </section>
@@ -3160,25 +3161,25 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
             className="game-modal-card game-modal-card--delete-collection"
             role="dialog"
             aria-modal="true"
-            aria-label="删除收藏夹分类"
+            aria-label="Delete collection"
             onClick={event => event.stopPropagation()}
           >
             <div className="game-modal-head">
               <div>
                 <span>DELETE</span>
-                <strong>删除收藏夹分类？</strong>
+                <strong>Delete this collection?</strong>
               </div>
-              <button type="button" aria-label="关闭" onClick={() => setDeleteCollectionTarget(null)}>
+              <button type="button" aria-label="Close" onClick={() => setDeleteCollectionTarget(null)}>
                 <X size={18} />
               </button>
             </div>
             <p className="game-delete-copy">
-              是否删除“{deleteCollectionTarget.name}”收藏夹分类及里面的游戏？
-              {deleteCollectionTarget.games.length > 0 ? ` 确定后会一并从收藏柜中删除 ${deleteCollectionTarget.games.length} 个游戏。` : ""}
+              Delete the collection "{deleteCollectionTarget.name}" and the games in it?
+              {deleteCollectionTarget.games.length > 0 ? ` This will also remove ${deleteCollectionTarget.games.length} game(s) from your library.` : ""}
             </p>
             <div className="game-modal-actions">
-              <button type="button" onClick={() => setDeleteCollectionTarget(null)}>取消</button>
-              <button type="button" className="is-danger" onClick={confirmDeleteCollectionFolder}>确定删除</button>
+              <button type="button" onClick={() => setDeleteCollectionTarget(null)}>Cancel</button>
+              <button type="button" className="is-danger" onClick={confirmDeleteCollectionFolder}>Confirm Delete</button>
             </div>
           </section>
         </div>
@@ -3194,21 +3195,21 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
             className="game-modal-card game-modal-card--delete-collection"
             role="dialog"
             aria-modal="true"
-            aria-label="不能删除收藏夹分类"
+            aria-label="Cannot delete collection"
             onClick={event => event.stopPropagation()}
           >
             <div className="game-modal-head">
               <div>
                 <span>NOTICE</span>
-                <strong>不能删除这个柜子</strong>
+                <strong>Can't delete this collection</strong>
               </div>
-              <button type="button" aria-label="关闭" onClick={() => setCollectionDeleteBlockedOpen(false)}>
+              <button type="button" aria-label="Close" onClick={() => setCollectionDeleteBlockedOpen(false)}>
                 <X size={18} />
               </button>
             </div>
-            <p className="game-delete-copy">这个柜子不能删除，因为只剩下一个柜子了噢~</p>
+            <p className="game-delete-copy">This collection can't be deleted because it's the only one left~</p>
             <div className="game-modal-actions">
-              <button type="button" className="is-primary" onClick={() => setCollectionDeleteBlockedOpen(false)}>我知道了</button>
+              <button type="button" className="is-primary" onClick={() => setCollectionDeleteBlockedOpen(false)}>Got it</button>
             </div>
           </section>
         </div>
@@ -3227,7 +3228,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
             className="game-modal-card game-modal-card--collection"
             role="dialog"
             aria-modal="true"
-            aria-label="新建柜子"
+            aria-label="New Collection"
             onClick={event => event.stopPropagation()}
           >
             <div className="game-modal-head">
@@ -3236,7 +3237,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
               </div>
               <button
                 type="button"
-                aria-label="关闭"
+                aria-label="Close"
                 onClick={() => {
                   setNewCollectionOpen(false);
                   setNewCollectionName("");
@@ -3247,18 +3248,18 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
             </div>
             <div className="game-collection-create">
               <label>
-                <span>柜子名称</span>
+                <span>Collection Name</span>
                 <input
                   value={newCollectionName}
                   maxLength={40}
-                  placeholder="比如：约会小游戏"
+                  placeholder="e.g. Dating mini-games"
                   onChange={event => setNewCollectionName(event.target.value)}
                   onKeyDown={event => {
                     if (event.key === "Enter") createCollectionFolder();
                   }}
                 />
               </label>
-              <p>创建后会出现在柜子列表里，之后可以把喜欢的游戏整理进去。</p>
+              <p>Once created, it'll appear in your collection list — you can organize your favorite games into it later.</p>
             </div>
             <div className="game-modal-actions">
               <button
@@ -3268,9 +3269,9 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                   setNewCollectionName("");
                 }}
               >
-                取消
+                Cancel
               </button>
-              <button type="button" className="is-primary" onClick={createCollectionFolder}>创建柜子</button>
+              <button type="button" className="is-primary" onClick={createCollectionFolder}>Create Collection</button>
             </div>
           </section>
         </div>
@@ -3281,7 +3282,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
           <section className={`game-runtime-card game-runtime-card--${runtimeStage}`}>
             {runtimeStage === "permission" ? (
               <div className="game-runtime-permission-top">
-                <button type="button" aria-label="返回" onClick={closeRuntime}>
+                <button type="button" aria-label="Back" onClick={closeRuntime}>
                   <ChevronLeft size={22} strokeWidth={2.5} />
                 </button>
               </div>
@@ -3289,7 +3290,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
               <button
                 type="button"
                 className="game-runtime-floating-back"
-                aria-label="返回"
+                aria-label="Back"
                 onClick={closeRuntime}
                 style={runtimeBackButtonStyle}
               >
@@ -3300,12 +3301,12 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
             {runtimeStage === "permission" ? (
               <div className="game-permission">
                 <ShieldAlert size={34} />
-                <h2>高级游戏权限确认</h2>
-                <p>该游戏使用高级游戏权限，可能控制当前页面显示、播放音频、访问本地页面数据、读取你选择角色的提示词包，并把关键游戏结果写入角色记忆。请仅运行可信作者的游戏。</p>
-                <span>本次授权只对当前打开的游戏生效；关闭后再次打开仍会重新询问。</span>
+                <h2>Advanced Game Permission Confirmation</h2>
+                <p>This game uses advanced game permission, which may let it control the current page display, play audio, access local page data, read the prompt package of your selected characters, and write key game results to character memory. Only run games from authors you trust.</p>
+                <span>This authorization only applies to the currently open game session; you'll be asked again next time you open it.</span>
                 <div className="game-permission-actions">
-                  <button type="button" onClick={closeRuntime}>取消</button>
-                  <button type="button" className="is-primary" onClick={confirmAdvancedPermission}>允许并继续</button>
+                  <button type="button" onClick={closeRuntime}>Cancel</button>
+                  <button type="button" className="is-primary" onClick={confirmAdvancedPermission}>Allow and Continue</button>
                 </div>
               </div>
             ) : null}
@@ -3313,7 +3314,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
             {runtimeStage === "picker" ? (
               <GameIframe
                 key={`${runtimeGame.localId}-picker-${advancedAllowed ? "advanced" : "safe"}`}
-                title={`${runtimeGame.templateSnapshot.title} 角色选择`}
+                title={`${runtimeGame.templateSnapshot.title} Character Selection`}
                 html={runtimeGame.templateSnapshot.pickerHtml}
                 allowExternalControl={runtimeAllowExternal}
                 onBridgeRequest={handleBridgeRequest}
@@ -3323,7 +3324,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
             {runtimeStage === "game" ? (
               <GameIframe
                 key={`${runtimeGame.localId}-game-${advancedAllowed ? "advanced" : "safe"}`}
-                title={`${runtimeGame.templateSnapshot.title} 游戏`}
+                title={`${runtimeGame.templateSnapshot.title} Game`}
                 html={runtimeGame.templateSnapshot.gameHtml}
                 allowExternalControl={runtimeAllowExternal}
                 onBridgeRequest={handleBridgeRequest}

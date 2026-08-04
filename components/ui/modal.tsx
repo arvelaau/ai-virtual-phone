@@ -22,8 +22,8 @@ export function ConfirmDialog({
   title,
   message,
   icon: Icon,
-  confirmLabel = "确认",
-  cancelLabel = "取消",
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
   variant = "default",
   overlayClassName,
   dialogClassName,
@@ -59,8 +59,8 @@ export type ContentDialogProps = {
 
 export function ContentDialog({
   title,
-  confirmLabel = "\u4FDD\u5B58",
-  cancelLabel = "\u53D6\u6D88",
+  confirmLabel = "Save",
+  cancelLabel = "Cancel",
   onConfirm,
   onCancel,
   children,

@@ -139,15 +139,15 @@ const MENU_ITEMS: Array<{
   color?: string;
   glow?: string;
 }> = [
-  { section: "palette", icon: IconPalette, label: "主题色", desc: "调色板预设", color: BINDING_ACCENTS.preset, glow: `color-mix(in srgb, ${BINDING_ACCENTS.preset} 35%, transparent)` },
-  { section: "wallpaper", icon: IconWallpaper, label: "壁纸", desc: "桌面背景", color: BINDING_ACCENTS.api, glow: `color-mix(in srgb, ${BINDING_ACCENTS.api} 35%, transparent)` },
-  { section: "icons", icon: IconGrid, label: "图标", desc: "应用图标", color: BINDING_ACCENTS.regex, glow: `color-mix(in srgb, ${BINDING_ACCENTS.regex} 35%, transparent)` },
-  { section: "widgets", icon: IconWidgets, label: "桌面组件", desc: "小组件", color: BINDING_ACCENTS.voice, glow: `color-mix(in srgb, ${BINDING_ACCENTS.voice} 35%, transparent)` },
-  { section: "case", icon: IconCase, label: "状态栏", color: BINDING_ACCENTS.memory },
-  { section: "text", icon: IconText, label: "文字", color: BINDING_ACCENTS.identity, glow: `color-mix(in srgb, ${BINDING_ACCENTS.identity} 35%, transparent)` },
-  { section: "css", icon: IconCode, label: "CSS 变量", desc: "自定义全局样式变量", color: BINDING_ACCENTS.embedding, glow: `color-mix(in srgb, ${BINDING_ACCENTS.embedding} 35%, transparent)` },
-  { section: "transfer", icon: IconTransfer, label: "主题导入 / 导出", desc: "备份与迁移", color: BINDING_ACCENTS.api, glow: `color-mix(in srgb, ${BINDING_ACCENTS.api} 35%, transparent)` },
-  { section: "reset", icon: IconReset, label: "恢复默认", desc: "重置外观", color: BINDING_ACCENTS.regex, glow: `color-mix(in srgb, ${BINDING_ACCENTS.regex} 30%, transparent)` },
+  { section: "palette", icon: IconPalette, label: "Theme Color", desc: "Color palette presets", color: BINDING_ACCENTS.preset, glow: `color-mix(in srgb, ${BINDING_ACCENTS.preset} 35%, transparent)` },
+  { section: "wallpaper", icon: IconWallpaper, label: "Wallpaper", desc: "Desktop background", color: BINDING_ACCENTS.api, glow: `color-mix(in srgb, ${BINDING_ACCENTS.api} 35%, transparent)` },
+  { section: "icons", icon: IconGrid, label: "Icons", desc: "App icons", color: BINDING_ACCENTS.regex, glow: `color-mix(in srgb, ${BINDING_ACCENTS.regex} 35%, transparent)` },
+  { section: "widgets", icon: IconWidgets, label: "Desktop Widgets", desc: "Widgets", color: BINDING_ACCENTS.voice, glow: `color-mix(in srgb, ${BINDING_ACCENTS.voice} 35%, transparent)` },
+  { section: "case", icon: IconCase, label: "Status Bar", color: BINDING_ACCENTS.memory },
+  { section: "text", icon: IconText, label: "Text", color: BINDING_ACCENTS.identity, glow: `color-mix(in srgb, ${BINDING_ACCENTS.identity} 35%, transparent)` },
+  { section: "css", icon: IconCode, label: "CSS Variables", desc: "Custom global style variables", color: BINDING_ACCENTS.embedding, glow: `color-mix(in srgb, ${BINDING_ACCENTS.embedding} 35%, transparent)` },
+  { section: "transfer", icon: IconTransfer, label: "Theme Import / Export", desc: "Backup and migration", color: BINDING_ACCENTS.api, glow: `color-mix(in srgb, ${BINDING_ACCENTS.api} 35%, transparent)` },
+  { section: "reset", icon: IconReset, label: "Restore Defaults", desc: "Reset appearance", color: BINDING_ACCENTS.regex, glow: `color-mix(in srgb, ${BINDING_ACCENTS.regex} 30%, transparent)` },
 ];
 
 const menuIconStyle = (color?: string): CSSProperties => ({
@@ -155,13 +155,13 @@ const menuIconStyle = (color?: string): CSSProperties => ({
 } as CSSProperties);
 
 const SECTION_TITLES: Record<Exclude<ThemeSection, "menu">, string> = {
-  palette: "\u4E3B\u9898\u8272",
-  wallpaper: "\u58C1\u7EB8",
-  icons: "\u56FE\u6807",
-  widgets: "\u684C\u9762\u7EC4\u4EF6",
-  case: "\u624B\u673A\u58F3",
-  text: "\u6587\u5B57",
-  css: "CSS \u53D8\u91CF",
+  palette: "Theme Color",
+  wallpaper: "Wallpaper",
+  icons: "Icons",
+  widgets: "Desktop Widgets",
+  case: "Phone Case",
+  text: "Text",
+  css: "CSS Variables",
 };
 
 const THEME_SECTIONS = new Set<string>(["menu", "palette", "wallpaper", "icons", "widgets", "case", "text", "css"]);
@@ -213,10 +213,10 @@ export function PhoneThemeApp({
       const { downloadFile } = await import("@/lib/download-utils");
       await downloadFile(result.blob, result.fileName);
       setShowThemeTransfer(false);
-      onNotice(`已导出主题包：${result.summary.assetCount} 个资源，${result.summary.widgetCount} 个桌面组件。`);
+      onNotice(`Theme package exported: ${result.summary.assetCount} assets, ${result.summary.widgetCount} desktop widgets.`);
     } catch (error) {
       console.error(error);
-      onNotice(error instanceof Error ? error.message : "主题导出失败");
+      onNotice(error instanceof Error ? error.message : "Theme export failed");
     } finally {
       setThemeTransferBusy(false);
     }
@@ -236,10 +236,10 @@ export function PhoneThemeApp({
       await onApply(result.themeProfile);
       onDraftChange(result.themeProfile);
       setShowThemeTransfer(false);
-      onNotice(`已导入主题包：${result.summary.assetCount} 个资源，${result.summary.widgetCount} 个桌面组件。`);
+      onNotice(`Theme package imported: ${result.summary.assetCount} assets, ${result.summary.widgetCount} desktop widgets.`);
     } catch (error) {
       console.error(error);
-      onNotice(error instanceof Error ? error.message : "主题导入失败");
+      onNotice(error instanceof Error ? error.message : "Theme import failed");
     } finally {
       setThemeTransferBusy(false);
     }
@@ -253,10 +253,10 @@ export function PhoneThemeApp({
       await onApply(result.themeProfile);
       onDraftChange(result.themeProfile);
       setConfirmThemeReset(false);
-      onNotice("已恢复默认外观，壁纸库和自定义组件已保留。");
+      onNotice("Default appearance restored. Wallpaper library and custom widgets have been kept.");
     } catch (error) {
       console.error(error);
-      onNotice(error instanceof Error ? error.message : "恢复默认失败");
+      onNotice(error instanceof Error ? error.message : "Restore defaults failed");
     } finally {
       setThemeTransferBusy(false);
     }
@@ -270,13 +270,13 @@ export function PhoneThemeApp({
     }
   }
 
-  const title = section === "menu" ? "\u5916\u89C2" : SECTION_TITLES[section];
+  const title = section === "menu" ? "Appearance" : SECTION_TITLES[section];
 
   return (
     <PageShell title={title} onBack={handleBack}>
         {section === "menu" ? (
           <div className="page-menu appearance-main-menu">
-            {/* Section 1: 外观定制 — 2x2 card grid */}
+            {/* Section 1: Appearance customization — 2x2 card grid */}
             <div>
               <h3 className="appearance-menu-section-title">Appearance</h3>
               <div className="card-grid mt-2.5">
@@ -304,11 +304,11 @@ export function PhoneThemeApp({
               </div>
             </div>
 
-            {/* Section 2: 系统设置 — Glass list group (has toggle) */}
+            {/* Section 2: System settings — Glass list group (has toggle) */}
             <div>
               <h3 className="appearance-menu-section-title">System Settings</h3>
               <div className="menu-group mt-2.5">
-                {/* 状态栏开关 + 位置调节 */}
+                {/* Status bar toggle + position adjustment */}
                 {(() => {
                   const caseItem = MENU_ITEMS.find(i => i.section === "case")!;
                   return (
@@ -358,7 +358,7 @@ export function PhoneThemeApp({
               </div>
             </div>
 
-            {/* Section 3: 高级 — Featured card for CSS */}
+            {/* Section 3: Advanced — Featured card for CSS */}
             {(() => {
               const cssItem = MENU_ITEMS.find(i => i.section === "css")!;
               return (
@@ -382,7 +382,7 @@ export function PhoneThemeApp({
               );
             })()}
 
-            {/* Section 4: 系统 — 2-column card grid */}
+            {/* Section 4: System — 2-column card grid */}
             <div>
               <h3 className="appearance-menu-section-title">System</h3>
               <div className="card-grid mt-2.5">
@@ -435,12 +435,13 @@ export function PhoneThemeApp({
           <IconSkinPage draft={draft} onDraftChange={onDraftChange} onApply={onApply} onNotice={onNotice} />
         ) : (
           <div className="flex-1 overflow-y-auto items-start justify-center flex">
-            <p className="ts-14 text-[var(--c-icon)]">{"\u300C"}{SECTION_TITLES[section]}{"\u300D\u529F\u80FD\u5F00\u53D1\u4E2D\u2026"}</p>
+            <p className="ts-14 text-[var(--c-icon)]">{"\""}{SECTION_TITLES[section]}{"\" feature in development\u2026"}</p>
           </div>
         )}
-      {/* 不限定 accept：.ai-theme 是自定义后缀，iOS「文件」选择器会把
-          没有注册 UTI 的类型置灰导致选不中。放开后由 installThemePackageFile
-          校验包内 manifest.json，非法文件照样会被拒。 */}
+      {/* No accept restriction: .ai-theme is a custom extension, and iOS's "Files"
+          picker greys out unregistered UTI types so they can't be selected.
+          Leaving it open is fine since installThemePackageFile validates
+          manifest.json inside the package and rejects invalid files anyway. */}
       <input
         ref={importFileRef}
         type="file"
@@ -449,9 +450,9 @@ export function PhoneThemeApp({
       />
       {showThemeTransfer && createPortal(
         <ContentDialog
-          title="主题导入 / 导出"
+          title="Theme Import / Export"
           confirmLabel={undefined}
-          cancelLabel="关闭"
+          cancelLabel="Close"
           onConfirm={() => setShowThemeTransfer(false)}
           onCancel={() => {
             if (!themeTransferBusy) setShowThemeTransfer(false);
@@ -459,7 +460,7 @@ export function PhoneThemeApp({
         >
           <div className="flex flex-col gap-4">
             <p className="ts-13 leading-relaxed text-[var(--c-text)]">
-              主题包会包含主题色、壁纸、图标、桌面组件、自定义组件，以及桌面图标和组件位置。
+              The theme package includes the theme color, wallpaper, icons, desktop widgets, custom widgets, and the positions of desktop icons and widgets.
             </p>
             <div className="grid grid-cols-2 gap-8 py-1">
               <button
@@ -471,7 +472,7 @@ export function PhoneThemeApp({
                 <span className="card-icon" style={menuIconStyle(BINDING_ACCENTS.api)}>
                   <Upload size={20} strokeWidth={1.75} />
                 </span>
-                <span>导入</span>
+                <span>Import</span>
               </button>
               <button
                 type="button"
@@ -482,7 +483,7 @@ export function PhoneThemeApp({
                 <span className="card-icon" style={menuIconStyle(BINDING_ACCENTS.embedding)}>
                   <Download size={20} strokeWidth={1.75} />
                 </span>
-                <span>导出</span>
+                <span>Export</span>
               </button>
             </div>
           </div>
@@ -491,12 +492,12 @@ export function PhoneThemeApp({
       )}
       {confirmThemeReset && (
         <ConfirmDialog
-          title="恢复默认外观？"
-          message="将恢复默认主题色、当前壁纸、图标、桌面组件和桌面位置；已导入的壁纸库和自定义组件会保留，但不会继续应用在桌面上。"
+          title="Restore default appearance?"
+          message="This will restore the default theme color, current wallpaper, icons, desktop widgets, and desktop layout. Imported wallpapers and custom widgets will be kept, but will no longer be applied on the desktop."
           icon={AlertCircle}
           variant="danger"
-          confirmLabel={themeTransferBusy ? "恢复中" : "恢复默认"}
-          cancelLabel="取消"
+          confirmLabel={themeTransferBusy ? "Restoring" : "Restore Defaults"}
+          cancelLabel="Cancel"
           onConfirm={themeTransferBusy ? () => {} : handleResetTheme}
           onCancel={() => {
             if (!themeTransferBusy) setConfirmThemeReset(false);
@@ -505,9 +506,9 @@ export function PhoneThemeApp({
       )}
       {showStatusBarAdjust && createPortal(
         <ContentDialog
-          title={"状态栏位置"}
-          confirmLabel={"确定"}
-          cancelLabel={"重置"}
+          title={"Status Bar Position"}
+          confirmLabel={"Confirm"}
+          cancelLabel={"Reset"}
           onConfirm={() => setShowStatusBarAdjust(false)}
           onCancel={() => {
             const next = { ...draft, cssOverrides: { ...draft.cssOverrides } };
@@ -519,7 +520,7 @@ export function PhoneThemeApp({
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)" }}>{"顶部偏移"}</span>
+              <span style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)" }}>{"Top Offset"}</span>
               <span style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text-title)", fontWeight: 600 }}>{statusBarTop}px</span>
             </div>
             <input
@@ -538,10 +539,10 @@ export function PhoneThemeApp({
               data-ui="slider"
             />
             <p style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-icon)", lineHeight: 1.4 }}>
-              {"调节状态栏文字和图标的垂直位置，适配不同设备。可设为负值上移（顶部空间偏大的浏览器如 Edge 适用）。点「重置」恢复默认值。"}
+              {"Adjust the vertical position of the status bar text and icons to fit different devices. Can be set negative to move it up (useful for browsers with extra top space, like Edge). Tap \"Reset\" to restore the default value."}
             </p>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-              <span style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)" }}>{"隐藏灵动岛"}</span>
+              <span style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)" }}>{"Hide Dynamic Island"}</span>
               <label
                 className="block w-10 h-[22px] cursor-pointer relative shrink-0"
                 onClick={(e) => e.stopPropagation()}
@@ -561,7 +562,7 @@ export function PhoneThemeApp({
               </label>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-              <span style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)" }}>{"状态栏占位上移"}</span>
+              <span style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)" }}>{"Status Bar Placeholder Shift"}</span>
               <span style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text-title)", fontWeight: 600 }}>{draft.statusBarDropPx ?? 0}px</span>
             </div>
             <input
@@ -579,7 +580,7 @@ export function PhoneThemeApp({
               data-ui="slider"
             />
             <p style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-icon)", lineHeight: 1.4 }}>
-              {"安卓部分浏览器不能全屏（底部被真实状态栏顶出屏幕）时调大：把整块画面上移、裁掉顶部状态栏占位，让底部栏回到屏幕内。调到刚好铺满即可（约等于真实状态栏高度）。iOS 能正常全屏，保持 0。"}
+              {"Increase this when some Android browsers can't go fullscreen (the bottom bar gets pushed off-screen by the real status bar): it shifts the whole screen up and trims the top status bar placeholder so the bottom bar fits back on screen. Set it to just fill the gap (roughly the height of the real status bar). iOS can go fullscreen normally, so keep it at 0."}
             </p>
           </div>
         </ContentDialog>,
@@ -587,8 +588,8 @@ export function PhoneThemeApp({
       )}
       {showTextAdjust && createPortal(
         <ContentDialog
-          title={"文字"}
-          confirmLabel={"确定"}
+          title={"Text"}
+          confirmLabel={"Confirm"}
           cancelLabel={undefined}
           onConfirm={() => setShowTextAdjust(false)}
           onCancel={() => setShowTextAdjust(false)}
@@ -613,14 +614,14 @@ export function PhoneThemeApp({
 
 type ColorItem = { key: string; label: string; defaultValue: string };
 const COLOR_ITEMS: ColorItem[] = [
-  { key: "--c-header-bg", label: "标题栏", defaultValue: "#FFFFFF" },
-  { key: "--c-page-body-bg", label: "内容区", defaultValue: "#F1F2F6" },
-  { key: "--c-card", label: "卡片", defaultValue: "rgba(255, 255, 255, 0.7)" },
-  { key: "--c-card-border", label: "卡片边框", defaultValue: "#E0E0E0" },
-  { key: "--c-panel", label: "面板", defaultValue: "#FFFFFF" },
-  { key: "--c-panel-border", label: "面板边框", defaultValue: "#D9DADB" },
-  { key: "--c-input", label: "输入框", defaultValue: "#F2F3F5" },
-  { key: "--c-input-border", label: "输入框边框", defaultValue: "rgba(224, 226, 229, 0)" },
+  { key: "--c-header-bg", label: "Header Bar", defaultValue: "#FFFFFF" },
+  { key: "--c-page-body-bg", label: "Content Area", defaultValue: "#F1F2F6" },
+  { key: "--c-card", label: "Card", defaultValue: "rgba(255, 255, 255, 0.7)" },
+  { key: "--c-card-border", label: "Card Border", defaultValue: "#E0E0E0" },
+  { key: "--c-panel", label: "Panel", defaultValue: "#FFFFFF" },
+  { key: "--c-panel-border", label: "Panel Border", defaultValue: "#D9DADB" },
+  { key: "--c-input", label: "Input Field", defaultValue: "#F2F3F5" },
+  { key: "--c-input-border", label: "Input Field Border", defaultValue: "rgba(224, 226, 229, 0)" },
 ];
 
 /** Parse any CSS color string into { hex, alpha } */
@@ -675,7 +676,7 @@ function PalettePresetPage({
 
   function handleApplyAll() {
     onApply(draft);
-    onNotice("主题色已应用");
+    onNotice("Theme color applied");
   }
 
   function handleReset() {
@@ -686,7 +687,7 @@ function PalettePresetPage({
     const next = normalizeThemeProfile({ ...draft, cssOverrides: newOverrides });
     onDraftChange(next);
     onApply(next);
-    onNotice("已恢复默认颜色");
+    onNotice("Default colors restored");
   }
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -730,7 +731,7 @@ function PalettePresetPage({
                 </label>
                 <div className="px-3 py-2.5 flex flex-col gap-2">
                   <div className="flex items-center gap-2">
-                    <span className="ts-11 text-[var(--c-text)] flex-shrink-0">透明度</span>
+                    <span className="ts-11 text-[var(--c-text)] flex-shrink-0">Opacity</span>
                     <input type="range" min={0} max={100} step="any"
                       value={alpha * 100}
                       onChange={(e) => handleColorChange(seed.key, buildColor(hex, Number(e.target.value) / 100))}
@@ -754,7 +755,7 @@ function PalettePresetPage({
           onClick={handleReset}
         >
           <RotateCcw size={15} strokeWidth={1.8} />
-          <span>重置</span>
+          <span>Reset</span>
         </button>
         <button
           type="button"
@@ -762,7 +763,7 @@ function PalettePresetPage({
           onClick={handleApplyAll}
         >
           <PaintBucket size={15} strokeWidth={1.8} />
-          <span>应用</span>
+          <span>Apply</span>
         </button>
       </div>
     </div>
@@ -810,10 +811,10 @@ function TextScalePage({
       }
       onDraftChange(next);
       await onApply(next);
-      onNotice(cleanupFailed ? "已清除上传字体，资源稍后可再清理" : "已清除上传字体");
+      onNotice(cleanupFailed ? "Uploaded font cleared; asset will be cleaned up later" : "Uploaded font cleared");
     } catch (err) {
       console.error("[Font] clear failed:", err);
-      onNotice("清除失败：" + String(err));
+      onNotice("Clear failed: " + String(err));
     }
   }, [draft, onDraftChange, onApply, onNotice]);
   const handleFontUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -829,18 +830,18 @@ function TextScalePage({
       console.log("[Font] applying theme, fontAssetId:", next.fontAssetId, "fontFamily:", next.fontFamily);
       onDraftChange(next);
       await onApply(next);
-      onNotice("字体已上传：" + file.name);
+      onNotice("Font uploaded: " + file.name);
     } catch (err) {
       console.error("[Font] upload failed:", err);
-      onNotice("上传失败：" + String(err));
+      onNotice("Upload failed: " + String(err));
     }
   }, [draft, onDraftChange, onApply, onNotice]);
   return (
     <div className="theme-section-page" style={{ padding: compact ? 0 : "16px 28px 24px" }}>
-      {/* 文字缩放 */}
+      {/* Text scale */}
       <div className="wp-sliders">
         <div className="wp-slider-row">
-          <label>{"文字缩放"}</label>
+          <label>{"Text Scale"}</label>
           <input
             className="ui-slider"
             type="range"
@@ -854,19 +855,19 @@ function TextScalePage({
         </div>
       </div>
 
-      {/* 字体选择 */}
+      {/* Font selection */}
       <div className="mt-4">
-        <p className="ts-13 font-medium mb-8" style={{ color: "var(--c-text-title)" }}>{"字体"}</p>
+        <p className="ts-13 font-medium mb-8" style={{ color: "var(--c-text-title)" }}>{"Font"}</p>
         {draft.fontAssetId && (
           <div className="mb-2 flex justify-end">
             <button
               type="button"
               className="inline-flex h-8 items-center justify-center gap-1 rounded-full border border-black/10 bg-white/70 px-3 ts-11 font-medium text-[var(--c-text)] shadow-sm transition-all hover:bg-white active:scale-95 focus:outline-none"
               onClick={handleFontClear}
-              title="清除上传字体"
+              title="Clear uploaded font"
             >
               <RotateCcw size={12} strokeWidth={1.8} />
-              <span>清除字体</span>
+              <span>Clear Font</span>
             </button>
           </div>
         )}
@@ -877,7 +878,7 @@ function TextScalePage({
             onClick={() => fontFileRef.current?.click()}
           >
             <Type size={15} strokeWidth={1.8} />
-            <span>上传字体</span>
+            <span>Upload Font</span>
           </button>
         </div>
         <input
@@ -890,9 +891,9 @@ function TextScalePage({
       </div>
 
       <p className="ts-11 text-[var(--c-icon)] leading-relaxed mt-12">
-        {"文字缩放：以当前设计字号为 100%，范围 75% ~ 150%。"}
+        {"Text scale: the current design font size is 100%, range 75% ~ 150%."}
         <br />
-        {"字体：上传 .ttf / .otf / .woff2 文件。"}
+        {"Font: upload a .ttf / .otf / .woff2 file."}
       </p>
     </div>
   );
@@ -922,13 +923,13 @@ function GlobalCSSPage({
     onDraftChange(next);
     onApply(next);
     console.log("[GlobalCSS] Applied CSS length:", localCSS.length, "| preview:", localCSS.slice(0, 80));
-    onNotice("自定义 CSS 已应用");
+    onNotice("Custom CSS applied");
   }
 
   return (
     <div className="theme-section-page">
       <p className="ts-13 text-[var(--c-text)] mb-3 leading-relaxed">
-        {"编写自定义 CSS，覆盖 :root 变量或为任意元素添加样式。修改后点击「应用」生效。"}
+        {"Write custom CSS to override :root variables or add styles to any element. Click \"Apply\" after editing to take effect."}
       </p>
       <textarea
         className="ui-textarea font-mono ts-13 leading-relaxed flex-1"
@@ -940,8 +941,8 @@ function GlobalCSSPage({
       />
       <div className="flex gap-2 mt-3 items-center">
         <CSSSchemeBar target="global" currentCSS={localCSS} onLoad={setLocalCSS} />
-        <button type="button" className="ui-btn ui-btn-outline flex-1" onClick={() => setLocalCSS("")}>清除</button>
-        <button type="button" className="ui-btn ui-btn-soft-action flex-1" onClick={handleApply}>应用</button>
+        <button type="button" className="ui-btn ui-btn-outline flex-1" onClick={() => setLocalCSS("")}>Clear</button>
+        <button type="button" className="ui-btn ui-btn-soft-action flex-1" onClick={handleApply}>Apply</button>
       </div>
     </div>
   );
@@ -1056,7 +1057,7 @@ function IconSkinPage({
       );
       setThumbs(map);
     } catch {
-      onNotice("上传失败，请重试");
+      onNotice("Upload failed, please try again");
     }
     setUploadTarget(null);
   }, [draft, uploadTarget, onDraftChange, onApply, onNotice]);
@@ -1074,7 +1075,7 @@ function IconSkinPage({
     const next = updateIconSkin(draft, iconId, null);
     onDraftChange(next);
     await onApply(next);
-    onNotice("已还原默认图标");
+    onNotice("Default icon restored");
   }, [confirmDeleteId, draft, onDraftChange, onApply, onNotice]);
 
   const triggerDockUpload = useCallback(() => {
@@ -1093,7 +1094,7 @@ function IconSkinPage({
       const map = await getThemeAssetMap([assetId]);
       setDockThumbUrl(map[assetId] ?? null);
     } catch {
-      onNotice("上传失败，请重试");
+      onNotice("Upload failed, please try again");
     }
   }, [draft, onDraftChange, onApply, onNotice]);
 
@@ -1111,7 +1112,7 @@ function IconSkinPage({
     onDraftChange(next);
     await onApply(next);
     setDockThumbUrl(null);
-    onNotice("已还原 DOCK 栏背景");
+    onNotice("Dock background restored");
   }, [draft, onDraftChange, onApply, onNotice]);
 
   const handleResetAll = useCallback(async () => {
@@ -1133,7 +1134,7 @@ function IconSkinPage({
     await onApply(next);
     setThumbs({});
     setDockThumbUrl(null);
-    onNotice("已还原全部图标");
+    onNotice("All icons restored");
   }, [activeSkins, draft, onDraftChange, onApply, onNotice]);
 
   return (
@@ -1164,7 +1165,7 @@ function IconSkinPage({
         })}
       </div>
 
-      <p className="is-empty-hint">点击图标上传自定义图片</p>
+      <p className="is-empty-hint">Tap an icon to upload a custom image</p>
 
       <h3 className="appearance-menu-section-title">Dock</h3>
       <div
@@ -1178,7 +1179,7 @@ function IconSkinPage({
             <button className="ui-card-delete" onClick={handleDockDeleteClick}>×</button>
           </>
         ) : (
-          <span className="is-empty-hint">点击上传 DOCK 栏背景</span>
+          <span className="is-empty-hint">Tap to upload Dock background</span>
         )}
       </div>
 
@@ -1189,7 +1190,7 @@ function IconSkinPage({
           onClick={handleResetAll}
         >
           <RotateCcw size={15} strokeWidth={1.8} />
-          <span>全部还原</span>
+          <span>Restore All</span>
         </button>
       )}
 
@@ -1198,12 +1199,12 @@ function IconSkinPage({
 
       {confirmDeleteId && (
         <ConfirmDialog
-          title="确定要还原这个图标吗？"
-          message="将恢复为默认图标样式。"
+          title="Restore this icon?"
+          message="This will restore the default icon style."
           icon={AlertCircle}
           variant="danger"
-          confirmLabel="还原"
-          cancelLabel="取消"
+          confirmLabel="Restore"
+          cancelLabel="Cancel"
           onConfirm={handleDeleteConfirm}
           onCancel={() => setConfirmDeleteId(null)}
         />
@@ -1211,12 +1212,12 @@ function IconSkinPage({
 
       {confirmDeleteDock && (
         <ConfirmDialog
-          title="确定要还原 DOCK 栏背景吗？"
-          message="将恢复为默认毛玻璃效果。"
+          title="Restore the Dock background?"
+          message="This will restore the default frosted-glass effect."
           icon={AlertCircle}
           variant="danger"
-          confirmLabel="还原"
-          cancelLabel="取消"
+          confirmLabel="Restore"
+          cancelLabel="Cancel"
           onConfirm={handleDockDeleteConfirm}
           onCancel={() => setConfirmDeleteDock(false)}
         />
@@ -1318,7 +1319,7 @@ function WallpaperPage({
       const map = await getThemeAssetMap(next.wallpaperLibrary);
       setThumbs(map);
     } catch {
-      onNotice("\u4E0A\u4F20\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5");
+      onNotice("Upload failed, please try again");
     }
   }, [draft, onDraftChange, onApply, onNotice]);
 
@@ -1327,7 +1328,7 @@ function WallpaperPage({
       const next = normalizeThemeProfile({ ...draft, wallpaperAssetId: null });
       onDraftChange(next);
       await onApply(next);
-      showToast("\u5DF2\u53D6\u6D88\u5E94\u7528\u58C1\u7EB8");
+      showToast("Wallpaper unapplied");
       return;
     }
     const next = normalizeThemeProfile({
@@ -1336,7 +1337,7 @@ function WallpaperPage({
     });
     onDraftChange(next);
     await onApply(next);
-    showToast("\u5DF2\u5207\u6362\u58C1\u7EB8");
+    showToast("Wallpaper switched");
   }, [draft, onDraftChange, onApply, showToast]);
 
   const handleDeleteClick = useCallback((assetId: string, e: React.MouseEvent) => {
@@ -1389,9 +1390,9 @@ function WallpaperPage({
           onClick={() => fileRef.current?.click()}
         >
           <Plus size={15} strokeWidth={1.8} />
-          {"\u6DFB\u52A0\u58C1\u7EB8"}
+          {"Add Wallpaper"}
         </button>
-        <p className="mt-3 text-[calc(11px*var(--app-text-scale,1))] font-medium text-gray-400">上传并管理个性化桌面壁纸</p>
+        <p className="mt-3 text-[calc(11px*var(--app-text-scale,1))] font-medium text-gray-400">Upload and manage personalized desktop wallpapers</p>
       </div>
       <input
         ref={fileRef}
@@ -1405,7 +1406,7 @@ function WallpaperPage({
       {hasWallpaper && (
         <div className="g-card wp-sliders">
           <div className="wp-slider-row">
-            <label>{"\u900F\u660E\u5EA6"}</label>
+            <label>{"Opacity"}</label>
             <input
               className="ui-slider"
               type="range"
@@ -1420,7 +1421,7 @@ function WallpaperPage({
             <span className="wp-slider-value">{Math.round(sliderDraft.wallpaperOpacity * 100)}</span>
           </div>
           <div className="wp-slider-row">
-            <label>{"\u6A21\u7CCA\u5EA6"}</label>
+            <label>{"Blur"}</label>
             <input
               className="ui-slider"
               type="range"
@@ -1435,7 +1436,7 @@ function WallpaperPage({
             <span className="wp-slider-value">{Math.round(sliderDraft.wallpaperBlur)}</span>
           </div>
           <div className="wp-slider-row">
-            <label>{"\u7F29\u653E\u5EA6"}</label>
+            <label>{"Scale"}</label>
             <input
               className="ui-slider"
               type="range"
@@ -1450,7 +1451,7 @@ function WallpaperPage({
             <span className="wp-slider-value">{Math.round(sliderDraft.wallpaperScale)}%</span>
           </div>
           <div className="wp-slider-row">
-            <label>{"X \u504F\u79FB"}</label>
+            <label>{"X Offset"}</label>
             <input
               className="ui-slider"
               type="range"
@@ -1465,7 +1466,7 @@ function WallpaperPage({
             <span className="wp-slider-value">{Math.round(sliderDraft.wallpaperX)}%</span>
           </div>
           <div className="wp-slider-row">
-            <label>{"Y \u504F\u79FB"}</label>
+            <label>{"Y Offset"}</label>
             <input
               className="ui-slider"
               type="range"
@@ -1501,12 +1502,12 @@ function WallpaperPage({
                 ) : (
                   <div className="wp-card-img bg-[var(--c-page-body-bg)]" />
                 )}
-                {isActive && <span className="wp-card-badge">{"\u4F7F\u7528\u4E2D"}</span>}
+                {isActive && <span className="wp-card-badge">{"In Use"}</span>}
                 <button
                   type="button"
                   className="ui-card-delete"
                   onClick={(e) => handleDeleteClick(assetId, e)}
-                  aria-label={"\u5220\u9664"}
+                  aria-label={"Delete"}
                 >
                   {"\u00D7"}
                 </button>
@@ -1515,7 +1516,7 @@ function WallpaperPage({
           })}
         </div>
       ) : (
-        <p className="wp-empty">{"\u8FD8\u6CA1\u6709\u58C1\u7EB8\uFF0C\u70B9\u51FB\u4E0A\u65B9\u6DFB\u52A0"}</p>
+        <p className="wp-empty">{"No wallpapers yet, tap above to add"}</p>
       )}
 
       {/* Bottom toast */}
@@ -1524,12 +1525,12 @@ function WallpaperPage({
       {/* Delete confirmation dialog */}
       {confirmDeleteId && (
         <ConfirmDialog
-          title="确定要删除这张壁纸吗？"
-          message="删除壁纸后无法恢复。是否继续？"
+          title="Delete this wallpaper?"
+          message="This wallpaper cannot be recovered after deletion. Continue?"
           icon={AlertCircle}
           variant="danger"
-          confirmLabel="删除"
-          cancelLabel="取消"
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
           onConfirm={handleDeleteConfirm}
           onCancel={handleDeleteCancel}
         />
@@ -1566,8 +1567,8 @@ function WidgetManagerPage({
   const mergedCatalog = useMemo(() => {
     const diyEntries = diyTemplates.map(t => ({
       type: t.id as WidgetType,
-      name: t.name || "DIY组件",
-      desc: t.mode === "image" ? "图片贴纸" : "自定义代码",
+      name: t.name || "DIY Widget",
+      desc: t.mode === "image" ? "Image Sticker" : "Custom Code",
       size: t.size,
       track: "freestyle" as const
     }));
@@ -1591,12 +1592,12 @@ function WidgetManagerPage({
                }
              }}
           >
-            {(showStudio && !editingTemplate) ? "收起面板" : "➕ 创建新组件"}
+            {(showStudio && !editingTemplate) ? "Collapse Panel" : "➕ Create New Widget"}
           </button>
-          <p className="text-[calc(11px*var(--app-text-scale,1))] text-gray-400 font-medium mt-3">创建和管理个性化桌面组件</p>
+          <p className="text-[calc(11px*var(--app-text-scale,1))] text-gray-400 font-medium mt-3">Create and manage personalized desktop widgets</p>
         </div>
-        
-        {/* 新建面板（顶部）。编辑已有组件改为在该组件下方就地展开。 */}
+
+        {/* New widget panel (top). Editing an existing widget expands it in place below the widget instead. */}
         {showStudio && !editingTemplate && (
           <div className="rounded-[32px] w-full">
              <DIYWidgetEditor
@@ -1616,8 +1617,8 @@ function WidgetManagerPage({
       {/* Widget catalog */}
       <div className="wm-catalog" style={{ marginTop: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <h3 className="wm-catalog-title" style={{ margin: 0 }}>{"\u7EC4\u4EF6\u4ED3\u5E93"}</h3>
-          <span className="text-[calc(11px*var(--app-text-scale,1))] text-gray-400 font-medium">长按手机桌面的空白处即可将组件添加到主屏幕</span>
+          <h3 className="wm-catalog-title" style={{ margin: 0 }}>{"Widget Library"}</h3>
+          <span className="text-[calc(11px*var(--app-text-scale,1))] text-gray-400 font-medium">Long-press an empty area on the desktop to add a widget to the home screen</span>
         </div>
         <div className="wm-catalog-list">
           {mergedCatalog.map((entry) => {
@@ -1641,10 +1642,10 @@ function WidgetManagerPage({
                 {isDIY && (
                   <button
                     className="absolute top-0 right-0 translate-x-1/4 -translate-y-1/4 z-20 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-md border-2 border-white transition-transform active:scale-95"
-                    title="删除自制组件"
+                    title="Delete custom widget"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (window.confirm("确定要删除这个自制组件吗？桌面上已添加的相关组件可能也会丢失界面。")) {
+                      if (window.confirm("Delete this custom widget? Any matching widgets already added to the desktop may lose their appearance.")) {
                          const updated = diyTemplates.filter(t => t.id !== entry.type);
                          saveDIYTemplates(updated);
                          setDiyTemplates(updated);

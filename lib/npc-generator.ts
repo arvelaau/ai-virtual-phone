@@ -1,10 +1,14 @@
 // lib/npc-generator.ts
-// 「生成配角」：为指定角色 AI 生成一批同世界观的配角（数量用户可选），
-// 每个产出完整角色卡（与主角同规格）+ 简量人设 + 双向关系标签。
+// "Generate supporting characters": has the AI create a batch of same-world side
+// characters for a given character (count is user-selectable). Each one yields a
+// full character card (same spec as a main character) + a brief persona + a
+// two-way relation label.
 //
-// 刻意不走预设系统组装（simpleLLMCall + 代码手动组提示词）：这是结构化的
-// 工具任务，用户聊天预设里的角色扮演指令、文风要求、正则后处理都会污染
-// 标签格式输出。API 配置仍沿用角色的聊天绑定（只取 config，不取预设/正则）。
+// Deliberately does NOT go through preset assembly (simpleLLMCall + a hand-built
+// prompt): this is a structured tool task, and the roleplay instructions, style
+// requirements and regex post-processing in the user's chat preset would all
+// corrupt the tagged output format. The API config still comes from the
+// character's chat binding (config only — no preset, no regexes).
 
 import { simpleLLMCall } from "./api-helpers";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
@@ -26,55 +30,74 @@ export type GeneratedSupportingCharacter = {
     persona: string;
     personality: string;
     briefPersona: string;
-    /** 新配角是目标角色的什么人（如：同事） */
+    /** Who the new character is to the target character (e.g. colleague) */
     relationLabel: string;
-    /** 目标角色是新配角的什么人（如：上司） */
+    /** Who the target character is to the new character (e.g. manager) */
     reverseRelationLabel: string;
 };
 
 export const NPC_GENERATE_MAX_COUNT = 5;
 
-function extractTag(text: string, tag: string): string {
-    const match = text.match(new RegExp(`\\[${tag}\\]\\s*([\\s\\S]*?)\\s*\\[\\/${tag}\\]`));
-    return match?.[1]?.trim() ?? "";
+// Protocol tags. The prompt teaches the English names; the Chinese ones are kept
+// as accepted aliases so a model steered by a Chinese persona still parses. These
+// tags are never persisted — they live for exactly one LLM round-trip (taught,
+// emitted, parsed into an object here) — so this is robustness, not a migration.
+const TAG_BLOCK = ["Supporting", "配角"] as const;
+const TAG_NAME = ["Name", "名字"] as const;
+const TAG_PERSONA = ["Persona", "人设"] as const;
+const TAG_PERSONALITY = ["Personality", "性格"] as const;
+const TAG_BRIEF = ["Brief", "简介"] as const;
+const TAG_RELATION = ["Relation", "关系"] as const;
+const TAG_REVERSE_RELATION = ["ReverseRelation", "反向关系"] as const;
+
+function extractTag(text: string, tags: readonly string[]): string {
+    for (const tag of tags) {
+        const match = text.match(new RegExp(`\\[${tag}\\]\\s*([\\s\\S]*?)\\s*\\[\\/${tag}\\]`));
+        const value = match?.[1]?.trim();
+        if (value) return value;
+    }
+    return "";
 }
 
 function parseOneBlock(block: string): GeneratedSupportingCharacter | null {
-    const name = extractTag(block, "名字");
-    const persona = extractTag(block, "人设");
+    const name = extractTag(block, TAG_NAME);
+    const persona = extractTag(block, TAG_PERSONA);
     if (!name || !persona) return null;
     return {
         name,
         persona,
-        personality: extractTag(block, "性格"),
-        briefPersona: extractTag(block, "简介"),
-        relationLabel: extractTag(block, "关系"),
-        reverseRelationLabel: extractTag(block, "反向关系"),
+        personality: extractTag(block, TAG_PERSONALITY),
+        briefPersona: extractTag(block, TAG_BRIEF),
+        relationLabel: extractTag(block, TAG_RELATION),
+        reverseRelationLabel: extractTag(block, TAG_REVERSE_RELATION),
     };
 }
 
-/** 世界上下文：世界观描述 + 同世界全部角色名（不受「未配置世界观则为空」的门槛影响，
- *  保证 LLM 永远知道已有哪些角色，防重名/定位撞车）+ 关系图 + 一跳角色简介。 */
+/** World context: the world description + every character name in that world (not
+ *  gated on "empty when no world is configured", so the LLM always knows which
+ *  characters already exist and avoids duplicate names/roles) + the relation graph
+ *  + one-hop character briefs. */
 function buildWorldContext(character: Character): string {
     const characters = loadCharacters();
-    const nameById = new Map(characters.map(c => [c.id, c.name || "未命名"]));
+    const nameById = new Map(characters.map(c => [c.id, c.name || "Unnamed"]));
     const briefById = new Map(characters.map(c => [c.id, c.briefPersona?.trim() || ""]));
     const group = loadCharacterWorldGroups().find(g => g.memberIds.includes(character.id));
 
     const lines: string[] = [];
     if (group) {
-        lines.push(`世界观：${group.name}`);
-        if (group.description.trim()) lines.push(`世界观描述：${group.description.trim()}`);
+        lines.push(`World: ${group.name}`);
+        if (group.description.trim()) lines.push(`World description: ${group.description.trim()}`);
         const memberNames = group.memberIds
             .map(id => nameById.get(id))
             .filter((name): name is string => Boolean(name));
-        if (memberNames.length > 0) lines.push(`同世界已有角色（新配角不得与他们重名或定位重复）：${memberNames.join("、")}`);
+        if (memberNames.length > 0) lines.push(`Characters already in this world (the new character must not duplicate their names or roles): ${memberNames.join(", ")}`);
         for (const relation of group.relations) {
             const fromName = nameById.get(relation.fromCharacterId);
             const toName = nameById.get(relation.toCharacterId);
-            if (fromName && toName) lines.push(`${fromName}是${toName}的${relation.label}。`);
+            if (fromName && toName) lines.push(`${fromName} is ${toName}'s ${relation.label}.`);
         }
-        // 与目标角色拉过线的角色附上简量人设，便于新配角与他们呼应
+        // Attach brief personas for characters already linked to the target, so the new
+        // character can echo them
         const counterpartIds = new Set<string>();
         for (const relation of group.relations) {
             if (relation.fromCharacterId === character.id) counterpartIds.add(relation.toCharacterId);
@@ -82,7 +105,7 @@ function buildWorldContext(character: Character): string {
         }
         for (const id of counterpartIds) {
             const brief = briefById.get(id);
-            if (brief) lines.push(`${nameById.get(id)}的简介：${brief}`);
+            if (brief) lines.push(`Brief for ${nameById.get(id)}: ${brief}`);
         }
     }
     return lines.join("\n");
@@ -91,17 +114,18 @@ function buildWorldContext(character: Character): string {
 type GenerationOptions = {
     count: number;
     hint: string;
-    /** 锁定名字：为聊天名片里 AI 提到的特定人物建档时使用 */
+    /** Locked name: used when profiling a specific person the AI mentioned on a chat contact card */
     fixedName?: string;
-    /** 推荐语境：名片消息前后的对话摘录，生成的人设必须与其自洽 */
+    /** Recommendation context: the conversation excerpt around the card message; the generated persona must stay consistent with it */
     chatContext?: string;
 };
 
-/** 目标角色最近的朋友圈动态 + 评论区：出现过的路人名字（一次性 NPC）是最好的建档素材 */
+/** The target character's recent Moments posts + comment threads: the walk-on names
+ *  that appear there (one-off NPCs) are the best material for a new profile. */
 function buildMomentsContext(character: Character, maxPosts = 6, maxChars = 1600): string {
     try {
         const characters = loadCharacters();
-        const nameById = new Map(characters.map(c => [c.id, c.name || "未命名"]));
+        const nameById = new Map(characters.map(c => [c.id, c.name || "Unnamed"]));
         const posts = loadMomentPosts()
             .filter(post => post.authorType === "character" && post.authorId === character.id)
             .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
@@ -111,19 +135,19 @@ function buildMomentsContext(character: Character, maxPosts = 6, maxChars = 1600
         const lines: string[] = [];
         for (const post of posts) {
             const content = (post.content || "").trim().slice(0, 120);
-            if (content) lines.push(`动态：${content}`);
+            if (content) lines.push(`Post: ${content}`);
             const likeNames = post.likes
-                .map(like => like.authorType === "user" ? "用户" : like.authorType === "npc" ? like.authorName : nameById.get(like.authorId))
+                .map(like => like.authorType === "user" ? "User" : like.authorType === "npc" ? like.authorName : nameById.get(like.authorId))
                 .filter((name): name is string => Boolean(name));
-            if (likeNames.length > 0) lines.push(`  点赞：${likeNames.join("、")}`);
+            if (likeNames.length > 0) lines.push(`  Liked by: ${likeNames.join(", ")}`);
             for (const comment of loadMomentComments(post.id).slice(0, 6)) {
                 const author = comment.authorType === "user"
-                    ? "用户"
+                    ? "User"
                     : comment.authorType === "npc"
-                        ? (comment.authorName || "路人")
-                        : (nameById.get(comment.authorId) || "路人");
+                        ? (comment.authorName || "passer-by")
+                        : (nameById.get(comment.authorId) || "passer-by");
                 const text = (comment.content || "").trim().slice(0, 60);
-                if (text) lines.push(`  ${author} 评论：${text}`);
+                if (text) lines.push(`  ${author} commented: ${text}`);
             }
         }
         let context = lines.join("\n");
@@ -136,41 +160,47 @@ function buildMomentsContext(character: Character, maxPosts = 6, maxChars = 1600
 
 function buildSystemPrompt(character: Character, worldContext: string, coreMemories: string, longTermMemories: string, options: GenerationOptions): string {
     const sections: string[] = [];
-    sections.push(`你是角色档案助手。以下是角色「${character.name}」的资料，请为TA生成配角（同一世界观中的次要人物），用于丰富TA的人际圈。`);
-    sections.push(`【角色设定】\n${character.persona || "（暂无）"}`);
-    if (character.personality?.trim()) sections.push(`【性格】\n${character.personality.trim()}`);
-    if (coreMemories) sections.push(`【核心记忆】\n${coreMemories}`);
-    if (longTermMemories) sections.push(`【相关长期记忆】\n${longTermMemories}`);
-    if (worldContext) sections.push(`【世界观与人际】\n${worldContext}`);
+    sections.push(`You are a character-profile assistant. Below is the material for the character ${character.name}. Generate supporting characters for them — secondary figures in the same world — to fill out their social circle.`);
+    sections.push(`[Character setting]\n${character.persona || "(none yet)"}`);
+    if (character.personality?.trim()) sections.push(`[Personality]\n${character.personality.trim()}`);
+    if (coreMemories) sections.push(`[Core memories]\n${coreMemories}`);
+    if (longTermMemories) sections.push(`[Relevant long-term memories]\n${longTermMemories}`);
+    if (worldContext) sections.push(`[World and relationships]\n${worldContext}`);
     const momentsContext = buildMomentsContext(character);
-    if (momentsContext) sections.push(`【「${character.name}」最近的朋友圈（含评论区出现过的人）】\n${momentsContext}`);
+    if (momentsContext) sections.push(`[${character.name}'s recent Moments, including people who appeared in the comments]\n${momentsContext}`);
     if (options.chatContext?.trim()) {
-        sections.push(`【推荐语境（「${character.name}」与用户的最近对话摘录）】\n${options.chatContext.trim()}`);
+        sections.push(`[Recommendation context - a recent excerpt of ${character.name} talking with the user]\n${options.chatContext.trim()}`);
     }
     const rules = [
-        "生成要求：",
-        `- 配角要与「${character.name}」的世界观、生活圈自然契合；不得与已有角色重名或定位重复`,
-        "- 优先呼应角色的记忆与经历：记忆或朋友圈里出现过、但「同世界已有角色」名单里没有的人（某位同事、旧友、家人、常来评论的路人）是最好的配角素材——直接沿用其名字与已透露的信息建档",
-        "- 人设完整但克制：TA 是配角，不是另一位主角，不要写成天命之子",
+        "Requirements:",
+        `- Each character must fit naturally into ${character.name}'s world and social circle, and must not duplicate an existing character's name or role`,
+        "- Prefer echoing the character's memories and history: someone who appeared in a memory or in Moments but is absent from the list of existing characters (a colleague, an old friend, a family member, a regular commenter) is the best material — reuse their name and whatever has already been revealed about them",
+        "- Make the persona complete but restrained: this is a supporting character, not a second protagonist — do not write them as a chosen one",
     ];
     if (options.fixedName) {
-        rules.push(`- 本次只生成一位配角，名字必须是「${options.fixedName}」，不得更改`);
-        rules.push(`- 人设必须与上方对话摘录中透露的关于「${options.fixedName}」的信息完全自洽（身份、关系、提到过的事实都要吻合）`);
+        rules.push(`- Generate exactly one character this time, and the name must be ${options.fixedName} — do not change it`);
+        rules.push(`- The persona must be fully consistent with what the excerpt above reveals about ${options.fixedName} (identity, relationships and any stated facts must all line up)`);
     } else {
-        rules.push("- 一次生成多位时，彼此的身份定位、性格类型要错开，不要同质化");
+        rules.push("- When generating several at once, vary their roles and personality types - do not make them alike");
     }
-    rules.push("- 若用户消息中有补充要求，优先满足");
+    rules.push("- If the user message carries extra requirements, satisfy those first");
     sections.push(rules.join("\n"));
     sections.push([
-        "每位配角用 [配角]…[/配角] 包裹，内部严格按以下标签输出，每个标签都必填，标签外不要输出任何其他内容：",
-        "[配角]",
-        "[名字]配角姓名[/名字]",
-        "[人设]完整角色卡：身份背景、外貌、性格、说话风格、习惯癖好，300~600字[/人设]",
-        "[性格]一句话性格概括[/性格]",
-        "[简介]100~200字第三人称简量人设，供其他角色了解TA时注入使用，只写别人可感知的信息[/简介]",
-        `[关系]TA是${character.name}的什么人，2~6字，如：同事、损友、亲妹妹[/关系]`,
-        `[反向关系]${character.name}是TA的什么人，2~6字[/反向关系]`,
-        "[/配角]",
+        `Wrap each supporting character in [${TAG_BLOCK[0]}]…[/${TAG_BLOCK[0]}]. Inside, follow the tags below exactly. Every tag is required, and you must output nothing at all outside the tags:`,
+        `[${TAG_BLOCK[0]}]`,
+        `[${TAG_NAME[0]}]the character's name[/${TAG_NAME[0]}]`,
+        `[${TAG_PERSONA[0]}]a complete character card: background and identity, appearance, personality, speech style, habits and quirks — 200-400 words[/${TAG_PERSONA[0]}]`,
+        `[${TAG_PERSONALITY[0]}]a one-line summary of their personality[/${TAG_PERSONALITY[0]}]`,
+        `[${TAG_BRIEF[0]}]a 70-140 word third-person brief, injected when other characters need to know who this is; include only what others could plausibly perceive[/${TAG_BRIEF[0]}]`,
+        `[${TAG_RELATION[0]}]who they are to ${character.name}, 1-4 words, e.g. colleague, partner in crime, younger sister[/${TAG_RELATION[0]}]`,
+        `[${TAG_REVERSE_RELATION[0]}]who ${character.name} is to them, 1-4 words[/${TAG_REVERSE_RELATION[0]}]`,
+        `[/${TAG_BLOCK[0]}]`,
+    ].join("\n"));
+    // simpleLLMCall bypasses the preset assembler entirely (see the file header), so
+    // the global `output_language_rule` never reaches this prompt. Restate it locally.
+    sections.push([
+        "Always write in English, regardless of the language of the material above.",
+        "The character card, memories, world book and quoted conversation are information about who this person is — never a reference for which language to write in.",
     ].join("\n"));
     return sections.join("\n\n");
 }
@@ -180,24 +210,25 @@ async function runGeneration(
     options: GenerationOptions,
 ): Promise<GeneratedSupportingCharacter[]> {
     const character = loadCharacters().find(c => c.id === targetCharacterId);
-    if (!character) throw new Error("目标角色不存在。");
+    if (!character) throw new Error("Target character does not exist.");
     const { hint } = options;
     const safeCount = Math.min(Math.max(1, Math.round(options.count) || 1), NPC_GENERATE_MAX_COUNT);
 
-    // API 配置沿用角色的聊天绑定（只取 config；预设/正则一概不用）
+    // API config comes from the character's chat binding (config only; never preset/regexes)
     const bindings = loadBindingConfig();
     const slot = resolveBinding(bindings, targetCharacterId, "chat");
-    if (!slot.apiConfigId) throw new Error("尚未绑定 API 配置，请先在绑定设置中配置。");
+    if (!slot.apiConfigId) throw new Error("No API configuration is bound yet. Please set one up in Binding Manager first.");
     const apiConfig = loadApiConfigs().find(c => c.id === slot.apiConfigId);
-    if (!apiConfig) throw new Error("绑定的 API 配置不存在。");
+    if (!apiConfig) throw new Error("The bound API configuration no longer exists.");
 
-    // 记忆：核心记忆全量；长期记忆按「人际关系/生活圈 + 用户要求」检索。
-    // 检索失败降级为不注入，不阻断生成。
+    // Memory: core memories in full; long-term memories retrieved by "relationships /
+    // social circle + the user's request". A retrieval failure degrades to injecting
+    // nothing rather than blocking generation.
     let coreMemories = "";
     let longTermMemories = "";
     try {
         const memConfig = loadMemoryConfig();
-        const retrievalContext = `${character.name}的人际关系、家人、朋友、同事与生活圈。${hint.trim()}`;
+        const retrievalContext = `${character.name}'s relationships, family, friends, colleagues and social circle. ${hint.trim()}`;
         const [coreResults, longTermResults] = await Promise.all([
             retrieveCoreMemoriesForPrompt(targetCharacterId, memConfig),
             retrieveMemoriesForPrompt(targetCharacterId, retrievalContext, memConfig),
@@ -211,8 +242,8 @@ async function runGeneration(
     const systemPrompt = buildSystemPrompt(character, buildWorldContext(character), coreMemories, longTermMemories, options);
     const trimmedHint = hint.trim();
     const userPrompt = options.fixedName
-        ? `请为对话中提到的「${options.fixedName}」生成完整档案。${trimmedHint}`
-        : `本次请生成 ${safeCount} 位配角。${trimmedHint}`;
+        ? `Create a full profile for ${options.fixedName}, who was mentioned in the conversation. ${trimmedHint}`
+        : `Generate ${safeCount} supporting character(s) this time. ${trimmedHint}`;
 
     const result = await simpleLLMCall(
         apiConfig,
@@ -220,34 +251,39 @@ async function runGeneration(
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },
         ],
-        // 每位配角约 600~900 token；思考模型还会先烧隐藏思考 token，
-        // 上限不足会 finishReason=length 且正文为空——按数量给足余量
+        // ~600-900 tokens per character; reasoning models burn hidden thinking tokens
+        // first, and too low a cap yields finishReason=length with empty content —
+        // so scale the headroom with the requested count
         { temperature: 0.85, max_tokens: Math.max(8192, safeCount * 2000) },
     );
 
     if (result.error || !result.content) {
-        throw new Error(result.error || "模型返回了空内容，请重试。");
+        throw new Error(result.error || "The model returned empty content. Please try again.");
     }
     const text = result.content.trim();
 
-    // 多块解析：[配角]…[/配角] 重复出现；兼容无外层包裹的单个配角输出
-    const blocks = [...text.matchAll(/\[配角\]([\s\S]*?)\[\/配角\]/g)].map(m => m[1]);
+    // Multi-block parse: [Supporting]…[/Supporting] repeats; also tolerates a single
+    // character emitted without the outer wrapper. Legacy Chinese tag still accepted.
+    const blocks = TAG_BLOCK.flatMap(tag =>
+        [...text.matchAll(new RegExp(`\\[${tag}\\]([\\s\\S]*?)\\[\\/${tag}\\]`, "g"))].map(m => m[1]),
+    );
     const parsed = (blocks.length > 0 ? blocks : [text])
         .map(parseOneBlock)
         .filter((item): item is GeneratedSupportingCharacter => item !== null);
 
     if (parsed.length === 0) {
-        if (result.wasTruncated) throw new Error("模型输出被截断（max_tokens 不足），请减少生成数量后重试。");
-        throw new Error("模型输出缺少必要字段（名字/人设），请重试。");
+        if (result.wasTruncated) throw new Error("The model output was truncated (max_tokens too low). Reduce the number of characters and try again.");
+        throw new Error("The model output is missing required fields (name/persona). Please try again.");
     }
-    // 锁名模式：无论模型怎么写，名字以指定值为准
+    // Locked-name mode: whatever the model writes, the specified name wins
     if (options.fixedName) {
         return [{ ...parsed[0], name: options.fixedName }];
     }
     return parsed.slice(0, safeCount);
 }
 
-/** 为目标角色生成 count 位配角；hint 为用户的补充要求（可空）。失败抛错（含用户可读信息）。 */
+/** Generates `count` supporting characters for the target; `hint` is the user's extra
+ *  requirement (may be empty). Throws on failure, with a user-readable message. */
 export async function generateSupportingCharacters(
     targetCharacterId: string,
     hint: string,
@@ -256,7 +292,8 @@ export async function generateSupportingCharacters(
     return runGeneration(targetCharacterId, { count, hint });
 }
 
-/** 为聊天名片里提到的特定人物生成档案：名字锁定，人设须与推荐语境自洽。 */
+/** Profiles a specific person mentioned on a chat contact card: the name is locked,
+ *  and the persona must stay consistent with the recommendation context. */
 export async function generateNamedSupportingCharacter(
     recommenderCharacterId: string,
     fixedName: string,
@@ -271,9 +308,11 @@ export async function generateNamedSupportingCharacter(
     return first;
 }
 
-/** 落库：建角色卡 → 贴目标角色旁放置 → 入同世界 → 建双向关系 → 预置发帖开关。
- *  角色 app「生成配角」与聊天名片「现场建档」共用这一份逻辑。
- *  直接写存储；调用方若持有 React 态需自行重新加载。 */
+/** Persist: create the character card -> place it next to the target -> join the same
+ *  world -> create the two-way relation -> preset the auto-post switch.
+ *  Shared by the Characters app's "generate supporting cast" and the chat contact
+ *  card's "profile on the spot".
+ *  Writes storage directly; callers holding React state must reload themselves. */
 export function materializeSupportingCharacter(
     result: GeneratedSupportingCharacter,
     targetCharacterId: string,
@@ -291,11 +330,11 @@ export function materializeSupportingCharacter(
         briefPersona: result.briefPersona || undefined,
         briefPersonaUpdatedAt: result.briefPersona ? now : undefined,
         avatar: null,
-        tags: ["配角"],
+        tags: ["Supporting"],
     });
     const baseX = target?.canvasX ?? 120;
     const baseY = target?.canvasY ?? 120;
-    // 围绕目标角色扇形展开，批量生成时按序号错开不重叠
+    // Fan out around the target character; stagger by index so batches do not overlap
     newChar.canvasX = baseX + 150 + (index % 2) * 130 + Math.round(Math.random() * 40);
     newChar.canvasY = baseY + Math.floor(index / 2) * 150 - 50 + Math.round(Math.random() * 40);
     newChar.canvasRot = Math.round((Math.random() * 8 - 4) * 10) / 10;
@@ -310,7 +349,8 @@ export function materializeSupportingCharacter(
         if (result.reverseRelationLabel) addCharacterWorldRelation(groupId, targetCharacterId, newChar.id, result.reverseRelationLabel);
     }
 
-    // 自动发朋友圈默认关闭：预置进禁用名单（加好友后才会真的进入发帖调度）
+    // Auto-posting to Moments is off by default: seed into the disabled list (only after
+    // being added as a friend does it actually enter the posting scheduler)
     if (!options.allowAutoPost) {
         const cfg = loadMomentsConfig();
         if (!cfg.autoPostDisabledCharacterIds.includes(newChar.id)) {

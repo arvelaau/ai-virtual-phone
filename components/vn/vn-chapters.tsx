@@ -52,7 +52,7 @@ export function VnChapters({ characterId, onClose, onSelect, vnTheme }: VnChapte
   const handleNewChapter = useCallback(() => {
     if (!canCreateNewChapter) return;
     const index = chapters.length;
-    const title = `第${numberToChinese(index + 1)}章`;
+    const title = `Chapter ${index + 1}`;
     startNewChapter(session.id, title);
     forceUpdate((n) => n + 1);
     onSelect(index);
@@ -356,7 +356,7 @@ export function VnChapters({ characterId, onClose, onSelect, vnTheme }: VnChapte
           <ArrowLeft size={20} />
         </button>
         <div className="vnc-header-center">
-          <div className="vnc-char-name">{character?.name ?? "角色"}</div>
+          <div className="vnc-char-name">{character?.name ?? "Character"}</div>
           <div className="vnc-char-sub">Story Line</div>
         </div>
         <div style={{ width: 40 }} />
@@ -396,14 +396,14 @@ export function VnChapters({ characterId, onClose, onSelect, vnTheme }: VnChapte
                 <div className="vnc-label">
                   <div className="vnc-chapter-title">{ch.title}</div>
                   {ch.subtitle && <div className="vnc-chapter-sub">{ch.subtitle}</div>}
-                  {ch.summaryContent && <div className="vnc-summary-badge">已生成记忆</div>}
+                  {ch.summaryContent && <div className="vnc-summary-badge">Memory generated</div>}
                 </div>
                 {/* Summarize button for archived chapters without summary */}
                 {ch.archived && !ch.summaryContent && (
                   <div className="vnc-actions" onClick={(e) => e.stopPropagation()}>
                     <button
                       className="vnc-action-btn"
-                      title="生成全局记忆"
+                      title="Generate global memory"
                       data-loading={summarizing === i ? "true" : undefined}
                       onClick={() => handleSummarize(i)}
                     >
@@ -427,20 +427,11 @@ export function VnChapters({ characterId, onClose, onSelect, vnTheme }: VnChapte
             onClick={handleNewChapter}
           >
             <div className="vnc-new-dot"><Plus size={14} /></div>
-            <span className="vnc-new-text">{canCreateNewChapter ? "新章节" : "请先归档当前章节"}</span>
+            <span className="vnc-new-text">{canCreateNewChapter ? "New Chapter" : "Archive the current chapter first"}</span>
           </button>
         </div>
       </div>
 
     </div>
   );
-}
-
-function numberToChinese(n: number): string {
-  const digits = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
-  if (n <= 10) return digits[n];
-  if (n < 20) return `十${digits[n - 10]}`;
-  const tens = Math.floor(n / 10);
-  const ones = n % 10;
-  return `${digits[tens]}十${ones ? digits[ones] : ""}`;
 }

@@ -33,12 +33,12 @@ export function DiaryApp({ onClose, onNotice }: DiaryAppProps) {
   return (
     <section className="diary-app">
       <header className="diary-app-header">
-        <button type="button" className="diary-icon-btn" onClick={onClose} aria-label="返回桌面">
+        <button type="button" className="diary-icon-btn" onClick={onClose} aria-label="Back to desktop">
           <ChevronLeft size={20} />
         </button>
         <div>
-          <h1>手记</h1>
-          <p>记录角色留下的话</p>
+          <h1>Journal</h1>
+          <p>Words your characters leave behind</p>
         </div>
         <span className="diary-header-spacer" />
       </header>
@@ -56,8 +56,8 @@ export function DiaryApp({ onClose, onNotice }: DiaryAppProps) {
               <BookOpenText size={20} strokeWidth={1.55} />
             </span>
             <span>
-              <strong>日记</strong>
-              <em>角色写下的纸页和片段</em>
+              <strong>Diary</strong>
+              <em>Pages and fragments written by your characters</em>
             </span>
           </span>
           <span className="diary-feature-bottom" aria-hidden="true">
@@ -79,8 +79,8 @@ export function DiaryApp({ onClose, onNotice }: DiaryAppProps) {
                 <StickyNote size={20} strokeWidth={1.55} />
               </span>
               <span>
-                <strong>便签墙</strong>
-                <em>公开贴上的心情和留言</em>
+                <strong>Note Wall</strong>
+                <em>Moods and messages posted publicly</em>
               </span>
             </span>
             <span className="diary-feature-bottom" aria-hidden="true">

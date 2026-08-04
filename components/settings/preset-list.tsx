@@ -12,7 +12,7 @@ export function PresetList({ data }: PresetListProps) {
 
     if (!data) return (
         <div className="ui-empty">
-            <span className="menu-desc">暂无预设配置</span>
+            <span className="menu-desc">No preset configuration yet</span>
         </div>
     );
 
@@ -20,7 +20,7 @@ export function PresetList({ data }: PresetListProps) {
         <div className="flex flex-col gap-6 p-4 pb-20">
             {/* Global Settings Card */}
             <div className="ui-list-card" style={{ flexDirection: "column", alignItems: "stretch" }}>
-                <p className="card-section-label m-0">生成参数</p>
+                <p className="card-section-label m-0">Generation Parameters</p>
                 <div className="grid grid-cols-2 gap-4">
                     <SettingItem label="Temperature" value={data.temperature} />
                     <SettingItem label="Top P" value={data.top_p} />
@@ -35,7 +35,7 @@ export function PresetList({ data }: PresetListProps) {
 
             {/* Prompts List */}
             <div className="flex flex-col gap-3">
-                <p className="card-section-label m-0 mx-1">提示词 (Prompts)</p>
+                <p className="card-section-label m-0 mx-1">Prompts</p>
                 {data.prompts.map((prompt) => (
                     <div key={prompt.identifier} className="ui-list-card-expandable">
                         <div
@@ -47,7 +47,7 @@ export function PresetList({ data }: PresetListProps) {
                             <div className="flex justify-between items-center">
                                 <span className="menu-label font-medium">{prompt.name}</span>
                                 <span className="ui-badge" data-variant={prompt.enabled ? "success" : "muted"}>
-                                    {prompt.enabled ? "启用" : "禁用"}
+                                    {prompt.enabled ? "Enabled" : "Disabled"}
                                 </span>
                             </div>
                             <div className="menu-desc flex gap-3">

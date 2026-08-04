@@ -105,7 +105,7 @@ export function PdfPageRenderer({
                 const rawData = await loadRawFileBlob(bookId);
                 if (cancelled) return;
                 if (!rawData || rawData.size === 0) {
-                    setError("PDF 文件未找到或为空");
+                    setError("PDF file not found or empty");
                     setLoading(false);
                     return;
                 }
@@ -119,7 +119,7 @@ export function PdfPageRenderer({
                 onTotalPages?.(pdf.numPages);
                 setDocVersion((v) => v + 1);
             } catch (err) {
-                if (!cancelled) setError(`PDF 加载失败: ${err instanceof Error ? err.message : String(err)}`);
+                if (!cancelled) setError(`Failed to load PDF: ${err instanceof Error ? err.message : String(err)}`);
                 if (!cancelled) setLoading(false);
             } finally {
                 if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -196,7 +196,7 @@ export function PdfPageRenderer({
                             const toggleBtn = document.createElement("button");
                             toggleBtn.type = "button";
                             toggleBtn.className = "chat-bilingual-toggle reading-annotation-bilingual-toggle";
-                            toggleBtn.textContent = collapseBilingualTranslation ? "中文" : "收起中文";
+                            toggleBtn.textContent = collapseBilingualTranslation ? "Chinese" : "Hide Chinese";
 
                             const translationEl = document.createElement("div");
                             translationEl.className = "reading-annotation-translation";
@@ -207,7 +207,7 @@ export function PdfPageRenderer({
                                 e.stopPropagation();
                                 const expanded = translationEl.style.display !== "none";
                                 translationEl.style.display = expanded ? "none" : "block";
-                                toggleBtn.textContent = expanded ? "中文" : "收起中文";
+                                toggleBtn.textContent = expanded ? "Chinese" : "Hide Chinese";
                             };
 
                             textEl.append(originalEl, toggleBtn, translationEl);
@@ -218,7 +218,7 @@ export function PdfPageRenderer({
 
                         const copyBtn = document.createElement("button");
                         copyBtn.className = "ctx-menu-btn";
-                        copyBtn.textContent = "复制";
+                        copyBtn.textContent = "Copy";
                         copyBtn.onclick = (e) => {
                             e.stopPropagation();
                             onCopyAnnotation?.(ann.content);
@@ -227,7 +227,7 @@ export function PdfPageRenderer({
 
                         const deleteBtn = document.createElement("button");
                         deleteBtn.className = "ctx-menu-btn ctx-menu-btn-danger";
-                        deleteBtn.textContent = "删除";
+                        deleteBtn.textContent = "Delete";
                         deleteBtn.onclick = (e) => {
                             e.stopPropagation();
                             onDeleteAnnotation?.(ann.id);
@@ -435,7 +435,7 @@ export function PdfPageRenderer({
                 };
             } catch (err) {
                 if (!cancelled && renderSeq === renderSeqRef.current) {
-                    setError(`PDF 渲染失败: ${err instanceof Error ? err.message : String(err)}`);
+                    setError(`Failed to render PDF: ${err instanceof Error ? err.message : String(err)}`);
                     setLoading(false);
                 }
             }
@@ -537,10 +537,10 @@ export function PdfPageRenderer({
                     </div>
                     <div className="reading-loading-copy">
                         <span className="reading-loading-title">
-                            正在打开 PDF
+                            Opening PDF
                             <span className="reading-loading-dots" aria-hidden="true"><i /><i /><i /></span>
                         </span>
-                        <span className="reading-loading-subtitle">正在准备页面渲染</span>
+                        <span className="reading-loading-subtitle">Preparing page rendering</span>
                     </div>
                     <div className="reading-loading-lines" aria-hidden="true">
                         <span />
@@ -566,7 +566,7 @@ export function PdfPageRenderer({
                     data-no-nav="true"
                     onClick={() => { scaleRef.current = 1; setScale(1); }}
                 >
-                    点击恢复原始大小
+                    Click to restore original size
                 </div>
             )}
         </div>

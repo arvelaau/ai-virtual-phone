@@ -121,6 +121,7 @@ import { startWeixinCloudRealtimeSync } from "@/lib/weixin-cloud-sync";
 import { sendBrowserNotification } from "@/lib/browser-notification";
 import type { ChatSharePayload } from "@/lib/chat-share";
 import { completePendingMcpOAuthCallback } from "@/lib/tool-executor";
+import { buildCallInitiateGroupTag, buildCallInitiateTag, buildCallRejectTag } from "@/lib/call-tag-patterns";
 import { LayoutGrid, LoaderCircle, RefreshCw } from "lucide-react";
 
 const EMOJI_FONTS = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla"';
@@ -178,11 +179,11 @@ function toCssPx(value: string | undefined, fallback: string): string {
 }
 
 const TEXT = {
-  ariaDesktopIcons: "\u684C\u9762\u56FE\u6807",
-  backDesktop: "\u8FD4\u56DE\u684C\u9762",
-  placeholderTitle: "\u529F\u80FD\u5360\u4F4D",
+  ariaDesktopIcons: "Desktop Icons",
+  backDesktop: "Back to Desktop",
+  placeholderTitle: "Feature Placeholder",
   placeholderBody:
-    "\u8BE5\u5165\u53E3\u5DF2\u5728\u4EFF\u771F\u624B\u673A\u5185\u9884\u7559\uff0C\u540E\u7EED\u5F00\u53D1\u65F6\u4F1A\u5728\u624B\u673A\u754C\u9762\u5185\u5B8C\u6210\u529F\u80FD\u3002"
+    "This entry is already reserved within the simulated phone. The feature will be completed within the phone interface as development continues."
 };
 
 type DesktopLayout = DesktopIconLayout;
@@ -481,9 +482,10 @@ function normalizeLayout(raw: unknown, widgets: WidgetInstance[], dockIds: Set<D
   }
 
   // Ensure all default icons exist somewhere across desktop pages (but not ones
-  // the user has moved into the dock). DOCK_DEFAULT 也纳入兜底：若某默认 dock
-  // 图标（如设置）既不在任何页面也不在 dock（如恢复默认/导入主题后 dock 未含它），
-  // 就近放回页面，防止图标彻底丢失。
+  // the user has moved into the dock). DOCK_DEFAULT is also included as a fallback:
+  // if a default dock icon (e.g. Settings) is neither on any page nor in the dock
+  // (e.g. dock didn't include it after restoring defaults/importing a theme),
+  // place it back on the nearest page so the icon is never permanently lost.
   const allPlaced = new Set<DesktopIconId>(getDesktopIconLayoutItems(layout).map(ic => ic.id));
   const allDefaults = [...PAGE_1_DEFAULT, ...PAGE_2_DEFAULT, ...PAGE_3_DEFAULT, ...DOCK_DEFAULT];
 
@@ -990,7 +992,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   useEffect(() => {
     activeAppRef.current = activeApp;
   }, [activeApp]);
-  // Listen for theme CSS updates from 小卷
+  // Listen for theme CSS updates from Xiaojuan
   useEffect(() => {
     const onThemeUpdate = () => {
       const fresh = readThemeProfile();
@@ -1053,8 +1055,8 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   const mergedCatalog = useMemo(() => {
     const diyEntries = diyTemplates.map(t => ({
       type: t.id as WidgetType,
-      name: t.name || "DIY组件",
-      desc: t.mode === "image" ? "图片贴纸" : "自定义代码",
+      name: t.name || "Custom Widget",
+      desc: t.mode === "image" ? "Image sticker" : "Custom code",
       size: t.size,
       track: "freestyle" as const
     }));
@@ -1080,8 +1082,10 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   const dockElRef = useRef<HTMLElement | null>(null);
   const gridRefs = useRef<Record<string, HTMLElement | null>>({ page1: null, page2: null });
 
-  // ── FLIP：编辑/拖拽中，图标与组件"让位"时平滑滑动到新格（grid 行列本身不可过渡）──
-  // 坐标取相对所在 icon-grid 的局部值，整页横滑平移不会误触发动画。
+  // -- FLIP: while editing/dragging, icons and widgets "yield position" and slide smoothly
+  // to their new cell (grid rows/columns themselves can't be transitioned) --
+  // Coordinates are taken relative to their containing icon-grid, so a full-page
+  // horizontal swipe won't accidentally trigger the animation.
   const flipRectsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   useLayoutEffect(() => {
     const editing = editMode || dragItem !== null;
@@ -1095,7 +1099,8 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
     for (const pageKey of pageKeys) {
       const grid = gridRefs.current[pageKey];
       if (!grid) continue;
-      // 测量前清掉上一轮 FLIP 残留的 transform，避免量到动画中间值（同步无重绘，安全）
+      // Clear any leftover transform from the previous FLIP round before measuring,
+      // to avoid measuring a mid-animation value (synchronous, no repaint, safe)
       const els = grid.querySelectorAll<HTMLElement>("[data-flip-id]");
       els.forEach((el) => {
         if (el.dataset.flipActive) {
@@ -1130,7 +1135,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       moved.push(item.el);
     }
     if (moved.length) {
-      // 强制一次 reflow，让起始 transform 先生效
+      // Force a reflow so the starting transform takes effect first
       void moved[0].offsetWidth;
       for (const el of moved) {
         el.style.transition = "transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1)";
@@ -1308,9 +1313,11 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       backgroundImage: `linear-gradient(rgba(255, 255, 255, ${whiteMaskAlpha}), rgba(255, 255, 255, ${whiteMaskAlpha})), url("${wallpaperDataUrl}")`,
       opacity: 1,
       filter: draftTheme.wallpaperBlur ? `blur(${draftTheme.wallpaperBlur}px)` : undefined,
-      // blur 会向元素边界外采样、边界外无像素 → 边缘晕开变透。把壁纸层向四周外扩
-      // 2×模糊半径，让晕开的边缘落到 .phone-shell 的 overflow:hidden 之外被裁掉，
-      // 可视区内始终是实色（边缘不再模糊）。
+      // Blur samples outside the element's bounds, and there are no pixels out there,
+      // so the edges bloom and turn transparent. Expand the wallpaper layer outward
+      // by 2x the blur radius on every side, so the bloomed edges fall outside
+      // .phone-shell's overflow:hidden and get clipped off - the visible area stays
+      // fully opaque (edges are no longer blurred).
       inset: draftTheme.wallpaperBlur ? `${-2 * draftTheme.wallpaperBlur}px` : undefined,
       backgroundSize: draftTheme.wallpaperScale !== 100 ? `${draftTheme.wallpaperScale}%` : "cover",
       backgroundPosition: `${draftTheme.wallpaperX}% ${draftTheme.wallpaperY}%`
@@ -1403,7 +1410,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
         const timeoutId = window.setTimeout(() => {
           pendingCustomAppBackgroundToolsRef.current.delete(id);
           setCustomAppBackgroundToolRuns(prev => prev.filter(run => run.id !== id));
-          reject(new Error(`APP handler 执行超时：${payload.tool.name}`));
+          reject(new Error(`APP handler timed out: ${payload.tool.name}`));
         }, timeoutMs + 5000);
         pendingCustomAppBackgroundToolsRef.current.set(id, { resolve, reject, timeoutId });
         setCustomAppBackgroundToolRuns(prev => [
@@ -1433,7 +1440,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       unregister();
       for (const [id, pending] of pendingCustomAppBackgroundToolsRef.current.entries()) {
         window.clearTimeout(pending.timeoutId);
-        pending.reject(new Error(`APP handler 已取消：${id}`));
+        pending.reject(new Error(`APP handler was cancelled: ${id}`));
       }
       pendingCustomAppBackgroundToolsRef.current.clear();
       setCustomAppBackgroundToolRuns([]);
@@ -1601,7 +1608,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   // Update mascot context when activeApp changes
   useEffect(() => {
     if (!activeApp) {
-      setMascotContext({ page: "desktop", mode: "idle", label: "桌面", fields: {} });
+      setMascotContext({ page: "desktop", mode: "idle", label: "Desktop", fields: {} });
     }
     // Specific pages update their own precise context via notifyMascotPageContext
   }, [activeApp]);
@@ -1622,15 +1629,18 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
         ? (detail.characterName ? chars.find(c => c.name === detail.characterName) : null)
         : chars.find(c => c.id === session.contactId);
       const charName = isGroup
-        ? (detail.characterName || session.groupName || "群聊")
-        : (session.alias || char?.name || "未知");
-      // Write call initiation system message
-      const callLabel = detail.type === "voice" ? "语音通话" : "视频通话";
+        ? (detail.characterName || session.groupName || "Group Chat")
+        : (session.alias || char?.name || "Unknown");
+      // Write call initiation system message.
+      // NOTE: this is chat call-protocol content, matched by regex elsewhere.
+      // Build it only via lib/call-tag-patterns.ts so the wording can never drift
+      // from what the matchers accept — never hand-write the tag here.
+      const callKind = detail.type === "voice" ? "voice" : "video";
       if (isGroup) {
         pushChatMessage({
           sessionId: detail.sessionId,
           role: "assistant",
-          content: `[我向群聊发起了${callLabel}]`,
+          content: buildCallInitiateGroupTag(callKind),
           ...(char ? { senderCharacterId: char.id, senderName: detail.characterName || charName } : {}),
         });
       } else {
@@ -1638,7 +1648,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
         pushChatMessage({
           sessionId: detail.sessionId,
           role: "assistant",
-          content: `[我向${userName}发起了${callLabel}]`,
+          content: buildCallInitiateTag(callKind, userName),
         });
       }
       setIncomingCall({
@@ -1648,8 +1658,8 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
         charAvatar: char?.avatar || null,
         isGroup,
       });
-      sendBrowserNotification("来电", {
-        body: `${charName} ${isGroup ? "群" : ""}${detail.type === "voice" ? "语音通话" : "视频通话"}`,
+      sendBrowserNotification("Incoming Call", {
+        body: `${charName} ${isGroup ? "Group " : ""}${detail.type === "voice" ? "Voice Call" : "Video Call"}`,
         icon: char?.avatar || undefined,
       });
     };
@@ -1810,9 +1820,9 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
     void completePendingMcpOAuthCallback().then((result) => {
       if (cancelled || !result.completed) return;
       if (result.success) {
-        setNotice(result.serverName ? `${result.serverName} 授权成功` : "MCP 授权成功");
+        setNotice(result.serverName ? `${result.serverName} authorized successfully` : "MCP authorized successfully");
       } else {
-        setNotice(`MCP 授权失败：${result.error || "未知错误"}`);
+        setNotice(`MCP authorization failed: ${result.error || "Unknown error"}`);
       }
     });
     return () => {
@@ -1873,12 +1883,12 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
     const targetUrl = new URL(path, window.location.origin).toString();
     const escapedTargetUrl = JSON.stringify(targetUrl);
     const bootHtml = `<!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#121110" />
-<title>筑境</title>
+<title>World Builder</title>
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgba(255,248,232,.92);color-scheme:dark;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:hidden}
@@ -1901,10 +1911,10 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     <div class="wb-initial-mark" aria-hidden="true"><span></span></div>
     <div class="wb-initial-copy">
       <span>World Builder</span>
-      <h1>正在搭建筑境</h1>
-      <p>场景出现后会自动进入。</p>
+      <h1>Building your world</h1>
+      <p>You'll enter automatically once the scene appears.</p>
     </div>
-    <button class="wb-initial-back" type="button" onclick="if(window.opener&&!window.opener.closed){window.opener.focus();window.close();}else{window.location.replace('/')}">返回小手机</button>
+    <button class="wb-initial-back" type="button" onclick="if(window.opener&&!window.opener.closed){window.opener.focus();window.close();}else{window.location.replace('/')}">Back to Phone</button>
   </div>
 </main>
 <script>setTimeout(function(){window.location.replace(${escapedTargetUrl});},80);</script>
@@ -1958,7 +1968,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
           });
         }
       } catch {
-        // 本地导入、离线或市场不可用时不打扰用户。
+        // Don't bother the user when locally imported, offline, or the market is unavailable.
       } finally {
         customAppUpdateCheckingRef.current.delete(app.id);
       }
@@ -1973,7 +1983,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     if (!appId) return;
     const app = getFreshInstalledCustomApp(appId);
     if (!app) {
-      setNotice("这个 APP 已被卸载或不存在。");
+      setNotice("This app has been uninstalled or no longer exists.");
       return;
     }
     activateCustomApp(app.id, launchContext);
@@ -2203,7 +2213,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
       const detailSenderName = detail.senderName?.trim();
       const title = detailSenderName && detailSenderName !== "对方"
         ? detailSenderName
-        : (isGroup ? session.groupName || "群聊" : session.alias || char?.name || "新消息");
+        : (isGroup ? session.groupName || "Group Chat" : session.alias || char?.name || "New Message");
 
       if (chatMessageNoticeTimerRef.current !== null) {
         window.clearTimeout(chatMessageNoticeTimerRef.current);
@@ -2316,10 +2326,13 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     swipeRef.current.pointerId = null;
   }
 
-  // 安卓：长按激活拖拽后若不松手继续移动，浏览器会把这串触摸判定为滚动手势
-  // 并发出 pointercancel（表现为"拖到一半弹回去，必须松手重按"）。touch-action
-  // 在触摸开始时已快照，事后改无效——唯一可靠的办法是在拖拽激活期间用
-  // non-passive touchmove 阻止默认行为，浏览器就无法启动滚动接管。iOS 不受影响。
+  // Android: after long-press activates dragging, if the finger keeps moving without
+  // lifting, the browser reads that touch sequence as a scroll gesture and fires
+  // pointercancel (seen as "snaps back halfway through the drag, must release and
+  // press again"). touch-action is snapshotted at touch start, so changing it later
+  // has no effect - the only reliable fix is to call preventDefault on a non-passive
+  // touchmove listener while the drag is active, so the browser can never take over
+  // scrolling. iOS is unaffected.
   useEffect(() => {
     const blockScrollWhileDragging = (event: TouchEvent) => {
       if (editDragRef.current?.active && event.cancelable) event.preventDefault();
@@ -2346,7 +2359,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
       clone.style.height = `${drag.ghostH}px`;
       clone.style.minHeight = "";
       clone.style.boxSizing = "border-box";
-      // 拿起手感：克隆体轻微放大 + 投影
+      // Pick-up feel: slightly scale up the clone + drop shadow
       clone.style.transition = "transform 0.16s ease, filter 0.16s ease";
       ghost.appendChild(clone);
       requestAnimationFrame(() => {
@@ -2729,7 +2742,8 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
       finalize();
       return;
     }
-    // 落位动画：ghost 平滑飞到最终格位（布局已实时写入/恢复，元素就位）
+    // Drop animation: ghost smoothly flies to its final cell (layout has already
+    // been written/restored in real time, element is in place)
     requestAnimationFrame(() => {
       let el: HTMLElement | null = null;
       try {
@@ -2838,8 +2852,10 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
 
   function handleThemeDesktopChange(next: { widgets: WidgetInstance[]; iconLayout: DesktopLayout; dock?: DesktopIconId[] }): void {
     const normalizedWidgets = sanitizeWidgetsForLayout(next.iconLayout, next.widgets);
-    // dock：恢复默认时传入出厂 dock；主题包导入不含 dock 时保留当前。
-    // 新布局里明确摆放的图标从 dock 去重（一个图标只能存在于一处）。
+    // dock: the factory dock is passed in when restoring defaults; if a theme pack
+    // import doesn't include a dock, the current one is kept.
+    // Icons explicitly placed in the new layout are deduplicated out of the dock
+    // (an icon can only exist in one place).
     const placedIds = new Set<DesktopIconId>(getDesktopIconLayoutItems(next.iconLayout).map(ic => ic.id));
     const nextDock = normalizeDock(next.dock ?? dockRef.current).filter(id => !placedIds.has(id));
     dockRef.current = nextDock;
@@ -2976,7 +2992,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     swipeLayerRef.current?.classList.add("phone-swipe-dragging");
   }, [activeApp, editMode]);
 
-  // ── 状态栏颜色自适应：检测当前背景亮度 ──
+  // -- Status bar color adaptation: detect the current background brightness --
   useEffect(() => {
     const shell = shellRef.current;
     if (!shell) return;
@@ -2987,11 +3003,14 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
       debounceTimer = setTimeout(() => updateStatusBarTone(shell, activeApp), 120);
     };
 
-    // 初始检测（延迟让 app 渲染完毕）
+    // Initial detection (delayed so the app finishes rendering)
     detect();
 
-    // 监听 workspace 内 DOM 变化（如：进入聊天室、切换子页面）
-    // 修复：仅当进入 App 时才监听，防止桌面组件（如时钟秒针更新）疯狂触发画布亮度计算导致严重发烫
+    // Watch for DOM changes within the workspace (e.g. entering a chat room,
+    // switching sub-pages).
+    // Fix: only observe while inside an App, to stop desktop widgets (e.g. a clock's
+    // second-hand updates) from firing off canvas brightness calculations
+    // relentlessly and causing serious overheating.
     let observer: MutationObserver | null = null;
     if (activeApp !== null) {
       const workspace = shell.querySelector(".phone-workspace");
@@ -3140,7 +3159,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     const shouldKeepMounted = isBusy ?? xiaohongshuBusy;
     setActiveApp(null);
     if (shouldKeepMounted) {
-      setNotice("小红书正在后台生成，完成后会自动更新。");
+      setNotice("Xiaohongshu is generating in the background and will update automatically when done.");
       return;
     }
     setXiaohongshuBusy(false);
@@ -3151,7 +3170,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     const shouldKeepMounted = isBusy ?? shoppingBusy;
     setActiveApp(null);
     if (shouldKeepMounted) {
-      setNotice("购物正在后台生成，完成后会自动更新。");
+      setNotice("Shopping is generating in the background and will update automatically when done.");
       return;
     }
     setShoppingBusy(false);
@@ -3191,11 +3210,11 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
       setCustomApps(loadInstalledCustomApps());
       setCustomAppUpdatePrompt(null);
       setNotice(result.previousVersion === result.installed.version
-        ? `已同步「${result.installed.name}」`
-        : `已更新「${result.installed.name}」到 v${result.installed.version}`);
+        ? `Synced "${result.installed.name}"`
+        : `Updated "${result.installed.name}" to v${result.installed.version}`);
       activateCustomApp(result.installed.id, pending.launchContext);
     } catch (err) {
-      setNotice(`更新失败：${err instanceof Error ? err.message : String(err)}`);
+      setNotice(`Update failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setCustomAppUpdateBusy(false);
     }
@@ -3456,23 +3475,23 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                     data-ui="modal-dialog"
                     role="dialog"
                     aria-modal="true"
-                    aria-label="APP 更新"
+                    aria-label="App Update"
                     onClick={event => event.stopPropagation()}
                   >
                     <div className="modal-header" data-ui="modal-header">
                       <div className="ui-icon-circle" data-variant="action">
                         {customAppUpdateBusy ? <LoaderCircle className="am-spin" size={20} /> : <RefreshCw size={20} />}
                       </div>
-                      <h3 className="modal-title">发现新版本</h3>
+                      <h3 className="modal-title">New Version Available</h3>
                     </div>
                     <div className="modal-body" data-ui="modal-body">
                       <p>
-                        「{customAppUpdatePrompt.app.name}」当前为 v{customAppUpdatePrompt.app.version}，
-                        市场版本为 v{customAppUpdatePrompt.item.version}。是否立即更新？
+                        "{customAppUpdatePrompt.app.name}" is currently v{customAppUpdatePrompt.app.version},
+                        the market version is v{customAppUpdatePrompt.item.version}. Update now?
                       </p>
                       {customAppUpdatePrompt.item.changelog?.trim() ? (
                         <p style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
-                          更新日志：{customAppUpdatePrompt.item.changelog.trim()}
+                          Changelog: {customAppUpdatePrompt.item.changelog.trim()}
                         </p>
                       ) : null}
                     </div>
@@ -3483,7 +3502,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                         onClick={dismissPendingCustomAppUpdate}
                         disabled={customAppUpdateBusy}
                       >
-                        稍后
+                        Later
                       </button>
                       <button
                         type="button"
@@ -3491,7 +3510,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                         onClick={() => void confirmPendingCustomAppUpdate()}
                         disabled={customAppUpdateBusy}
                       >
-                        {customAppUpdateBusy ? "更新中" : "立即更新"}
+                        {customAppUpdateBusy ? "Updating" : "Update Now"}
                       </button>
                     </div>
                   </div>
@@ -3554,7 +3573,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                         onClose={() => handleCustomAppBackgroundToolComplete(run.id, {
                           ok: false,
                           reason: "closed",
-                          error: "APP handler 在工具执行完成前关闭。",
+                          error: "APP handler closed before the tool finished executing.",
                         })}
                         onNotice={setNotice}
                         onBackgroundToolComplete={handleCustomAppBackgroundToolComplete}
@@ -3578,7 +3597,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                     <div className="incoming-call-bar-text">
                       <span className="incoming-call-bar-name">{incomingCall.charName}</span>
                       <span className="incoming-call-bar-type">
-                        {incomingCall.isGroup ? "群" : ""}{incomingCall.type === "voice" ? "语音通话" : "视频通话"}
+                        {incomingCall.isGroup ? "Group " : ""}{incomingCall.type === "voice" ? "Voice Call" : "Video Call"}
                       </span>
                     </div>
                   </div>
@@ -3587,11 +3606,12 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                       className="incoming-call-bar-btn incoming-call-bar-decline"
                       onClick={() => {
                         const call = incomingCall;
-                        const callLabel = call.type === "voice" ? "语音通话" : "视频通话";
+                        // NOTE: chat call-protocol content, matched by regex
+                        // elsewhere — always build it via lib/call-tag-patterns.ts.
                         pushChatMessage({
                           sessionId: call.sessionId,
                           role: "user",
-                          content: `[我拒绝了${callLabel}]`,
+                          content: buildCallRejectTag(call.type === "voice" ? "voice" : "video", false),
                         });
                         setIncomingCall(null);
                         // Trigger AI reply after declining — fire event for chat-room, plus background fallback
@@ -3660,14 +3680,14 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                   onPointerUp={handleNoticePointerUp}
                   onPointerCancel={handleNoticePointerUp}
                   onClick={handleNoticeClick}
-                  aria-label={`查看 ${chatMessageNotice.title} 的新消息`}
+                  aria-label={`View new message from ${chatMessageNotice.title}`}
                 >
                   <div className="chat-message-notice-info">
                     {chatMessageNotice.avatar ? (
                       <img src={chatMessageNotice.avatar} alt="" className="chat-message-notice-avatar" />
                     ) : (
                       <span className="chat-message-notice-avatar chat-message-notice-avatar-fallback">
-                        {chatMessageNotice.title[0] || "消"}
+                        {chatMessageNotice.title[0] || "M"}
                       </span>
                     )}
                     <div className="chat-message-notice-text">
@@ -3675,7 +3695,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                       <span className="chat-message-notice-body">{chatMessageNotice.body}</span>
                     </div>
                   </div>
-                  <span className="chat-message-notice-action">查看</span>
+                  <span className="chat-message-notice-action">View</span>
                 </button>
               ) : null}
 
@@ -3690,7 +3710,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
 
               {/* Mini chat window — persists across music pages */}
               <MiniAppWindow
-                title="聊天"
+                title="Chat"
                 visible={showMiniChat}
                 onClose={handleMiniChatClose}
                 onExpand={handleMiniChatExpand}
@@ -3725,13 +3745,13 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                 {editMode && !activeApp && (
                   <>
                     <button type="button" className="edit-mode-edit" style={{ left: 16 }} onPointerDown={e => e.stopPropagation()} onClick={() => { setShowWidgetPicker(true); setShowDesktopCustomizer(false); }}>
-                      添加
+                      Add
                     </button>
                     <button type="button" className="edit-mode-edit" style={{ left: "50%", transform: "translateX(-50%)" }} onPointerDown={e => e.stopPropagation()} onClick={() => { setShowDesktopCustomizer(true); setShowWidgetPicker(false); }}>
-                      装扮
+                      Customize
                     </button>
                     <button type="button" className="edit-mode-done" onClick={exitEditMode}>
-                      完成
+                      Done
                     </button>
                   </>
                 )}
@@ -3792,7 +3812,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                                         e.stopPropagation();
                                         handleWidgetsChange(widgetsRef.current.filter((w) => w.id !== widget.id));
                                       }}
-                                      aria-label="删除组件"
+                                      aria-label="Delete widget"
                                     >
                                       ×
                                     </button>
@@ -3880,7 +3900,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                                       <CustomAppGlyph seed={customApp?.name || icon.label} className="icon-glyph" />
                                     )}
                                     {badgeCount > 0 ? (
-                                      <span className="desktop-icon-badge" aria-label={`${badgeCount} 条未读`}>
+                                      <span className="desktop-icon-badge" aria-label={`${badgeCount} unread`}>
                                         {badgeCount > 99 ? "99+" : badgeCount}
                                       </span>
                                     ) : null}
@@ -3900,7 +3920,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                           key={pageKey}
                           type="button"
                           className={boundedCurrentPageIndex === pageIndex ? "dot active dot-btn" : "dot dot-btn"}
-                          aria-label={`第${pageIndex + 1}页`}
+                          aria-label={`Page ${pageIndex + 1}`}
                           onClick={() => setCurrentPageIndex(pageIndex)}
                         />
                       ))}
@@ -4033,15 +4053,15 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                 <div className="widget-picker-sheet" onClick={e => e.stopPropagation()}>
                   <div className="wm-header" style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span className="ts-16 font-medium text-[var(--c-text-title)] flex items-center gap-2">
-                      <LayoutGrid size={18} /> 添加组件
+                      <LayoutGrid size={18} /> Add Widget
                     </span>
                     <button className="ui-bare-btn text-[var(--c-icon)]" onClick={() => setShowWidgetPicker(false)}>✕</button>
                   </div>
 
                   <div className="px-4 py-3 flex gap-2 w-full">
                     {[
-                      { id: "standard", label: "全局套件" },
-                      { id: "freestyle", label: "自由艺术" },
+                      { id: "standard", label: "Standard Kit" },
+                      { id: "freestyle", label: "Freestyle Art" },
                     ].map(tab => (
                       <button
                         key={tab.id}
@@ -4077,7 +4097,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                                 }
                               }
                             }
-                            if (!placed) setNotice("当前页面没有足够空间");
+                            if (!placed) setNotice("Not enough space on the current page");
                             setShowWidgetPicker(false);
                           }}
                         >
@@ -4116,7 +4136,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                                 }
                               }
                             }
-                            if (!placed) setNotice("当前页面没有足够空间");
+                            if (!placed) setNotice("Not enough space on the current page");
                             setShowWidgetPicker(false);
                           }}
                         >

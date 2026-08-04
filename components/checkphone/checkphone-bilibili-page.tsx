@@ -37,8 +37,8 @@ function formatBilibiliTime(iso: string): string {
     minute: "2-digit",
     hour12: false,
   });
-  if (value >= todayStart) return `今天 ${hhmm}`;
-  if (value >= yesterdayStart) return `昨天 ${hhmm}`;
+  if (value >= todayStart) return `Today ${hhmm}`;
+  if (value >= yesterdayStart) return `Yesterday ${hhmm}`;
   return value.toLocaleDateString("zh-CN", {
     month: "2-digit",
     day: "2-digit",
@@ -49,16 +49,21 @@ function formatBilibiliListTime(iso: string): string {
   const value = new Date(iso);
   if (Number.isNaN(value.getTime())) return iso;
   const pad = (number: number) => number.toString().padStart(2, "0");
-  return `${value.getFullYear()}年${pad(value.getMonth() + 1)}月${pad(value.getDate())}日 ${pad(value.getHours())}:${pad(value.getMinutes())}`;
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}`;
 }
 
 function formatBilibiliPlayCount(value: number): string {
-  if (value >= 10000) {
-    const wan = value / 10000;
-    const text = wan >= 10 ? Math.round(wan).toString() : wan.toFixed(1).replace(/\.0$/, "");
-    return `${text}万播放`;
+  if (value >= 1000000) {
+    const m = value / 1000000;
+    const text = m >= 10 ? Math.round(m).toString() : m.toFixed(1).replace(/\.0$/, "");
+    return `${text}M views`;
   }
-  return `${value}播放`;
+  if (value >= 1000) {
+    const k = value / 1000;
+    const text = k >= 100 ? Math.round(k).toString() : k.toFixed(1).replace(/\.0$/, "");
+    return `${text}k views`;
+  }
+  return `${value} views`;
 }
 
 function getEntries(payload: CheckPhoneBilibiliPayload | null, tab: BilibiliTabId): BilibiliEntry[] {
@@ -212,17 +217,17 @@ export function CheckPhoneBilibiliPage({ character, onBack }: CheckPhoneBilibili
         {!activeEntry ? (
           <div style={{ flex: 1, display: "flex", justifyContent: "center", gap: "28px", alignItems: "center" }}>
              <button type="button" onClick={() => setSelectedTab("history")} style={{ fontSize: "calc(15px*var(--app-text-scale,1))", fontWeight: selectedTab === "history" ? 500 : 400, color: selectedTab === "history" ? "#fb7299" : "#666", position: "relative", border: "none", background: "transparent", padding: 0 }}>
-                历史记录
+                History
                 {selectedTab === "history" && <div style={{ position: "absolute", bottom: "-6px", left: "50%", transform: "translateX(-50%)", width: "16px", height: "3px", background: "#fb7299", borderRadius: "2px" }} />}
              </button>
              <button type="button" onClick={() => setSelectedTab("favorites")} style={{ fontSize: "calc(15px*var(--app-text-scale,1))", fontWeight: selectedTab === "favorites" ? 500 : 400, color: selectedTab === "favorites" ? "#fb7299" : "#666", position: "relative", border: "none", background: "transparent", padding: 0 }}>
-                收藏
+                Favorites
                 {selectedTab === "favorites" && <div style={{ position: "absolute", bottom: "-6px", left: "50%", transform: "translateX(-50%)", width: "16px", height: "3px", background: "#fb7299", borderRadius: "2px" }} />}
              </button>
           </div>
         ) : (
           <div className="cp-bilibili-header-stack" style={{ position: "static", transform: "none", flex: 1, alignItems: "center" }}>
-            <div className="cp-bilibili-header-title" style={{ fontSize: "calc(16px*var(--app-text-scale,1))", color: "#333", fontWeight: 500 }}>{activeEntry.section === "history" ? "历史记录" : "收藏"}</div>
+            <div className="cp-bilibili-header-title" style={{ fontSize: "calc(16px*var(--app-text-scale,1))", color: "#333", fontWeight: 500 }}>{activeEntry.section === "history" ? "History" : "Favorites"}</div>
           </div>
         )}
         <div className="cp-appbar-actions" style={{ gap: "12px", position: "static" }}>
@@ -237,7 +242,7 @@ export function CheckPhoneBilibiliPage({ character, onBack }: CheckPhoneBilibili
 
       {loading && (
         <div className="cp-refresh-indicator cp-refresh-indicator--floating" aria-live="polite">
-          <span className="cp-refresh-indicator-text">正在刷新 B站</span>
+          <span className="cp-refresh-indicator-text">Refreshing Bilibili</span>
           <span className="cp-refresh-indicator-dots" aria-hidden="true">
             <i></i><i></i><i></i>
           </span>
@@ -245,18 +250,18 @@ export function CheckPhoneBilibiliPage({ character, onBack }: CheckPhoneBilibili
       )}
 
       <div className="cp-bilibili-body" style={{ background: "#fff", padding: 0, gap: 0 }}>
-        {!loaded && <div className="cp-bilibili-status">正在同步 B站痕迹...</div>}
+        {!loaded && <div className="cp-bilibili-status">Syncing Bilibili history...</div>}
 
         {loaded && !payload && !loading && (
           <div className="cp-bilibili-status cp-empty-copy">
-            <p>暂无B站内容</p>
-            <span className="cp-bilibili-hint">点刷新同步观看记录和收藏</span>
+            <p>No Bilibili content yet</p>
+            <span className="cp-bilibili-hint">Tap refresh to sync watch history and favorites</span>
           </div>
         )}
 
         {error ? (
           <CheckPhoneDebugErrorCard
-            title="暂时无法解析 B站 内容。"
+            title="Unable to parse Bilibili content right now."
             error={error}
             debugParseMode={debugParseMode}
             debugParseError={debugParseError}
@@ -345,11 +350,11 @@ export function CheckPhoneBilibiliPage({ character, onBack }: CheckPhoneBilibili
                   </div>
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     <div style={{ fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 500, color: "#fb7299" }}>{activeEntry.upName}</div>
-                    <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#999" }}>10.1万粉丝  240视频</div>
+                    <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#999" }}>101k followers · 240 videos</div>
                   </div>
                 </div>
                 <button style={{ background: "#fb7299", color: "#fff", border: "none", borderRadius: "14px", padding: "4px 16px", fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 500, display: "flex", alignItems: "center", gap: "4px" }}>
-                  <span>+</span> 关注
+                  <span>+</span> Follow
                 </button>
               </div>
 
@@ -367,7 +372,7 @@ export function CheckPhoneBilibiliPage({ character, onBack }: CheckPhoneBilibili
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "calc(13px*var(--app-text-scale,1))", color: "#999", marginBottom: "4px" }}>
                       <span style={{ width: "3px", height: "12px", borderRadius: "999px", background: "rgba(251, 114, 153, 0.58)" }} />
-                      当时状态
+                      State at the time
                     </div>
                     <div style={{ fontSize: "calc(14px*var(--app-text-scale,1))", color: "#333", lineHeight: 1.5 }}><CheckPhoneBilingualText text={activeEntry.stateNote} tone="bilibili" /></div>
                   </div>
@@ -376,7 +381,7 @@ export function CheckPhoneBilibiliPage({ character, onBack }: CheckPhoneBilibili
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "calc(13px*var(--app-text-scale,1))", color: "#999", marginBottom: "4px" }}>
                       <span style={{ width: "3px", height: "12px", borderRadius: "999px", background: "rgba(251, 114, 153, 0.58)" }} />
-                      收藏原因
+                      Reason for saving
                     </div>
                     <div style={{ fontSize: "calc(14px*var(--app-text-scale,1))", color: "#333", lineHeight: 1.5 }}><CheckPhoneBilingualText text={activeEntry.saveReason} tone="bilibili" /></div>
                   </div>
@@ -385,7 +390,7 @@ export function CheckPhoneBilibiliPage({ character, onBack }: CheckPhoneBilibili
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "calc(13px*var(--app-text-scale,1))", color: "#999", marginBottom: "4px" }}>
                       <span style={{ width: "3px", height: "12px", borderRadius: "999px", background: "rgba(251, 114, 153, 0.58)" }} />
-                      内心感受
+                      Inner thoughts
                     </div>
                     <div style={{ fontSize: "calc(14px*var(--app-text-scale,1))", color: "#333", lineHeight: 1.5 }}><CheckPhoneBilingualText text={activeEntry.feeling} tone="bilibili" /></div>
                   </div>
@@ -398,11 +403,11 @@ export function CheckPhoneBilibiliPage({ character, onBack }: CheckPhoneBilibili
 
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空 B站 内容？"
-          message="确认后会清空当前 B站 缓存。之后重新刷新时，不会再带入旧 B站 内容。"
+          title="Clear Bilibili content?"
+          message="This clears the current Bilibili cache. Refreshing again won't bring back the old content."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Confirm Clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

@@ -28,9 +28,9 @@ export default function WorldBuilder() {
   const [showLoad, setShowLoad] = useState(false);
   const { settings, update: updateSettings } = useSceneSettings();
   const [userModels, setUserModels] = useState<UserModel[]>([]);
-  // 角色库（独立窗口页面需先水合 kv 才能读到）
+  // Character library (this standalone window page needs to hydrate the KV store first before it can read it)
   const [characters, setCharacters] = useState<Character[]>([]);
-  // 点击化身名牌弹出的角色简介卡
+  // Character brief card that pops up when tapping an avatar nameplate
   const [avatarCardId, setAvatarCardId] = useState<string | null>(null);
   const [showInitialBoot, setShowInitialBoot] = useState(true);
   const history = useRef<SceneObject[][]>([]);
@@ -38,7 +38,7 @@ export default function WorldBuilder() {
 
   const selected = objects.find((o) => o.id === selectedId) ?? null;
 
-  // 加载用户模型
+  // Load user models
   const loadUserModels = useCallback(async () => {
     try {
       const models = await getAllModels();
@@ -77,7 +77,7 @@ export default function WorldBuilder() {
     }, 40);
   }, []);
 
-  // 所有分类（预设 + 用户）
+  // All categories (preset + user)
   const allCategories = [
     ...new Set([
       ...PRESET_MODELS.map((m) => m.category),
@@ -85,7 +85,7 @@ export default function WorldBuilder() {
     ]),
   ];
 
-  // 每次 objects 变更前存快照
+  // Save a snapshot before every objects change
   const pushHistory = useCallback(() => {
     history.current.push(objects.map((o) => ({ ...o })));
     if (history.current.length > 50) history.current.shift();
@@ -199,16 +199,16 @@ export default function WorldBuilder() {
     <div className={`wb-layout ${isLightTheme(settings.theme) ? "wb-light" : ""} ${showInitialBoot ? "wb-layout--booting" : ""}`}>
       <div className="wb-topbar">
           <button className="wb-topbar-btn" onClick={() => window.close()}>
-            返回
+            Back
           </button>
           <button className="wb-topbar-btn" onClick={handleUndo} disabled={history.current.length === 0}>
-            撤销
+            Undo
           </button>
           <button className="wb-topbar-btn" onClick={handleRedo} disabled={future.current.length === 0}>
-            重做
+            Redo
           </button>
           <button className="wb-topbar-btn" onClick={() => setShowImport(true)}>
-            导入模型
+            Import Model
           </button>
           <button
             className="wb-topbar-btn"
@@ -227,23 +227,23 @@ export default function WorldBuilder() {
                 const { downloadFile } = await import("@/lib/download-utils");
                 await downloadFile(blob, `${selected.name}.glb`);
               } catch (e: any) {
-                alert("导出失败: " + e.message);
+                alert("Export failed: " + e.message);
               }
             }}
           >
-            导出模型
+            Export Model
           </button>
           <button className="wb-topbar-btn" onClick={() => setShowGenerate(true)}>
-            生成模型
+            Generate Model
           </button>
           <button className="wb-topbar-btn" onClick={() => setShowSave(true)}>
-            保存场景
+            Save Scene
           </button>
           <button className="wb-topbar-btn" onClick={() => setShowLoad(true)}>
-            加载场景
+            Load Scene
           </button>
           <button className="wb-topbar-btn" onClick={() => setShowSettings(true)}>
-            偏好设置
+            Preferences
           </button>
       </div>
 
@@ -256,7 +256,7 @@ export default function WorldBuilder() {
         onPlace={handlePlace}
         onTransformEnd={handleTransformEnd}
         onSceneMounted={hideInitialBoot}
-        characterNameById={new Map(characters.map((c) => [c.id, c.name || "未命名"]))}
+        characterNameById={new Map(characters.map((c) => [c.id, c.name || "Unnamed"]))}
         onCharacterTap={setAvatarCardId}
       />
 
@@ -268,11 +268,11 @@ export default function WorldBuilder() {
             </div>
             <div className="wb-initial-copy">
               <span>World Builder</span>
-              <h1>正在搭建筑境</h1>
-              <p>场景出现后会自动进入。</p>
+              <h1>Constructing the World</h1>
+              <p>You'll enter automatically once the scene appears.</p>
             </div>
             <button className="wb-initial-back" type="button" onClick={handleInitialBootBack}>
-              返回小手机
+              Back to Phone
             </button>
           </div>
         </div>
@@ -329,11 +329,11 @@ export default function WorldBuilder() {
                   ? <img src={card.avatar} alt="" />
                   : <span>{(card?.name || "?").slice(0, 1)}</span>}
               </div>
-              <div className="wb-avatar-card-name">{card?.name || "未知角色"}</div>
+              <div className="wb-avatar-card-name">{card?.name || "Unknown Character"}</div>
               <p className="wb-avatar-card-brief">
-                {card ? (card.briefPersona?.trim() || card.personality?.trim() || "还没有简介，可在角色档案里生成简量人设。") : "该角色档案已不存在。"}
+                {card ? (card.briefPersona?.trim() || card.personality?.trim() || "No brief yet — you can generate a brief persona in the character profile.") : "This character's profile no longer exists."}
               </p>
-              <button className="wb-topbar-btn" onClick={() => setAvatarCardId(null)}>关闭</button>
+              <button className="wb-topbar-btn" onClick={() => setAvatarCardId(null)}>Close</button>
             </div>
           </div>
         );

@@ -15,7 +15,7 @@ import { resolveActiveIconSkins, type ThemeProfile } from "@/lib/theme-types";
 import { hasPendingMcpOAuthCallback } from "@/lib/tool-executor";
 
 const TEXT = {
-  loading: "\u52A0\u8F7D\u4E2D...",
+  loading: "Loading...",
 };
 
 const BUILTIN_FONT_URLS = [
@@ -223,6 +223,31 @@ async function prepareDesktopThemeForFirstPaint(): Promise<PreparedDesktopTheme>
   return { profile, assets };
 }
 
+// Startup steps that touch IndexedDB can hang forever instead of rejecting (a
+// blocked version upgrade or a wedged connection never settles), so a plain
+// try/catch is not enough to guarantee startup finishes.
+const HYDRATION_STEP_TIMEOUT_MS = 10_000;
+
+// Race `work` against a deadline. Never rejects: a failure or a timeout both
+// resolve to null so callers can always move on to a degraded-but-usable state.
+function withTimeout<T>(work: Promise<T>, ms: number, label: string): Promise<T | null> {
+  let timer = 0;
+  const deadline = new Promise<null>((resolve) => {
+    timer = window.setTimeout(() => {
+      console.warn(`[MainApp] ${label} timed out after ${ms}ms; continuing without it.`);
+      resolve(null);
+    }, ms);
+  });
+
+  return Promise.race([
+    work.catch((error) => {
+      console.warn(`[MainApp] ${label} failed:`, error);
+      return null;
+    }),
+    deadline,
+  ]).finally(() => window.clearTimeout(timer));
+}
+
 export function MainApp() {
   const [preparedDesktopTheme, setPreparedDesktopTheme] = useState<PreparedDesktopTheme | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -232,15 +257,17 @@ export function MainApp() {
     let cancelled = false;
 
     void (async () => {
-      await hydrateKvDb();
+      // Both steps below gate `hydrated`, which gates the splash enter button.
+      // If either one hangs the button stays disabled with no way out, so cap
+      // each independently and carry on rather than block first paint forever.
+      await withTimeout(hydrateKvDb(), HYDRATION_STEP_TIMEOUT_MS, "kv hydration");
       if (cancelled) return;
 
-      let nextPreparedTheme: PreparedDesktopTheme | null = null;
-      try {
-        nextPreparedTheme = await prepareDesktopThemeForFirstPaint();
-      } catch (error) {
-        console.warn("[MainApp] desktop theme preload failed:", error);
-      }
+      const nextPreparedTheme = await withTimeout(
+        prepareDesktopThemeForFirstPaint(),
+        HYDRATION_STEP_TIMEOUT_MS,
+        "desktop theme preload",
+      );
 
       if (cancelled) return;
       setPreparedDesktopTheme(nextPreparedTheme);
@@ -250,9 +277,9 @@ export function MainApp() {
       }
     })();
 
-    // 安卓全屏兜底：点击屏幕进入全屏模式（iOS 不支持此 API，会自动忽略）
+    // Android fullscreen fallback: tap the screen to enter fullscreen mode (iOS doesn't support this API and will silently ignore it)
     const isMobile = window.matchMedia("(max-width: 500px) and (hover: none) and (pointer: coarse)").matches;
-    // Edge 改用 minimal-ui 保留原生状态栏，不能再被强制全屏顶掉（仅 Edge 跳过，其它浏览器照旧）
+    // Edge uses minimal-ui to keep the native status bar and shouldn't be forced into fullscreen (only Edge is skipped; other browsers behave as before)
     const isEdge = /Edg/i.test(navigator.userAgent);
     if (!isMobile || isEdge) return () => {
       cancelled = true;
@@ -263,7 +290,7 @@ export function MainApp() {
       if (document.fullscreenElement) return;
       doc.requestFullscreen?.().catch(() => { });
     }
-    // 每次点击都尝试进入全屏（退出后可重新进入）
+    // Try to enter fullscreen on every click (can re-enter after exiting)
     document.addEventListener("click", tryFullscreen);
     return () => {
       cancelled = true;

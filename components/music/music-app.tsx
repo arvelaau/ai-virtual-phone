@@ -101,7 +101,7 @@ export default function MusicApp({ onClose }: Props) {
         if (musicLoadingFallbackRef.current) clearTimeout(musicLoadingFallbackRef.current);
         musicToastTimerRef.current = null;
         setPendingPlayTrackId(trackId);
-        setMusicToast("加载音乐中...");
+        setMusicToast("Loading music...");
         musicLoadingFallbackRef.current = setTimeout(() => {
             setMusicToast(null);
             setPendingPlayTrackId(null);
@@ -171,7 +171,7 @@ export default function MusicApp({ onClose }: Props) {
         beginMusicLoadingToast(trackId);
         const url = await getNeteasePlayUrl(result.id);
         if (!url) {
-            showMusicToast("加载失败，请稍后重试");
+            showMusicToast("Failed to load, please try again later");
             return;
         }
         const detail = await getNeteaseSongDetail(result.id);
@@ -202,7 +202,7 @@ export default function MusicApp({ onClose }: Props) {
         }
 
         if (!playable) {
-            showMusicToast("歌单内暂无可播放歌曲");
+            showMusicToast("No playable songs in this playlist");
             return;
         }
 
@@ -211,7 +211,7 @@ export default function MusicApp({ onClose }: Props) {
         const lyrics = await getNeteaseLyrics(playable.song.id);
         const track = toMusicTrack(playable.song, { lyrics, coverUrl: detail?.coverUrl, name: detail?.name, artists: detail?.artists });
         player.playUrl(playable.url, track);
-        if (playable.index > 0) showMusicToast(`已跳过 ${playable.index} 首不可播放歌曲`);
+        if (playable.index > 0) showMusicToast(`Skipped ${playable.index} unplayable songs`);
     }, [beginMusicLoadingToast, player, showMusicToast, toMusicTrack]);
 
     const formatTime = (s: number) => {
@@ -250,7 +250,7 @@ export default function MusicApp({ onClose }: Props) {
             {musicToast && (
                 <div className="music-toast-overlay">
                     <div className="music-toast-chip">
-                        {musicToast === "加载音乐中..." ? (
+                        {musicToast === "Loading music..." ? (
                             <span className="ui-loading-toast-content">
                                 <span className="ui-loading-spinner" />
                                 <span>{musicToast}</span>
@@ -266,20 +266,20 @@ export default function MusicApp({ onClose }: Props) {
                     <button className="music-header-action" onClick={() => {
                         if (activePlaylist) { setActivePlaylist(null); }
                         else { onClose(); }
-                    }} title="返回">
+                    }} title="Back">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="15 18 9 12 15 6" />
                         </svg>
                     </button>
                 </div>
                 <div className="music-tabs">
-                    {hasNetease && <button className="music-tab" {...(tab === "recommend" ? { "data-active": "" } : {})} onClick={() => { setTab("recommend"); setActivePlaylist(null); }}>推荐</button>}
-                    {hasNetease && <button className="music-tab" {...(tab === "mine" ? { "data-active": "" } : {})} onClick={() => { setTab("mine"); setActivePlaylist(null); }}>我的</button>}
-                    {hasNetease && <button className="music-tab" {...(tab === "search" ? { "data-active": "" } : {})} onClick={() => setTab("search")}>搜索</button>}
-                    <button className="music-tab" {...(tab === "local" ? { "data-active": "" } : {})} onClick={() => { setTab("local"); setActivePlaylist(null); }}>本地</button>
+                    {hasNetease && <button className="music-tab" {...(tab === "recommend" ? { "data-active": "" } : {})} onClick={() => { setTab("recommend"); setActivePlaylist(null); }}>Recommended</button>}
+                    {hasNetease && <button className="music-tab" {...(tab === "mine" ? { "data-active": "" } : {})} onClick={() => { setTab("mine"); setActivePlaylist(null); }}>Mine</button>}
+                    {hasNetease && <button className="music-tab" {...(tab === "search" ? { "data-active": "" } : {})} onClick={() => setTab("search")}>Search</button>}
+                    <button className="music-tab" {...(tab === "local" ? { "data-active": "" } : {})} onClick={() => { setTab("local"); setActivePlaylist(null); }}>Local</button>
                 </div>
                 <div className="music-header-right">
-                    <button className="music-header-action" onClick={() => setShowSettings(true)} title="设置">
+                    <button className="music-header-action" onClick={() => setShowSettings(true)} title="Settings">
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
                             <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
                         </svg>
@@ -319,9 +319,9 @@ export default function MusicApp({ onClose }: Props) {
 
                     {/* Song list */}
                     {loading ? (
-                        <div className="music-empty"><div className="music-empty-text">加载中...</div></div>
+                        <div className="music-empty"><div className="music-empty-text">Loading...</div></div>
                     ) : tracks.length === 0 ? (
-                        <div className="music-empty"><div className="music-empty-icon">♪</div><div className="music-empty-text">还没有音乐</div></div>
+                        <div className="music-empty"><div className="music-empty-icon">♪</div><div className="music-empty-text">No music yet</div></div>
                     ) : (
                         <SongList tracks={tracks} player={player} formatTime={formatTime} onDelete={handleDelete} onPlay={handlePlay} />
                     )}
@@ -338,7 +338,7 @@ export default function MusicApp({ onClose }: Props) {
                     <button
                         className="music-fab-add"
                         onClick={() => setShowCssEditor(true)}
-                        title="自定义样式"
+                        title="Custom style"
                         style={{ bottom: player.currentTrack ? "168px" : "88px" }}
                     >
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -349,7 +349,7 @@ export default function MusicApp({ onClose }: Props) {
                     <button
                         className="music-fab-add"
                         onClick={() => fileInputRef.current?.click()}
-                        title="添加本地音乐"
+                        title="Add local music"
                         style={{ bottom: player.currentTrack ? "112px" : "32px" }}
                     >
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -464,11 +464,11 @@ function RecommendTab({ formatTime, onPlayNetease, onOpenPlaylist }: {
     return (
         <div className="music-discovery">
             {loading && !hasRecommendContent ? (
-                <div className="music-empty"><div className="music-empty-text">加载推荐中...</div></div>
+                <div className="music-empty"><div className="music-empty-text">Loading recommendations...</div></div>
             ) : (
                 <>
                     {dailySongs.length > 0 && (
-                        <MusicSection title="每日推荐" action={`${dailySongs.length} 首`}>
+                        <MusicSection title="Daily Recommendations" action={`${dailySongs.length} tracks`}>
                             <div className="music-list music-list-compact">
                                 {dailySongs.slice(0, 8).map((song, idx) => (
                                     <NeteaseSongRow key={song.id} song={song} index={idx} formatTime={formatTime} onPlay={onPlayNetease} />
@@ -478,13 +478,13 @@ function RecommendTab({ formatTime, onPlayNetease, onOpenPlaylist }: {
                     )}
 
                     {playlists.length > 0 && (
-                        <MusicSection title="推荐歌单" action="更多灵感">
+                        <MusicSection title="Recommended Playlists" action="More inspiration">
                             <PlaylistGrid playlists={playlists.slice(0, 9)} onOpen={onOpenPlaylist} />
                         </MusicSection>
                     )}
 
                     {hotSearches.length > 0 && (
-                        <MusicSection title="热搜榜" action="实时">
+                        <MusicSection title="Hot Searches" action="Live">
                             <div className="music-hot-list">
                                 {hotSearches.slice(0, 10).map((item, idx) => (
                                     <button key={`${item.keyword}-${idx}`} className="music-hot-item" onClick={() => searchNetease(item.keyword, 1).then(result => result[0] && onPlayNetease(result[0]))}>
@@ -498,7 +498,7 @@ function RecommendTab({ formatTime, onPlayNetease, onOpenPlaylist }: {
                     )}
 
                     {toplists.length > 0 && (
-                        <MusicSection title="排行榜" action="Toplist">
+                        <MusicSection title="Charts" action="Toplist">
                             <div className="music-chart-grid">
                                 {toplists.slice(0, 6).map(chart => (
                                     <button key={chart.id} className="music-chart-card" onClick={() => onOpenPlaylist(chart)}>
@@ -565,7 +565,7 @@ function MineTab({ player, formatTime, onPlayNetease, onPlayAll, activePlaylist,
     return (
         <div className="music-discovery">
             {recentTracks.length > 0 && (
-                <MusicSection title="最近播放" action={`${recentTracks.length} 首`}>
+                <MusicSection title="Recently Played" action={`${recentTracks.length} tracks`}>
                     <div className="music-list music-list-compact">
                         {recentTracks.slice(0, 8).map((song, idx) => (
                             <NeteaseSongRow key={song.id} song={song} index={idx} formatTime={formatTime} onPlay={onPlayNetease} />
@@ -575,13 +575,13 @@ function MineTab({ player, formatTime, onPlayNetease, onPlayAll, activePlaylist,
             )}
 
             {playlists.length > 0 ? (
-                <MusicSection title="我的歌单" action={`${playlists.length} 个`}>
+                <MusicSection title="My Playlists" action={`${playlists.length} playlists`}>
                     <PlaylistGrid playlists={playlists} onOpen={setActivePlaylist} />
                 </MusicSection>
             ) : loading ? (
-                <div className="music-empty"><div className="music-empty-text">加载歌单...</div></div>
+                <div className="music-empty"><div className="music-empty-text">Loading playlists...</div></div>
             ) : (
-                <div className="music-empty"><div className="music-empty-text">没有云端歌单</div></div>
+                <div className="music-empty"><div className="music-empty-text">No cloud playlists</div></div>
             )}
 
         </div>
@@ -688,12 +688,12 @@ function SongList({ tracks, player, formatTime, onDelete, onPlay }: {
             {deleteTarget && (
                 <div className="music-settings-modal-overlay" onClick={() => setDeleteTarget(null)}>
                     <div className="music-settings-modal-dialog music-confirm-dialog" onClick={e => e.stopPropagation()}>
-                        <div className="music-settings-header"><h2>删除确认</h2></div>
+                        <div className="music-settings-header"><h2>Confirm Delete</h2></div>
                         <div className="music-settings-body">
-                            <div className="music-confirm-text">确定删除「{deleteTarget.title}」吗？</div>
+                            <div className="music-confirm-text">Delete "{deleteTarget.title}"?</div>
                             <div className="music-settings-actions">
-                                <button className="music-settings-btn" onClick={() => setDeleteTarget(null)}>取消</button>
-                                <button className="music-settings-btn music-settings-btn-danger" onClick={(e) => { onDelete(deleteTarget.id, e); setDeleteTarget(null); }}>删除</button>
+                                <button className="music-settings-btn" onClick={() => setDeleteTarget(null)}>Cancel</button>
+                                <button className="music-settings-btn music-settings-btn-danger" onClick={(e) => { onDelete(deleteTarget.id, e); setDeleteTarget(null); }}>Delete</button>
                             </div>
                         </div>
                     </div>
@@ -729,12 +729,12 @@ function OnlineSearchTab({ player, formatTime, onPlayNetease }: {
             <div className="music-search-bar">
                 <input
                     className="music-search-input"
-                    placeholder="搜索歌曲、歌手..."
+                    placeholder="Search songs, artists..."
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && doSearch()}
                 />
-                <button className="music-search-btn" onClick={doSearch} disabled={searching} title="搜索">
+                <button className="music-search-btn" onClick={doSearch} disabled={searching} title="Search">
                     {searching ? (
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="music-spin">
                             <line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
@@ -767,13 +767,13 @@ function OnlineSearchTab({ player, formatTime, onPlayNetease }: {
                     ))}
                 </div>
             ) : searching ? (
-                <div className="music-empty"><div className="music-empty-text">搜索中...</div></div>
+                <div className="music-empty"><div className="music-empty-text">Searching...</div></div>
             ) : (
                 <div className="music-empty">
                     <div className="music-empty-icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
                     </div>
-                    <div className="music-empty-text">搜索网易云音乐</div>
+                    <div className="music-empty-text">Search Netease Cloud Music</div>
                 </div>
             )}
         </div>
@@ -830,16 +830,16 @@ function PlaylistsTab({ player, formatTime, onPlayNetease, onPlayAll, activePlay
         return (
             <div className="music-playlist-detail">
                 <div className="music-playlist-detail-header">
-                    <div className="music-playlist-detail-name">{activePlaylist.name}<span className="music-playlist-detail-count">{activePlaylist.trackCount}首</span></div>
+                    <div className="music-playlist-detail-name">{activePlaylist.name}<span className="music-playlist-detail-count">{activePlaylist.trackCount} tracks</span></div>
                     {tracks.length > 0 && (
                         <button className="music-playlist-play-all" onClick={() => onPlayAll(tracks)}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
-                            <span>播放全部</span>
+                            <span>Play All</span>
                         </button>
                     )}
                 </div>
                 {loadingTracks ? (
-                    <div className="music-empty"><div className="music-empty-text">加载中...</div></div>
+                    <div className="music-empty"><div className="music-empty-text">Loading...</div></div>
                 ) : (
                     <div className="music-list">
                         {tracks.map((r, idx) => (
@@ -868,14 +868,14 @@ function PlaylistsTab({ player, formatTime, onPlayNetease, onPlayAll, activePlay
     return (
         <div className="music-playlists">
             {loading ? (
-                <div className="music-empty"><div className="music-empty-text">加载歌单...</div></div>
+                <div className="music-empty"><div className="music-empty-text">Loading playlists...</div></div>
             ) : playlists.length === 0 ? (
                 <div className="music-empty">
                     <div className="music-empty-icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round"><rect x="2" y="3" width="20" height="18" rx="2" /><path d="M8 12h8M8 16h5" /></svg>
                     </div>
-                    <div className="music-empty-text">没有歌单</div>
-                    <div className="music-empty-text" style={{ fontSize: "calc(11px*var(--app-text-scale,1))", opacity: 0.5 }}>请先在设置中登录网易云账号</div>
+                    <div className="music-empty-text">No playlists</div>
+                    <div className="music-empty-text" style={{ fontSize: "calc(11px*var(--app-text-scale,1))", opacity: 0.5 }}>Please log in to your Netease Cloud Music account in Settings first</div>
                 </div>
             ) : (
                 <div className="music-playlist-grid">
@@ -942,18 +942,18 @@ function MusicSettingsTab({ onBack, onSaved }: { onBack: () => void; onSaved: ()
     const startQrLogin = async () => {
         const base = config.baseUrl.trim();
         if (!base) return;
-        setQrStatus("获取二维码...");
+        setQrStatus("Fetching QR code...");
         setQrImg(null);
         if (pollRef.current) clearInterval(pollRef.current);
 
         const key = await getQrKey(base);
-        if (!key) { setQrStatus("获取二维码失败"); return; }
+        if (!key) { setQrStatus("Failed to fetch QR code"); return; }
         setQrKey(key);
 
         const img = await getQrImage(base, key);
-        if (!img) { setQrStatus("生成二维码失败"); return; }
+        if (!img) { setQrStatus("Failed to generate QR code"); return; }
         setQrImg(img);
-        setQrStatus("请用网易云音乐 App 扫码");
+        setQrStatus("Scan with the Netease Cloud Music app");
         setQrPolling(true);
 
         pollRef.current = setInterval(async () => {
@@ -968,15 +968,15 @@ function MusicSettingsTab({ onBack, onSaved }: { onBack: () => void; onSaved: ()
                 setQrPolling(false);
                 setQrImg(null);
                 setQrStatus("");
-                setLoginNickname(res.nickname || "已登录");
+                setLoginNickname(res.nickname || "Logged in");
                 onSaved();
             } else if (res.code === 802) {
-                setQrStatus("已扫码，请在手机上确认");
+                setQrStatus("Scanned, please confirm on your phone");
             } else if (res.code === 800) {
                 if (pollRef.current) clearInterval(pollRef.current);
                 setQrPolling(false);
                 setQrImg(null);
-                setQrStatus("二维码已过期，请重新获取");
+                setQrStatus("QR code expired, please fetch a new one");
             }
             // 801 = waiting, do nothing
         }, 2000);
@@ -997,7 +997,7 @@ function MusicSettingsTab({ onBack, onSaved }: { onBack: () => void; onSaved: ()
     return (
         <div className="music-settings">
             <div className="music-settings-header">
-                <h2>设置</h2>
+                <h2>Settings</h2>
                 <button className="music-settings-close" onClick={onBack}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                 </button>
@@ -1005,8 +1005,8 @@ function MusicSettingsTab({ onBack, onSaved }: { onBack: () => void; onSaved: ()
 
             <div className="music-settings-body">
                 <div className="music-settings-section">
-                    <div className="music-settings-label">网易云 API 地址</div>
-                    <div className="music-settings-hint">默认使用公共服务，也可以改成自己的 NeteaseCloudMusicApi 地址</div>
+                    <div className="music-settings-label">Netease Cloud Music API address</div>
+                    <div className="music-settings-hint">Uses a public service by default; you can change this to your own NeteaseCloudMusicApi address</div>
                     <input
                         className="music-settings-input"
                         placeholder="https://your-api.vercel.app"
@@ -1017,10 +1017,10 @@ function MusicSettingsTab({ onBack, onSaved }: { onBack: () => void; onSaved: ()
 
                 <div className="music-settings-actions">
                     <button className="music-settings-btn" onClick={handleTest} disabled={testing || !config.baseUrl.trim()}>
-                        {testing ? "测试中..." : "测试连接"}
+                        {testing ? "Testing..." : "Test Connection"}
                     </button>
                     <button className="music-settings-btn music-settings-btn-primary" onClick={handleSave}>
-                        保存
+                        Save
                     </button>
                 </div>
 
@@ -1033,13 +1033,13 @@ function MusicSettingsTab({ onBack, onSaved }: { onBack: () => void; onSaved: ()
                 {/* QR Login Section */}
                 {config.baseUrl.trim() && (
                     <div className="music-settings-section music-qr-section">
-                        <div className="music-settings-label">网易云账号登录</div>
-                        <div className="music-settings-hint">登录后可播放 VIP 歌曲（需扫码）</div>
+                        <div className="music-settings-label">Netease Cloud Music Account Login</div>
+                        <div className="music-settings-hint">Log in to play VIP songs (QR scan required)</div>
 
                         {loginNickname ? (
                             <div className="music-qr-logged">
                                 <span className="music-qr-nickname">{loginNickname}</span>
-                                <span className="music-qr-badge">已登录</span>
+                                <span className="music-qr-badge">Logged in</span>
                             </div>
                         ) : (
                             <>
@@ -1049,7 +1049,7 @@ function MusicSettingsTab({ onBack, onSaved }: { onBack: () => void; onSaved: ()
                                         onClick={startQrLogin}
                                         disabled={qrPolling}
                                     >
-                                        {qrPolling ? "等待扫码中..." : "扫码登录"}
+                                        {qrPolling ? "Waiting for scan..." : "Scan to Log In"}
                                     </button>
                                 </div>
 
@@ -1071,7 +1071,7 @@ function MusicSettingsTab({ onBack, onSaved }: { onBack: () => void; onSaved: ()
                             className="music-settings-btn"
                             onClick={handleLogout}
                         >
-                            退出登录
+                            Log Out
                         </button>
                     </div>
                 )}
@@ -1100,7 +1100,7 @@ function writeMusicCache<T>(key: string, data: T): void {
 
 function formatMusicCount(value: number): string {
     if (!Number.isFinite(value)) return "0";
-    if (value >= 10000) return `${Math.round(value / 1000) / 10}万`;
+    if (value >= 10000) return `${Math.round(value / 1000) / 10}w`;
     return String(value);
 }
 
@@ -1124,19 +1124,19 @@ function MusicCssEditor({ onClose, onSave }: { onClose: () => void; onSave: (css
     return (
         <div className="music-settings">
             <div className="music-settings-header">
-                <h2>自定义样式</h2>
+                <h2>Custom Style</h2>
                 <button className="music-settings-close" onClick={onClose}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                 </button>
             </div>
             <div className="music-settings-body">
-                <div className="music-settings-hint">输入 CSS 代码，覆盖音乐页面任意样式</div>
+                <div className="music-settings-hint">Enter CSS code to override any style on the music page</div>
                 <textarea
                     className="music-settings-input"
                     style={{ height: 280, resize: "none", fontFamily: "'SF Mono', 'Menlo', 'Monaco', monospace", fontSize: "calc(13px*var(--app-text-scale,1))", lineHeight: 1.6, padding: "12px 14px", whiteSpace: "pre-wrap", wordBreak: "break-all" }}
                     value={css}
                     onChange={e => setCss(e.target.value)}
-                    placeholder="/* 在此输入自定义 CSS... */"
+                    placeholder="/* Enter custom CSS here... */"
                     spellCheck={false}
                     autoCapitalize="off"
                     autoCorrect="off"
@@ -1155,9 +1155,9 @@ function MusicCssEditor({ onClose, onSave }: { onClose: () => void; onSave: (css
                       inputBorder: "var(--c-music-surface-solid, rgba(255,255,255,0.12))",
                       accent: "var(--c-music-accent, #b49de8)",
                     }} />
-                    <button className="music-settings-btn" onClick={() => setCss(MUSIC_CSS_EXAMPLE)}>示例</button>
-                    <button className="music-settings-btn" onClick={() => setCss("")}>清空</button>
-                    <button className="music-settings-btn music-settings-btn-primary" onClick={handleSave}>保存</button>
+                    <button className="music-settings-btn" onClick={() => setCss(MUSIC_CSS_EXAMPLE)}>Example</button>
+                    <button className="music-settings-btn" onClick={() => setCss("")}>Clear</button>
+                    <button className="music-settings-btn music-settings-btn-primary" onClick={handleSave}>Save</button>
                 </div>
             </div>
         </div>

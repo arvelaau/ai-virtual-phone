@@ -50,7 +50,7 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
         if (viewMode === "detail" && activeBookId) {
             setOverrideBack(() => () => setViewMode("list"));
             const target = books.find(b => b.id === activeBookId);
-            setSubpageTitle(target?.name || "世界书详情");
+            setSubpageTitle(target?.name || "Worldbook Details");
         } else {
             setOverrideBack(null);
             setSubpageTitle(null);
@@ -83,7 +83,7 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
             const boundCharProfiles: string[] = [];
             // Check global defaults
             if (bindingConfig.globalDefaults.worldBookIds?.includes(activeBookId)) {
-                boundNames.push("全局默认");
+                boundNames.push("Global Default");
             }
             // Check character bindings
             for (const cb of bindingConfig.characterBindings) {
@@ -93,9 +93,9 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                     const char = characters.find(c => c.id === cb.characterId);
                     if (char) {
                         boundNames.push(char.name);
-                        const parts = [`【${char.name}】`];
+                        const parts = [`[${char.name}]`];
                         if (char.persona) parts.push(char.persona);
-                        if (char.personality) parts.push(`性格: ${char.personality}`);
+                        if (char.personality) parts.push(`Personality: ${char.personality}`);
                         boundCharProfiles.push(parts.join("\n"));
                     }
                 }
@@ -104,7 +104,7 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
             const fields: Record<string, string> = {
                 worldbookName: book.name,
                 worldbookDescription: book.description || "",
-                boundCharacters: boundNames.length > 0 ? boundNames.join("、") : "未绑定",
+                boundCharacters: boundNames.length > 0 ? boundNames.join(", ") : "Not bound",
             };
             if (boundCharProfiles.length > 0) {
                 fields.characterProfiles = boundCharProfiles.join("\n\n");
@@ -121,14 +121,14 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
             notifyMascotPageContext({
                 page: "worldbook",
                 mode: "editing",
-                label: `世界书 · ${book.name}`,
+                label: `Worldbook · ${book.name}`,
                 fields,
             });
         } else if (viewMode === "list") {
             notifyMascotPageContext({
                 page: "worldbook",
                 mode: "viewing",
-                label: "世界书列表",
+                label: "Worldbook List",
                 fields: {},
             });
         }
@@ -137,7 +137,7 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
     // Reset mascot context on unmount
     useEffect(() => {
         return () => {
-            notifyMascotPageContext({ page: "desktop", mode: "idle", label: "桌面", fields: {} });
+            notifyMascotPageContext({ page: "desktop", mode: "idle", label: "Desktop", fields: {} });
         };
     }, []);
 
@@ -236,7 +236,7 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
 
     // --- Book Level Operations ---
     const addBook = useCallback(() => {
-        const newBook = createWorldBook("新世界书");
+        const newBook = createWorldBook("New Worldbook");
         persist([newBook, ...books]);
         setActiveBookId(newBook.id);
         setViewMode("detail");
@@ -255,7 +255,7 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                     className="inline-flex h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] border border-black/10 bg-white px-4 text-xs font-bold text-gray-800 shadow-sm transition-all hover:bg-gray-50 hover:shadow-md active:scale-95 focus:outline-none"
                 >
                     <Upload size={15} strokeWidth={1.8} />
-                    <span>导入世界书</span>
+                    <span>Import Worldbook</span>
                 </button>
                 <button
                     type="button"
@@ -263,7 +263,7 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                     className="inline-flex h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] bg-black px-4 text-xs font-bold text-white shadow-sm transition-all hover:bg-gray-800 hover:shadow-md active:scale-95 focus:outline-none"
                 >
                     <Plus size={15} strokeWidth={1.8} />
-                    <span>新建世界书</span>
+                    <span>New Worldbook</span>
                 </button>
             </div>
         );
@@ -298,13 +298,13 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                     persist([parsed, ...books]);
                     setActiveBookId(parsed.id);
                 } else {
-                    setImportError("无法解析世界书文件，格式不正确。");
+                    setImportError("Unable to parse the worldbook file. The format is invalid.");
                 }
             } catch (e) {
                 if (e instanceof Error && e.message === UNSUPPORTED_IMPORT_FORMAT) {
-                    setImportError("不支持该世界书格式");
+                    setImportError("This worldbook format is not supported");
                 } else {
-                    setImportError("无法解析世界书文件，格式不正确。");
+                    setImportError("Unable to parse the worldbook file. The format is invalid.");
                 }
             }
         };
@@ -372,12 +372,12 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                             <div className="ui-icon-circle">
                                 <BookOpen size={24} />
                             </div>
-                            <span className="menu-label font-semibold">没有世界书</span>
+                            <span className="menu-label font-semibold">No worldbooks</span>
                             <span className="menu-desc text-center max-w-[240px] !mt-0">
-                                世界书用于为 AI 提供长期记忆和背景知识，当触发特定词汇时自动插入设定。
+                                Worldbooks give the AI long-term memory and background knowledge, automatically inserting settings when specific words are triggered.
                             </span>
                             <button onClick={addBook} className="ui-btn ui-btn-primary mt-2">
-                                <Plus size={16} /> 新建世界书
+                                <Plus size={16} /> New Worldbook
                             </button>
                         </div>
                     ) : (
@@ -389,7 +389,7 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                                     style={{ aspectRatio: "3 / 2", padding: "12px", justifyContent: "space-between" }}
                                     role="button"
                                     tabIndex={0}
-                                    aria-label={`编辑 ${book.name || "世界书"}`}
+                                    aria-label={`Edit ${book.name || "worldbook"}`}
                                     onClick={() => { setActiveBookId(book.id); setViewMode("detail"); }}
                                     onKeyDown={(event) => {
                                         if (event.target !== event.currentTarget) return;
@@ -405,10 +405,10 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                                             <BookOpen size={16} className="shrink-0" />
                                             <span className="truncate text-[calc(14.4px*var(--app-text-scale,1))] font-bold leading-tight text-[var(--c-text-title)]">{book.name}</span>
                                         </div>
-                                        <span className="menu-desc truncate">{book.description || `${book.entries?.length || 0} 个条目`}</span>
+                                        <span className="menu-desc truncate">{book.description || `${book.entries?.length || 0} entries`}</span>
                                     </div>
                                     <div className="flex items-center justify-between gap-2">
-                                        <span className="menu-desc ts-12">条目 {book.entries?.length || 0}</span>
+                                        <span className="menu-desc ts-12">Entries {book.entries?.length || 0}</span>
                                         <ChevronLeft size={16} className="opacity-40" style={{ transform: "rotate(180deg)" }} />
                                     </div>
                                 </div>
@@ -428,7 +428,7 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                                     className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[20px] bg-black px-4 text-xs font-bold text-white shadow-sm transition-all hover:bg-gray-800 hover:shadow-md active:scale-95"
                                 >
                                     <Download size={15} strokeWidth={1.8} />
-                                    <span>导出世界书</span>
+                                    <span>Export Worldbook</span>
                                 </button>
                                 <button
                                     type="button"
@@ -436,29 +436,29 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                                     className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[20px] border border-black/10 bg-white px-4 text-xs font-bold text-[var(--c-danger)] shadow-sm transition-all hover:bg-gray-50 hover:shadow-md active:scale-95"
                                 >
                                     <Trash2 size={15} strokeWidth={1.8} />
-                                    <span>删除世界书</span>
+                                    <span>Delete Worldbook</span>
                                 </button>
                             </div>
 
                             <h2 className="mx-2 mb-0 mt-2 ts-20 font-bold leading-none text-black">Worldbook Info</h2>
                             <div className="ui-entry-card" style={{ cursor: "default" }}>
                                 <div className="flex flex-col gap-2">
-                                    <label className="menu-label ts-13 font-semibold ml-1">世界书名称</label>
+                                    <label className="menu-label ts-13 font-semibold ml-1">Worldbook Name</label>
                                     <input
                                         type="text"
                                         value={activeBook.name}
                                         onChange={(e) => updateBook(activeBook.id, { name: e.target.value })}
-                                        placeholder="世界书名称..."
+                                        placeholder="Worldbook name..."
                                         className="ui-input font-medium"
                                     />
                                 </div>
 
                                 <div className="flex flex-col gap-2">
-                                    <label className="menu-label ts-13 font-semibold ml-1">简介描述</label>
+                                    <label className="menu-label ts-13 font-semibold ml-1">Description</label>
                                     <textarea
                                         value={activeBook.description || ""}
                                         onChange={(e) => updateBook(activeBook.id, { description: e.target.value })}
-                                        placeholder="简介描述..."
+                                        placeholder="Description..."
                                         rows={2}
                                         className="ui-textarea resize-none"
                                     />
@@ -473,7 +473,7 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                             <div className="flex flex-col gap-2">
                                 {visibleEntries.length === 0 ? (
                                     <div className="menu-desc text-center mt-10 ts-14">
-                                        没找到相关的世界书条目
+                                        No matching worldbook entries found
                                     </div>
                                 ) : (
                                     visibleEntries.map(entry => {
@@ -498,16 +498,16 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                                                         </div>
                                                         <div className="flex flex-col gap-1 flex-1">
                                                             <span className="menu-label font-semibold break-all ts-15">
-                                                                {entry.comment || "(未设置名称)"}
+                                                                {entry.comment || "(No name set)"}
                                                             </span>
                                                             <div className="flex items-center gap-1.5 flex-wrap">
                                                                 <span className="ui-tag" data-variant="muted">
-                                                                    {entry.key || "(无触发词)"}
+                                                                    {entry.key || "(No trigger word)"}
                                                                 </span>
-                                                                {entry.constant && <span className="ui-status-tag" data-variant="warning">常驻激活</span>}
-                                                                {entry.use_regex && !entry.constant && <span className="ui-status-tag" data-variant="action">正则触发</span>}
-                                                                {!entry.constant && !entry.use_regex && <span className="ui-status-tag" data-variant="success">关键词触发</span>}
-                                                                {entry.disable && <span className="ui-status-tag">已禁用</span>}
+                                                                {entry.constant && <span className="ui-status-tag" data-variant="warning">Always active</span>}
+                                                                {entry.use_regex && !entry.constant && <span className="ui-status-tag" data-variant="action">Regex trigger</span>}
+                                                                {!entry.constant && !entry.use_regex && <span className="ui-status-tag" data-variant="success">Keyword trigger</span>}
+                                                                {entry.disable && <span className="ui-status-tag">Disabled</span>}
                                                             </div>
                                                         </div>
                                                     </button>
@@ -516,7 +516,7 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                                                         <label
                                                             className="ui-mini-toggle"
                                                             onClick={(e) => e.stopPropagation()}
-                                                            title={entry.disable ? "已禁用 (点击启用)" : "已启用 (点击禁用)"}
+                                                            title={entry.disable ? "Disabled (click to enable)" : "Enabled (click to disable)"}
                                                         >
                                                             <input
                                                                 type="checkbox"
@@ -542,15 +542,15 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
 
                                                         <div className="flex flex-col gap-1">
                                                             <div className="flex justify-between items-end">
-                                                                <label className="menu-desc">触发关键字 (Key)</label>
+                                                                <label className="menu-desc">Trigger Key</label>
                                                                 <div className="flex items-center gap-3">
                                                                     <label className="ui-checkbox-label">
                                                                         <input type="checkbox" checked={entry.constant} onChange={(e) => updateEntry(entry.uid, { constant: e.target.checked })} />
-                                                                        常驻激活
+                                                                        Always active
                                                                     </label>
                                                                     <label className="ui-checkbox-label" style={{ opacity: entry.constant ? 0.5 : 1 }}>
                                                                         <input type="checkbox" checked={entry.use_regex} onChange={(e) => updateEntry(entry.uid, { use_regex: e.target.checked })} disabled={entry.constant} />
-                                                                        使用正则
+                                                                        Use regex
                                                                     </label>
                                                                 </div>
                                                             </div>
@@ -558,7 +558,7 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                                                                 type="text"
                                                                 value={entry.key}
                                                                 onChange={(e) => updateEntry(entry.uid, { key: e.target.value })}
-                                                                placeholder={entry.constant ? "已全局常驻，此字段无效" : (entry.use_regex ? "/正则表达式/i" : "例如: 魔法, 设定, 人物")}
+                                                                placeholder={entry.constant ? "Always active globally, this field has no effect" : (entry.use_regex ? "/regex pattern/i" : "e.g. magic, setting, character")}
                                                                 disabled={entry.constant}
                                                                 className="ui-input ts-14"
                                                                 style={{ fontFamily: entry.use_regex && !entry.constant ? "monospace" : "inherit", opacity: entry.constant ? 0.5 : 1 }}
@@ -567,7 +567,7 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
 
                                                         <div className="grid grid-cols-2 gap-3">
                                                             <div className="flex flex-col gap-1">
-                                                                <label className="menu-desc">注入位置 (Position)</label>
+                                                                <label className="menu-desc">Injection Position</label>
                                                                 <select
                                                                     value={String(
                                                                         typeof entry.position === "string"
@@ -580,13 +580,13 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                                                                     }}
                                                                     className="ui-select ts-13"
                                                                 >
-                                                                    <option value="0">角色设定前</option>
-                                                                    <option value="1">角色设定后</option>
-                                                                    <option value="4">按深度插入</option>
+                                                                    <option value="0">Before character setting</option>
+                                                                    <option value="1">After character setting</option>
+                                                                    <option value="4">Insert by depth</option>
                                                                 </select>
                                                             </div>
                                                             <div className="flex flex-col gap-1">
-                                                                <label className="menu-desc">注入深度 (Depth)</label>
+                                                                <label className="menu-desc">Injection Depth</label>
                                                                 <input
                                                                     type="number"
                                                                     value={entry.depth ?? 0}
@@ -599,7 +599,7 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                                                             </div>
 
                                                             <div className="flex flex-col gap-1">
-                                                                <label className="menu-desc">权重优先级 (Order)</label>
+                                                                <label className="menu-desc">Priority Weight (Order)</label>
                                                                 <input
                                                                     type="number"
                                                                     value={entry.insertion_order ?? 50}
@@ -608,7 +608,7 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                                                                 />
                                                             </div>
                                                             <div className="flex flex-col gap-1">
-                                                                <label className="menu-desc">消息角色 (Role)</label>
+                                                                <label className="menu-desc">Message Role</label>
                                                                 <select
                                                                     value={entry.role ?? 0}
                                                                     onChange={(e) => updateEntry(entry.uid, { role: parseInt(e.target.value) || 0 })}
@@ -620,10 +620,10 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                                                                 </select>
                                                             </div>
                                                             <div className="col-span-full flex items-center gap-3">
-                                                                <span className="menu-desc !mt-0 shrink-0">触发概率 (Probability)</span>
+                                                                <span className="menu-desc !mt-0 shrink-0">Trigger Probability</span>
                                                                 <label className="ui-checkbox-label whitespace-nowrap">
                                                                     <input type="checkbox" checked={!!entry.useProbability} onChange={e => updateEntry(entry.uid, { useProbability: e.target.checked })} />
-                                                                    启用
+                                                                    Enable
                                                                 </label>
                                                                 <input
                                                                     type="number"
@@ -638,23 +638,23 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                                                         </div>
 
                                                         <div className="flex flex-col gap-1">
-                                                            <label className="menu-desc">备注 (Comment)</label>
+                                                            <label className="menu-desc">Comment</label>
                                                             <input
                                                                 type="text"
                                                                 value={entry.comment}
                                                                 onChange={(e) => updateEntry(entry.uid, { comment: e.target.value })}
-                                                                placeholder="描述设定的作用..."
+                                                                placeholder="Describe what this setting does..."
                                                                 className="ui-input ts-13"
                                                             />
                                                         </div>
 
                                                         <div className="flex flex-col gap-1">
-                                                            <label className="menu-desc">设定内容 (Content)</label>
+                                                            <label className="menu-desc">Content</label>
                                                             <div className="relative">
                                                                 <textarea
                                                                     value={entry.content}
                                                                     onChange={(e) => updateEntry(entry.uid, { content: e.target.value })}
-                                                                    placeholder="当触发关键字时，会被作为背景信息输入给AI的内容..."
+                                                                    placeholder="Content that will be given to the AI as background information when the trigger keyword is matched..."
                                                                     rows={6}
                                                                     className="ui-textarea ts-13"
                                                                 />
@@ -676,7 +676,7 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                                 className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[20px] bg-black px-4 text-xs font-bold text-white shadow-sm transition-all hover:bg-gray-800 hover:shadow-md active:scale-95 focus:outline-none"
                             >
                                 <Plus size={15} strokeWidth={1.8} />
-                                添加条目
+                                Add Entry
                             </button>
                             </div>
                         </div>
@@ -687,12 +687,12 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
             {/* Delete Confirmation Dialog */}
             {confirmDeleteTarget && (
                 <ConfirmDialog
-                    title="确认删除？"
-                    message={confirmDeleteTarget.type === 'book' ? "删除世界书后无法恢复。是否继续？" : "删除条目后无法恢复。是否继续？"}
+                    title="Confirm delete?"
+                    message={confirmDeleteTarget.type === 'book' ? "This worldbook cannot be recovered after deletion. Continue?" : "This entry cannot be recovered after deletion. Continue?"}
                     icon={AlertCircle}
                     variant="danger"
-                    confirmLabel="确认删除"
-                    cancelLabel="取消"
+                    confirmLabel="Delete"
+                    cancelLabel="Cancel"
                     onConfirm={() => {
                         if (confirmDeleteTarget.type === 'book') {
                             removeBook(confirmDeleteTarget.id);
@@ -707,11 +707,11 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
 
             {importError && (
                 <ConfirmDialog
-                    title="导入失败"
+                    title="Import failed"
                     message={importError}
                     icon={AlertCircle}
                     variant="danger"
-                    confirmLabel="知道了"
+                    confirmLabel="Got it"
                     cancelLabel=""
                     onConfirm={() => setImportError(null)}
                     onCancel={() => setImportError(null)}
@@ -723,10 +723,10 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                 if (!entry) return null;
                 return (
                     <TextExpandModal
-                        title={entry.comment || "编辑设定内容"}
+                        title={entry.comment || "Edit Content"}
                         value={entry.content}
                         onChange={(v) => updateEntry(entry.uid, { content: v })}
-                        placeholder="当触发关键字时，会被作为背景信息输入给AI的内容..."
+                        placeholder="Content that will be given to the AI as background information when the trigger keyword is matched..."
                         className="ts-13"
                         onClose={() => setExpandUid(null)}
                     />

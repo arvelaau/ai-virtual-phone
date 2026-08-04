@@ -37,7 +37,7 @@ export function CheckPhoneDebugErrorCard({
     const detail = detailParts.join("\n");
     const errorText = detail ? `${normalizedError}\n${detail}` : normalizedError;
 
-    return `错误信息：${errorText}\nAI原始输出：${rawOutput}`;
+    return `Error message: ${errorText}\nAI raw output: ${rawOutput}`;
   }, [debugNormalizeError, debugParseError, debugRawOutput, debugSanitizedOutput, error]);
 
   useEffect(() => {
@@ -90,27 +90,27 @@ export function CheckPhoneDebugErrorCard({
           type="button"
           className="modal-header-btn modal-header-btn-muted cp-sync-error-close"
           onClick={() => setOpen(false)}
-          aria-label="关闭"
+          aria-label="Close"
         >
           <X size={17} />
         </button>
 
         <div className="modal-header cp-sync-error-header" data-ui="modal-header">
-          <h3 className="modal-title">{title || "哎呀，抱歉~同步数据失败了呢~"}</h3>
+          <h3 className="modal-title">{title || "Oops, sorry~ Data sync failed~"}</h3>
         </div>
 
         <div className="modal-body cp-sync-error-body" data-ui="modal-body">
           {!showReason ? (
             <button type="button" className="ui-btn ui-btn-primary" onClick={() => setShowReason(true)}>
-              查看原因
+              View reason
             </button>
           ) : (
             <>
-              <div className="cp-sync-error-raw" role="region" aria-label="AI 原始输出">
+              <div className="cp-sync-error-raw" role="region" aria-label="AI raw output">
                 <pre>{reasonText}</pre>
               </div>
               <button type="button" className="ui-btn ui-btn-outline cp-sync-error-copy" onClick={handleCopy}>
-                {copied ? "已复制" : "复制"}
+                {copied ? "Copied" : "Copy"}
               </button>
             </>
           )}

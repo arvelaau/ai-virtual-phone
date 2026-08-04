@@ -36,9 +36,9 @@ type CharState = {
     itemHtmlCache: Record<string, string>;
     loadingItemKeys: Set<string>;
     lastItemError: string | null;
-    /** roomId → 生图失败原因（存在时不再自动重试，需手动重试） */
+    /** roomId → image generation failure reason (if present, auto-retry stops; manual retry required) */
     imageErrors: Record<string, string>;
-    /** 正在生图的 roomId 集合 */
+    /** Set of roomIds currently generating images */
     generatingImageRooms: Set<string>;
 };
 
@@ -64,10 +64,10 @@ function getCharState(charId: string): CharState {
 
 function itemKey(roomId: string, itemId: string) { return `${roomId}_${itemId}`; }
 
-/** mediaRef → object URL（会话级缓存，图不多，不主动 revoke） */
+/** mediaRef → object URL (session-level cache; images are few, so not proactively revoked) */
 const roomImageUrls = new Map<string, string>();
 
-/** 角色名 → 大写拼音（chip 下行幽灵字） */
+/** Character name → uppercase pinyin (ghost text below the chip) */
 const charEnCache = new Map<string, string>();
 function charChipEn(name: string): string {
     let en = charEnCache.get(name);
@@ -98,7 +98,7 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
     }, []);
 
     useEffect(() => {
-        // 用户可能中途去设置里配置了生图，回到栖所时重新判定
+        // The user may have configured image generation in settings midway; re-check when returning to Dwelling
         if (visible) setImageConfigured(getDwellingImageAvailability().configured);
     }, [visible]);
 
@@ -169,7 +169,7 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
         const { layout: newLayout, error: genError } = await generateDwellingLayout(charId, mode);
         cs.isGenerating = false;
         if (!newLayout) {
-            cs.error = genError || "生成失败";
+            cs.error = genError || "Generation failed";
             rerender();
             if (!visible && onIdle) onIdle();
             return;
@@ -226,7 +226,7 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
         rerender();
     }
 
-    // ── 房间生图 ──
+    // ── Room image generation ──
     const handleGenerateRoomImage = useCallback(async (charId: string, roomId: string) => {
         const cs = getCharState(charId);
         const layout = cs.layout;
@@ -242,7 +242,7 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
         const { assetId, error } = await generateDwellingRoomImage(charId, room);
         cs.generatingImageRooms.delete(roomId);
 
-        // 生成期间布局被重建/删除：丢弃这张图
+        // Layout was rebuilt/deleted during generation: discard this image
         if (cs.layout !== layout) {
             if (assetId) void deleteMediaRef(assetId);
             rerender();
@@ -257,12 +257,12 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
             if (url) roomImageUrls.set(assetId, url);
             await saveDwellingLayout(charId, layout);
         } else {
-            cs.imageErrors[roomId] = error || "生成失败";
+            cs.imageErrors[roomId] = error || "Generation failed";
         }
         rerender();
     }, []);
 
-    // 进入房间：已有图则解析 URL；没有图且生图可用则自动生成
+    // Entering a room: resolve the URL if an image already exists; auto-generate if there's no image and generation is available
     const csForImage = activeCharId ? getCharState(activeCharId) : null;
     const roomForImage = csForImage?.layout?.rooms[activeRoomIdx] ?? null;
     useEffect(() => {
@@ -281,7 +281,7 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
                 if (url) {
                     roomImageUrls.set(ref, url);
                 } else if (cs.layout && cs.layout.rooms.includes(room)) {
-                    // 媒体已丢失：清掉引用，回氛围底并允许重新生成
+                    // Media was lost: clear the reference, fall back to the ambient background, and allow regeneration
                     room.imageAssetId = undefined;
                     void saveDwellingLayout(activeCharId, cs.layout);
                 }
@@ -341,7 +341,7 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
         <div className="dwelling-app" data-haspicker={characters.length > 1 ? "true" : undefined}>
             <div className="dwelling-header">
                 <button className="dw-back" onClick={onClose}><ChevronLeft size={18} /></button>
-                <h1>栖 所<span className="dw-title-en">DWELLING</span></h1>
+                <h1>Dwelling<span className="dw-title-en">DWELLING</span></h1>
             </div>
 
             {characters.length > 1 && (
@@ -361,34 +361,34 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
             )}
 
             {!activeCharId && characters.length > 1 && (
-                <div className="dwelling-empty"><span>选择一位角色，探索 ta 的栖所</span></div>
+                <div className="dwelling-empty"><span>Select a character to explore their dwelling</span></div>
             )}
             {characters.length === 0 && (
-                <div className="dwelling-empty"><span>还没有角色，去创建一个吧</span></div>
+                <div className="dwelling-empty"><span>No characters yet, go create one</span></div>
             )}
             {cs?.isGenerating && !cs.layout && (
-                <div className="dwelling-loading"><div className="dwelling-spinner" /><span className="dwelling-loading-text">正在窥探房间…</span></div>
+                <div className="dwelling-loading"><div className="dwelling-spinner" /><span className="dwelling-loading-text">Peeking into the room…</span></div>
             )}
             {cs?.isGenerating && cs.layout && (
-                <div className="dwelling-loading-bar"><span className="dwelling-spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /><span>刷新中…</span></div>
+                <div className="dwelling-loading-bar"><span className="dwelling-spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /><span>Refreshing…</span></div>
             )}
             {cs && (cs.error || cs.lastItemError) && (
                 <div className="dw-confirm-overlay">
                     <div className="dw-confirm-shade" onClick={() => { cs.error = null; cs.lastItemError = null; rerender(); }} />
                     <div className="dw-confirm-card">
-                        <div className="dw-confirm-title">{cs.error ? "生成失败" : "探索失败"}</div>
+                        <div className="dw-confirm-title">{cs.error ? "Generation Failed" : "Exploration Failed"}</div>
                         <div className="dw-confirm-msg dw-error-msg">{cs.error || cs.lastItemError}</div>
                         <div className="dw-confirm-actions">
-                            <button className="dw-confirm-btn" onClick={() => { cs.error = null; cs.lastItemError = null; rerender(); }}>知道了</button>
+                            <button className="dw-confirm-btn" onClick={() => { cs.error = null; cs.lastItemError = null; rerender(); }}>Got it</button>
                         </div>
                     </div>
                 </div>
             )}
             {activeCharId && cs?.loaded && !cs.layout && !cs.isGenerating && (
                 <div className="dwelling-empty">
-                    <span>还未生成 ta 的房间</span>
+                    <span>Their room hasn't been generated yet</span>
                     <button className="dwelling-generate-btn" onClick={() => doGenerate(activeCharId)}>
-                        <Wand2 size={16} />生成房间
+                        <Wand2 size={16} />Generate Room
                     </button>
                 </div>
             )}
@@ -404,10 +404,10 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
                         </button>
                     ))}
                     <div className="dw-tabs-actions">
-                        <button className="dw-tab-action" onClick={() => setShowRefreshConfirm(true)} disabled={cs.isGenerating} title="重新生成">
+                        <button className="dw-tab-action" onClick={() => setShowRefreshConfirm(true)} disabled={cs.isGenerating} title="Regenerate">
                             <RefreshCw size={13} />
                         </button>
-                        <button className="dw-tab-action dw-tab-action-danger" onClick={() => setShowDeleteConfirm(true)} disabled={cs.isGenerating} title="删除布局">
+                        <button className="dw-tab-action dw-tab-action-danger" onClick={() => setShowDeleteConfirm(true)} disabled={cs.isGenerating} title="Delete Layout">
                             <Trash2 size={13} />
                         </button>
                     </div>
@@ -432,7 +432,7 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
                             if (!activeCharId || !cs.layout) return;
                             const roomIdx = cs.layout.rooms.indexOf(activeRoom);
                             if (roomIdx < 0) return;
-                            // 不可变更新：房间对象换新引用，RoomView 才会立即重算标注布局
+                            // Immutable update: the room object gets a new reference so RoomView recalculates the marker layout right away
                             cs.layout.rooms[roomIdx] = {
                                 ...activeRoom,
                                 furniture: activeRoom.furniture.map(f => f.id === furnitureId ? { ...f, marker } : f),
@@ -449,7 +449,7 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
                             const next = !imageEnabled;
                             setImageEnabled(next);
                             saveDwellingImageEnabled(next);
-                            // 重新打开开关视为想再试一次：清掉失败记录，让自动生成重新触发
+                            // Re-enabling the toggle is treated as wanting to retry: clear failure records so auto-generation triggers again
                             if (next) cs.imageErrors = {};
                         }}
                         onRetryImage={() => { if (activeCharId) void handleGenerateRoomImage(activeCharId, activeRoom.id); }}
@@ -466,7 +466,7 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
                                 <div className="dwelling-detail-name">{itemDetail.itemName}</div>
                                 <div className="dwelling-detail-location">{itemDetail.roomName} · {itemDetail.furnitureLabel}</div>
                             </div>
-                            <button className="dwelling-items-close" onClick={() => setItemDetail(null)} aria-label="关闭">
+                            <button className="dwelling-items-close" onClick={() => setItemDetail(null)} aria-label="Close">
                                 <X size={13} />
                             </button>
                         </div>
@@ -486,22 +486,22 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
                 <div className="dw-confirm-overlay">
                     <div className="dw-confirm-shade" onClick={() => setShowRefreshConfirm(false)} />
                     <div className="dw-confirm-card">
-                        <div className="dw-confirm-title">刷新房间</div>
-                        <div className="dw-confirm-msg">选择刷新方式</div>
+                        <div className="dw-confirm-title">Refresh Room</div>
+                        <div className="dw-confirm-msg">Choose a refresh method</div>
                         <div className="dw-confirm-actions-col">
                             <button className="dw-confirm-option" onClick={() => { setShowRefreshConfirm(false); handleRefresh("items"); }}>
                                 <span className="dw-confirm-option-text">
-                                    <strong>刷新物品</strong>
-                                    <small>保留房间和家具，只更新物品</small>
+                                    <strong>Refresh Items</strong>
+                                    <small>Keep rooms and furniture, only update items</small>
                                 </span>
                             </button>
                             <button className="dw-confirm-option" onClick={() => { setShowRefreshConfirm(false); handleRefresh("full"); }}>
                                 <span className="dw-confirm-option-text">
-                                    <strong>完全重建</strong>
-                                    <small>重新生成所有房间、家具和物品</small>
+                                    <strong>Full Rebuild</strong>
+                                    <small>Regenerate all rooms, furniture, and items</small>
                                 </span>
                             </button>
-                            <button className="dw-confirm-btn dw-confirm-btn-cancel" style={{ marginTop: 4 }} onClick={() => setShowRefreshConfirm(false)}>取消</button>
+                            <button className="dw-confirm-btn dw-confirm-btn-cancel" style={{ marginTop: 4 }} onClick={() => setShowRefreshConfirm(false)}>Cancel</button>
                         </div>
                     </div>
                 </div>
@@ -512,11 +512,11 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
                 <div className="dw-confirm-overlay">
                     <div className="dw-confirm-shade" onClick={() => setShowDeleteConfirm(false)} />
                     <div className="dw-confirm-card">
-                        <div className="dw-confirm-title">要离开这里吗？</div>
-                        <div className="dw-confirm-msg">房间里的一切都会消失不见哦<br />包括已经探索过的物品</div>
+                        <div className="dw-confirm-title">Leave this place?</div>
+                        <div className="dw-confirm-msg">Everything in the room will disappear<br />including items you've already explored</div>
                         <div className="dw-confirm-actions">
-                            <button className="dw-confirm-btn dw-confirm-btn-cancel" onClick={() => setShowDeleteConfirm(false)}>再想想</button>
-                            <button className="dw-confirm-btn dw-confirm-btn-danger" onClick={() => { setShowDeleteConfirm(false); handleDelete(); }}>挥手告别</button>
+                            <button className="dw-confirm-btn dw-confirm-btn-cancel" onClick={() => setShowDeleteConfirm(false)}>Let Me Think</button>
+                            <button className="dw-confirm-btn dw-confirm-btn-danger" onClick={() => { setShowDeleteConfirm(false); handleDelete(); }}>Wave Goodbye</button>
                         </div>
                     </div>
                 </div>

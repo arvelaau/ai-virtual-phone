@@ -63,7 +63,7 @@ function resolveSceneConfigs(characterId: string): SceneConfigs {
   const bindings = loadBindingConfig();
   const activeSlot = resolveBinding(bindings, characterId, BLACK_MARKET_BINDING_APP_ID);
   if (!activeSlot.apiConfigId) {
-    throw new ChatEngineError(`No API Configuration bound for ${character.name}. Please go to Settings -> 绑定管理 -> 购物 to assign one.`);
+    throw new ChatEngineError(`No API Configuration bound for ${character.name}. Please go to Settings -> Binding Manager -> Shopping to assign one.`);
   }
 
   const apiConfig = loadApiConfigs().find(config => config.id === activeSlot.apiConfigId);
@@ -87,7 +87,7 @@ function resolveSceneConfigs(characterId: string): SceneConfigs {
 }
 
 export function expandBlackMarketMacros(text: string, characterName?: string, userName?: string): string {
-  const engine = new MacroEngine(characterName || "角色", userName || "用户");
+  const engine = new MacroEngine(characterName || "Character", userName || "User");
   return postProcessTrim(engine.expand(text || "")).trim();
 }
 
@@ -111,9 +111,17 @@ function buildSceneDirective(template: BlackMarketTheaterTemplate, characterName
   const outputContract = expandBlackMarketMacros(template.outputContract, characterName, userName);
   return [
     "<scene_directive>",
-    "【剧情指令】",
+    "【Scene Directive】",
     aiInstruction,
-    outputContract ? `\n【输出契约】\n${outputContract}` : "",
+    // NOTE: only the section heading is translated here — never the contract body.
+    // `outputContract` is per-template DATA with two different origins:
+    //   - built-in templates: CONTRACT_* constants in lib/black-market-builtins.ts
+    //   - user templates: authored in the Studio, whose default seeds the
+    //     【秘密】/【失控】/【反应】 markers that the template's own `renderRulesText`
+    //     regex matches (see components/shopping/black-market-app.tsx ~637/650).
+    // Either way the body is data the user can edit, and its markers must round-trip
+    // to that template's render rules — so it is never rewritten here.
+    outputContract ? `\n【Output Contract】\n${outputContract}` : "",
     "</scene_directive>",
   ].filter(Boolean).join("\n");
 }
@@ -124,7 +132,7 @@ async function buildScenePromptMessages(session: BlackMarketSceneSession, templa
 }> {
   const configs = resolveSceneConfigs(session.characterId);
   const userIdentity = resolveUserIdentity(session.characterId, BLACK_MARKET_BINDING_APP_ID);
-  const userName = session.userName || userIdentity?.name || "用户";
+  const userName = session.userName || userIdentity?.name || "User";
   const history = session.messages.map(message => toChatHistoryMessage(session, message));
   const memConfig = loadMemoryConfig();
   const { recentBlocks, truncatedHistory, wbActivationContext, unifiedRecentItems } = prepareShortTermContext(session.characterId, BLACK_MARKET_PROMPT_APP_ID, {
@@ -164,21 +172,21 @@ async function buildScenePromptMessages(session: BlackMarketSceneSession, templa
 
 export async function generateBlackMarketSceneReply(sessionId: string, userText: string): Promise<BlackMarketSceneGenerationResult> {
   const current = getBlackMarketSceneSession(sessionId);
-  if (!current) throw new ChatEngineError("小剧场会话不存在。");
-  if (current.status !== "active") throw new ChatEngineError("小剧场已经结束。");
+  if (!current) throw new ChatEngineError("That mini-theater session no longer exists.");
+  if (current.status !== "active") throw new ChatEngineError("This mini-theater session has already ended.");
   const owned = findOwnedTheater(current.localTheaterId);
-  if (!owned) throw new ChatEngineError("暗柜中没有找到这份夜间档案。");
+  if (!owned) throw new ChatEngineError("That night file was not found in the cabinet.");
 
   let withUser = current;
   const lastMessage = current.messages[current.messages.length - 1];
   if (!(lastMessage?.role === "user" && lastMessage.content === userText)) {
     const appended = appendBlackMarketSceneMessage(sessionId, "user", userText);
-    if (!appended) throw new ChatEngineError("无法写入玩家行动。");
+    if (!appended) throw new ChatEngineError("Could not record the player action.");
     withUser = appended;
   }
 
   const { messages, configs } = await buildScenePromptMessages(withUser, owned.templateSnapshot);
-  const userName = withUser.userName || resolveUserIdentity(withUser.characterId, BLACK_MARKET_BINDING_APP_ID)?.name || "用户";
+  const userName = withUser.userName || resolveUserIdentity(withUser.characterId, BLACK_MARKET_BINDING_APP_ID)?.name || "User";
   const reply = await sendLLMRequest(configs.apiConfig, configs.preset, messages, configs.regexes, {
     characterName: withUser.characterName,
     userName,
@@ -188,14 +196,14 @@ export async function generateBlackMarketSceneReply(sessionId: string, userText:
   });
 
   const updated = appendBlackMarketSceneMessage(sessionId, "assistant", reply);
-  if (!updated) throw new ChatEngineError("无法写入角色回复。");
+  if (!updated) throw new ChatEngineError("Could not record the character reply.");
 
   return {
     session: updated,
     reply,
     promptMessages: messages,
     model: configs.apiConfig.defaultModel,
-    presetName: configs.preset?.name || "默认预设",
+    presetName: configs.preset?.name || "(default preset)",
   };
 }
 
@@ -208,35 +216,35 @@ function formatSceneTranscript(session: BlackMarketSceneSession): string {
 
 export async function summarizeAndRecordBlackMarketScene(sessionId: string): Promise<BlackMarketSceneSummaryResult> {
   const session = getBlackMarketSceneSession(sessionId);
-  if (!session) throw new ChatEngineError("小剧场会话不存在。");
+  if (!session) throw new ChatEngineError("That mini-theater session no longer exists.");
   const owned = findOwnedTheater(session.localTheaterId);
-  if (!owned) throw new ChatEngineError("暗柜中没有找到这份夜间档案。");
-  if (session.messages.length === 0) throw new ChatEngineError("小剧场还没有可总结的剧情。");
+  if (!owned) throw new ChatEngineError("That night file was not found in the cabinet.");
+  if (session.messages.length === 0) throw new ChatEngineError("This mini-theater has no story yet to summarize.");
 
   const { apiConfig } = resolveSceneConfigs(session.characterId);
   const promptTemplate = expandBlackMarketMacros(
-    owned.templateSnapshot.memorySummaryPrompt || "请把以下小剧场剧情整理为 1 条短期记忆，保留关键事实、角色态度变化和关系变化，不要写系统信息。",
+    owned.templateSnapshot.memorySummaryPrompt || "Condense the mini-theater scene below into a single short-term memory entry. Keep the key facts, any shift in the character's attitude, and any change in the relationship. Do not include system information.",
     session.characterName,
     session.userName,
   );
   const prompt = [
     promptTemplate,
     "",
-    `小剧场标题：${owned.templateSnapshot.title}`,
-    `角色：${session.characterName}`,
-    `用户：${session.userName}`,
+    `Mini-theater title: ${owned.templateSnapshot.title}`,
+    `Character: ${session.characterName}`,
+    `User: ${session.userName}`,
     "",
-    "剧情记录：",
+    "Scene transcript:",
     formatSceneTranscript(session),
     "",
-    "请只输出短期记忆正文。",
+    "Output only the short-term memory text.",
   ].join("\n");
 
   const result = await simpleLLMCall(apiConfig, [{ role: "user", content: prompt }], {
     temperature: 0.3,
   });
   const summary = (result.content || "").trim();
-  if (!summary) throw new ChatEngineError(result.error || "记忆总结为空。");
+  if (!summary) throw new ChatEngineError(result.error || "The memory summary came back empty.");
 
   const ended = endBlackMarketSceneSession(sessionId, summary);
   const finalSession = ended ?? session;

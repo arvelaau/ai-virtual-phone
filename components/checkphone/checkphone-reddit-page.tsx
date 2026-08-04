@@ -356,7 +356,7 @@ export function CheckPhoneRedditPage({ character, onBack }: CheckPhoneRedditPage
 
         {error ? (
           <CheckPhoneDebugErrorCard
-            title="暂时无法解析 Reddit 内容。"
+            title="Unable to parse Reddit content."
             error={error}
             debugParseMode={debugParseMode}
             debugParseError={debugParseError}
@@ -488,11 +488,11 @@ export function CheckPhoneRedditPage({ character, onBack }: CheckPhoneRedditPage
 
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空 Reddit 内容？"
-          message="确认后会清空当前 Reddit 缓存。之后重新刷新时，不会再带入旧 Reddit 内容。"
+          title="Clear Reddit content?"
+          message="This clears the current Reddit cache. The next refresh will not reuse old Reddit content."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

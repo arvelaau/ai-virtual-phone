@@ -45,10 +45,10 @@ import { normalizeTimeZone } from "@/lib/character-time";
 
 type ViewType = "list" | "detail";
 
-// 画布连线：与世界观关系同步——同一对角色间的多条关系合并为一条线，标签并列显示
+// Canvas connection lines: kept in sync with worldbook relations — multiple relations between the same pair of characters merge into one line, with labels shown side by side
 type CanvasRelationLine = { key: string; aId: string; bId: string; labels: string[] };
 
-// 每个世界一张画布：平移缩放记忆按世界分 key（默认世界沿用旧 key，存量零迁移）
+// One canvas per world: pan/zoom memory is keyed per world (the default world keeps the old key, so existing data needs zero migration)
 const PAN_STORAGE_BASE_KEY = 'ai_phone_canvas_pan_v2';
 const WORLD_TAB_KEY = 'ai_phone_character_app_world_v1';
 function worldPanKey(worldId: string): string {
@@ -144,7 +144,7 @@ export function PhoneCharacterApp({ onClose, onNotice }: PhoneCharacterAppProps)
   const [pendingPlacementChar, setPendingPlacementChar] = useState<Character | null>(null);
   const [pendingPolaroidStyle, setPendingPolaroidStyle] = useState<number>(0);
 
-  // ── 世界卷宗：分组数据 + 当前打开的卷宗（持久记忆） ──
+  // ── World files: grouped data + the currently open file (persisted) ──
   const [worldGroups, setWorldGroups] = useState<CharacterWorldGroup[]>(() => loadCharacterWorldGroups());
   const [currentWorldId, setCurrentWorldId] = useState<string>(() => {
     const saved = typeof window !== "undefined" ? kvGet(WORLD_TAB_KEY) : null;
@@ -155,7 +155,7 @@ export function PhoneCharacterApp({ onClose, onNotice }: PhoneCharacterAppProps)
     window.addEventListener(CHARACTER_WORLDS_UPDATED_EVENT, reload);
     return () => window.removeEventListener(CHARACTER_WORLDS_UPDATED_EVENT, reload);
   }, []);
-  // 记忆的世界可能已被删除 → 回落默认卷宗
+  // The remembered world may have been deleted → fall back to the default file
   const safeWorldId = worldGroups.some(g => g.id === currentWorldId) ? currentWorldId : DEFAULT_CHARACTER_WORLD_ID;
   function selectWorldId(worldId: string) {
     setCurrentWorldId(worldId);
@@ -165,7 +165,7 @@ export function PhoneCharacterApp({ onClose, onNotice }: PhoneCharacterAppProps)
   function updateChars(next: Character[]) {
     setCharacters(next);
     saveCharacters(next);
-    // 角色增删会影响世界成员归属（normalize），同步刷新分组
+    // Adding/removing characters affects world membership (normalize), so refresh the groups in sync
     setWorldGroups(loadCharacterWorldGroups());
   }
 
@@ -223,7 +223,7 @@ export function PhoneCharacterApp({ onClose, onNotice }: PhoneCharacterAppProps)
             onStartCharPlacement={(char: Character) => setPendingPlacementChar(char)}
             onPlacementDone={(placed: Character) => {
               setPendingPlacementChar(null);
-              // 新建/导入的角色放进当前打开的卷宗（normalize 默认丢进默认世界）
+              // Newly created/imported characters go into the currently open file (normalize drops them into the default world otherwise)
               if (safeWorldId !== DEFAULT_CHARACTER_WORLD_ID) {
                 moveCharacterToWorld(placed.id, safeWorldId);
               } else {
@@ -258,13 +258,13 @@ export function PhoneCharacterApp({ onClose, onNotice }: PhoneCharacterAppProps)
                 };
                 updateChars(characters.map((c) => (c.id === existing.id ? updated : c)));
                 setView({ type: "detail", id: existing.id, isEditing: false });
-                onNotice("档案已更新");
+                onNotice("Archive updated");
               } else {
                 const newChar = createCharacter(data);
                 newChar.polaroidStyle = pendingPolaroidStyle;
                 setPendingPlacementChar(newChar);
                 setView({ type: "list", id: null, isEditing: false });
-                onNotice("点击画布放置角色");
+                onNotice("Tap the canvas to place the character");
               }
             }}
             onDelete={() => {
@@ -272,7 +272,7 @@ export function PhoneCharacterApp({ onClose, onNotice }: PhoneCharacterAppProps)
                 updateChars(characters.filter((c) => c.id !== view.id));
               }
               setView({ type: "list", id: null, isEditing: false });
-              onNotice("已删除档案");
+              onNotice("Archive deleted");
             }}
             onExportJson={() => {
               const c = view.id ? characters.find(x => x.id === view.id) : null;
@@ -282,7 +282,7 @@ export function PhoneCharacterApp({ onClose, onNotice }: PhoneCharacterAppProps)
               const c = view.id ? characters.find(x => x.id === view.id) : null;
               if (c) {
                 await exportCharacterAsPng(c);
-                onNotice("导出成功");
+                onNotice("Export succeeded");
               }
             }}
           />
@@ -297,7 +297,7 @@ export function PhoneCharacterApp({ onClose, onNotice }: PhoneCharacterAppProps)
   );
 }
 
-// ── 过渡动效层 ───────────────────────────────────────
+// ── Transition animation layer ───────────────────────────────────────
 
 function FlipTransitionOverlay({ transit }: { transit: TransitionState }) {
   const { char, sourceRect, phase } = transit;
@@ -387,7 +387,7 @@ function FlipTransitionOverlay({ transit }: { transit: TransitionState }) {
 }
 
 
-// ── 列表视图（照片墙） ─────────────────────────────────────────
+// ── List view (photo wall) ─────────────────────────────────────────
 
 function CharListView({
   characters,
@@ -426,7 +426,7 @@ function CharListView({
   const [showNpcGen, setShowNpcGen] = useState(false);
   const [activeMoveChar, setActiveMoveChar] = useState<Character | null>(null);
 
-  // ── 世界卷宗：当前世界派生数据 ──
+  // ── World files: data derived from the current world ──
   const currentGroup = worldGroups.find(g => g.id === currentWorldId)
     ?? worldGroups.find(g => g.id === DEFAULT_CHARACTER_WORLD_ID)
     ?? worldGroups[0];
@@ -434,8 +434,8 @@ function CharListView({
   const worldCharacters = characters.filter(c => memberSet.has(c.id));
   const worldBgItems = (bgItems || []).filter(item => (item.worldId ?? DEFAULT_CHARACTER_WORLD_ID) === currentWorldId);
   const memberCounts = new Map(worldGroups.map(g => [g.id, g.memberIds.length]));
-  const nameById = new Map(characters.map(c => [c.id, c.name || "未命名"]));
-  // 连线与世界观关系同步：同一对角色的多条关系合并为一条线
+  const nameById = new Map(characters.map(c => [c.id, c.name || "Unnamed"]));
+  // Connection lines stay in sync with worldbook relations: multiple relations between the same pair of characters merge into one line
   const relationLines: CanvasRelationLine[] = (() => {
     const pairs = new Map<string, CanvasRelationLine>();
     for (const relation of currentGroup?.relations ?? []) {
@@ -451,26 +451,26 @@ function CharListView({
     return [...pairs.values()];
   })();
 
-  // ── 世界卷宗：弹层与交互状态 ──
+  // ── World files: popovers and interaction state ──
   const [showWorldEditor, setShowWorldEditor] = useState(false);
   const [showNewWorld, setShowNewWorld] = useState(false);
   const [dropTargetWorldId, setDropTargetWorldId] = useState<string | null>(null);
-  // 拉线：编辑模式下点照片A→照片B
+  // Relation linking: in edit mode, tap photo A → photo B
   const [linkFromId, setLinkFromId] = useState<string | null>(null);
   const [linkTo, setLinkTo] = useState<{ fromId: string; toId: string } | null>(null);
   const [pairSheet, setPairSheet] = useState<{ aId: string; bId: string } | null>(null);
 
-  // 切世界/退出编辑时收起拉线状态
+  // Reset the linking state when switching worlds or exiting edit mode
   useEffect(() => { setLinkFromId(null); setLinkTo(null); setPairSheet(null); }, [currentWorldId]);
 
-  /** 编辑模式下点拍立得：起线/落线 */
+  /** In edit mode, tapping a polaroid starts/ends a relation line */
   function handleCharEditTap(charId: string) {
     if (linkFromId === charId) { setLinkFromId(null); return; }
     if (linkFromId) { setLinkTo({ fromId: linkFromId, toId: charId }); setLinkFromId(null); return; }
     setLinkFromId(charId);
   }
 
-  /** 拖拍立得时实时检测是否悬停在某个世界 tab 上 */
+  /** While dragging a polaroid, continuously detect whether it's hovering over a world tab */
   function handleCharDragMoveAt(clientX: number, clientY: number) {
     const tabEl = typeof document !== "undefined"
       ? document.elementFromPoint(clientX, clientY)?.closest("[data-world-tab-id]")
@@ -479,7 +479,7 @@ function CharListView({
     setDropTargetWorldId(worldId && worldId !== currentWorldId ? worldId : null);
   }
 
-  /** 松手落在世界 tab 上：把角色归档进那份卷宗（清旧坐标，按目标画布视野自动放置） */
+  /** Releasing on a world tab files the character into that world (clears old coordinates, auto-places based on the target canvas's viewport) */
   function handleCharDropAt(charId: string, clientX: number, clientY: number): boolean {
     setDropTargetWorldId(null);
     const tabEl = typeof document !== "undefined"
@@ -490,7 +490,7 @@ function CharListView({
     const targetGroup = worldGroups.find(g => g.id === worldId);
     if (!targetGroup) return false;
 
-    // 目标世界画布的可视区左上附近自动放置（读它的 pan 记忆）
+    // Auto-place near the top-left of the target world canvas's visible area (read its saved pan)
     let targetPan = { x: 0, y: 0, zoom: 1 };
     try {
       const raw = kvGet(worldPanKey(worldId));
@@ -506,19 +506,19 @@ function CharListView({
       : c
     ));
     moveCharacterToWorld(charId, worldId);
-    onNotice(`已归入卷宗「${targetGroup.name}」`);
+    onNotice(`Filed into "${targetGroup.name}"`);
     return true;
   }
 
-  /** 「生成配角」确认落库（支持一批）：落库逻辑与聊天名片建档共用 lib/npc-generator 的 materialize */
+  /** Confirming "Generate Supporting Character" persists the result (supports a batch): the persistence logic shares lib/npc-generator's materialize with the chat card creation flow */
   function handleNpcGenerated(results: GeneratedSupportingCharacter[], targetId: string, allowAutoPost: boolean) {
     const newChars = results.map((result, index) =>
       materializeSupportingCharacter(result, targetId, { allowAutoPost, placementIndex: index })
     );
-    // materialize 直接写存储；这里回读刷新 React 态（onUpdateChars 会再存一次同数据，无害）
+    // materialize writes to storage directly; this reads it back to refresh React state (onUpdateChars will save the same data again, which is harmless)
     onUpdateChars(loadCharacters());
     setShowNpcGen(false);
-    onNotice(`已生成配角：${newChars.map(c => `「${c.name}」`).join("")}`);
+    onNotice(`Generated supporting characters: ${newChars.map(c => `"${c.name}"`).join("")}`);
   }
 
   useEffect(() => {
@@ -573,7 +573,7 @@ function CharListView({
 
   const [pan, setPan] = useState(() => loadWorldPan(currentWorldId));
 
-  /** 切换世界：先保存当前画布视野，再切换并载入目标画布的视野 */
+  /** Switch worlds: save the current canvas viewport first, then switch and load the target canvas's viewport */
   function selectWorld(worldId: string) {
     if (worldId === currentWorldId) return;
     try { kvSet(worldPanKey(currentWorldId), JSON.stringify(panRef.current)); } catch { }
@@ -592,7 +592,7 @@ function CharListView({
 
   function toggleEditing() {
     if (isEditing) {
-      // Exiting edit mode → persist pan + zoom position（按当前世界）
+      // Exiting edit mode → persist pan + zoom position (per current world)
       try { kvSet(worldPanKey(currentWorldId), JSON.stringify(pan)); } catch { }
       setLinkFromId(null);
     }
@@ -602,7 +602,7 @@ function CharListView({
   const [deleteConfirmReady, setDeleteConfirmReady] = useState(false);
   const [isAnyDragging, setIsAnyDragging] = useState(false);
   const [overTrashBin, setOverTrashBin] = useState(false);
-  // 拖拽结束（含取消）时清掉世界 tab 的归档高亮
+  // Clear the world-tab filing highlight when dragging ends (including cancellation)
   useEffect(() => { if (!isAnyDragging) setDropTargetWorldId(null); }, [isAnyDragging]);
   const trashBinRef = useRef<HTMLDivElement>(null);
   const isEditingRef = useRef(isEditing);
@@ -656,7 +656,7 @@ function CharListView({
         };
         onUpdateChars([...characters, charWithCoords]);
         onPlacementDone(charWithCoords);
-        onNotice("已放置角色");
+        onNotice("Character placed");
       } else if (pendingBgType) {
         const newId = `bg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
         const newItem: CanvasBgItem = {
@@ -670,13 +670,13 @@ function CharListView({
         };
         onUpdateBgItems([...(bgItems || []), newItem]);
         setPendingBgType(null);
-        onNotice("已放置道具");
+        onNotice("Prop placed");
       }
       return;
     }
     if (!isEditing) return;
     if ((e.target as HTMLElement).closest('.char-polaroid-board-item') || (e.target as HTMLElement).closest('.char-bg-item')) return;
-    if (linkFromId) setLinkFromId(null); // 点空白处取消拉线
+    if (linkFromId) setLinkFromId(null); // Tapping empty space cancels the relation link
     isDraggingCanvasRef.current = true;
     canvasPointerIdRef.current = e.pointerId;
     startPanRef.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
@@ -806,7 +806,7 @@ function CharListView({
   function handleAddBgItem(type: CanvasBgItem['type']) {
     setPendingBgType(type);
     setIsPropsMenuOpen(false);
-    onNotice("点击画布放置道具");
+    onNotice("Tap the canvas to place the prop");
   }
 
   async function handleImportFile(file: File) {
@@ -815,15 +815,15 @@ function CharListView({
       if (file.type === "application/json" || file.name.endsWith(".json")) {
         const text = await file.text();
         const data = parseCharacterFromJson(text);
-        if (!data) return onNotice("解析失败，请检查文件格式");
+        if (!data) return onNotice("Failed to parse — please check the file format");
         const c = createCharacter(data);
         c.polaroidStyle = styleIdx;
         onStartCharPlacement(c);
-        onNotice("点击画布放置角色");
+        onNotice("Tap the canvas to place the character");
       } else if (file.type === "image/png" || file.name.endsWith(".png")) {
         const buffer = await file.arrayBuffer();
         const data = parseCharacterFromPng(buffer);
-        if (!data) return onNotice("未在 PNG 中找到角色数据");
+        if (!data) return onNotice("No character data found in the PNG");
         let avatar = "";
         try {
           avatar = await fileToDataUrl(file);
@@ -836,15 +836,15 @@ function CharListView({
         const c = createCharacter({ ...data, avatar });
         c.polaroidStyle = styleIdx;
         onStartCharPlacement(c);
-        onNotice("点击画布放置角色");
+        onNotice("Tap the canvas to place the character");
       } else {
-        onNotice("请选择 .json 或 .png 文件");
+        onNotice("Please select a .json or .png file");
       }
     } catch (e) {
       if (e instanceof Error && e.message === CHAR_BLOCKED_FIELDS) {
-        setImportError("不支持包含开场白、场景或示例对话的角色卡");
+        setImportError("Character cards containing an opening line, scenario, or example dialogue are not supported");
       } else {
-        onNotice("解析失败，请检查文件格式");
+        onNotice("Failed to parse — please check the file format");
       }
     }
   }
@@ -952,7 +952,7 @@ function CharListView({
           <button
             className="flex items-center justify-center w-[34px] h-[34px] rounded-full bg-black/5 text-[#666] hover:bg-black/10 transition-colors"
             onClick={onClose}
-            aria-label="返回桌面"
+            aria-label="Back to desktop"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
           </button>
@@ -966,7 +966,7 @@ function CharListView({
                 : 'bg-black/5 text-[#666] hover:bg-black/10'
             }`}
             onClick={() => toggleEditing()}
-            aria-label="编辑排版"
+            aria-label="Edit layout"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
           </button>
@@ -1003,7 +1003,7 @@ function CharListView({
           </div>
         }
       >
-      {/* 世界卷宗标签条：每个世界一份案卷、一张画布 */}
+      {/* World file tab strip: one case file and one canvas per world */}
       <WorldTabStrip
         groups={worldGroups}
         currentWorldId={currentWorldId}
@@ -1029,10 +1029,10 @@ function CharListView({
         }}
         style={{ touchAction: 'none', WebkitUserSelect: 'none', cursor: placementActive ? 'crosshair' : undefined }}
       >
-        {/* 拉线进行中的提示纸条 */}
+        {/* Hint banner shown while linking */}
         {linkFromId && (
           <div className="wt-link-hint">
-            正在从 <strong>{nameById.get(linkFromId) ?? "?"}</strong> 拉线 · 点另一张照片牵上关系，点空白处取消
+            Linking from <strong>{nameById.get(linkFromId) ?? "?"}</strong> · tap another photo to connect a relation, tap empty space to cancel
           </div>
         )}
         {worldCharacters.length === 0 && worldBgItems.length === 0 ? (
@@ -1040,12 +1040,12 @@ function CharListView({
             <div className="char-empty-icon">
               <IconCamera size={44} />
             </div>
-            <p className="char-empty-text">这份卷宗还是空的</p>
-            <p className="char-empty-sub">CREATE 建人 · NPC 生成配角 · 或从别的卷宗拖人进来</p>
+            <p className="char-empty-text">This file is still empty</p>
+            <p className="char-empty-sub">CREATE a character · NPC to generate a supporting character · or drag one in from another file</p>
           </div>
         ) : (
           <div className="char-infinite-container absolute w-0 h-0 origin-top-left" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${pan.zoom})` }}>
-            {/* 连线原本在这里渲染，现在移到了下方，确保它覆盖在拍立得照片的上方 */}
+            {/* Connection lines used to render here; now rendered below to ensure they layer above the polaroid photos */}
 
             {worldBgItems.map(item => (
               <DraggableNode
@@ -1107,7 +1107,7 @@ function CharListView({
                     <button
                       className="char-polaroid-menu-btn absolute top-1 right-1 w-6 h-6 bg-black/20 text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-black/40 transition-colors z-10"
                       onClick={(e) => { e.stopPropagation(); setActiveMoveChar(char); }}
-                      aria-label="转移世界"
+                      aria-label="Move to another world"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
                     </button>
@@ -1117,7 +1117,7 @@ function CharListView({
               );
             })}
 
-            {/* 把拉线放在所有卡片的最后渲染，并设置超高 zIndex，使其盖在所有照片之上 */}
+            {/* Render the relation lines last, after all cards, with a very high zIndex so they sit above all photos */}
             <svg className="absolute top-0 left-0 w-[10000px] h-[10000px] pointer-events-none overflow-visible" style={{ zIndex: 99999 }}>
               {relationLines.map(line => {
                 const a = worldCharacters.find(c => c.id === line.aId);
@@ -1127,12 +1127,12 @@ function CharListView({
                 const x2 = b.canvasX + 60, y2 = b.canvasY + 60;
                 return (
                   <g key={line.key}>
-                    {/* 连线阴影 (更淡的阴影) */}
+                    {/* Line shadow (lighter shadow) */}
                     <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(0,0,0,0.04)" strokeWidth="2" transform="translate(1, 1.5)" strokeDasharray="6 3" />
-                    {/* 虚线（颜色更深） */}
+                    {/* Dashed line (darker color) */}
                     <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#222222" strokeWidth="1.5" opacity={0.9} strokeDasharray="6 3" />
 
-                    {/* 图钉 (Pushpins - 更深的主色，更浅的阴影) */}
+                    {/* Pushpins (darker main color, lighter shadow) */}
                     <g transform={`translate(${x1}, ${y1})`}>
                       <circle cx="1.5" cy="2" r="4.5" fill="rgba(0,0,0,0.12)" />
                       <circle cx="0" cy="0" r="4.5" fill="#111111" />
@@ -1143,7 +1143,7 @@ function CharListView({
                       <circle cx="0" cy="0" r="4.5" fill="#111111" />
                       <circle cx="-1.5" cy="-1.5" r="1.5" fill="#555555" opacity="0.9" />
                     </g>
-                    {/* 关系标签 */}
+                    {/* Relation label */}
                     <foreignObject
                       x={(x1 + x2) / 2 - 100}
                       y={(y1 + y2) / 2 - 15}
@@ -1205,7 +1205,7 @@ function CharListView({
         {placementActive && (
           <div className="char-placement-hint" style={{ zIndex: 999999 }}>
             <span className="char-placement-hint-finger" aria-hidden="true">👆</span>
-            <span>点击画布放置 · ESC 取消</span>
+            <span>Tap the canvas to place · ESC to cancel</span>
           </div>
         )}
 
@@ -1235,8 +1235,8 @@ function CharListView({
           }}
         >
           <div className="char-punched-hole-note" onClick={(e) => e.stopPropagation()}>
-            <h3>销毁确认</h3>
-            <p>您确定要丢弃该档案或物件吗？此操作将永远无法恢复。</p>
+            <h3>Confirm Destruction</h3>
+            <p>Are you sure you want to discard this archive or item? This action cannot be undone.</p>
             <div className="char-punched-hole-btn-group">
               <button
                 className="char-punched-hole-btn"
@@ -1244,18 +1244,18 @@ function CharListView({
                 onClick={() => {
                   if (deleteConfirmReady) setDeleteConfirm(null);
                 }}
-              >驳回申请</button>
+              >Reject Request</button>
               <button className="char-punched-hole-btn danger" disabled={!deleteConfirmReady} onClick={() => {
                 if (!deleteConfirmReady) return;
                 if (deleteConfirm.type === 'char') {
                   onUpdateChars(characters.filter(c => c.id !== deleteConfirm.id));
-                  onNotice?.("已销毁调查档案");
+                  onNotice?.("Investigation archive destroyed");
                 } else {
                   onUpdateBgItems((bgItems || []).filter(b => b.id !== deleteConfirm.id));
-                  onNotice?.("已销毁散落物件");
+                  onNotice?.("Scattered item destroyed");
                 }
                 setDeleteConfirm(null);
-              }}>批准销毁</button>
+              }}>Approve Destruction</button>
             </div>
           </div>
         </div>
@@ -1263,18 +1263,18 @@ function CharListView({
 
       {importError && (
         <ConfirmDialog
-          title="导入失败"
+          title="Import Failed"
           message={importError}
           icon={AlertCircle}
           variant="danger"
-          confirmLabel="知道了"
+          confirmLabel="Got it"
           cancelLabel=""
           onConfirm={() => setImportError(null)}
           onCancel={() => setImportError(null)}
         />
       )}
 
-      {/* NPC generator sheet — 目标角色限当前世界，生成的配角落在当前画布 */}
+      {/* NPC generator sheet — target character is limited to the current world; generated supporting characters are placed on the current canvas */}
       {showNpcGen && (
         <NpcGeneratorSheet
           characters={worldCharacters}
@@ -1283,7 +1283,7 @@ function CharListView({
         />
       )}
 
-      {/* 世界卷宗编辑 */}
+      {/* World file editor */}
       {showWorldEditor && currentGroup && (
         <WorldCaseSheet
           group={currentGroup}
@@ -1293,26 +1293,26 @@ function CharListView({
             deleteCharacterWorldGroup(currentGroup.id);
             setShowWorldEditor(false);
             selectWorld(DEFAULT_CHARACTER_WORLD_ID);
-            onNotice("卷宗已删除，角色并回默认世界");
+            onNotice("File deleted, characters moved back to the default world");
           }}
           onClose={() => setShowWorldEditor(false)}
         />
       )}
 
-      {/* 新建卷宗 */}
+      {/* New world file */}
       {showNewWorld && (
         <NewWorldSheet
           onCreate={name => {
             const group = createCharacterWorldGroup(name);
             setShowNewWorld(false);
             selectWorld(group.id);
-            onNotice(`已建立卷宗「${group.name}」`);
+            onNotice(`Created file "${group.name}"`);
           }}
           onClose={() => setShowNewWorld(false)}
         />
       )}
 
-      {/* 拉线：关系标签输入 */}
+      {/* Relation linking: label input */}
       {linkTo && currentGroup && (
         <RelationLinkDialog
           fromName={nameById.get(linkTo.fromId) ?? "?"}
@@ -1325,7 +1325,7 @@ function CharListView({
         />
       )}
 
-      {/* 关系细目：逐条剪断 */}
+      {/* Relation detail: remove one at a time */}
       {pairSheet && currentGroup && (
         <RelationPairSheet
           relations={(currentGroup.relations ?? []).filter(r =>
@@ -1370,9 +1370,9 @@ function CharListView({
               <div className="text-center ts-12 font-bold text-[#4a3f2f] mb-3 tracking-[1px] uppercase">Select Format</div>
               <div className="flex gap-1.5 justify-center">
                 {[
-                  { label: '正方', cls: 'ratio-square' },
-                  { label: '竖版', cls: 'ratio-portrait' },
-                  { label: '横版', cls: 'ratio-landscape' },
+                  { label: 'Square', cls: 'ratio-square' },
+                  { label: 'Portrait', cls: 'ratio-portrait' },
+                  { label: 'Landscape', cls: 'ratio-landscape' },
                   { label: '16:9', cls: 'ratio-16-9' },
                   { label: '9:16', cls: 'ratio-9-16' },
                 ].map((style, idx) => (
@@ -1440,12 +1440,12 @@ function CharListView({
               <div className="text-center ts-12 font-bold text-[#4a3f2f] mb-3 tracking-[1px] uppercase">Add Props</div>
               <div className="flex gap-1.5 justify-center flex-wrap">
                 {([
-                  { type: 'a4' as const, label: '档案', w: 200, h: 280, scale: 0.16 },
-                  { type: 'yellow-note' as const, label: '便签', w: 110, h: 80, scale: 0.28 },
-                  { type: 'blue-note' as const, label: '传票', w: 120, h: 90, scale: 0.26 },
-                  { type: 'torn' as const, label: '碎片', w: 130, h: 70, scale: 0.24 },
-                  { type: 'grid' as const, label: '网格', w: 150, h: 100, scale: 0.21 },
-                  { type: 'scrap' as const, label: '烧纸', w: 140, h: 50, scale: 0.24 },
+                  { type: 'a4' as const, label: 'File', w: 200, h: 280, scale: 0.16 },
+                  { type: 'yellow-note' as const, label: 'Sticky Note', w: 110, h: 80, scale: 0.28 },
+                  { type: 'blue-note' as const, label: 'Summons', w: 120, h: 90, scale: 0.26 },
+                  { type: 'torn' as const, label: 'Scrap', w: 130, h: 70, scale: 0.24 },
+                  { type: 'grid' as const, label: 'Grid', w: 150, h: 100, scale: 0.21 },
+                  { type: 'scrap' as const, label: 'Burnt Paper', w: 140, h: 50, scale: 0.24 },
                 ]).map((item) => (
                   <button
                     key={item.type}
@@ -1484,12 +1484,12 @@ function CharListView({
         </div>
       )}
 
-      {/* 转移世界 Modal */}
+      {/* Move to another world modal */}
       {activeMoveChar && (
         <div className="modal-overlay" data-ui="modal" onPointerDown={() => setActiveMoveChar(null)}>
           <div className="modal-dialog" data-ui="modal-dialog" onPointerDown={(e) => e.stopPropagation()} style={{ padding: 0, overflow: 'hidden' }}>
             <div className="modal-header" data-ui="modal-header" style={{ padding: '20px 20px 10px' }}>
-              <h3 className="modal-title" style={{ margin: 0, fontSize: '16px' }}>转移到其他卷宗</h3>
+              <h3 className="modal-title" style={{ margin: 0, fontSize: '16px' }}>Move to Another File</h3>
             </div>
             <div role="listbox" style={{ maxHeight: '40dvh', padding: '10px 16px', overflowY: 'auto' }}>
               {worldGroups.filter(g => g.id !== currentWorldId).map(group => (
@@ -1507,11 +1507,11 @@ function CharListView({
                 </button>
               ))}
               {worldGroups.filter(g => g.id !== currentWorldId).length === 0 && (
-                <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>没有其他卷宗可供转移</div>
+                <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>No other files to move to</div>
               )}
             </div>
             <div className="modal-footer" data-ui="modal-footer" style={{ padding: '10px 20px 20px' }}>
-              <button className="ui-btn ui-btn-outline" style={{ width: '100%' }} onClick={() => setActiveMoveChar(null)}>取消</button>
+              <button className="ui-btn ui-btn-outline" style={{ width: '100%' }} onClick={() => setActiveMoveChar(null)}>Cancel</button>
             </div>
           </div>
         </div>
@@ -1520,7 +1520,7 @@ function CharListView({
   );
 }
 
-// ── Draggable 组件封装 ───────────────────────────────────
+// ── Draggable component wrapper ───────────────────────────────────
 
 function DraggableNode({
   id, x, y, rot, zIndex, children, onDragEnd, onClick, className, w, isEditing, onDeleteIntent,
@@ -1538,11 +1538,11 @@ function DraggableNode({
   onOverTrashChange?: (over: boolean) => void;
   zoom?: number;
   pinchRef?: React.RefObject<PinchState | null>;
-  /** 编辑模式下的「点按」（无位移的 tap）——用于拉线选点 */
+  /** A "tap" in edit mode (a tap with no movement) — used to select points for relation linking */
   onEditTap?: (id: string) => void;
-  /** 拖动过程中上报指针屏幕坐标——用于世界 tab 悬停高亮 */
+  /** Reports the pointer's screen position during drag — used for world-tab hover highlighting */
   onDragMoveAt?: (clientX: number, clientY: number) => void;
-  /** 松手时的落点处理；返回 true 表示已被消费（如归档进其他世界），位置回弹 */
+  /** Handles the drop point on release; returning true means it was consumed (e.g. filed into another world), and the position springs back */
   onDropAt?: (id: string, clientX: number, clientY: number) => boolean;
 }) {
   const [pos, setPos] = useState({ x, y });
@@ -1617,7 +1617,7 @@ function DraggableNode({
         setPos({ x: dragStart.current.startX, y: dragStart.current.startY });
         return;
       }
-      // 落点被外部消费（如拖到世界 tab 上归档）→ 位置回弹，不落坐标
+      // The drop point was consumed externally (e.g. dropped on a world tab to file it) → position springs back, no coordinates saved
       if (dragStart.current.moved && onDropAt?.(id, e.clientX, e.clientY)) {
         setPos({ x: dragStart.current.startX, y: dragStart.current.startY });
         return;
@@ -1648,7 +1648,7 @@ function DraggableNode({
     if (isEditing) {
       e.stopPropagation();
       e.preventDefault();
-      // 编辑模式下无位移的点按 → 拉线选点
+      // A tap with no movement in edit mode → select a point for relation linking
       if (onEditTap) onEditTap(id);
       return;
     }
@@ -1678,7 +1678,7 @@ function DraggableNode({
 }
 
 
-// ── 绝密档案视图（详情页面） ─────────────────────────────────────────
+// ── Classified archive view (detail page) ─────────────────────────────────────────
 
 function CharArchiveView({
   char,
@@ -1726,7 +1726,7 @@ function CharArchiveView({
     notifyMascotPageContext({
       page: "character",
       mode: isEditing ? "editing" : "viewing",
-      label: `角色编辑 · ${name || "新角色"}`,
+      label: `Character Edit · ${name || "New Character"}`,
       fields: {
         _characterId: char.id || "",
         name,
@@ -1756,7 +1756,7 @@ function CharArchiveView({
   // Reset mascot context on unmount
   useEffect(() => {
     return () => {
-      notifyMascotPageContext({ page: "desktop", mode: "idle", label: "桌面", fields: {} });
+      notifyMascotPageContext({ page: "desktop", mode: "idle", label: "Desktop", fields: {} });
     };
   }, []);
 
@@ -1829,7 +1829,7 @@ function CharArchiveView({
         persona,
         personality: personality.trim() || undefined,
         briefPersona: trimmedBrief || undefined,
-        // 简介变动才刷新时间戳；未动则保留原值（供「设定已更新」过期提示判断）
+        // Only refresh the timestamp when the brief changes; otherwise keep the original value (used to determine the "settings updated" staleness hint)
         briefPersonaUpdatedAt: trimmedBrief
           ? (trimmedBrief !== (char.briefPersona || "").trim() ? new Date().toISOString() : char.briefPersonaUpdatedAt)
           : undefined,
@@ -1847,7 +1847,7 @@ function CharArchiveView({
     try {
       const text = await generateBriefPersonaText({
         ...char,
-        name: name.trim() || char.name || "未命名角色",
+        name: name.trim() || char.name || "Unnamed Character",
         persona,
         personality: personality.trim() || undefined,
       });
@@ -2109,31 +2109,31 @@ function CharArchiveView({
             </div>
           )}
 
-          {/* 简量人设 — 注入到同世界有关系角色的上下文，防对方 OOC */}
+          {/* Brief persona — injected into the context of related characters in the same world, to keep them from going OOC */}
           {(isEditing || briefPersona.trim()) && (
             <div className="char-log-entry mb-4 border-t border-dashed border-[#999] pt-3">
               <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                <span className="char-log-entry-header !mb-0">BRIEF PERSONA / 简量人设</span>
+                <span className="char-log-entry-header !mb-0">BRIEF PERSONA</span>
                 {isEditing && (
                   <button
                     className="ts-10 px-3 py-1 bg-[#111111] text-white border-none rounded-full cursor-pointer disabled:opacity-50 hover:bg-[#222222] transition-colors"
                     disabled={briefBusy}
                     onClick={handleGenerateBrief}
                   >
-                    {briefBusy ? "生成中…" : briefPersona.trim() ? "重新生成" : "AI 生成"}
+                    {briefBusy ? "Generating…" : briefPersona.trim() ? "Regenerate" : "AI Generate"}
                   </button>
                 )}
               </div>
               <p className="ts-10 opacity-60 mt-1">
-                会注入给同世界与 TA 有关系的角色，帮助对方提到 TA 时不 OOC。
-                {!isEditing && isBriefPersonaStale(char) ? " ⚠ 设定已更新，建议重新生成简介。" : ""}
+                Injected into related characters' context within the same world, to help them avoid going OOC when mentioning this character.
+                {!isEditing && isBriefPersonaStale(char) ? " ⚠ Settings have been updated — consider regenerating the brief." : ""}
               </p>
               {briefError && <p className="ts-10 mt-1" style={{ color: "#b4233b" }}>{briefError}</p>}
               {isEditing ? (
                 <AutoResizingTextarea
                   value={briefPersona}
                   onChange={setBriefPersona}
-                  placeholder="点「AI 生成」自动压缩人设，或手写 100~200 字简介…"
+                  placeholder="Tap 'AI Generate' to auto-condense the persona, or write a 100-200 word brief by hand…"
                   minHeight={60}
                   style={{
                     width: "100%", background: "color-mix(in srgb, var(--c-input) 50%, transparent)",
@@ -2260,12 +2260,12 @@ function CharArchiveView({
       {/* Unsaved changes confirmation dialog */}
       {showUnsavedConfirm && (
         <ConfirmDialog
-          title="确定要放弃编辑吗？"
-          message="当前编辑内容尚未保存，离开后所有更改将丢失。"
+          title="Discard editing?"
+          message="Your changes haven't been saved yet. Leaving now will lose all edits."
           icon={AlertCircle}
           variant="danger"
-          confirmLabel="放弃更改"
-          cancelLabel="继续编辑"
+          confirmLabel="Discard Changes"
+          cancelLabel="Keep Editing"
           onConfirm={() => {
             const action = showUnsavedConfirm;
             setShowUnsavedConfirm(null);
@@ -2281,7 +2281,7 @@ function CharArchiveView({
 
 // The CharEditView component has been removed as editing is now inline within CharArchiveView.
 
-// ── 共享子组件 ───────────────────────────────────────
+// ── Shared subcomponents ───────────────────────────────────────
 
 function CharAvatarFallback({
   name,
@@ -2317,9 +2317,9 @@ function AutoResizingTextarea({
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // useLayoutEffect（绘制前同步执行）：把"塌成一行→撑回真实高度"放在同一帧、绘制之前完成，
-  // 避免某些内核（如小米浏览器）把中间那帧的高度骤减画出来、并因文档变矮把视口往上夹/拉。
-  // 同时记录并还原最近可滚动祖先的 scrollTop，作为对 reflow 滚动锚定的额外保护。
+  // useLayoutEffect (runs synchronously before paint): do the "collapse to one line → expand back to real height" within the same frame, before paint,
+  // to avoid some engines (e.g. Xiaomi's browser) painting the intermediate frame's collapsed height and then yanking/pulling the viewport up as the document shrinks.
+  // Also record and restore the nearest scrollable ancestor's scrollTop, as extra protection for scroll anchoring during reflow.
   useLayoutEffect(() => {
     const ta = textareaRef.current;
     if (!ta) return;
@@ -2354,7 +2354,7 @@ function AutoResizingTextarea({
   );
 }
 
-// ── 工具函数 ─────────────────────────────────────────
+// ── Utility functions ─────────────────────────────────────────
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -2392,7 +2392,7 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-// ── 图标 ─────────────────────────────────────────────
+// ── Icons ─────────────────────────────────────────────
 
 function IconBack() {
   return (
@@ -2451,11 +2451,11 @@ function IconTrash({ size = 20 }: { size?: number }) {
   );
 }
 
-// ── 组件实现 ─────────────────────────────────────────────
+// ── Component implementation ─────────────────────────────────────────────
 
-// ── NPC 生成器 ─────────────────────────────────────────────
-// 「生成配角」弹层：选目标角色 + 可选要求 → LLM 生成完整角色卡 → 预览可编辑 → 确认落库。
-// 生成逻辑见 lib/npc-generator.ts；落库动作在父组件 handleNpcGenerated。
+// ── NPC generator ─────────────────────────────────────────────
+// "Generate Supporting Character" popover: pick a target character + optional requirements → LLM generates a full character card → editable preview → confirm to persist.
+// See lib/npc-generator.ts for the generation logic; the persistence action lives in the parent component's handleNpcGenerated.
 function NpcGeneratorSheet({ characters, onClose, onConfirm }: {
   characters: Character[];
   onClose: () => void;
@@ -2479,7 +2479,7 @@ function NpcGeneratorSheet({ characters, onClose, onConfirm }: {
       const generated = await generateSupportingCharacters(targetId, hint, count);
       setResults(generated);
       if (generated.length < count) {
-        setError(`本次只成功解析出 ${generated.length} 位配角，可直接使用或重新生成。`);
+        setError(`Only successfully parsed ${generated.length} supporting character(s) this time — you can use them as-is or regenerate.`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -2494,7 +2494,7 @@ function NpcGeneratorSheet({ characters, onClose, onConfirm }: {
   const removeAt = (index: number) => {
     setResults(prev => {
       const next = prev ? prev.filter((_, i) => i !== index) : prev;
-      return next && next.length > 0 ? next : null; // 全删了就回到生成表单
+      return next && next.length > 0 ? next : null; // If all are removed, go back to the generation form
     });
   };
   const confirmDisabled = busy
@@ -2518,13 +2518,13 @@ function NpcGeneratorSheet({ characters, onClose, onConfirm }: {
 
         {!results ? (
           <div className="flex flex-col">
-            <label className="wt-paper-label">为哪位角色生成配角</label>
+            <label className="wt-paper-label">Generate a supporting character for</label>
             <select className="wt-paper-input" value={targetId} onChange={e => setTargetId(e.target.value)}>
               {characters.map(c => (
-                <option key={c.id} value={c.id}>{c.name || "未命名角色"}</option>
+                <option key={c.id} value={c.id}>{c.name || "Unnamed Character"}</option>
               ))}
             </select>
-            <label className="wt-paper-label mt-2">生成数量</label>
+            <label className="wt-paper-label mt-2">Number to Generate</label>
             <div className="flex gap-2">
               {[1, 2, 3, 4, 5].map(n => (
                 <button
@@ -2537,28 +2537,28 @@ function NpcGeneratorSheet({ characters, onClose, onConfirm }: {
                 </button>
               ))}
             </div>
-            <label className="wt-paper-label mt-2">补充要求（可选）</label>
+            <label className="wt-paper-label mt-2">Additional Requirements (optional)</label>
             <textarea
               className="wt-paper-textarea"
               style={{ minHeight: 64 }}
-              placeholder="例如：生成一个损友 / 她的亲妹妹 / 暗恋她的学长…"
+              placeholder="e.g. a troublesome friend / her younger sister / a senior who has a crush on her…"
               value={hint}
               onChange={e => setHint(e.target.value)}
             />
-            <p className="wt-paper-hint mt-1">会带上 TA 的核心记忆与相关长期记忆——记忆里提过的人是最好的配角素材。</p>
+            <p className="wt-paper-hint mt-1">This will draw on the character's core and related long-term memories — people mentioned in memories make the best supporting character material.</p>
             {error && <p className="wt-paper-confirm mt-2">{error}</p>}
 
             <div className="wt-paper-actions mt-4">
-              <button className="wt-btn flex-1" onClick={onClose} disabled={busy}>取消</button>
+              <button className="wt-btn flex-1" onClick={onClose} disabled={busy}>Cancel</button>
               <button
                 className="wt-btn wt-btn-primary flex-1"
                 onClick={handleGenerate}
                 disabled={busy || !targetId}
               >
-                {busy ? "生成中…" : "生成"}
+                {busy ? "Generating…" : "Generate"}
               </button>
             </div>
-            {characters.length === 0 && <p className="wt-paper-hint mt-2">还没有角色，先创建一位主角。</p>}
+            {characters.length === 0 && <p className="wt-paper-hint mt-2">No characters yet — create a main character first.</p>}
           </div>
         ) : (
           <div className="flex flex-col">
@@ -2569,15 +2569,15 @@ function NpcGeneratorSheet({ characters, onClose, onConfirm }: {
                   <span className="wt-paper-spacer" />
                   {results.length > 1 && (
                     <button type="button" className="wt-btn wt-btn-danger wt-btn-small" onClick={() => removeAt(index)}>
-                      移除
+                      Remove
                     </button>
                   )}
                 </div>
 
-                <label className="wt-paper-label mt-2">名字</label>
+                <label className="wt-paper-label mt-2">Name</label>
                 <input className="wt-paper-input" value={result.name} onChange={e => patchAt(index, { name: e.target.value })} />
 
-                <label className="wt-paper-label mt-2">人设（完整角色卡）</label>
+                <label className="wt-paper-label mt-2">Persona (full character card)</label>
                 <textarea
                   className="wt-paper-textarea"
                   style={{ minHeight: 120 }}
@@ -2585,10 +2585,10 @@ function NpcGeneratorSheet({ characters, onClose, onConfirm }: {
                   onChange={e => patchAt(index, { persona: e.target.value })}
                 />
 
-                <label className="wt-paper-label mt-2">性格</label>
+                <label className="wt-paper-label mt-2">Personality</label>
                 <input className="wt-paper-input" value={result.personality} onChange={e => patchAt(index, { personality: e.target.value })} />
 
-                <label className="wt-paper-label mt-2">简量人设（注入给同世界角色）</label>
+                <label className="wt-paper-label mt-2">Brief Persona (injected into characters in the same world)</label>
                 <textarea
                   className="wt-paper-textarea"
                   style={{ minHeight: 64 }}
@@ -2598,11 +2598,11 @@ function NpcGeneratorSheet({ characters, onClose, onConfirm }: {
 
                 <div className="flex gap-2 mt-2">
                   <div className="flex-1 flex flex-col">
-                    <label className="wt-paper-label">TA 是{targetName}的</label>
+                    <label className="wt-paper-label">This character is {targetName}'s</label>
                     <input className="wt-paper-input" value={result.relationLabel} onChange={e => patchAt(index, { relationLabel: e.target.value })} />
                   </div>
                   <div className="flex-1 flex flex-col">
-                    <label className="wt-paper-label">{targetName}是 TA 的</label>
+                    <label className="wt-paper-label">{targetName} is this character's</label>
                     <input className="wt-paper-input" value={result.reverseRelationLabel} onChange={e => patchAt(index, { reverseRelationLabel: e.target.value })} />
                   </div>
                 </div>
@@ -2611,26 +2611,26 @@ function NpcGeneratorSheet({ characters, onClose, onConfirm }: {
 
             <label className="flex items-center gap-2 mt-3 wt-paper-label" style={{ fontWeight: 'normal' }}>
               <input type="checkbox" checked={allowAutoPost} onChange={e => setAllowAutoPost(e.target.checked)} />
-              加好友后允许自动发朋友圈（本批全部生效）
+              Allow auto-posting to Moments after becoming friends (applies to this whole batch)
             </label>
 
             {error && <p className="wt-paper-confirm mt-2">{error}</p>}
 
             <div className="wt-paper-actions mt-4">
               <button className="wt-btn flex-1" onClick={handleGenerate} disabled={busy}>
-                {busy ? "生成中…" : "重新生成"}
+                {busy ? "Generating…" : "Regenerate"}
               </button>
               <button
                 className="wt-btn wt-btn-primary flex-1"
                 disabled={confirmDisabled}
                 onClick={() => results && onConfirm(results, targetId, allowAutoPost)}
               >
-                {results.length > 1 ? `确认创建 ${results.length} 位` : "确认创建"}
+                {results.length > 1 ? `Confirm & Create ${results.length}` : "Confirm & Create"}
               </button>
             </div>
 
             <div className="flex mt-2">
-              <button className="wt-btn flex-1" onClick={onClose} disabled={busy}>取消</button>
+              <button className="wt-btn flex-1" onClick={onClose} disabled={busy}>Cancel</button>
             </div>
           </div>
         )}

@@ -84,7 +84,7 @@ function resolveStoryConfigs(characterId: string): {
   const bindings = loadBindingConfig();
   const activeSlot = resolveBinding(bindings, characterId, "story");
   if (!activeSlot.apiConfigId) {
-    throw new ChatEngineError(`No API Configuration bound for ${character.name}. Please go to Settings -> 绑定管理 -> 剧情 to assign one.`);
+    throw new ChatEngineError(`No API Configuration bound for ${character.name}. Please go to Settings -> Binding Manager -> Story to assign one.`);
   }
 
   const apiConfig = loadApiConfigs().find((config) => config.id === activeSlot.apiConfigId);
@@ -149,7 +149,7 @@ export async function generateStoryCompletion(
   const llmMessages = await buildStoryPromptMessages(characterId, history, preset, regexes, worldBooks, effectiveContextExcludedTags);
 
   const userIdentity = resolveUserIdentity(characterId, "story");
-  const macroEngine = new MacroEngine(character.name, userIdentity?.name ?? "用户");
+  const macroEngine = new MacroEngine(character.name, userIdentity?.name ?? "User");
 
   const rawOutput = await sendLLMRequest(apiConfig, preset, llmMessages, regexes, {
     characterName: character.name,
@@ -169,7 +169,7 @@ export async function generateStoryCompletion(
     parserVersion: STORY_PARSER_VERSION,
     promptMessages: llmMessages,
     model: apiConfig.defaultModel,
-    presetName: preset?.name || "默认预设",
+    presetName: preset?.name || "(default preset)",
   };
 }
 
@@ -190,7 +190,7 @@ async function buildStoryPromptMessages(
   const historyMessages = history.map((message) => toHistoryMessage(message, contextExcludedTags));
   const memConfig = loadMemoryConfig();
   const { recentBlocks, truncatedHistory, wbActivationContext, unifiedRecentItems } = prepareShortTermContext(characterId, "story", {
-    userName: userIdentity?.name ?? "用户",
+    userName: userIdentity?.name ?? "User",
     history: historyMessages,
   });
 
@@ -235,7 +235,7 @@ export async function previewStoryPromptPayload(
     messages: previewMessagesForApi(apiConfig, preset, llmMessages),
     characterName: character.name,
     model: apiConfig.defaultModel,
-    presetName: preset?.name || "默认预设",
+    presetName: preset?.name || "(default preset)",
   };
 }
 
@@ -246,7 +246,7 @@ export function rebuildStorySessionRenderCache(characterId: string, sessionId: s
 
   const character = loadCharacters().find((c) => c.id === characterId);
   const userIdentity = resolveUserIdentity(characterId, "story");
-  const macroEngine = new MacroEngine(character?.name ?? "", userIdentity?.name ?? "用户");
+  const macroEngine = new MacroEngine(character?.name ?? "", userIdentity?.name ?? "User");
 
   const rebuilt = loadStoryMessages(sessionId).map((message) => {
     if (message.role !== "assistant") {

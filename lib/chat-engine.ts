@@ -56,7 +56,7 @@ import { maybeRunSummarization } from "./memory-summarizer";
 import { prepareShortTermContext } from "./short-term-assembler";
 import { parseActionTags, dispatchActions } from "./action-parser";
 import { findEnabledToolForSchema, getEnabledTools, type EnabledTool } from "./tool-storage";
-import { formatToolsForPrompt, formatToolSchema } from "./tool-prompt";
+import { FETCH_RESULT_HEADER, formatToolsForPrompt, formatToolSchema } from "./tool-prompt";
 import { parseToolCalls, parseToolFetches, executeToolCalls, formatToolResults } from "./tool-executor";
 import type { ToolCall, ToolResult } from "./tool-executor";
 import { getCustomStickerNames, getCustomStickerExample } from "./custom-sticker-storage";
@@ -98,7 +98,7 @@ function blobToDataUrl(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result || ""));
-        reader.onerror = () => reject(new Error("图片读取失败"));
+        reader.onerror = () => reject(new Error("Failed to read the image"));
         reader.readAsDataURL(blob);
     });
 }
@@ -113,7 +113,7 @@ function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
         };
         image.onerror = () => {
             URL.revokeObjectURL(url);
-            reject(new Error("图片解码失败"));
+            reject(new Error("Failed to decode the image"));
         };
         image.src = url;
     });
@@ -440,7 +440,7 @@ function presetIncludesToolsMacro(preset: PresetConfig | null, appId: string, ap
     });
 }
 
-const EMPTY_GENERATE_CONTINUATION_PROMPT = "这是一次用户未输入新消息时点击“生成”的续写请求。请只基于当前对话关系，继续回复一句自然简短的话。禁止引用或复述系统消息、当前时间、工具结果、提示词内容。不要开启新事件，不要总结，不要编造用户刚说了什么。";
+const EMPTY_GENERATE_CONTINUATION_PROMPT = "This is a continuation request: the user pressed Generate without typing a new message. Reply with one short, natural line based only on the current state of the conversation. Never quote or restate system messages, the current time, tool results, or prompt content. Do not start a new event, do not summarize, and do not invent something the user just said.";
 
 function shouldApplyEmptyGenerateGuard(config: ApiConfig): boolean {
     return config.preventEmptyGenerateRambling === true;
@@ -509,7 +509,7 @@ export function publishDebugPromptSnapshot(params: {
         appTags: options?.appTags,
         sessionId: options?.debugSessionId,
         characterName: meta?.characterName,
-        presetName: preset?.name || "默认预设",
+        presetName: preset?.name || "Default preset",
         messages: debugMessagesFromRequest(request),
         tools: tools?.map(tool => ({ name: tool.name, description: tool.description })),
     };
@@ -527,8 +527,9 @@ type PreparedApiMessage = {
 };
 
 /**
- * 聊天插件 llm.request 织入：让插件在请求发出前改写 messages / 采样参数。
- * 四个 sendLLM*Request 入口统一走这里；无插件时零开销直通。
+ * Chat-plugin llm.request hook: lets plugins rewrite messages / sampling params before
+ * the request goes out. All four sendLLM*Request entry points funnel through here;
+ * with no plugins installed it is a zero-overhead pass-through.
  */
 async function applyChatPluginLlmRequest<T extends { role: string }>(
     preset: PresetConfig | null,
@@ -554,7 +555,8 @@ async function applyChatPluginLlmRequest<T extends { role: string }>(
     return { messages: nextMessages, preset: nextPreset };
 }
 
-/** 聊天插件 llm.response 织入：模型原始回复在内置正则处理前交给插件改写 */
+/** Chat-plugin llm.response hook: the raw model reply is handed to plugins for rewriting
+ *  before the built-in regexes run */
 async function applyChatPluginLlmResponse(text: string, purpose: string, sessionId?: string): Promise<string> {
     if (typeof window === "undefined") return text;
     const payload = await runChatPluginTransform("llm.response", { text, sessionId, purpose });
@@ -690,7 +692,7 @@ async function readSseStream(
     providerKind: ChatCompletionStreamResult["providerKind"],
     callbacks?: ChatCompletionStreamCallbacks,
 ): Promise<{ content: string; rawResponse: string }> {
-    if (!response.body) throw new ChatEngineError("流式响应没有 body。");
+    if (!response.body) throw new ChatEngineError("The streaming response has no body.");
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
@@ -795,16 +797,16 @@ export async function sendLLMStreamRequest(
         }
         const { content: streamedContent, rawResponse } = await readSseStream(response, request.providerKind, pluginCallbacks ?? callbacks);
         if (!streamedContent.trim()) {
-            throw new ChatEngineError("流式响应没有解析到文本增量。");
+            throw new ChatEngineError("No text delta was parsed from the streaming response.");
         }
         let rawOutput = stripHallucinatedTimestamps(streamedContent.trim());
         rawOutput = await applyChatPluginLlmResponse(rawOutput, pluginPurpose);
 
         // Store API log entry — mirror sendLLMRequest so streaming calls also show up
-        // in the "底层调用大模型日志" panel.
+        // in the raw LLM call log panel.
         const sanitizedMessages = request.messagesForLog.map(m => ({
             ...m,
-            content: typeof m.content === "string" ? m.content : "[vision: 含图片的多模态消息]",
+            content: typeof m.content === "string" ? m.content : "[vision: multimodal message containing images]",
         }));
         const logEntry: DebugInfo = {
             id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -820,7 +822,7 @@ export async function sendLLMStreamRequest(
         _saveLogs(logs);
 
         if (!options?.skipOutputRegex) {
-            const macroEngine = new MacroEngine(meta?.characterName ?? "", meta?.userName ?? "用户");
+            const macroEngine = new MacroEngine(meta?.characterName ?? "", meta?.userName ?? "User");
             const activeTags = getActiveAppTags(options?.appId ?? "chat", {
                 appTags: options?.appTags,
                 followUpCount: options?.followUpCount,
@@ -831,7 +833,7 @@ export async function sendLLMStreamRequest(
     } catch (error: unknown) {
         if (error instanceof DOMException && (error as DOMException).name === "AbortError") {
             if (options?.signal?.aborted) throw error;
-            throw new ChatEngineError("AI 流式回复超时（500秒），请重试。");
+            throw new ChatEngineError("The AI streaming reply timed out (500s). Please try again.");
         }
         if (error instanceof ChatEngineError) throw error;
         const detail = error instanceof Error ? error.message : String(error);
@@ -855,7 +857,7 @@ export async function sendLLMRequest(
     options?: {
         skipOutputRegex?: boolean;
         includeReasoning?: boolean;
-        /** 供调用方捕获模型思维链（reasoning）内容，不影响返回文本 */
+        /** Lets the caller capture the model's reasoning; does not affect the returned text */
         onReasoning?: (text: string) => void;
         appId?: string;
         appTags?: string[];
@@ -917,7 +919,7 @@ export async function sendLLMRequest(
         let rawOutput = parsed.content || "";
 
         if (parsed.reasoning) {
-            try { options?.onReasoning?.(parsed.reasoning); } catch { /* 捕获回调异常，不影响主流程 */ }
+            try { options?.onReasoning?.(parsed.reasoning); } catch { /* swallow callback errors; never break the main flow */ }
         }
 
         // Prepend reasoning content as <think> block (only when caller requests it, e.g. story mode)
@@ -946,7 +948,7 @@ export async function sendLLMRequest(
         // Store API log entry (strip base64 image data to avoid bloating localStorage)
         const sanitizedMessages = request.messagesForLog.map(m => ({
             ...m,
-            content: typeof m.content === "string" ? m.content : "[vision: 含图片的多模态消息]",
+            content: typeof m.content === "string" ? m.content : "[vision: multimodal message containing images]",
         }));
         const logEntry: DebugInfo = {
             id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -966,7 +968,7 @@ export async function sendLLMRequest(
             return rawOutput;
         }
         // Apply Output Regex Filters
-        const macroEngine = new MacroEngine(meta?.characterName ?? "", meta?.userName ?? "用户");
+        const macroEngine = new MacroEngine(meta?.characterName ?? "", meta?.userName ?? "User");
         const activeTags = getActiveAppTags(options?.appId ?? "chat", {
             appTags: options?.appTags,
             followUpCount: options?.followUpCount,
@@ -974,12 +976,12 @@ export async function sendLLMRequest(
         return applyOutputRegex(rawOutput, regexes, { macroEngine, activeTags });
     } catch (error: unknown) {
         if (error instanceof DOMException && (error as DOMException).name === "AbortError") {
-            throw new ChatEngineError("AI 回复超时（500秒），请重试。");
+            throw new ChatEngineError("The AI reply timed out (500s). Please try again.");
         }
         if (error instanceof ChatEngineError) throw error;
         const detail = error instanceof Error ? error.message : String(error);
         throw new ChatEngineError(
-            `Network Error connecting to AI Provider: ${detail}\n请求诊断：provider=${requestDebugInfo.provider}, model=${requestDebugInfo.model}, app=${requestDebugInfo.appId}, messages=${requestDebugInfo.messageCount}, bodySize=${requestDebugInfo.bodySize}, estimatedTokens=${requestDebugInfo.bodyTokenEstimate}, largestMessage=${requestDebugInfo.largestMessageSize}, largestRole=${requestDebugInfo.largestMessageRole}, largestIndex=${requestDebugInfo.largestMessageIndex}`,
+            `Network Error connecting to AI Provider: ${detail}\nRequest diagnostics: provider=${requestDebugInfo.provider}, model=${requestDebugInfo.model}, app=${requestDebugInfo.appId}, messages=${requestDebugInfo.messageCount}, bodySize=${requestDebugInfo.bodySize}, estimatedTokens=${requestDebugInfo.bodyTokenEstimate}, largestMessage=${requestDebugInfo.largestMessageSize}, largestRole=${requestDebugInfo.largestMessageRole}, largestIndex=${requestDebugInfo.largestMessageIndex}`,
         );
     } finally {
         clearTimeout(llmTimeout);
@@ -1022,7 +1024,7 @@ function finalizeStreamToolCalls(drafts: Map<number, StreamToolCallDraft>): LlmT
         .map(([index, draft]) => {
             const args = draft.args ?? JSON.parse(draft.argsText || "{}") as unknown;
             if (!args || typeof args !== "object" || Array.isArray(args)) {
-                throw new ChatEngineError(`原生动作 ${draft.name || index} 的参数不是 JSON object。`);
+                throw new ChatEngineError(`Arguments for native action ${draft.name || index} are not a JSON object.`);
             }
             const call: LlmToolCall = {
                 id: draft.id || `tool_${Date.now()}_${index}`,
@@ -1080,7 +1082,7 @@ export async function sendLLMToolStreamRequest(
             const errorText = await response.text();
             throw new ChatEngineError(`API Tool Stream Error ${response.status}: ${errorText}`);
         }
-        if (!response.body) throw new ChatEngineError("原生动作流式响应没有 body。");
+        if (!response.body) throw new ChatEngineError("The native-action streaming response has no body.");
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -1144,7 +1146,7 @@ export async function sendLLMToolStreamRequest(
 
         const sanitizedMessages = request.messagesForLog.map(m => ({
             ...m,
-            content: typeof m.content === "string" ? m.content : "[vision: 含图片的多模态消息]",
+            content: typeof m.content === "string" ? m.content : "[vision: multimodal message containing images]",
         }));
         const toolCalls = finalizeStreamToolCalls(toolDrafts);
         const logEntry: DebugInfo = {
@@ -1161,7 +1163,7 @@ export async function sendLLMToolStreamRequest(
         _saveLogs(logs);
 
         if (!content && toolCalls.length === 0) {
-            throw new ChatEngineError("原生动作流式响应没有解析到文本或动作。");
+            throw new ChatEngineError("No text or action was parsed from the native-action streaming response.");
         }
 
         return {
@@ -1175,7 +1177,7 @@ export async function sendLLMToolStreamRequest(
     } catch (error: unknown) {
         if (error instanceof DOMException && error.name === "AbortError") {
             if (options?.signal?.aborted) throw error;
-            throw new ChatEngineError("AI 原生动作流式回复超时（500秒），请重试。");
+            throw new ChatEngineError("The AI native-action streaming reply timed out (500s). Please try again.");
         }
         if (error instanceof ChatEngineError) throw error;
         const detail = error instanceof Error ? error.message : String(error);
@@ -1249,7 +1251,7 @@ export async function sendLLMToolRequest(
 
         const sanitizedMessages = request.messagesForLog.map(m => ({
             ...m,
-            content: typeof m.content === "string" ? m.content : "[vision: 含图片的多模态消息]",
+            content: typeof m.content === "string" ? m.content : "[vision: multimodal message containing images]",
         }));
         const rawResponse = JSON.stringify({
             content: parsed.content,
@@ -1273,7 +1275,7 @@ export async function sendLLMToolRequest(
         _saveLogs(logs);
 
         if (!options?.skipOutputRegex && rawOutput) {
-            const macroEngine = new MacroEngine(meta?.characterName ?? "", meta?.userName ?? "用户");
+            const macroEngine = new MacroEngine(meta?.characterName ?? "", meta?.userName ?? "User");
             const activeTags = getActiveAppTags(options?.appId ?? "chat", {
                 appTags: options?.appTags,
                 followUpCount: options?.followUpCount,
@@ -1293,7 +1295,7 @@ export async function sendLLMToolRequest(
     } catch (error: unknown) {
         if (error instanceof DOMException && error.name === "AbortError") {
             if (options?.signal?.aborted) throw error;
-            throw new ChatEngineError("AI 原生动作回复超时（500秒），请重试。");
+            throw new ChatEngineError("The AI native-action reply timed out (500s). Please try again.");
         }
         if (error instanceof ChatEngineError) throw error;
         const detail = error instanceof Error ? error.message : String(error);
@@ -1378,7 +1380,7 @@ export async function syncMusicData(): Promise<MusicSyncData> {
             for (let i = 0; i < top.length; i++) {
                 const songs = trackResults[i];
                 if (songs.length > 0) {
-                    lines.push(`歌单「${top[i].name}」：${songs.slice(0, 10).map(s => s.name).join("、")}`);
+                    lines.push(`Playlist "${top[i].name}": ${songs.slice(0, 10).map(s => s.name).join(", ")}`);
                 }
             }
             playlistSummary = lines.join("\n");
@@ -1531,7 +1533,7 @@ function parseNativeToolSchema(displayName: string, schemaSource: unknown): Reco
         ? JSON.parse(schemaSource || "{}") as unknown
         : schemaSource;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw new ChatEngineError(`动作「${displayName}」的参数 schema 必须是 JSON object。`);
+        throw new ChatEngineError(`The parameter schema for action "${displayName}" must be a JSON object.`);
     }
     const schema = parsed as Record<string, unknown>;
     return schema.type ? schema : { type: "object", ...schema };
@@ -1539,26 +1541,31 @@ function parseNativeToolSchema(displayName: string, schemaSource: unknown): Reco
 
 function formatNativeUsageGuide(usageGuide?: string): string {
     if (!usageGuide) return "";
-    const withoutHeader = usageGuide.replace(/^以下是你获取指令的返回结果：\s*/u, "").trim();
-    const exampleStart = withoutHeader.search(/\n(?:正确)?示例：/u);
+    // `usageGuide` is either generated by lib/tool-prompt.ts (now English) or
+    // authored by the user (often still Chinese) — handle BOTH forms.
+    const withoutHeader = usageGuide
+        .replace(/^Here is the result of your FetchTool request:\s*/u, "")
+        .replace(/^以下是你获取指令的返回结果：\s*/u, "")
+        .trim();
+    const exampleStart = withoutHeader.search(/\n(?:正确)?示例：|\n(?:Correct )?[Ee]xample:/u);
     const core = exampleStart >= 0 ? withoutHeader.slice(0, exampleStart).trim() : withoutHeader;
     return core
-        .replace(/获取指令/g, "动作说明")
-        .replace(/执行动作指令/g, "调用当前动作");
+        .replace(/获取指令|FetchTool/g, "the action description")
+        .replace(/执行动作指令|CallTool directive|CallTool/g, "calling this action");
 }
 
 function formatNativeToolDescription(displayName: string, description: string, usageGuide?: string): string {
     const nativeUsageGuide = formatNativeUsageGuide(usageGuide);
     return [
-        `动作：${displayName}`,
+        `Action: ${displayName}`,
         description,
-        nativeUsageGuide ? `使用规则：\n${nativeUsageGuide}` : "",
+        nativeUsageGuide ? `Usage rules:\n${nativeUsageGuide}` : "",
     ].filter(Boolean).join("\n\n");
 }
 
 function expandNativeToolText(text: string, options?: NativeChatToolBuildOptions): string {
     if (!text.includes("{{")) return text;
-    const engine = new MacroEngine(options?.characterName || "", options?.userName || "用户");
+    const engine = new MacroEngine(options?.characterName || "", options?.userName || "User");
     return postProcessTrim(engine.expand(text));
 }
 
@@ -1566,8 +1573,8 @@ function wrapNativeGroupToolParameters(parameters: Record<string, unknown>, acto
     const actorField: Record<string, unknown> = {
         type: "string",
         description: actorNames.length > 0
-            ? `执行该动作的群成员名，必须是以下之一：${actorNames.join("、")}`
-            : "执行该动作的群成员名",
+            ? `Name of the group member performing this action; must be one of: ${actorNames.join(", ")}`
+            : "Name of the group member performing this action",
     };
     if (actorNames.length > 0) actorField.enum = actorNames;
     if (!includeArgs) {
@@ -1605,7 +1612,7 @@ export function buildNativeChatTools(enabledTools: EnabledTool[], expandedSource
         const nativeName = makeNativeToolName(`load_${sourceKey}_${displayName}_tools`, usedNames);
         definitions.push({
             name: nativeName,
-            description: [`展开「${displayName}」动作说明。`, displayDescription].filter(Boolean).join(""),
+            description: [`Expand the "${displayName}" action description.`, displayDescription].filter(Boolean).join(""),
             parameters: options?.actorNames
                 ? wrapNativeGroupToolParameters({ type: "object", additionalProperties: false, properties: {} }, options.actorNames, false)
                 : {
@@ -1614,8 +1621,8 @@ export function buildNativeChatTools(enabledTools: EnabledTool[], expandedSource
                 properties: {},
             },
         });
-        nameMap.set(nativeName, `展开「${tool.name}」动作说明`);
-        displayNameMap.set(nativeName, `展开「${displayName}」动作说明`);
+        nameMap.set(nativeName, `Expand the "${tool.name}" action description`);
+        displayNameMap.set(nativeName, `Expand the "${displayName}" action description`);
         loaderMap.set(nativeName, { sourceKey, label: displayName });
     };
 
@@ -1674,7 +1681,7 @@ export function buildNativeChatTools(enabledTools: EnabledTool[], expandedSource
             for (const customAppTool of tool.customAppTools || []) {
                 registerTool(
                     customAppTool.name,
-                    customAppTool.description || `来自「${customAppTool.appName}」的自定义 APP 工具`,
+                    customAppTool.description || `Custom app tool from "${customAppTool.appName}"`,
                     JSON.stringify(customAppTool.parameterSchema || { type: "object", properties: {} }),
                     sourceKey,
                     customAppTool.usageGuide,
@@ -1700,14 +1707,14 @@ export function buildNativeChatTools(enabledTools: EnabledTool[], expandedSource
 export function formatNativeChatToolResult(result: ToolResult): string {
     return [
         `<action_result name="${result.name}" success="${result.success ? "true" : "false"}">`,
-        result.success ? result.data || result.userNotice || "执行成功。" : result.error || result.userNotice || "执行失败。",
+        result.success ? result.data || result.userNotice || "Completed successfully." : result.error || result.userNotice || "Execution failed.",
         "</action_result>",
-        "工具结果已经返回给你，不要重复你之前已经说过的内容，不要再次执行相同的动作。",
+        "The tool results have been returned to you. Do not repeat what you have already said, and do not run the same action again.",
     ].join("\n");
 }
 
 export function formatNativeLoaderToolResult(label: string): string {
-    return `已展开「${label}」动作说明。`;
+    return `Expanded the "${label}" action description.`;
 }
 
 export function nativeChatToolCallToTextCall(call: LlmToolCall, bundle: NativeChatToolBundle): ToolCall {
@@ -1788,7 +1795,7 @@ export async function buildChatPromptMessages(
                 createdAt: new Date().toISOString(),
                 mediaType: "image",
                 mediaUrl: imageUrl,
-                mediaData: { label: "视频通话当前画面" },
+                mediaData: { label: "Current video call frame" },
             })),
         ]
         : history;
@@ -1833,14 +1840,14 @@ export async function buildChatPromptMessages(
     const coreMemories = coreResults ? formatCoreMemories(coreResults) : "";
     const scheduleSummary = buildCalendarScheduleMarker("character", character.id, getWeekStartIso(now));
     const currentSchedule = getCurrentCalendarScheduleForPrompt("character", character.id, now);
-    const musicOnlineHint = isNeteaseConfigured() ? "- 你可以推荐任何歌曲，系统会在线搜索并播放。不局限于用户本地音乐库。\n" : "\n";
+    const musicOnlineHint = isNeteaseConfigured() ? "- You may recommend any song; the system will search for it online and play it. You are not limited to the user's local library.\n" : "\n";
     const pluginPrompt = await runChatPluginTransform("prompt.system", {
         sessionId: session.id,
         isGroup: !!session.isGroup,
         characterId: character.id,
         hint: buildChatPluginPromptFragments(session.id),
     });
-    const pluginPromptHint = pluginPrompt.hint?.trim() ? `\n\n### 扩展插件\n${pluginPrompt.hint.trim()}\n` : "";
+    const pluginPromptHint = pluginPrompt.hint?.trim() ? `\n\n### Plugins\n${pluginPrompt.hint.trim()}\n` : "";
     const customAppRichMediaDirectives = formatCustomAppChatDirectivesForPrompt() + buildScreenEffectPromptHint() + pluginPromptHint;
     const toolsPrompt = toolsEnabled && !usesNativeActions ? formatToolsForPrompt(enabledTools) : "";
     const chatBilingualInstruction = !session.isGroup
@@ -1896,12 +1903,12 @@ export async function buildChatPromptMessages(
     if (promptProfile?.output === "plain_text") {
         llmMessages.push({
             role: "system",
-            content: "本次自定义 APP AI 任务只输出纯文本结果。不要输出聊天富媒体指令、状态面板、内心想法、XML 包裹或 Markdown 代码块。",
+            content: "For this custom-app AI task, output plain text only. Do not output chat rich-media directives, status panels, inner thoughts, XML wrappers, or Markdown code blocks.",
         });
     } else if (promptProfile?.output === "json") {
         llmMessages.push({
             role: "system",
-            content: "本次自定义 APP AI 任务只输出严格 JSON。不要输出 Markdown 代码块、解释文字或聊天富媒体指令。",
+            content: "For this custom-app AI task, output strict JSON only. Do not output Markdown code blocks, explanatory text, or chat rich-media directives.",
         });
     }
     appendEmptyGenerateGuardMessage(llmMessages, config, historyForPrompt);
@@ -1927,7 +1934,7 @@ export type ChatCompletionCallbacks = {
         senderCharacterId?: string;
         senderName?: string;
     }) => void;
-    /** 每轮 LLM 调用解析出思维链（reasoning）时触发，先于该轮 onTextPart */
+    /** Fires when a round's LLM call yields reasoning, before that round's onTextPart */
     onReasoning?: (text: string) => void;
     onToolExecution?: (results: ToolResult[], historyContent?: string, options?: { toolExecutionId?: string }) => void;
     onNativeToolAssistantTurn?: (turn: {
@@ -1948,7 +1955,7 @@ export type ChatCompletionCallbacks = {
 export type OfflineChatCompletionResult = ParsedOfflineResponse & {
     model: string;
     presetName: string;
-    /** 模型思维链（reasoning）内容，供线下记录展示 */
+    /** The model's reasoning, kept for offline log display */
     reasoning?: string;
 };
 
@@ -1979,7 +1986,7 @@ export async function generateOfflineChatCompletion(
     return {
         ...parseOfflineResponse(rawOutput, summaryTag),
         model: config.defaultModel,
-        presetName: preset?.name || "默认预设",
+        presetName: preset?.name || "Default preset",
         reasoning: reasoning || undefined,
     };
 }
@@ -2007,7 +2014,7 @@ async function generateNativeChatCompletion(
     );
     const nativeToolBuildOptions = {
         characterName: character.name,
-        userName: userIdentity?.name ?? "用户",
+        userName: userIdentity?.name ?? "User",
     };
     let nativeBundle = buildNativeChatTools(enabledTools, expandedSourceIds, nativeToolBuildOptions);
     const requestMessages: LlmRequestMessage[] = toLlmRequestMessages(llmMessages);
@@ -2035,7 +2042,7 @@ async function generateNativeChatCompletion(
                 },
             );
         } catch (err) {
-            const errMsg = `⚠️ 回复生成失败: ${err instanceof Error ? err.message : String(err)}`;
+            const errMsg = `⚠️ Reply generation failed: ${err instanceof Error ? err.message : String(err)}`;
             if (parts.length > 0) {
                 throwIfAborted(options?.signal);
                 callbacks?.onToolNotice?.(errMsg);
@@ -2055,7 +2062,8 @@ async function generateNativeChatCompletion(
 
         if (result.toolCalls.length === 0) {
             throwIfAborted(options?.signal);
-            // 无工具调用的最终轮：把解析到的思维链先交给回调（先于 onTextPart，与非原生路径一致）
+            // Final round with no tool calls: hand the parsed reasoning to the callback first
+            // (before onTextPart, matching the non-native path)
             if (result.reasoning) callbacks?.onReasoning?.(result.reasoning);
             await callbacks?.onTextPart?.(afterActionStrip);
             parts.push({ text: afterActionStrip });
@@ -2080,11 +2088,11 @@ async function generateNativeChatCompletion(
         const realNativeCalls = result.toolCalls.filter(call => !nativeBundle.loaderMap.has(call.name));
         const textCalls = realNativeCalls.map((call) => nativeChatToolCallToTextCall(call, nativeBundle));
         const displayedActionNames = [
-            ...loaderCalls.map(item => `展开「${item.loader.label}」动作说明`),
+            ...loaderCalls.map(item => `Expand the "${item.loader.label}" action description`),
             ...realNativeCalls.map(call => nativeBundle.displayNameMap.get(call.name) || nativeBundle.nameMap.get(call.name) || call.name),
         ];
         const actorName = character.name;
-        callbacks?.onToolNotice?.(`${actorName}正在${displayedActionNames.join("、")}...`);
+        callbacks?.onToolNotice?.(`${actorName} is running ${displayedActionNames.join(", ")}...`);
 
         let realResults: Awaited<ReturnType<typeof executeToolCalls>> = [];
         try {
@@ -2100,7 +2108,7 @@ async function generateNativeChatCompletion(
             throwIfAborted(options?.signal);
         } catch (err) {
             throwIfAborted(options?.signal);
-            const errMsg = `⚠️ 动作执行失败: ${err instanceof Error ? err.message : String(err)}`;
+            const errMsg = `⚠️ Action execution failed: ${err instanceof Error ? err.message : String(err)}`;
             callbacks?.onToolNotice?.(errMsg);
             parts.push({ text: "", toolNotice: errMsg });
             break;
@@ -2138,8 +2146,8 @@ async function generateNativeChatCompletion(
             const realResult = realResults[realResultIndex] || {
                 name: nativeBundle.nameMap.get(nativeCall.name) || nativeCall.name,
                 success: false,
-                error: "动作结果缺失。",
-                userNotice: `✗ ${nativeBundle.nameMap.get(nativeCall.name) || nativeCall.name}: 动作结果缺失。`,
+                error: "Action result missing.",
+                userNotice: `✗ ${nativeBundle.nameMap.get(nativeCall.name) || nativeCall.name}: action result missing.`,
             };
             realResultIndex += 1;
             const sourceKey = nativeBundle.realToolSourceMap.get(nativeCall.name);
@@ -2162,7 +2170,7 @@ async function generateNativeChatCompletion(
         }
 
         const notices = outcomes.map(item => (
-            item.result.userNotice || (item.result.success ? `✓ ${item.result.name} 执行成功` : `✗ ${item.result.name}: ${item.result.error}`)
+            item.result.userNotice || (item.result.success ? `✓ ${item.result.name} succeeded` : `✗ ${item.result.name}: ${item.result.error}`)
         )).filter(Boolean).join("；");
         throwIfAborted(options?.signal);
         if (notices) callbacks?.onToolNotice?.(notices);
@@ -2212,7 +2220,7 @@ async function generateNativeChatCompletion(
                                 requestMessages.push({
                                     role: "user",
                                     content: [
-                                        { type: "text", text: "系统记录：这是你刚才生成的图片。" },
+                                        { type: "text", text: "System note: this is the image you just generated." },
                                         { type: "image_url", image_url: { url: dataUrl, detail: "low" } },
                                     ],
                                 });
@@ -2271,7 +2279,7 @@ export async function generateChatCompletion(
                 onReasoning: callbacks?.onReasoning,
             });
         } catch (err) {
-            const errMsg = `⚠️ 回复生成失败: ${err instanceof Error ? err.message : String(err)}`;
+            const errMsg = `⚠️ Reply generation failed: ${err instanceof Error ? err.message : String(err)}`;
             if (parts.length > 0) {
                 throwIfAborted(options?.signal);
                 callbacks?.onToolNotice?.(errMsg);
@@ -2282,14 +2290,14 @@ export async function generateChatCompletion(
         }
         throwIfAborted(options?.signal);
 
-        // Parse actions (朋友圈 etc) — strip from display text but keep tool tags
+        // Parse actions (Moments etc) — strip from display text but keep tool tags
         const { cleanText: afterActionStrip, actions } = parseActionTags(filteredOutput);
         if (actions.length > 0) {
             throwIfAborted(options?.signal);
             dispatchActions(actions, actionContext).catch(err => console.warn("[ChatEngine] Action dispatch failed:", err));
         }
 
-        // Check for [获取指令:xxx] and [执行动作:xxx({...})]
+        // Check for [FetchTool:xxx] and [CallTool:xxx({...})]
         const toolFetches = toolsEnabled ? parseToolFetches(afterActionStrip) : [];
         const { toolCalls } = toolsEnabled ? parseToolCalls(afterActionStrip) : { toolCalls: [] };
         const assistantForToolContext = stripStateAndInnerForPrompt(filteredOutput);
@@ -2324,24 +2332,24 @@ export async function generateChatCompletion(
             return llmMessages.length;
         };
 
-        // Handle [获取指令:xxx] — local parameter schema lookup
+        // Handle [FetchTool:xxx] — local parameter schema lookup
         if (toolFetches.length > 0) {
             for (const fetch of toolFetches) {
                 throwIfAborted(options?.signal);
                 const actorName = fetch.actor || character.name;
-                const toolNotice = `${actorName}正在获取「${fetch.name}」指令...`;
+                const toolNotice = `${actorName} is fetching the "${fetch.name}" action description...`;
                 callbacks?.onToolNotice?.(toolNotice);
 
                 const tool = findEnabledToolForSchema(fetch.name, options?.appId ?? "chat", {
                     characterName: character.name,
-                    userName: userIdentity?.name ?? "用户",
+                    userName: userIdentity?.name ?? "User",
                 });
                 const schemaContent = tool
                     ? formatToolSchema(tool, {
                         characterName: character.name,
-                        userName: userIdentity?.name ?? "用户",
+                        userName: userIdentity?.name ?? "User",
                     })
-                    : `以下是你获取指令的返回结果：\n动作类别「${fetch.name}」未找到，请检查名称。`;
+                    : `${FETCH_RESULT_HEADER}\nAction category "${fetch.name}" not found — check the name.`;
 
                 // Persist to history + inject into messages
                 throwIfAborted(options?.signal);
@@ -2355,10 +2363,10 @@ export async function generateChatCompletion(
             continue; // Next round — LLM will now call the tool with params
         }
 
-        // Handle [执行动作:xxx({...})] — execute calls
+        // Handle [CallTool:xxx({...})] — execute calls
         if (toolCalls.length > 0) {
             const actorName = toolCalls[0]?.actor || character.name;
-            const toolNotice = `${actorName}正在${toolCalls.map(t => t.name).join("、")}...`;
+            const toolNotice = `${actorName} is running ${toolCalls.map(t => t.name).join(", ")}...`;
             callbacks?.onToolNotice?.(toolNotice);
 
             let results: Awaited<ReturnType<typeof executeToolCalls>>;
@@ -2371,11 +2379,11 @@ export async function generateChatCompletion(
                     signal: options?.signal,
                 });
                 throwIfAborted(options?.signal);
-                const resultNotices = results.map(r => r.userNotice || (r.success ? `✓ ${r.name} 执行成功` : `✗ ${r.name}: ${r.error}`)).join("；");
+                const resultNotices = results.map(r => r.userNotice || (r.success ? `✓ ${r.name} succeeded` : `✗ ${r.name}: ${r.error}`)).join("；");
                 callbacks?.onToolNotice?.(resultNotices);
             } catch (err) {
                 throwIfAborted(options?.signal);
-                const errMsg = `⚠️ 动作执行失败: ${err instanceof Error ? err.message : String(err)}`;
+                const errMsg = `⚠️ Action execution failed: ${err instanceof Error ? err.message : String(err)}`;
                 callbacks?.onToolNotice?.(errMsg);
                 parts.push({ text: "", toolNotice: errMsg });
                 break;
@@ -2408,7 +2416,7 @@ export async function generateChatCompletion(
                                     insertions.push({
                                         role: "user",
                                         content: [
-                                            { type: "text", text: "系统记录：这是你刚才生成的图片。" },
+                                            { type: "text", text: "System note: this is the image you just generated." },
                                             { type: "image_url", image_url: { url: dataUrl, detail: "low" } },
                                         ],
                                     });
@@ -2440,7 +2448,7 @@ export async function generateChatCompletion(
                     parts.push({ text: finalOutput });
                 } catch (err) {
                     throwIfAborted(options?.signal);
-                    const errMsg = `⚠️ 回复生成失败: ${err instanceof Error ? err.message : String(err)}`;
+                    const errMsg = `⚠️ Reply generation failed: ${err instanceof Error ? err.message : String(err)}`;
                     callbacks?.onToolNotice?.(errMsg);
                     parts.push({ text: "", toolNotice: errMsg });
                 }
@@ -2497,7 +2505,7 @@ export async function previewPromptPayload(
                     id: `_marker_${currentRound}_${Date.now()}`,
                     sessionId: session.id,
                     role: "user",
-                    content: `[对方没有回复你的消息，距上次回复已过约${silenceSec}秒]`,
+                    content: `[The other person has not replied; about ${silenceSec}s have passed since your last message]`,
                     status: "sent",
                     createdAt: msg.createdAt,
                 });
@@ -2510,7 +2518,7 @@ export async function previewPromptPayload(
             id: `_silence_${nowMs}`,
             sessionId: session.id,
             role: "system",
-            content: `[对方没有回复你的消息，距上次回复已过约${finalSilenceSec}秒]`,
+            content: `[The other person has not replied; about ${finalSilenceSec}s have passed since your last message]`,
             status: "sent",
             createdAt: new Date().toISOString(),
         });
@@ -2526,7 +2534,7 @@ export async function previewPromptPayload(
         messages: apiMessages,
         characterName: character.name,
         model: config.defaultModel,
-        presetName: preset?.name ?? "(无预设)",
+        presetName: preset?.name ?? "(no preset)",
     };
 }
 
@@ -2559,7 +2567,7 @@ export async function previewPromptRequestSnapshot(
                     id: `_marker_${currentRound}_${Date.now()}`,
                     sessionId: session.id,
                     role: "user",
-                    content: `[对方没有回复你的消息，距上次回复已过约${silenceSec}秒]`,
+                    content: `[The other person has not replied; about ${silenceSec}s have passed since your last message]`,
                     status: "sent",
                     createdAt: msg.createdAt,
                 });
@@ -2572,7 +2580,7 @@ export async function previewPromptRequestSnapshot(
             id: `_silence_${nowMs}`,
             sessionId: session.id,
             role: "system",
-            content: `[对方没有回复你的消息，距上次回复已过约${finalSilenceSec}秒]`,
+            content: `[The other person has not replied; about ${finalSilenceSec}s have passed since your last message]`,
             status: "sent",
             createdAt: new Date().toISOString(),
         });
@@ -2592,7 +2600,7 @@ export async function previewPromptRequestSnapshot(
         );
         const nativeBundle = buildNativeChatTools(enabledTools, expandedSourceIds, {
             characterName: character.name,
-            userName: userIdentity?.name ?? "用户",
+            userName: userIdentity?.name ?? "User",
         });
         const request = buildProviderRequest(config, preset, requestMessages, { tools: nativeBundle.definitions });
         return publishDebugPromptSnapshot({

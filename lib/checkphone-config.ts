@@ -1235,31 +1235,36 @@ const CHECKPHONE_APP_PROMPT_TAGS: Record<CheckPhoneAppId, Exclude<CheckPhoneProm
   douban: "douban",
 };
 
+// Scope/UI labels only — consumed exclusively by lib/content-tag-utils.ts to build the
+// Preset and Regex "Scope" column. Deliberately reads `englishLabel`, NOT `label`:
+// `label` is the checkphone AI's own vocabulary (fed into prompts at
+// checkphone-engine.ts:426-430 and :1214, and parsed back by that engine), so it has to
+// stay Chinese until checkphone-engine.ts is migrated — it is last in the D3 queue.
 export const CHECKPHONE_PROMPT_SECONDARY_TAG_LABELS: Record<CheckPhonePromptSecondaryTag, string> = {
-  manifest: "清单",
-  phone: CHECKPHONE_APP_SPECS.phone.label,
-  messages: CHECKPHONE_APP_SPECS.messages.label,
-  browser: CHECKPHONE_APP_SPECS.browser.label,
-  photos: CHECKPHONE_APP_SPECS.photos.label,
-  messenger: CHECKPHONE_APP_SPECS.chat.label,
-  shopping: CHECKPHONE_APP_SPECS.shopping.label,
-  assets: CHECKPHONE_APP_SPECS.assets.label,
-  notes: CHECKPHONE_APP_SPECS.notes.label,
-  reader: CHECKPHONE_APP_SPECS.reading.label,
-  xiaohongshu: CHECKPHONE_APP_SPECS.xiaohongshu.label,
-  takeout: CHECKPHONE_APP_SPECS.takeout.label,
-  weibo: CHECKPHONE_APP_SPECS.weibo.label,
-  douyin: CHECKPHONE_APP_SPECS.douyin.label,
-  email: CHECKPHONE_APP_SPECS.email.label,
-  music: CHECKPHONE_APP_SPECS.music.label,
-  x: CHECKPHONE_APP_SPECS.x.label,
-  reddit: CHECKPHONE_APP_SPECS.reddit.label,
-  youtube: CHECKPHONE_APP_SPECS.youtube.label,
-  bilibili: CHECKPHONE_APP_SPECS.bilibili.label,
-  instagram: CHECKPHONE_APP_SPECS.instagram.label,
-  telegram: CHECKPHONE_APP_SPECS.telegram.label,
-  steam: CHECKPHONE_APP_SPECS.steam.label,
-  douban: CHECKPHONE_APP_SPECS.douban.label,
+  manifest: "Manifest",
+  phone: CHECKPHONE_APP_SPECS.phone.englishLabel,
+  messages: CHECKPHONE_APP_SPECS.messages.englishLabel,
+  browser: CHECKPHONE_APP_SPECS.browser.englishLabel,
+  photos: CHECKPHONE_APP_SPECS.photos.englishLabel,
+  messenger: CHECKPHONE_APP_SPECS.chat.englishLabel,
+  shopping: CHECKPHONE_APP_SPECS.shopping.englishLabel,
+  assets: CHECKPHONE_APP_SPECS.assets.englishLabel,
+  notes: CHECKPHONE_APP_SPECS.notes.englishLabel,
+  reader: CHECKPHONE_APP_SPECS.reading.englishLabel,
+  xiaohongshu: CHECKPHONE_APP_SPECS.xiaohongshu.englishLabel,
+  takeout: CHECKPHONE_APP_SPECS.takeout.englishLabel,
+  weibo: CHECKPHONE_APP_SPECS.weibo.englishLabel,
+  douyin: CHECKPHONE_APP_SPECS.douyin.englishLabel,
+  email: CHECKPHONE_APP_SPECS.email.englishLabel,
+  music: CHECKPHONE_APP_SPECS.music.englishLabel,
+  x: CHECKPHONE_APP_SPECS.x.englishLabel,
+  reddit: CHECKPHONE_APP_SPECS.reddit.englishLabel,
+  youtube: CHECKPHONE_APP_SPECS.youtube.englishLabel,
+  bilibili: CHECKPHONE_APP_SPECS.bilibili.englishLabel,
+  instagram: CHECKPHONE_APP_SPECS.instagram.englishLabel,
+  telegram: CHECKPHONE_APP_SPECS.telegram.englishLabel,
+  steam: CHECKPHONE_APP_SPECS.steam.englishLabel,
+  douban: CHECKPHONE_APP_SPECS.douban.englishLabel,
 };
 
 export function getCheckPhonePromptTags(
@@ -1271,28 +1276,34 @@ export function getCheckPhonePromptTags(
 }
 
 export function getCheckPhonePromptSecondaryTagLabel(tag: string): string | null {
-  if (tag === "checkphone") return "查手机";
+  if (tag === "checkphone") return "CheckPhone";
   if (tag === "manifest") return CHECKPHONE_PROMPT_SECONDARY_TAG_LABELS.manifest;
   if (tag in CHECKPHONE_PROMPT_SECONDARY_TAG_LABELS) {
     return CHECKPHONE_PROMPT_SECONDARY_TAG_LABELS[tag as CheckPhonePromptSecondaryTag];
   }
-  return isCheckPhoneAppId(tag) ? CHECKPHONE_APP_SPECS[tag].label : null;
+  // Route bare app ids through the same English map rather than CHECKPHONE_APP_SPECS.label.
+  // This function sits AHEAD of CONTENT_APP_LABELS in resolveContentTagLabel's fallback
+  // chain, so returning `label` here would shadow the translated app names with Chinese
+  // for every id checkphone happens to share with a content app (chat, reading, music…).
+  return isCheckPhoneAppId(tag)
+    ? CHECKPHONE_PROMPT_SECONDARY_TAG_LABELS[CHECKPHONE_APP_PROMPT_TAGS[tag]] ?? null
+    : null;
 }
 
 export const CHECKPHONE_TAG_PROFILES: CheckPhoneTagProfile[] = [
   {
     id: "checkphone",
-    label: "查手机",
+    label: "CheckPhone",
     tags: ["checkphone"],
   },
   {
     id: "checkphone_manifest",
-    label: `查手机 · ${CHECKPHONE_PROMPT_SECONDARY_TAG_LABELS.manifest}`,
+    label: `CheckPhone · ${CHECKPHONE_PROMPT_SECONDARY_TAG_LABELS.manifest}`,
     tags: getCheckPhonePromptTags("manifest"),
   },
   ...CHECKPHONE_PROMPT_APP_ORDER.map((appId) => ({
     id: `checkphone_${appId}`,
-    label: `查手机 · ${CHECKPHONE_PROMPT_SECONDARY_TAG_LABELS[CHECKPHONE_APP_PROMPT_TAGS[appId]]}`,
+    label: `CheckPhone · ${CHECKPHONE_PROMPT_SECONDARY_TAG_LABELS[CHECKPHONE_APP_PROMPT_TAGS[appId]]}`,
     tags: getCheckPhonePromptTags(appId),
   })),
 ];

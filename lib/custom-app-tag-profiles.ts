@@ -20,7 +20,7 @@ function stringArray(value: unknown, maxLength = 120): string[] {
 }
 
 function tagLabel(tags: string[]): string {
-  return tags.length > 0 ? tags.map(resolveContentTagLabel).join(" · ") : "通用";
+  return tags.length > 0 ? tags.map(resolveContentTagLabel).join(" · ") : "General";
 }
 
 function tagKey(tags: string[]): string {
@@ -42,7 +42,7 @@ function getBuilder(builders: Map<string, GroupBuilder>, app: InstalledCustomApp
   if (existing) return existing;
   const builder: GroupBuilder = {
     id,
-    label: app.name || app.manifest.name || "自定义 APP",
+    label: app.name || app.manifest.name || "Custom App",
     tags: [],
     minors: [],
     minorKeys: new Set(),
@@ -66,7 +66,7 @@ function addMinor(builder: GroupBuilder, tags: string[], label?: string): void {
 function addTagSet(builder: GroupBuilder, tags: string[], label?: string): void {
   if (tags.length === 0) return;
   if (builder.tags.length === 0) builder.tags = [tags[0]];
-  if (tags.length > 1) addMinor(builder, [tags[0]], "通用");
+  if (tags.length > 1) addMinor(builder, [tags[0]], "General");
   addMinor(builder, tags, label);
 }
 
@@ -83,7 +83,7 @@ function tagsFromScene(value: { tag?: string; tags?: string[]; appTags?: string[
 function addManifestTags(builders: Map<string, GroupBuilder>, app: InstalledCustomApp): void {
   const builder = getBuilder(builders, app);
   for (const primaryTag of stringArray(app.manifest.primaryTags)) {
-    addTagSet(builder, [primaryTag], "通用");
+    addTagSet(builder, [primaryTag], "General");
   }
   const chatBlocks = [app.manifest.chatExtensions, app.manifest.extensions?.chat].filter(Boolean);
   for (const chat of chatBlocks) {
@@ -151,7 +151,7 @@ export function buildCustomAppTagGroups(
 export function flattenTagGroups(groups: TagGroupProfile[]): TagProfile[] {
   return groups.flatMap(group => group.minors.map(minor => ({
     id: minor.id,
-    label: minor.tags.length === 0 ? "通用（所有功能）" : `${group.label}${minor.tags.length > 1 ? ` · ${minor.label}` : ""}`,
+    label: minor.tags.length === 0 ? "General (all features)" : `${group.label}${minor.tags.length > 1 ? ` · ${minor.label}` : ""}`,
     tags: minor.tags,
   })));
 }

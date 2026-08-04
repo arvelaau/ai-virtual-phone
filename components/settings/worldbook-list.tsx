@@ -14,7 +14,7 @@ export function WorldbookList({ entries }: WorldbookListProps) {
     if (list.length === 0) {
         return (
             <div className="ui-empty">
-                <span className="menu-desc">暂无世界书条目</span>
+                <span className="menu-desc">No worldbook entries yet</span>
             </div>
         );
     }
@@ -32,10 +32,10 @@ export function WorldbookList({ entries }: WorldbookListProps) {
                     >
                         <div className="flex justify-between items-start">
                             <span className="menu-label font-medium line-clamp-1">
-                                {entry.comment || "无标题条目"}
+                                {entry.comment || "Untitled entry"}
                             </span>
                             <span className="ui-badge" data-variant={entry.disable ? "muted" : "success"}>
-                                {entry.disable ? "已禁用" : "启用"}
+                                {entry.disable ? "Disabled" : "Enabled"}
                             </span>
                         </div>
 
@@ -56,9 +56,9 @@ export function WorldbookList({ entries }: WorldbookListProps) {
                                     {entry.content}
                                 </pre>
                                 <div className="menu-desc flex gap-4 pt-2">
-                                    <span>权重: {entry.insertion_order}</span>
-                                    <span>概率: {entry.probability}%</span>
-                                    <span>位置: {entry.position}</span>
+                                    <span>Weight: {entry.insertion_order}</span>
+                                    <span>Probability: {entry.probability}%</span>
+                                    <span>Position: {entry.position}</span>
                                 </div>
                             </div>
                         </div>

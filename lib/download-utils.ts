@@ -29,10 +29,14 @@ export async function downloadFile(blob: Blob, filename: string, options: Downlo
     const shouldUseNativeShare = options.nativeShareOnly || (!options.disableNativeShare && isIOSBrowser());
     if (shouldUseNativeShare) {
         const file = new File([blob], filename, { type: blob.type || "application/octet-stream" });
-        const canNativeShare = typeof navigator !== "undefined"
+        // navigator.share requires a SECURE CONTEXT. Over plain http:// on a LAN address
+        // (e.g. http://192.168.1.5:3001) it is not merely unreliable — it is `undefined`.
+        // That is the common case when testing from a phone against the dev server.
+        const shareApiAvailable = typeof navigator !== "undefined"
             && typeof navigator.share === "function"
-            && typeof navigator.canShare === "function"
-            && navigator.canShare({ files: [file] });
+            && typeof navigator.canShare === "function";
+        const canNativeShare = shareApiAvailable && navigator.canShare({ files: [file] });
+
         if (canNativeShare) {
             try {
                 await navigator.share({ files: [file] });
@@ -44,13 +48,20 @@ export async function downloadFile(blob: Blob, filename: string, options: Downlo
                     setTimeout(() => URL.revokeObjectURL(url), 1000);
                     return;
                 }
-                // Any other failure (webview without real file-share support, lost user
-                // activation, etc.) is surfaced to the caller on iOS instead of opening
-                // the blob URL, which can navigate away from the app.
+                // The share sheet existed but failed (webview without real file-share
+                // support, lost user activation, …). Surface it rather than opening the
+                // blob URL, which can navigate away from the app.
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                throw new Error("The browser could not open the system share sheet. Try again in Safari, or export a lightweight backup instead.");
             }
         }
+
+        // No Share API at all. Throwing here would leave the user with nothing, so fall
+        // back to a normal download: iOS Safari 13+ honours <a download> for blob URLs
+        // and saves into Files. This is what makes Export Backup work over plain http.
+        anchorDownload();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-        throw new Error("当前浏览器没有成功打开系统分享，请在 Safari 中重试，或导出轻量备份后再试。");
+        return;
     }
 
     anchorDownload();

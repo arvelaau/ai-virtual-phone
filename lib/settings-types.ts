@@ -188,25 +188,28 @@ export const CONTENT_APP_IDS: ContentAppId[] = [
     "moments", "group_chat", "vn", "adventure"
 ];
 
+// Display only — the app names shown in Binding Manager and, via content-tag-utils.ts,
+// in the Preset/Regex "Scope" column. Nothing compares these strings; every match runs
+// on the ContentAppId keys instead.
 export const CONTENT_APP_LABELS: Record<ContentAppId, string> = {
-    chat: "聊天",
-    diary: "手记",
-    music: "音乐",
-    reading: "阅读",
-    forum: "论坛（旧）",
-    cocreate: "共创",
-    story: "剧情",
-    game: "游戏",
-    xiaohongshu: "小红书",
-    dwelling: "栖所",
-    checkphone: "查手机",
-    shopping: "购物",
-    calendar: "日历",
-    interview_magazine: "在场",
-    moments: "朋友圈",
-    group_chat: "群聊",
-    vn: "漫卷",
-    adventure: "冒险",
+    chat: "Chat",
+    diary: "Journal",
+    music: "Music",
+    reading: "Reading",
+    forum: "Forum (legacy)",
+    cocreate: "Co-Create",
+    story: "Story",
+    game: "Games",
+    xiaohongshu: "Xiaohongshu",
+    dwelling: "Dwelling",
+    checkphone: "CheckPhone",
+    shopping: "Shopping",
+    calendar: "Calendar",
+    interview_magazine: "Interview",
+    moments: "Moments",
+    group_chat: "Group Chat",
+    vn: "Visual Novel",
+    adventure: "Adventure",
 };
 
 // Binding slot — config selections for a given scope

@@ -166,14 +166,14 @@ function parseEntry(evt: NativeTimelineEntry, userName: string): ParsedEntry | n
             id: evt.id,
             timestamp: evt.timestamp,
             source: "story",
-            label: "小剧场",
+            label: "Mini Theater",
             message: stripped || content,
         };
     }
 
     if (evt.sourceApp === "story" || evt.sourceApp === "vn" || evt.sourceApp === "map" || evt.sourceApp === "game" || evt.sourceApp === "xiaohongshu" || evt.sourceApp === "checkphone" || evt.sourceApp === "interview_magazine" || evt.sourceApp === "cocreate" || (evt.sourceApp === "diary" && (evt.sourceDetail === "diary_entry" || evt.sourceDetail === "notewall"))) {
         const source = evt.sourceApp as "story" | "vn" | "map" | "game" | "diary" | "xiaohongshu" | "interview_magazine" | "cocreate" | "checkphone";
-        const label = source === "story" ? "剧情" : source === "vn" ? "漫卷" : source === "map" ? "冒险" : source === "game" ? "小游戏" : source === "xiaohongshu" ? "小红书" : source === "checkphone" ? "查手机" : source === "interview_magazine" ? "访谈" : source === "cocreate" ? "共创" : evt.sourceDetail === "diary_entry" ? "日记" : "便签墙";
+        const label = source === "story" ? "剧情" : source === "vn" ? "漫卷" : source === "map" ? "冒险" : source === "game" ? "Mini Game" : source === "xiaohongshu" ? "Xiaohongshu" : source === "checkphone" ? "Check Phone" : source === "interview_magazine" ? "Interview" : source === "cocreate" ? "Co-create" : evt.sourceDetail === "diary_entry" ? "Diary" : "Note Wall";
         const stripped = content.replace(/^\[(?:事件|剧情|漫卷|梦境|跑团游戏|小游戏|日记|便签墙|小红书|查手机|访谈|共创)(?: [^\]]+)?\]\s*/, "");
         return {
             type: "projection",
@@ -297,7 +297,7 @@ function buildCluster(entries: ParsedEntry[]): TimelineCluster {
             tagSet.add("群聊");
             pool.push(e.message);
         } else if (e.type === "moments") {
-            tagSet.add("朋友圈");
+            tagSet.add("Moments");
             pool.push(e.content);
         } else if (e.type === "projection") {
             tagSet.add(e.label);
@@ -405,9 +405,9 @@ function fmtDate(ts: string): string {
     const now = new Date();
     const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
     const pad = (n: number) => String(n).padStart(2, "0");
-    if (d.toDateString() === now.toDateString()) return "今天";
-    if (d.toDateString() === yesterday.toDateString()) return "昨天";
-    return `${pad(d.getMonth() + 1)}月${pad(d.getDate())}日`;
+    if (d.toDateString() === now.toDateString()) return "Today";
+    if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+    return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}`;
 }
 
 function tagVariant(tag: string): "success" | "purple" | "action" | "warning" {
@@ -485,7 +485,7 @@ function ClusterDetail({ cluster }: { cluster: TimelineCluster }) {
                                                     </div>
                                                     <div className="chat-music-share-footer">
                                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg>
-                                                        <span>音乐</span>
+                                                        <span>Music</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -543,13 +543,13 @@ function ClusterDetail({ cluster }: { cluster: TimelineCluster }) {
                                                             <span className="mem-tl-moment-cmt-author">{root.author}</span>
                                                             {root.replyToAuthorName && (
                                                                 <>
-                                                                    <span className="mem-tl-moment-cmt-action">回复</span>
+                                                                    <span className="mem-tl-moment-cmt-action">Reply</span>
                                                                     <span className="mem-tl-moment-cmt-author">{root.replyToAuthorName}</span>
                                                                     <span className="mem-tl-moment-cmt-action">:</span>
                                                                 </>
                                                             )}
                                                             {!root.replyToAuthorName && (
-                                                                <span className="mem-tl-moment-cmt-action">评论:</span>
+                                                                <span className="mem-tl-moment-cmt-action">Comment:</span>
                                                             )}
                                                             <span className="mem-tl-moment-cmt-text">{root.content}</span>
                                                             <span className="mem-tl-bubble-ts">{fmtMomentCommentTime(root)}</span>
@@ -561,13 +561,13 @@ function ClusterDetail({ cluster }: { cluster: TimelineCluster }) {
                                                                         <span className="mem-tl-moment-cmt-author">{reply.author}</span>
                                                                         {reply.replyToAuthorName && (
                                                                             <>
-                                                                                <span className="mem-tl-moment-cmt-action">回复</span>
+                                                                                <span className="mem-tl-moment-cmt-action">Reply</span>
                                                                                 <span className="mem-tl-moment-cmt-author">{reply.replyToAuthorName}</span>
                                                                                 <span className="mem-tl-moment-cmt-action">:</span>
                                                                             </>
                                                                         )}
                                                                         {!reply.replyToAuthorName && (
-                                                                            <span className="mem-tl-moment-cmt-action">评论:</span>
+                                                                            <span className="mem-tl-moment-cmt-action">Comment:</span>
                                                                         )}
                                                                         <span className="mem-tl-moment-cmt-text">{reply.content}</span>
                                                                         <span className="mem-tl-bubble-ts">{fmtMomentCommentTime(reply)}</span>
@@ -600,7 +600,7 @@ type Props = {
     userName: string;
 };
 
-// 每批渲染的簇数：全部一次性渲染会在重数据账号上把 DOM 撑爆
+// Number of clusters rendered per batch: rendering everything at once would blow up the DOM on heavy-data accounts
 const CLUSTER_PAGE_SIZE = 30;
 
 export function MemoryTimeline({ events, userName }: Props) {
@@ -612,7 +612,7 @@ export function MemoryTimeline({ events, userName }: Props) {
         return clusterByTimeGap(parsed);
     }, [events, userName]);
 
-    // 切换角色/标签页时回到首屏
+    // Return to the first screen when switching character/tab
     useEffect(() => {
         setVisibleCount(CLUSTER_PAGE_SIZE);
         setExpandedClusterId(null);
@@ -621,7 +621,7 @@ export function MemoryTimeline({ events, userName }: Props) {
     if (clusters.length === 0) {
         return (
             <p className="text-center ts-14 mt-10 text-secondary">
-                暂无数据。聊天或朋友圈互动后会自动显示。
+                No data yet. It will appear automatically after chat or Moments interactions.
             </p>
         );
     }
@@ -649,7 +649,7 @@ export function MemoryTimeline({ events, userName }: Props) {
                                         <span key={tag} className="ui-status-tag" data-variant={tagVariant(tag)}>{tag}</span>
                                     ))}
                                 </div>
-                                <span className="mem-tl-card-count">{cluster.entryCount} 条记录</span>
+                                <span className="mem-tl-card-count">{cluster.entryCount} entries</span>
                             </div>
                             {expanded ? (
                                 <ClusterDetail cluster={cluster} />
@@ -658,7 +658,7 @@ export function MemoryTimeline({ events, userName }: Props) {
                                     {cluster.excerpts.length > 0 ? cluster.excerpts.map((ex, i) => (
                                         <p key={i} className="mem-tl-card-ex">{ex}</p>
                                     )) : (
-                                        <p className="mem-tl-card-ex">暂无可预览内容，展开查看完整记录。</p>
+                                        <p className="mem-tl-card-ex">No preview available yet. Expand to view the full record.</p>
                                     )}
                                 </div>
                             )}
@@ -672,7 +672,7 @@ export function MemoryTimeline({ events, userName }: Props) {
                     className="mem-tl-load-more"
                     onClick={() => setVisibleCount(count => count + CLUSTER_PAGE_SIZE)}
                 >
-                    加载更早的记录（还有 {clusters.length - visibleCount} 段）
+                    Load earlier entries ({clusters.length - visibleCount} more)
                 </button>
             ) : null}
         </>

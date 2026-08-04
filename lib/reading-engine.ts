@@ -103,7 +103,7 @@ async function resolveReadingInput(
     // Short-term context
     const { recentBlocks, truncatedHistory, unifiedRecentItems } = prepareShortTermContext(characterId, "chat", {
         history: options.history,
-        userName: userIdentity?.name ?? "用户",
+        userName: userIdentity?.name ?? "User",
     });
     const readingConfig = loadReadingInteractionConfig();
 
@@ -152,15 +152,92 @@ async function callReadingLLM(
     );
 }
 
+// ── Reading protocol tags ──
+//
+// Dual recognition (Track 2): every matcher below accepts the legacy Chinese token the
+// model was taught before this migration AND the English token it is taught now (the
+// `reading_annotation` / `reading_discuss` entries in lib/builtin-preset.ts). Producers
+// emit English only.
+//
+// Unlike the chat protocol, none of these tags is ever persisted: a match is turned into
+// a plain `content` string on a ReadingAnnotation / ReadingDiscussAction before it
+// reaches storage. So the Chinese half here is robustness against a model that still
+// thinks in Chinese, not a stored-data compatibility requirement.
+
+/** `[Annotation:N]…[/Annotation]`, legacy `[批注:N]…[/批注]`. */
+const ANNOTATION_BLOCK_ALIASES = "批注|Annotation";
+
+/**
+ * Built fresh on every call: this is a `g` regex, and a shared instance would carry
+ * `lastIndex` from one generation into the next.
+ *
+ * Opening and closing tags may use DIFFERENT aliases of the same tag
+ * (`[Annotation:1]…[/批注]`). Pinning them together with a backreference is exactly what
+ * made the chat block tags leak during the bilingual window, so it is not done here.
+ */
+function annotationBlockRegex(): RegExp {
+    return new RegExp(
+        `\\[(?:${ANNOTATION_BLOCK_ALIASES})[:：]\\s*(\\d+)\\s*\\]([\\s\\S]*?)\\[\\/(?:${ANNOTATION_BLOCK_ALIASES})\\]`,
+        "gi",
+    );
+}
+
+/** `[NoAnnotation]`, legacy `[无批注]` — "nothing here is worth commenting on". */
+const NO_ANNOTATION_RE = /\[\s*(?:无批注|no[\s_-]*annotation)\s*\]/i;
+
+// Discuss action tail. The legacy forms are wrapped in full-width 【】; the English
+// teaching uses ASCII [] because that is what a model writing English reaches for.
+// Both bracket pairs are accepted for both languages, so a half-migrated model — English
+// verb, Chinese brackets — still parses.
+const OPEN_BRACKET = "[【\\[]";
+const CLOSE_BRACKET = "[】\\]]";
+const ID_VALUE = "[^\\s】\\]]+";
+const ADD_VERBS = "新增批注|AddAnnotation";
+const DELETE_VERBS = "删除批注|DeleteAnnotation";
+const UPDATE_VERBS = "修改批注|EditAnnotation|UpdateAnnotation";
+const PARAGRAPH_KEY = "(?:段落|paragraph)";
+const ID_KEY = "id"; // every regex below carries the `i` flag, so this also matches `ID=`
+
+const ADD_ANNOTATION_RE = new RegExp(
+    `^${OPEN_BRACKET}(?:${ADD_VERBS})\\s+${PARAGRAPH_KEY}\\s*=\\s*(\\d+)${CLOSE_BRACKET}([\\s\\S]+)$`,
+    "i",
+);
+const DELETE_ANNOTATION_RE = new RegExp(
+    `^${OPEN_BRACKET}(?:${DELETE_VERBS})\\s+${ID_KEY}\\s*=\\s*(${ID_VALUE})${CLOSE_BRACKET}$`,
+    "i",
+);
+const UPDATE_ANNOTATION_RE = new RegExp(
+    `^${OPEN_BRACKET}(?:${UPDATE_VERBS})\\s+${ID_KEY}\\s*=\\s*(${ID_VALUE})${CLOSE_BRACKET}([\\s\\S]+)$`,
+    "i",
+);
+
+// Header only — classifies a line as belonging to the action tail. Built from the same
+// fragments as the three parsers above so the classifier and the parsers cannot drift.
+const DISCUSS_ACTION_LINE_RE = new RegExp(
+    `^${OPEN_BRACKET}(?:`
+    + `(?:${ADD_VERBS})\\s+${PARAGRAPH_KEY}\\s*=\\s*\\d+`
+    + `|(?:${DELETE_VERBS}|${UPDATE_VERBS})\\s+${ID_KEY}\\s*=\\s*${ID_VALUE}`
+    + `)${CLOSE_BRACKET}`,
+    "i",
+);
+
 // ── Format helpers ──
+//
+// These build the context SENT to the model. Nothing parses them back, but they
+// deliberately mirror the tag formats taught in the preset — the model copies the shape
+// it sees — so they have to be flipped in lockstep with the teaching.
+//
+// `formatChapterContent` and `formatAnnotationHistory` are currently unreferenced; they
+// are the single-chapter counterparts of the `formatBatch*` pair and are kept (and kept
+// correct) so a future caller does not resurrect the pre-migration format.
 
 function formatChapterContent(paragraphs: string[]): string {
     return paragraphs.map((p, i) => `[${i + 1}] ${p}`).join("\n\n");
 }
 
 function formatAnnotationHistory(annotations: ReadingAnnotation[]): string {
-    if (annotations.length === 0) return "（暂无批注）";
-    return annotations.map(a => `[批注:${a.paragraphIndex + 1}] ${a.content}`).join("\n");
+    if (annotations.length === 0) return "(No annotations yet)";
+    return annotations.map(a => `[Annotation:${a.paragraphIndex + 1}] ${a.content}`).join("\n");
 }
 
 function formatBatchChapterContent(targets: AnnotationTarget[]): string {
@@ -168,7 +245,7 @@ function formatBatchChapterContent(targets: AnnotationTarget[]): string {
 }
 
 function formatBatchAnnotationHistory(annotations: ReadingAnnotation[], targets: AnnotationTarget[]): string {
-    if (annotations.length === 0) return "（暂无批注）";
+    if (annotations.length === 0) return "(No annotations yet)";
 
     const targetIndexMap = new Map<string, number>();
     targets.forEach((target, index) => {
@@ -178,21 +255,21 @@ function formatBatchAnnotationHistory(annotations: ReadingAnnotation[], targets:
     const lines = annotations.flatMap((annotation) => {
         const relativeIndex = targetIndexMap.get(`${annotation.chapterIndex}:${annotation.paragraphIndex}`);
         if (!relativeIndex) return [];
-        return [`[批注:${relativeIndex}][角色:${annotation.characterName}] ${annotation.content}`];
+        return [`[Annotation:${relativeIndex}][Character:${annotation.characterName}] ${annotation.content}`];
     });
 
-    return lines.length > 0 ? lines.join("\n") : "（暂无批注）";
+    return lines.length > 0 ? lines.join("\n") : "(No annotations yet)";
 }
 
 function formatAnnotationActionContext(annotations: ReadingAnnotation[]): string {
-    if (annotations.length === 0) return "（当前范围暂无批注）";
+    if (annotations.length === 0) return "(No annotations in the current range)";
     return annotations
-        .map((annotation) => `- ID=${annotation.id} | 段落=${annotation.paragraphIndex + 1} | 角色=${annotation.characterName} | 内容=${annotation.content}`)
+        .map((annotation) => `- id=${annotation.id} | paragraph=${annotation.paragraphIndex + 1} | character=${annotation.characterName} | content=${annotation.content}`)
         .join("\n");
 }
 
 function isDiscussActionLine(line: string): boolean {
-    return /^【(?:新增批注\s+段落\s*=\s*\d+|删除批注\s+ID\s*=\s*[^\s】]+|修改批注\s+ID\s*=\s*[^\s】]+)】/.test(line);
+    return DISCUSS_ACTION_LINE_RE.test(line);
 }
 
 export function parseReadingDiscussResponse(raw: string): {
@@ -231,7 +308,7 @@ export function parseReadingDiscussResponse(raw: string): {
 
     const actions: ReadingDiscussAction[] = [];
     for (const line of actionLines) {
-        let match = line.match(/^【新增批注\s+段落\s*=\s*(\d+)】([\s\S]+)$/);
+        let match = line.match(ADD_ANNOTATION_RE);
         if (match) {
             const paragraphIndex = Number(match[1]) - 1;
             const content = match[2].trim();
@@ -241,13 +318,13 @@ export function parseReadingDiscussResponse(raw: string): {
             continue;
         }
 
-        match = line.match(/^【删除批注\s+ID\s*=\s*([^\s】]+)】$/);
+        match = line.match(DELETE_ANNOTATION_RE);
         if (match) {
             actions.push({ type: "delete_annotation", annotationId: match[1] });
             continue;
         }
 
-        match = line.match(/^【修改批注\s+ID\s*=\s*([^\s】]+)】([\s\S]+)$/);
+        match = line.match(UPDATE_ANNOTATION_RE);
         if (match) {
             const content = match[2].trim();
             if (content) {
@@ -258,6 +335,35 @@ export function parseReadingDiscussResponse(raw: string): {
 
     const reply = lines.slice(0, actionStart).join("\n").trim();
     return { reply, actions };
+}
+
+export type ParsedAnnotationBlock = {
+    /** 0-based index into the batch's `targets`, i.e. the taught `N` minus one. */
+    relativeIndex: number;
+    content: string;
+};
+
+/**
+ * Pull the `[Annotation:N]…[/Annotation]` blocks (legacy `[批注:N]…[/批注]`) out of an
+ * annotation response. Blocks whose body is blank are dropped, as they always were.
+ *
+ * Extracted from `generateAnnotationBatch` so the protocol parser can be exercised
+ * without an API key; that function still owns mapping `relativeIndex` onto a target.
+ */
+export function parseAnnotationBlocks(responseText: string): ParsedAnnotationBlock[] {
+    const pattern = annotationBlockRegex();
+    const blocks: ParsedAnnotationBlock[] = [];
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(responseText)) !== null) {
+        const content = match[2].trim();
+        if (content) blocks.push({ relativeIndex: parseInt(match[1], 10) - 1, content });
+    }
+    return blocks;
+}
+
+/** True when the model said there is nothing worth annotating. */
+export function isNoAnnotationResponse(responseText: string): boolean {
+    return NO_ANNOTATION_RE.test(responseText);
 }
 
 // ── Public API ──
@@ -290,7 +396,7 @@ export async function generateAnnotationBatch(
     characterId: string,
 ): Promise<ReadingAnnotation[]> {
     const character = loadCharacters().find(c => c.id === characterId);
-    if (!character) throw new Error("角色不存在");
+    if (!character) throw new Error("Character not found.");
     if (targets.length === 0) return [];
 
     const resolved = await resolveReadingInput(characterId, ["reading", "annotate"], {
@@ -299,7 +405,7 @@ export async function generateAnnotationBatch(
         chapterContent: formatBatchChapterContent(targets),
         annotationHistory: formatBatchAnnotationHistory(existingAnnotations, targets),
     });
-    if (!resolved) throw new Error("未找到 API 配置，请在设置中绑定 API");
+    if (!resolved) throw new Error("No API Configuration found. Please go to Settings -> Binding Manager -> Reading to assign one.");
 
     const { input, apiConfig, preset } = resolved;
     const llmMessages = assemblePromptPayload(input);
@@ -312,29 +418,23 @@ export async function generateAnnotationBatch(
         input.appTags,
         input.userIdentity?.name,
     );
-    if (!responseText) throw new Error("API 返回空内容");
-    if (responseText.includes("[无批注]")) return [];
+    if (!responseText) throw new Error("The API returned empty content.");
+    if (isNoAnnotationResponse(responseText)) return [];
 
-    // Parse [批注:N]...[/批注]
-    const pattern = /\[批注[:：](\d+)\]([\s\S]*?)\[\/批注\]/g;
     const results: ReadingAnnotation[] = [];
-    let match;
-    while ((match = pattern.exec(responseText)) !== null) {
-        const relativeIndex = parseInt(match[1], 10) - 1;
-        const content = match[2].trim();
-        const target = targets[relativeIndex];
-        if (content && target) {
-            results.push({
-                id: `ra_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-                bookId: book.id,
-                chapterIndex: target.chapterIndex,
-                paragraphIndex: target.paragraphIndex,
-                characterId,
-                characterName: character.name,
-                content,
-                createdAt: new Date().toISOString(),
-            });
-        }
+    for (const block of parseAnnotationBlocks(responseText)) {
+        const target = targets[block.relativeIndex];
+        if (!target) continue;
+        results.push({
+            id: `ra_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            bookId: book.id,
+            chapterIndex: target.chapterIndex,
+            paragraphIndex: target.paragraphIndex,
+            characterId,
+            characterName: character.name,
+            content: block.content,
+            createdAt: new Date().toISOString(),
+        });
     }
     return results;
 }
@@ -346,7 +446,7 @@ export async function previewReadingAnnotationPrompt(
     characterId: string,
 ): Promise<{ messages: LLMMessage[]; characterName: string; model: string; presetName: string }> {
     const character = loadCharacters().find(c => c.id === characterId);
-    if (!character) throw new Error("角色不存在");
+    if (!character) throw new Error("Character not found.");
 
     const targets = chapter.paragraphs.map((text, paragraphIndex) => ({
         chapterIndex: chapter.index,
@@ -359,14 +459,14 @@ export async function previewReadingAnnotationPrompt(
         chapterContent: formatBatchChapterContent(targets),
         annotationHistory: formatBatchAnnotationHistory(existingAnnotations, targets),
     });
-    if (!resolved?.apiConfig) throw new Error("未找到 API 配置，请在设置中绑定 API");
+    if (!resolved?.apiConfig) throw new Error("No API Configuration found. Please go to Settings -> Binding Manager -> Reading to assign one.");
 
     const llmMessages = assemblePromptPayload(resolved.input);
     return {
         messages: previewMessagesForApi(resolved.apiConfig, resolved.preset, llmMessages),
-        characterName: `阅读:${character.name}`,
+        characterName: `Reading: ${character.name}`,
         model: resolved.apiConfig.defaultModel,
-        presetName: resolved.preset?.name ?? "默认预设",
+        presetName: resolved.preset?.name ?? "Default preset",
     };
 }
 
@@ -377,7 +477,7 @@ export async function previewReadingDiscussPrompt(
     characterId: string,
 ): Promise<{ messages: LLMMessage[]; characterName: string; model: string; presetName: string }> {
     const character = loadCharacters().find(c => c.id === characterId);
-    if (!character) throw new Error("角色不存在");
+    if (!character) throw new Error("Character not found.");
 
     const history = loadChatMessages(session.id);
     const resolved = await resolveReadingInput(characterId, ["reading", "discuss"], {
@@ -387,14 +487,14 @@ export async function previewReadingDiscussPrompt(
         annotationHistory: formatAnnotationActionContext(context.annotations),
         history,
     });
-    if (!resolved?.apiConfig) throw new Error("未找到 API 配置，请在设置中绑定 API");
+    if (!resolved?.apiConfig) throw new Error("No API Configuration found. Please go to Settings -> Binding Manager -> Reading to assign one.");
 
     const llmMessages = assemblePromptPayload(resolved.input);
     return {
         messages: previewMessagesForApi(resolved.apiConfig, resolved.preset, llmMessages),
-        characterName: `阅读对话:${character.name}`,
+        characterName: `Reading Discussion: ${character.name}`,
         model: resolved.apiConfig.defaultModel,
-        presetName: resolved.preset?.name ?? "默认预设",
+        presetName: resolved.preset?.name ?? "Default preset",
     };
 }
 

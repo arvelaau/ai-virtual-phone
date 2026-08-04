@@ -52,7 +52,7 @@ export function ReadingAppearanceDialog({ appearance, backgroundUrl, onClose, on
             await onSave(draft, { backgroundFile, clearBackground, customFontFile, clearCustomFont });
             onClose();
         } catch (err) {
-            alert(err instanceof Error ? err.message : "阅读外观保存失败");
+            alert(err instanceof Error ? err.message : "Failed to save reading appearance");
         } finally {
             setSaving(false);
         }
@@ -60,9 +60,9 @@ export function ReadingAppearanceDialog({ appearance, backgroundUrl, onClose, on
 
     return (
         <ContentDialog
-            title="阅读外观"
-            confirmLabel={saving ? "保存中..." : "保存"}
-            cancelLabel="取消"
+            title="Reading Appearance"
+            confirmLabel={saving ? "Saving..." : "Save"}
+            cancelLabel="Cancel"
             onConfirm={() => { if (!saving) void handleSave(); }}
             onCancel={() => { if (!saving) onClose(); }}
         >
@@ -70,10 +70,10 @@ export function ReadingAppearanceDialog({ appearance, backgroundUrl, onClose, on
                 <section className="reading-settings-group">
                     <div className="reading-settings-heading">
                         <Type size={15} />
-                        <span>正文样式</span>
+                        <span>Body Text Style</span>
                     </div>
                     <label className="reading-settings-label">
-                        <span>字体</span>
+                        <span>Font</span>
                         <Select
                             value={draft.fontFamily}
                             onChange={(e) => setDraft((prev) => ({ ...prev, fontFamily: e.target.value as ReadingAppearance["fontFamily"] }))}
@@ -85,8 +85,8 @@ export function ReadingAppearanceDialog({ appearance, backgroundUrl, onClose, on
                         </Select>
                     </label>
                     <div className="reading-settings-inline-note">
-                        <span>自定义字体</span>
-                        <span>{draft.customFontName ? `已选择 · ${draft.customFontName}` : "未上传"}</span>
+                        <span>Custom Font</span>
+                        <span>{draft.customFontName ? `Selected . ${draft.customFontName}` : "Not uploaded"}</span>
                     </div>
                     <div className="reading-settings-actions">
                         <button
@@ -96,7 +96,7 @@ export function ReadingAppearanceDialog({ appearance, backgroundUrl, onClose, on
                             disabled={saving}
                         >
                             <Type size={14} />
-                            <span>{draft.customFontName ? "更换字体" : "上传字体"}</span>
+                            <span>{draft.customFontName ? "Change Font" : "Upload Font"}</span>
                         </button>
                         <button
                             type="button"
@@ -113,7 +113,7 @@ export function ReadingAppearanceDialog({ appearance, backgroundUrl, onClose, on
                             disabled={saving || !draft.customFontName}
                         >
                             <Trash2 size={14} />
-                            <span>清除</span>
+                            <span>Clear</span>
                         </button>
                     </div>
                     <input
@@ -135,7 +135,7 @@ export function ReadingAppearanceDialog({ appearance, backgroundUrl, onClose, on
                         }}
                     />
                     <Slider
-                        label="字号"
+                        label="Font Size"
                         min={14}
                         max={28}
                         step={1}
@@ -144,7 +144,7 @@ export function ReadingAppearanceDialog({ appearance, backgroundUrl, onClose, on
                         displayValue={`${draft.fontSize}px`}
                     />
                     <Slider
-                        label="行间距"
+                        label="Line Height"
                         min={1.4}
                         max={2.4}
                         step={0.1}
@@ -153,7 +153,7 @@ export function ReadingAppearanceDialog({ appearance, backgroundUrl, onClose, on
                         displayValue={draft.lineHeight.toFixed(1)}
                     />
                     <div className="reading-settings-color-row">
-                        <span className="reading-settings-label-inline">文字颜色</span>
+                        <span className="reading-settings-label-inline">Text Color</span>
                         <ColorInput value={draft.textColor} onChange={(textColor) => setDraft((prev) => ({ ...prev, textColor }))} />
                     </div>
                 </section>
@@ -161,13 +161,13 @@ export function ReadingAppearanceDialog({ appearance, backgroundUrl, onClose, on
                 <section className="reading-settings-group">
                     <div className="reading-settings-heading">
                         <Palette size={15} />
-                        <span>全屏背景</span>
+                        <span>Fullscreen Background</span>
                     </div>
                     <div
                         className="reading-bg-preview"
                         style={hasPreview ? { backgroundImage: `url("${previewUrl}")` } : undefined}
                     >
-                        {!hasPreview && <span>书架页和阅读页共用背景</span>}
+                        {!hasPreview && <span>Shared background for the shelf and reading pages</span>}
                     </div>
                     <div className="reading-settings-actions">
                         <button
@@ -177,7 +177,7 @@ export function ReadingAppearanceDialog({ appearance, backgroundUrl, onClose, on
                             disabled={saving}
                         >
                             <ImagePlus size={14} />
-                            <span>{hasPreview ? "更换背景" : "选择背景"}</span>
+                            <span>{hasPreview ? "Change Background" : "Choose Background"}</span>
                         </button>
                         <button
                             type="button"
@@ -190,7 +190,7 @@ export function ReadingAppearanceDialog({ appearance, backgroundUrl, onClose, on
                             disabled={saving || (!hasPreview && !backgroundFile)}
                         >
                             <Trash2 size={14} />
-                            <span>清除</span>
+                            <span>Clear</span>
                         </button>
                     </div>
                     <input

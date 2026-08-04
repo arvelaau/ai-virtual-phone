@@ -112,24 +112,24 @@ type PendingDeleteTarget =
 type PendingFeedAction = "refresh" | "clear";
 
 const TABS: Array<{ id: XiaohongshuTabId; label: string; icon: typeof Home }> = [
-  { id: "home", label: "首页", icon: Home },
-  { id: "video", label: "附近", icon: MapPin },
-  { id: "publish", label: "发布", icon: Plus },
-  { id: "messages", label: "消息", icon: Bell },
-  { id: "profile", label: "我的", icon: UserRound },
+  { id: "home", label: "Home", icon: Home },
+  { id: "video", label: "Nearby", icon: MapPin },
+  { id: "publish", label: "Post", icon: Plus },
+  { id: "messages", label: "Messages", icon: Bell },
+  { id: "profile", label: "Me", icon: UserRound },
 ];
 
 const PROFILE_TABS: Array<{ id: XiaohongshuProfileTab; label: string }> = [
-  { id: "notes", label: "笔记" },
-  { id: "comments", label: "评论" },
-  { id: "saved", label: "收藏" },
-  { id: "liked", label: "赞过" },
+  { id: "notes", label: "Notes" },
+  { id: "comments", label: "Comments" },
+  { id: "saved", label: "Saved" },
+  { id: "liked", label: "Liked" },
 ];
 
 const HOME_FEED_TABS: Array<{ id: XiaohongshuHomeFeedTab; label: string }> = [
-  { id: "follow", label: "关注" },
-  { id: "discover", label: "发现" },
-  { id: "video", label: "视频" },
+  { id: "follow", label: "Following" },
+  { id: "discover", label: "Discover" },
+  { id: "video", label: "Video" },
 ];
 
 const DEFAULT_XHS_AVATARS = [
@@ -156,7 +156,7 @@ const ICON_XHS_IMAGE_FRAME_STYLES: Record<XiaohongshuNoteCardVariant, CSSPropert
 };
 
 function formatCount(value: number): string {
-  if (value >= 10000) return `${(value / 10000).toFixed(value >= 100000 ? 0 : 1)}万`;
+  if (value >= 10000) return `${(value / 10000).toFixed(value >= 100000 ? 0 : 1)}w`;
   if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`;
   return String(Math.max(0, Math.round(value)));
 }
@@ -187,9 +187,9 @@ function formatTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   const diffMinutes = Math.max(1, Math.round((Date.now() - date.getTime()) / 60000));
-  if (diffMinutes < 60) return `${diffMinutes}分钟前`;
-  if (diffMinutes < 1440) return `${Math.round(diffMinutes / 60)}小时前`;
-  return `${Math.round(diffMinutes / 1440)}天前`;
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  if (diffMinutes < 1440) return `${Math.round(diffMinutes / 60)}h ago`;
+  return `${Math.round(diffMinutes / 1440)}d ago`;
 }
 
 function splitColumns<T>(items: T[]): [T[], T[]] {
@@ -384,7 +384,7 @@ function createCharacterPost(character: Character, activity: ParsedXiaohongshuCh
     source: "character",
     authorId: character.id,
     authorName: displayName,
-    title: activity.post.title || activity.post.body.slice(0, 24) || "新的笔记",
+    title: activity.post.title || activity.post.body.slice(0, 24) || "New note",
     body: activity.post.body,
     videoDescription: activity.post.videoDescription,
     coverIcon: activity.post.coverIcon || (activity.post.type === "video" ? "▶" : "✦"),
@@ -606,7 +606,7 @@ function CommentList({
   onVoteComment: (comment: XiaohongshuComment, vote: "like" | "dislike") => void;
   collapseBilingualTranslation: boolean;
 }) {
-  if (comments.length === 0) return <div className="cp-xhs-mini-empty">还没有评论</div>;
+  if (comments.length === 0) return <div className="cp-xhs-mini-empty">No comments yet</div>;
   const orderedComments = orderCommentsForDisplay(comments);
   return (
     <>
@@ -622,7 +622,7 @@ function CommentList({
             <div className="cp-xhs-comment-content">
               <strong>
                 {comment.authorName}
-                {targetName ? <><span className="cp-xhs-comment-reply-label">回复</span>{targetName}</> : null}
+                {targetName ? <><span className="cp-xhs-comment-reply-label">Reply to</span>{targetName}</> : null}
               </strong>
               <p>
                 <CheckPhoneBilingualText
@@ -635,15 +635,15 @@ function CommentList({
               <div className="xhs-comment-actions">
                 <div className="xhs-comment-text-actions">
                   <time className="xhs-comment-time" dateTime={comment.createdAt}>{formatTime(comment.createdAt)}</time>
-                  <button type="button" onClick={() => onReply(comment)}>回复</button>
-                  <button type="button" onClick={() => onDeleteComment(comment)}>删除</button>
+                  <button type="button" onClick={() => onReply(comment)}>Reply</button>
+                  <button type="button" onClick={() => onDeleteComment(comment)}>Delete</button>
                 </div>
                 <div className="xhs-comment-vote-actions">
                   <button
                     type="button"
                     className={`xhs-comment-vote-btn ${comment.liked ? "is-active" : ""}`}
                     onClick={() => onVoteComment(comment, "like")}
-                    aria-label="点赞评论"
+                    aria-label="Like comment"
                   >
                     <Heart size={20} strokeWidth={2.15} fill={comment.liked ? "currentColor" : "none"} />
                     {comment.likeCount > 0 ? <span>{formatCount(comment.likeCount)}</span> : null}
@@ -652,7 +652,7 @@ function CommentList({
                     type="button"
                     className={`xhs-comment-vote-btn ${comment.disliked ? "is-active is-disliked" : ""}`}
                     onClick={() => onVoteComment(comment, "dislike")}
-                    aria-label="点踩评论"
+                    aria-label="Dislike comment"
                   >
                     <XhsDislikeIcon />
                     {comment.dislikeCount > 0 ? <span>{formatCount(comment.dislikeCount)}</span> : null}
@@ -678,7 +678,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [busy, setBusy] = useState<BusyState>("idle");
   const [error, setError] = useState("");
-  const [debugErrorTitle, setDebugErrorTitle] = useState("暂时无法完成小红书操作。");
+  const [debugErrorTitle, setDebugErrorTitle] = useState("Unable to complete the Xiaohongshu action right now.");
   const [debugRawOutput, setDebugRawOutput] = useState("");
   const [debugParseError, setDebugParseError] = useState("");
   const [imageMap, setImageMap] = useState<Record<string, string>>({});
@@ -736,7 +736,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
   const dmThreads = useMemo<XiaohongshuDmThread[]>(() => {
     const groups = new Map<string, XiaohongshuNotification[]>();
     dmNotifications.forEach((notice) => {
-      const threadName = notice.threadName?.trim() || notice.actorName.trim() || "小红书用户";
+      const threadName = notice.threadName?.trim() || notice.actorName.trim() || "Xiaohongshu User";
       const threadId = notice.threadId?.trim() || `dm:${threadName}`;
       groups.set(threadId, [...(groups.get(threadId) ?? []), notice]);
     });
@@ -745,7 +745,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
         const sorted = [...notifications].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
         const latest = sorted[sorted.length - 1];
         if (!latest) return [];
-        const actorName = latest.threadName || sorted.find(item => item.direction !== "outgoing")?.actorName || latest.actorName || "小红书用户";
+        const actorName = latest.threadName || sorted.find(item => item.direction !== "outgoing")?.actorName || latest.actorName || "Xiaohongshu User";
         return [{
           id: threadId,
           actorName,
@@ -760,8 +760,8 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
   const selectedMessageNotifications = messagePanel
     ? state.notifications.filter(item => messagePanel === "engagement" ? item.type === "like" || item.type === "save" : item.type === messagePanel)
     : [];
-  const selectedMessagePanelLabel = messagePanel === "engagement" ? "点赞和收藏" : messagePanel === "follow" ? "新增关注" : messagePanel === "comment" ? "评论" : "";
-  const selectedMessagePanelTitle = messagePanel === "engagement" ? "收到的赞和收藏" : selectedMessagePanelLabel;
+  const selectedMessagePanelLabel = messagePanel === "engagement" ? "Likes & Saves" : messagePanel === "follow" ? "New Followers" : messagePanel === "comment" ? "Comments" : "";
+  const selectedMessagePanelTitle = messagePanel === "engagement" ? "Likes & Saves Received" : selectedMessagePanelLabel;
   const isMessageSubpage = selectedTab === "messages" && (Boolean(messagePanel) || Boolean(selectedDmThread));
   const selectedAuthorAccount = selectedNote ? makeAccountFromNote(selectedNote) : null;
   const selectedAuthorFollowing = isFollowingAccount(selectedAuthorAccount);
@@ -873,12 +873,12 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
 
   function clearErrorState() {
     setError("");
-    setDebugErrorTitle("暂时无法完成小红书操作。");
+    setDebugErrorTitle("Unable to complete the Xiaohongshu action right now.");
     setDebugRawOutput("");
     setDebugParseError("");
   }
 
-  function handleGenerationError(err: unknown, title = "暂时无法完成小红书操作。") {
+  function handleGenerationError(err: unknown, title = "Unable to complete the Xiaohongshu action right now.") {
     const message = err instanceof Error ? err.message : String(err);
     setDebugErrorTitle(title);
     setError(message);
@@ -925,7 +925,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
     if (note?.imageAssetId && imageMap[note.imageAssetId]) {
       return <img src={imageMap[note.imageAssetId]} alt="" />;
     }
-    return <span>{getXhsPlainText(notice.thumbnailText || note?.title || "笔记")}</span>;
+    return <span>{getXhsPlainText(notice.thumbnailText || note?.title || "Note")}</span>;
   }
 
   function notificationEngagementCount(notice: XiaohongshuNotification): number {
@@ -949,14 +949,14 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
   function formatNotificationAction(notice: XiaohongshuNotification) {
     if (notice.type === "like") {
       const count = notificationEngagementCount(notice);
-      return count > 1 ? `等${formatCount(count)}人赞了你的笔记` : "赞了你的笔记";
+      return count > 1 ? `${formatCount(count)} people liked your note` : "liked your note";
     }
     if (notice.type === "save") {
       const count = notificationEngagementCount(notice);
-      return count > 1 ? `等${formatCount(count)}人收藏了你的笔记` : "收藏了你的笔记";
+      return count > 1 ? `${formatCount(count)} people saved your note` : "saved your note";
     }
-    if (notice.type === "follow") return "关注了你";
-    if (notice.type === "comment") return "评论了你的笔记";
+    if (notice.type === "follow") return "followed you";
+    if (notice.type === "comment") return "commented on your note";
     return notice.text;
   }
 
@@ -1010,13 +1010,13 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
   }
 
   function createOutgoingDmMessage(thread: XiaohongshuDmThread, text: string, createdAt = new Date().toISOString()): XiaohongshuNotification {
-    const userName = state.profile.nickname || userIdentity?.name || "我";
+    const userName = state.profile.nickname || userIdentity?.name || "Me";
     return {
       ...makeXiaohongshuNotification({
         type: "dm",
         actorName: userName,
         text,
-        thumbnailText: "私信",
+        thumbnailText: "Message",
         direction: "outgoing",
         threadId: thread.id,
         threadName: thread.actorName,
@@ -1057,12 +1057,12 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
     if (pendingMessage) setState(current);
     const threadId = thread.id;
     const threadName = thread.actorName;
-    const userName = state.profile.nickname || userIdentity?.name || "我";
+    const userName = state.profile.nickname || userIdentity?.name || "Me";
     const baseMessages = pendingMessage ? [...thread.notifications, pendingMessage] : thread.notifications;
     const latestUserText = pendingMessage?.text ?? [...baseMessages].reverse().find(message => message.direction === "outgoing")?.text ?? "";
     if (!latestUserText) {
       setBusy("idle");
-      onNotice?.("请先发送一条私信");
+      onNotice?.("Please send a message first");
       return;
     }
     try {
@@ -1080,7 +1080,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
             type: "dm" as const,
             actorName: threadName,
             text: message,
-            thumbnailText: "私信",
+            thumbnailText: "Message",
             direction: "incoming" as const,
             threadId,
             threadName,
@@ -1096,7 +1096,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
         setState(current);
       }
     } catch (err) {
-      handleGenerationError(err, "暂时无法生成私信回复。");
+      handleGenerationError(err, "Unable to generate a message reply right now.");
     } finally {
       setBusy("idle");
     }
@@ -1171,7 +1171,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
       type: "follow" as const,
       noteId: note?.id,
       actorName: account.name,
-      text: `${account.name} 关注了你`,
+      text: `${account.name} followed you`,
       thumbnailText: note?.title,
       unread: true,
     }));
@@ -1277,7 +1277,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
       while (left <= right) {
         const middle = Math.floor((left + right) / 2);
         const candidate = activeVideoCaption.slice(0, middle).trimEnd();
-        measureNode.textContent = `${candidate}...  展开`;
+        measureNode.textContent = `${candidate}...  Expand`;
         if (measureNode.scrollHeight <= maxHeight) {
           best = candidate;
           left = middle + 1;
@@ -1321,7 +1321,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
       baseState.profile.ipLocation,
       baseState.profile.nickname,
     );
-    if (generated.length === 0) throw new Error("没有解析到小红书笔记。");
+    if (generated.length === 0) throw new Error("No Xiaohongshu notes were parsed.");
     return {
       generated,
       state: saveXiaohongshuState({
@@ -1427,9 +1427,9 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
         const withCharacters = await generateCharacterActivityState(withNpc, activeSettings);
         setState(withCharacters);
       }
-      onNotice?.("小红书内容已生成");
+      onNotice?.("Xiaohongshu content generated");
     } catch (err) {
-      handleGenerationError(err, "暂时无法刷新小红书内容。");
+      handleGenerationError(err, "Unable to refresh Xiaohongshu content right now.");
     } finally {
       setBusy("idle");
     }
@@ -1628,9 +1628,9 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
         current = saveXiaohongshuState(nextAfterCharacter);
         setState(current);
       }
-      onNotice?.("小红书笔记已发布");
+      onNotice?.("Xiaohongshu note published");
     } catch (err) {
-      handleGenerationError(err, "暂时无法发布小红书笔记。");
+      handleGenerationError(err, "Unable to publish the Xiaohongshu note right now.");
     } finally {
       setBusy("idle");
     }
@@ -1753,7 +1753,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
       noteId: selectedNote.id,
       authorType: "user",
       authorId: "user",
-      authorName: state.profile.nickname || "我",
+      authorName: state.profile.nickname || "Me",
       text,
       replyTo: target?.authorName,
       replyToCommentId: target?.id,
@@ -1787,7 +1787,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
       if (mentionCharacter) {
         const reaction = await generateXiaohongshuCharacterMentionReply(mentionCharacter.id, latestNote, userComment, target, current.settings);
         if (!reaction) {
-          onNotice?.("该角色暂时没有可用的小红书回复配置");
+          onNotice?.("This character has no Xiaohongshu reply configuration available right now");
           return;
         }
         if (reaction.comment.trim()) {
@@ -1845,7 +1845,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
             latestNote = applied.note;
           }
         } catch (err) {
-          handleGenerationError(err, "暂时无法生成评论回复。");
+          handleGenerationError(err, "Unable to generate a comment reply right now.");
         }
       }
       const npcReply = await generateXiaohongshuNpcReplyToUserComment(latestNote, userComment, current.settings, target);
@@ -1857,7 +1857,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
       });
       setState(current);
     } catch (err) {
-      handleGenerationError(err, mentionCharacter ? "暂时无法生成@回复。" : "暂时无法生成评论回复。");
+      handleGenerationError(err, mentionCharacter ? "Unable to generate an @mention reply right now." : "Unable to generate a comment reply right now.");
     } finally {
       setBusy("idle");
     }
@@ -1875,15 +1875,15 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
     try {
       const reaction = await generateXiaohongshuNpcMoreComments(latestNote, state.settings);
       const addedCount = reaction.comments.filter(comment => comment.text).length;
-      if (addedCount === 0) throw new Error("没有解析到新的小红书评论。");
+      if (addedCount === 0) throw new Error("No new Xiaohongshu comments were parsed.");
       const updatedNote = applyNpcMoreComments(latestNote, reaction);
       setState(saveXiaohongshuState({
         ...state,
         notes: state.notes.map(item => item.id === latestNote.id ? updatedNote : item),
       }));
-      onNotice?.(`已加载 ${addedCount} 条新评论`);
+      onNotice?.(`Loaded ${addedCount} new comments`);
     } catch (err) {
-      handleGenerationError(err, "暂时无法加载更多评论。");
+      handleGenerationError(err, "Unable to load more comments right now.");
     } finally {
       setBusy("idle");
     }
@@ -1893,7 +1893,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
     setDeleteTarget({
       type: "note",
       noteId: note.id,
-      title: note.title.trim() || note.body.trim().slice(0, 24) || "这篇笔记",
+      title: note.title.trim() || note.body.trim().slice(0, 24) || "this note",
     });
   }
 
@@ -1902,7 +1902,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
     setDeleteTarget({
       type: "comment",
       comment,
-      noteTitle: note?.title.trim() || note?.body.trim().slice(0, 24) || "这篇笔记",
+      noteTitle: note?.title.trim() || note?.body.trim().slice(0, 24) || "this note",
     });
   }
 
@@ -1980,7 +1980,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
     setCommentDraft("");
     setCommentEmojiOpen(false);
     setCommentMentionOpen(false);
-    onNotice?.("首页推荐、附近和视频内容已清空");
+    onNotice?.("Home recommendations, nearby, and video content cleared");
   }
 
   function handleConfirmDelete() {
@@ -2039,7 +2039,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
               </button>
             ))
           ) : (
-            <span className="xhs-comment-panel-empty">暂无已关注角色</span>
+            <span className="xhs-comment-panel-empty">No followed characters yet</span>
           )}
         </div>
       ) : null}
@@ -2062,7 +2062,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
           <button
             type="button"
             className={commentMentionOpen ? "is-active" : ""}
-            aria-label="@已关注角色"
+            aria-label="@ a followed character"
             onMouseDown={event => event.preventDefault()}
             onClick={() => {
               setCommentMentionOpen(prev => !prev);
@@ -2075,7 +2075,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
           <button
             type="button"
             className={commentEmojiOpen ? "is-active" : ""}
-            aria-label="选择表情"
+            aria-label="Choose emoji"
             onMouseDown={event => event.preventDefault()}
             onClick={() => {
               setCommentEmojiOpen(prev => !prev);
@@ -2092,7 +2092,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
           onClick={handleSubmitUserComment}
           disabled={busy !== "idle" || !commentDraft.trim()}
         >
-          {busy === "comment-reply" || busy === "mention-reply" ? <Loader2 className="cp-spin" size={15} /> : "发送"}
+          {busy === "comment-reply" || busy === "mention-reply" ? <Loader2 className="cp-spin" size={15} /> : "Send"}
         </button>
       </div>
     </>
@@ -2132,7 +2132,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
       tone: note.tone,
     } satisfies ChatSharePayload;
     window.dispatchEvent(new CustomEvent("open-mini-chat", { detail: { share } }));
-    onNotice?.("选择聊天对象后发送小红书帖子");
+    onNotice?.("Choose a chat to send this Xiaohongshu post");
   }
 
   function getSiblingVideo(direction: "previous" | "next") {
@@ -2271,7 +2271,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                   className={following ? "is-following" : ""}
                   onClick={() => handleToggleFollowAuthor(note)}
                 >
-                  {following ? "已关注" : "关注"}
+                  {following ? "Following" : "Follow"}
                 </button>
               ) : null}
               <time>{formatTime(note.createdAt)}</time>
@@ -2279,10 +2279,10 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                 type="button"
                 className="xhs-delete-note-btn xhs-video-delete-note-btn"
                 onClick={() => requestDeleteNote(note)}
-                aria-label="删除帖子"
+                aria-label="Delete post"
               >
                 <Trash2 size={14} strokeWidth={2.1} />
-                删除
+                Delete
               </button>
             </div>
             <h3>
@@ -2321,7 +2321,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                       onTouchStart={(event) => event.stopPropagation()}
                       onTouchEnd={(event) => event.stopPropagation()}
                     >
-                      {videoCaptionExpanded ? "收起" : "展开"}
+                      {videoCaptionExpanded ? "Show less" : "Expand"}
                     </button>
                   </>
                 ) : null}
@@ -2343,8 +2343,8 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
     if (columns[0].length + columns[1].length === 0) {
       return (
         <div className="cp-xhs-status cp-empty-copy">
-          <p>暂无小红书内容</p>
-          <span>生成首页、附近、视频和角色互动</span>
+          <p>No Xiaohongshu content yet</p>
+          <span>Generate home feed, nearby, video, and character activity</span>
           {options.showGenerateButton ? (
             <button
               type="button"
@@ -2352,7 +2352,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
               onClick={handleGenerateHomeContent}
               disabled={busy !== "idle"}
             >
-              {busy === "npc-feed" || busy === "character-activity" ? "正在生成" : "生成小红书内容"}
+              {busy === "npc-feed" || busy === "character-activity" ? "Generating" : "Generate Xiaohongshu content"}
             </button>
           ) : null}
         </div>
@@ -2401,7 +2401,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
               setMessagePanel(null);
               setSelectedDmThreadId(null);
             } : requestClose}
-            aria-label={isMessageSubpage ? "返回消息" : "返回桌面"}
+            aria-label={isMessageSubpage ? "Back to messages" : "Back to home screen"}
           >
             <ChevronLeft size={24} strokeWidth={2} />
           </button>
@@ -2424,7 +2424,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
               </>
             ) : (
               <div className="cp-xhs-header-title is-active">
-                {selectedTab === "video" ? "附近" : selectedTab === "messages" ? "消息" : "发布"}
+                {selectedTab === "video" ? "Nearby" : selectedTab === "messages" ? "Messages" : "Post"}
               </div>
             )}
           </div>
@@ -2434,7 +2434,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
               className="cp-float-refresh xhs-icon-action xhs-icon-action--refresh"
               onClick={() => requestFeedAction("refresh")}
               disabled={busy !== "idle"}
-              aria-label="刷新小红书内容"
+              aria-label="Refresh Xiaohongshu content"
             >
               <RotateCw size={18} strokeWidth={1.75} />
             </button>
@@ -2443,7 +2443,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
               className="cp-float-refresh xhs-icon-action xhs-icon-action--clear"
               onClick={() => requestFeedAction("clear")}
               disabled={busy !== "idle" || state.notes.length === 0}
-              aria-label="清空小红书内容"
+              aria-label="Clear Xiaohongshu content"
             >
               <Trash2 size={17} strokeWidth={1.8} />
             </button>
@@ -2454,7 +2454,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
       {busy !== "idle" ? (
         <div className="cp-refresh-indicator cp-refresh-indicator--floating" aria-live="polite">
           <span className="cp-refresh-indicator-text">
-            {busy === "npc-feed" ? "正在生成帖子内容" : busy === "character-activity" ? "正在生成角色互动内容" : busy === "publish" ? "正在发布笔记" : busy === "comment-reply" || busy === "mention-reply" ? "正在生成回复内容" : busy === "dm-reply" ? "正在生成私信回复" : "正在生成互动内容"}
+            {busy === "npc-feed" ? "Generating post content" : busy === "character-activity" ? "Generating character activity" : busy === "publish" ? "Publishing note" : busy === "comment-reply" || busy === "mention-reply" ? "Generating reply" : busy === "dm-reply" ? "Generating message reply" : "Generating activity"}
           </span>
           <span className="cp-refresh-indicator-dots" aria-hidden="true">
             <i></i><i></i><i></i>
@@ -2475,7 +2475,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
         {selectedDmThread ? (
           <div className="cp-xhs-thread-screen xhs-dm-thread-screen">
             <header className="cp-xhs-thread-appbar">
-              <button type="button" className="cp-xhs-thread-nav-button" onClick={() => setSelectedDmThreadId(null)} aria-label="返回消息">
+              <button type="button" className="cp-xhs-thread-nav-button" onClick={() => setSelectedDmThreadId(null)} aria-label="Back to messages">
                 <ChevronLeft size={26} strokeWidth={2.4} />
               </button>
               <div className="cp-xhs-thread-title-block">
@@ -2486,7 +2486,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                 />
                 <strong>{selectedDmThread.actorName}</strong>
               </div>
-              <button type="button" className="cp-xhs-thread-nav-button" aria-label="更多">
+              <button type="button" className="cp-xhs-thread-nav-button" aria-label="More">
                 <MoreHorizontal size={27} strokeWidth={2.4} />
               </button>
             </header>
@@ -2541,7 +2541,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                 </div>
               ) : null}
               <div className="cp-xhs-thread-inputbar">
-                <button type="button" aria-label="表情" className={dmEmojiOpen ? "is-active" : ""} onClick={() => setDmEmojiOpen(prev => !prev)}>
+                <button type="button" aria-label="Emoji" className={dmEmojiOpen ? "is-active" : ""} onClick={() => setDmEmojiOpen(prev => !prev)}>
                   <Smile size={24} strokeWidth={1.8} />
                 </button>
                 <input
@@ -2554,12 +2554,12 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                       handleSendDmMessage(selectedDmThread);
                     }
                   }}
-                  placeholder="发消息..."
+                  placeholder="Send a message..."
                 />
-                <button type="button" className="xhs-dm-generate-btn" aria-label="生成回复" disabled={busy !== "idle"} onClick={() => handleGenerateDmReply(selectedDmThread)}>
+                <button type="button" className="xhs-dm-generate-btn" aria-label="Generate reply" disabled={busy !== "idle"} onClick={() => handleGenerateDmReply(selectedDmThread)}>
                   {busy === "dm-reply" ? <Loader2 className="cp-spin" size={21} /> : <Sparkles size={22} strokeWidth={1.8} />}
                 </button>
-                <button type="button" aria-label="发送" disabled={busy !== "idle" || !dmDraft.trim()} onClick={() => handleSendDmMessage(selectedDmThread)}>
+                <button type="button" aria-label="Send" disabled={busy !== "idle" || !dmDraft.trim()} onClick={() => handleSendDmMessage(selectedDmThread)}>
                   <Send size={22} strokeWidth={1.8} />
                 </button>
               </div>
@@ -2575,17 +2575,17 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
             onTouchCancel={handleVideoTouchEnd}
           >
             <header className="cp-xhs-video-detail-topbar">
-              <button type="button" onClick={() => setSelectedNoteId(null)} aria-label="返回">
+              <button type="button" onClick={() => setSelectedNoteId(null)} aria-label="Back">
                 <ChevronLeft size={26} strokeWidth={2} />
               </button>
-              <button type="button" aria-label="更多视频">
+              <button type="button" aria-label="More videos">
                 <span className="cp-xhs-video-stack-icon" aria-hidden="true" />
               </button>
               <div className="cp-xhs-video-topbar-spacer" />
-              <button type="button" aria-label="搜索">
+              <button type="button" aria-label="Search">
                 <Search size={22} strokeWidth={2.2} />
               </button>
-              <button type="button" aria-label="分享" onClick={() => handleShareNote(selectedNote)}>
+              <button type="button" aria-label="Share" onClick={() => handleShareNote(selectedNote)}>
                 <ShareFat size={23} weight="regular" />
               </button>
             </header>
@@ -2595,17 +2595,17 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
 
             <footer className="cp-xhs-video-actions xhs-video-actions">
               <button type="button" className="cp-xhs-video-input xhs-video-input-button" onClick={() => setVideoCommentsOpen(true)}>
-                说点什么...
+                Say something...
               </button>
-              <button type="button" className={`cp-xhs-video-action ${selectedNote.liked ? "is-active" : ""}`} onClick={() => handleToggleLike(selectedNote)} aria-label="点赞">
+              <button type="button" className={`cp-xhs-video-action ${selectedNote.liked ? "is-active" : ""}`} onClick={() => handleToggleLike(selectedNote)} aria-label="Like">
                 <Heart size={24} strokeWidth={2.1} fill={selectedNote.liked ? "currentColor" : "none"} />
                 <span>{formatCount(selectedNote.likeCount)}</span>
               </button>
-              <button type="button" className={`cp-xhs-video-action ${selectedNote.saved ? "is-active" : ""}`} onClick={() => handleToggleSave(selectedNote)} aria-label="收藏">
+              <button type="button" className={`cp-xhs-video-action ${selectedNote.saved ? "is-active" : ""}`} onClick={() => handleToggleSave(selectedNote)} aria-label="Save">
                 <Bookmark size={24} strokeWidth={2.1} fill={selectedNote.saved ? "currentColor" : "none"} />
                 <span>{formatCount(selectedNote.saveCount)}</span>
               </button>
-              <button type="button" className="cp-xhs-video-action" onClick={() => setVideoCommentsOpen(true)} aria-label="评论">
+              <button type="button" className="cp-xhs-video-action" onClick={() => setVideoCommentsOpen(true)} aria-label="Comment">
                 <MessageCircle size={24} strokeWidth={2.1} />
                 <span>{formatCount(selectedNote.commentCount)}</span>
               </button>
@@ -2616,8 +2616,8 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                 <section className="cp-xhs-video-comments-sheet xhs-video-comments-sheet" onClick={event => event.stopPropagation()}>
                   <div className="cp-xhs-video-comments-handle" aria-hidden="true" />
                   <header>
-                    <strong>评论 {formatCount(selectedNote.commentCount)}</strong>
-                    <button type="button" onClick={() => setVideoCommentsOpen(false)} aria-label="关闭评论">×</button>
+                    <strong>Comments {formatCount(selectedNote.commentCount)}</strong>
+                    <button type="button" onClick={() => setVideoCommentsOpen(false)} aria-label="Close comments">×</button>
                   </header>
                   <div className="cp-xhs-comment-list xhs-video-comment-list">
                     <CommentList
@@ -2635,14 +2635,14 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                       disabled={busy !== "idle"}
                     >
                       {busy === "more-comments" ? <Loader2 className="cp-spin" size={15} /> : null}
-                      {busy === "more-comments" ? "加载中" : "加载更多评论"}
+                      {busy === "more-comments" ? "Loading" : "Load more comments"}
                     </button>
                   </div>
                   <div className={`xhs-video-comment-composer ${commentComposerExpanded ? "is-expanded" : ""}`}>
                     {replyTarget && replyTarget.noteId === selectedNote.id ? (
                       <div className="xhs-reply-target">
-                        <span>回复 {replyTarget.authorName}</span>
-                        <button type="button" onClick={() => setReplyTarget(null)}>取消</button>
+                        <span>Reply to {replyTarget.authorName}</span>
+                        <button type="button" onClick={() => setReplyTarget(null)}>Cancel</button>
                       </div>
                     ) : null}
                     <div className="xhs-comment-input-row">
@@ -2651,13 +2651,13 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                         onChange={event => setCommentDraft(event.target.value)}
                         onFocus={() => setCommentComposerFocused(true)}
                         onBlur={() => window.setTimeout(() => setCommentComposerFocused(false), 120)}
-                        placeholder={replyTarget ? "写回复" : "写评论"}
+                        placeholder={replyTarget ? "Write a reply" : "Write a comment"}
                         rows={commentComposerExpanded ? 3 : 1}
                       />
                       {!commentComposerExpanded ? (
                         <button type="button" onClick={handleSubmitUserComment} disabled={busy !== "idle" || !commentDraft.trim()}>
                           {busy === "comment-reply" || busy === "mention-reply" ? <Loader2 className="cp-spin" size={15} /> : null}
-                          发送
+                          Send
                         </button>
                       ) : null}
                     </div>
@@ -2670,7 +2670,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
         ) : (
           <div ref={detailScrollRef} className="cp-xhs-scroll cp-xhs-scroll--detail xhs-detail-page">
             <div className="cp-xhs-note-detail-header">
-              <button type="button" className="cp-xhs-detail-back" onClick={() => setSelectedNoteId(null)} aria-label="返回">
+              <button type="button" className="cp-xhs-detail-back" onClick={() => setSelectedNoteId(null)} aria-label="Back">
                 <ChevronLeft size={24} strokeWidth={2.1} />
               </button>
               <div className="cp-xhs-detail-author-info">
@@ -2683,10 +2683,10 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                   className={`cp-xhs-detail-follow ${selectedAuthorFollowing ? "is-following" : ""}`}
                   onClick={() => handleToggleFollowAuthor(selectedNote)}
                 >
-                  {selectedAuthorFollowing ? "已关注" : "关注"}
+                  {selectedAuthorFollowing ? "Following" : "Follow"}
                 </button>
               ) : null}
-              <button type="button" className="cp-xhs-detail-share" aria-label="分享" onClick={() => handleShareNote(selectedNote)}>
+              <button type="button" className="cp-xhs-detail-share" aria-label="Share" onClick={() => handleShareNote(selectedNote)}>
                 <ShareFat size={25} weight="regular" />
               </button>
             </div>
@@ -2724,15 +2724,15 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                     type="button"
                     className="xhs-delete-note-btn"
                     onClick={() => requestDeleteNote(selectedNote)}
-                    aria-label="删除帖子"
+                    aria-label="Delete post"
                   >
                     <Trash2 size={14} strokeWidth={2.1} />
-                    删除
+                    Delete
                   </button>
                 </div>
               </div>
               <div className="cp-xhs-comment-section xhs-detail-comment-section">
-                <div className="cp-xhs-comment-count">共 {formatCount(selectedNote.commentCount)} 条评论</div>
+                <div className="cp-xhs-comment-count">{formatCount(selectedNote.commentCount)} comments</div>
                 <div className="cp-xhs-comment-list">
                   <CommentList
                     comments={selectedNote.comments}
@@ -2749,7 +2749,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                     disabled={busy !== "idle"}
                   >
                     {busy === "more-comments" ? <Loader2 className="cp-spin" size={15} /> : null}
-                    {busy === "more-comments" ? "加载中" : "加载更多评论"}
+                    {busy === "more-comments" ? "Loading" : "Load more comments"}
                   </button>
                 </div>
               </div>
@@ -2758,8 +2758,8 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
               <div className="xhs-detail-comment-stack">
                 {replyTarget && replyTarget.noteId === selectedNote.id ? (
                   <div className="xhs-reply-target xhs-detail-reply-target">
-                    <span>回复 {replyTarget.authorName}</span>
-                    <button type="button" onClick={() => setReplyTarget(null)}>取消</button>
+                    <span>Reply to {replyTarget.authorName}</span>
+                    <button type="button" onClick={() => setReplyTarget(null)}>Cancel</button>
                   </div>
                 ) : null}
                 <div className="cp-xhs-input-box xhs-detail-input-box">
@@ -2769,7 +2769,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                     onChange={event => setCommentDraft(event.target.value)}
                     onFocus={() => setCommentComposerFocused(true)}
                     onBlur={() => window.setTimeout(() => setCommentComposerFocused(false), 120)}
-                    placeholder={replyTarget ? "写回复" : "说点什么..."}
+                    placeholder={replyTarget ? "Write a reply" : "Say something..."}
                     rows={commentComposerExpanded ? 3 : 1}
                   />
                 </div>
@@ -2777,19 +2777,19 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
               </div>
               {!commentComposerExpanded && commentDraft.trim() ? (
                 <button type="button" className="xhs-detail-send-btn" onClick={handleSubmitUserComment} disabled={busy !== "idle"}>
-                  {busy === "comment-reply" || busy === "mention-reply" ? <Loader2 className="cp-spin" size={15} /> : "发送"}
+                  {busy === "comment-reply" || busy === "mention-reply" ? <Loader2 className="cp-spin" size={15} /> : "Send"}
                 </button>
               ) : null}
               {!commentComposerExpanded ? <div className="cp-xhs-action-icons">
-                <button type="button" className={`cp-xhs-action-btn ${selectedNote.liked ? "is-liked" : ""}`} onClick={() => handleToggleLike(selectedNote)} aria-label="点赞">
+                <button type="button" className={`cp-xhs-action-btn ${selectedNote.liked ? "is-liked" : ""}`} onClick={() => handleToggleLike(selectedNote)} aria-label="Like">
                   <Heart size={24} strokeWidth={1.72} fill={selectedNote.liked ? "currentColor" : "none"} />
                   <span>{formatCount(selectedNote.likeCount)}</span>
                 </button>
-                <button type="button" className={`cp-xhs-action-btn ${selectedNote.saved ? "is-saved" : ""}`} onClick={() => handleToggleSave(selectedNote)} aria-label="收藏">
+                <button type="button" className={`cp-xhs-action-btn ${selectedNote.saved ? "is-saved" : ""}`} onClick={() => handleToggleSave(selectedNote)} aria-label="Save">
                   <Bookmark size={24} strokeWidth={1.72} fill={selectedNote.saved ? "currentColor" : "none"} />
                   <span>{formatCount(selectedNote.saveCount)}</span>
                 </button>
-                <button type="button" className="cp-xhs-action-btn" aria-label="评论">
+                <button type="button" className="cp-xhs-action-btn" aria-label="Comment">
                   <MessageCircle size={24} strokeWidth={1.72} />
                   <span>{formatCount(selectedNote.commentCount)}</span>
                 </button>
@@ -2811,7 +2811,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
             <section className="cp-xhs-panel cp-xhs-message-page xhs-message-detail-page">
               <div className="xhs-message-detail-list">
                 {selectedMessageNotifications.length === 0 ? (
-                  <div className="cp-xhs-mini-empty">暂无{selectedMessagePanelLabel}通知</div>
+                  <div className="cp-xhs-mini-empty">No {selectedMessagePanelLabel} notifications yet</div>
                 ) : selectedMessageNotifications.map((notice, index) => (
                   <button
                     key={notice.id}
@@ -2827,7 +2827,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                     <div className="xhs-message-detail-copy">
                       <div>
                         <strong>{notificationActorLabel(notice)}</strong>
-                        {notice.type === "follow" ? <em>你的粉丝</em> : null}
+                        {notice.type === "follow" ? <em>Your follower</em> : null}
                       </div>
                       <span>{formatNotificationAction(notice)} <time>{formatTime(notice.createdAt)}</time></span>
                       {notice.type === "comment" ? (
@@ -2852,9 +2852,9 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
             <section className="cp-xhs-panel cp-xhs-message-page xhs-message-page">
               <div className="cp-xhs-message-overview">
                 {([
-                  { id: "engagement", label: "点赞和收藏", count: engagementUnreadCount, icon: "heart", tone: "heart" },
-                  { id: "follow", label: "新增关注", count: followUnreadCount, icon: "user", tone: "follow" },
-                  { id: "comment", label: "评论", count: commentUnreadCount, icon: "chat", tone: "chat" },
+                  { id: "engagement", label: "Likes & Saves", count: engagementUnreadCount, icon: "heart", tone: "heart" },
+                  { id: "follow", label: "New Followers", count: followUnreadCount, icon: "user", tone: "follow" },
+                  { id: "comment", label: "Comments", count: commentUnreadCount, icon: "chat", tone: "chat" },
                 ] as const).map(panel => (
                   <button
                     key={panel.id}
@@ -2873,11 +2873,11 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                 ))}
               </div>
               <div className="xhs-message-section-title">
-                <strong>私信</strong>
-                {dmThreads.length > 0 ? <span>{dmThreads.length} 个对话</span> : null}
+                <strong>Messages</strong>
+                {dmThreads.length > 0 ? <span>{dmThreads.length} conversations</span> : null}
               </div>
               <div className="cp-xhs-thread-list">
-                {dmThreads.length === 0 ? <div className="cp-xhs-mini-empty">暂无私信</div> : null}
+                {dmThreads.length === 0 ? <div className="cp-xhs-mini-empty">No messages yet</div> : null}
                 {dmThreads.map((thread, index) => (
                   <button key={thread.id} type="button" className="cp-xhs-thread-card" onClick={() => handleOpenDmThread(thread)}>
                     <XhsAvatar
@@ -2905,11 +2905,11 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
           {selectedTab === "profile" ? (
             <section className="cp-xhs-profile xhs-profile">
               <div className={`cp-xhs-profile-topbar ${profileTopbarVisible ? "is-visible" : ""}`}>
-                <button type="button" onClick={requestClose} aria-label="返回桌面">
+                <button type="button" onClick={requestClose} aria-label="Back to home screen">
                   <ChevronLeft size={24} strokeWidth={2.4} />
                 </button>
                 <div>
-                  <button type="button" onClick={() => setSettingsOpen(true)} aria-label="设置">
+                  <button type="button" onClick={() => setSettingsOpen(true)} aria-label="Settings">
                     <MoreHorizontal size={22} strokeWidth={1.5} />
                   </button>
                 </div>
@@ -2919,7 +2919,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                   type="button"
                   className="cp-xhs-profile-cover"
                   style={profileCoverStyle}
-                  aria-label="更换主页背景图"
+                  aria-label="Change cover photo"
                   onClick={() => profileCoverFileRef.current?.click()}
                 />
                 <input
@@ -2935,8 +2935,8 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                   </div>
                   <div className="cp-xhs-profile-meta">
                     <h3>{state.profile.nickname}<ChevronDown size={16} strokeWidth={2.3} /></h3>
-                    <span>小红书号：{state.profile.handle}</span>
-                    <span>IP 属地：{state.profile.ipLocation}</span>
+                    <span>Xiaohongshu ID: {state.profile.handle}</span>
+                    <span>Location: {state.profile.ipLocation}</span>
                   </div>
                 </div>
                 <div className="cp-xhs-profile-bio">
@@ -2945,19 +2945,19 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                 </div>
                 <div className="cp-xhs-profile-actions">
                   <div className="cp-xhs-profile-stats">
-                    <div><strong>{formatCount(profileStats.followingCount)}</strong><span>关注</span></div>
-                    <div><strong>{formatCount(profileStats.followerCount)}</strong><span>粉丝</span></div>
-                    <div><strong>{formatCount(profileStats.likedAndSavedCount)}</strong><span>获赞与收藏</span></div>
+                    <div><strong>{formatCount(profileStats.followingCount)}</strong><span>Following</span></div>
+                    <div><strong>{formatCount(profileStats.followerCount)}</strong><span>Followers</span></div>
+                    <div><strong>{formatCount(profileStats.likedAndSavedCount)}</strong><span>Likes & Saves</span></div>
                   </div>
-                  <button type="button" className="cp-xhs-profile-edit" onClick={() => { setProfileDraft(state.profile); setProfileOpen(true); }}>编辑资料</button>
+                  <button type="button" className="cp-xhs-profile-edit" onClick={() => { setProfileDraft(state.profile); setProfileOpen(true); }}>Edit Profile</button>
                   <button type="button" className="cp-xhs-profile-settings" aria-label="Profile settings" onClick={() => setSettingsOpen(true)}>
                     <MoreHorizontal size={22} strokeWidth={1.5} />
                   </button>
                 </div>
                 <div className="cp-xhs-profile-tools">
-                  <div><strong>创作灵感</strong><span>学创作找灵感</span></div>
-                  <div><strong>RED 创作大赛</strong><span>为新生代好作品助力</span></div>
-                  <div><strong>浏览记录</strong><span>看过的笔记</span></div>
+                  <div><strong>Creative Inspiration</strong><span>Learn & find inspiration</span></div>
+                  <div><strong>RED Creator Contest</strong><span>Support great new content</span></div>
+                  <div><strong>Browsing History</strong><span>Notes you've viewed</span></div>
                 </div>
               </div>
               <div className="cp-xhs-profile-content">
@@ -2982,11 +2982,11 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
         )}
       </main>
 
-      {!selectedNote && !isMessageSubpage ? <nav className="cp-xhs-tabbar xhs-tabbar" aria-label="小红书导航">
+      {!selectedNote && !isMessageSubpage ? <nav className="cp-xhs-tabbar xhs-tabbar" aria-label="Xiaohongshu navigation">
         {TABS.map((tab) => {
           if (tab.id === "publish") {
             return (
-              <button key={tab.id} type="button" className="cp-xhs-tab-publish" onClick={() => setComposeOpen(true)} aria-label="发布">
+              <button key={tab.id} type="button" className="cp-xhs-tab-publish" onClick={() => setComposeOpen(true)} aria-label="Post">
                 <div className="cp-xhs-tab-publish-inner"><Plus size={20} strokeWidth={3} /></div>
               </button>
             );
@@ -3014,8 +3014,8 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
         <div className="xhs-modal-backdrop" onClick={() => setComposeOpen(false)}>
           <section className="xhs-publish-sheet" onClick={event => event.stopPropagation()}>
             <header>
-              <strong>发布新笔记</strong>
-              <button type="button" className="xhs-sheet-close-btn" onClick={() => setComposeOpen(false)} aria-label="关闭">×</button>
+              <strong>New Note</strong>
+              <button type="button" className="xhs-sheet-close-btn" onClick={() => setComposeOpen(false)} aria-label="Close">×</button>
             </header>
             <div className="xhs-publish-content">
               <div className="xhs-publish-left">
@@ -3024,8 +3024,8 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                     <div className="xhs-publish-placeholder">
                       <ImagePlus size={42} strokeWidth={1.5} color="#bbb" />
                       <div className="xhs-placeholder-actions">
-                        <button type="button" onClick={() => fileRef.current?.click()}>上传图片</button>
-                        <button type="button" onClick={() => setDraft(prev => ({ ...prev, image: { ...prev.image, description: "" } }))}>描述图片</button>
+                        <button type="button" onClick={() => fileRef.current?.click()}>Upload Image</button>
+                        <button type="button" onClick={() => setDraft(prev => ({ ...prev, image: { ...prev.image, description: "" } }))}>Describe Image</button>
                       </div>
                     </div>
                     <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleImageChange} />
@@ -3041,27 +3041,27 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                       <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleImageChange} />
                     </div>
                     <button type="button" className="xhs-upload-change-btn" onClick={() => setDraft(prev => ({ ...prev, image: {} }))}>
-                      取消并重新选择
+                      Cancel and choose again
                     </button>
                   </>
                 ) : (
                   <>
                     <div className="xhs-image-upload-area is-text-mode">
                       <div className="xhs-text-image-preview">
-                        {draft.image.description?.trim() || "在此区域下方输入描述\n即可生成文字图片"}
+                        {draft.image.description?.trim() || "Enter a description below\nto generate a text image"}
                       </div>
                     </div>
                     <div className="xhs-publish-field">
-                      <label>文字图片内容</label>
+                      <label>Text Image Content</label>
                       <textarea
-                        placeholder="输入文字描述..."
+                        placeholder="Enter a text description..."
                         value={draft.image.description || ""}
                         onChange={event => setDraft(prev => ({ ...prev, image: { ...prev.image, description: event.target.value } }))}
                         autoFocus
                       />
                     </div>
                     <button type="button" className="xhs-upload-change-btn" onClick={() => setDraft(prev => ({ ...prev, image: {} }))}>
-                      取消并重新选择
+                      Cancel and choose again
                     </button>
                   </>
                 )}
@@ -3069,13 +3069,13 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
               <div className="xhs-publish-right">
                 <input
                   className="xhs-publish-title-input"
-                  placeholder="填写标题会有更多赞哦~"
+                  placeholder="Add a title for more likes~"
                   value={draft.title}
                   onChange={event => setDraft(prev => ({ ...prev, title: event.target.value }))}
                 />
                 <textarea
                   className="xhs-publish-body-input"
-                  placeholder="添加正文，和大家分享你的见闻..."
+                  placeholder="Add a caption and share your experience..."
                   value={draft.body}
                   onChange={event => setDraft(prev => ({ ...prev, body: event.target.value }))}
                 />
@@ -3084,13 +3084,13 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                   <input
                     value={tagInput}
                     onChange={event => setTagInput(event.target.value)}
-                    placeholder="添加标签，用空格或逗号分隔"
+                    placeholder="Add tags, separated by spaces or commas"
                   />
                 </div>
                 <div className="xhs-publish-actions">
                   <button type="button" className="xhs-publish-submit-btn" onClick={handlePublish} disabled={busy !== "idle" || (!draft.title.trim() && !draft.body.trim())}>
                     {busy === "publish" ? <Loader2 className="cp-spin" size={18} /> : <Send size={18} />}
-                    发布笔记
+                    Publish Note
                   </button>
                 </div>
               </div>
@@ -3106,31 +3106,31 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
             onClick={event => event.stopPropagation()}
           >
             <header className="xhs-profile-edit-header">
-              <strong>小红书设置</strong>
-              <button type="button" className="xhs-sheet-close-btn" onClick={() => setSettingsOpen(false)} aria-label="关闭">×</button>
+              <strong>Xiaohongshu Settings</strong>
+              <button type="button" className="xhs-sheet-close-btn" onClick={() => setSettingsOpen(false)} aria-label="Close">×</button>
             </header>
 
             <div className="xhs-profile-edit-body">
               <div className="xhs-profile-edit-field">
-                <span className="xhs-profile-edit-section-title">INTERACTION <em>角色互动概率</em></span>
+                <span className="xhs-profile-edit-section-title">INTERACTION <em>Character Interaction Probability</em></span>
                 <input
                   className="xhs-profile-edit-pill"
                   type="number"
                   min={0}
                   max={100}
                   value={settingsDraft.sendToCharacterProbability}
-                  placeholder="发给角色的概率 (0–100)"
+                  placeholder="Probability of sending to character (0-100)"
                   onChange={event => setSettingsDraft(prev => ({ ...prev, sendToCharacterProbability: Number(event.target.value) }))}
                 />
               </div>
 
               <div className="xhs-profile-edit-field">
-                <span className="xhs-profile-edit-section-title">TRANSLATION <em>双语翻译</em></span>
+                <span className="xhs-profile-edit-section-title">TRANSLATION <em>Bilingual Translation</em></span>
                 <div className="xhs-settings-toggle-list">
                   <div className="xhs-settings-toggle-row">
                     <div>
-                      <strong>双语翻译</strong>
-                      <span>角色内容</span>
+                      <strong>Bilingual Translation</strong>
+                      <span>Character content</span>
                     </div>
                     <Toggle
                       checked={settingsDraft.bilingualTranslationEnabled}
@@ -3139,8 +3139,8 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                   </div>
                   <div className="xhs-settings-toggle-row">
                     <div>
-                      <strong>折叠翻译</strong>
-                      <span>默认收起</span>
+                      <strong>Collapse Translation</strong>
+                      <span>Collapsed by default</span>
                     </div>
                     <Toggle
                       checked={settingsDraft.collapseBilingualTranslation}
@@ -3151,10 +3151,10 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
               </div>
 
               <div className="xhs-profile-edit-field">
-                <span className="xhs-profile-edit-section-title">PARTICIPANTS <em>参与角色</em></span>
+                <span className="xhs-profile-edit-section-title">PARTICIPANTS <em>Participating Characters</em></span>
                 <div className="xhs-settings-edit-participants">
                   {characters.length === 0 ? (
-                    <span className="xhs-settings-edit-participants-empty">暂无角色</span>
+                    <span className="xhs-settings-edit-participants-empty">No characters yet</span>
                   ) : (
                     characters.map((character) => {
                       const selected = settingsDraft.participantCharacterIds.includes(character.id);
@@ -3180,15 +3180,15 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
               </div>
 
               <div className="xhs-profile-edit-field">
-                <span className="xhs-profile-edit-section-title">PROMPTS <em>提示词</em></span>
+                <span className="xhs-profile-edit-section-title">PROMPTS <em>Prompts</em></span>
                 {[
-                  { key: "npcIdentityGuardPrompt", label: "NPC身份保护", value: settingsDraft.npcIdentityGuardPrompt ?? DEFAULT_XIAOHONGSHU_SETTINGS.npcIdentityGuardPrompt, onChange: (v: string) => setSettingsDraft(prev => ({ ...prev, npcIdentityGuardPrompt: v })) },
-                  { key: "npcFeedPrompt", label: "帖子生成", value: settingsDraft.npcFeedPrompt, onChange: (v: string) => setSettingsDraft(prev => ({ ...prev, npcFeedPrompt: v })) },
-                  { key: "npcUserPostReactionPrompt", label: "评论用户帖子", value: settingsDraft.npcUserPostReactionPrompt, onChange: (v: string) => setSettingsDraft(prev => ({ ...prev, npcUserPostReactionPrompt: v })) },
-                  { key: "npcCommentReplyPrompt", label: "回复用户评论", value: settingsDraft.npcCommentReplyPrompt, onChange: (v: string) => setSettingsDraft(prev => ({ ...prev, npcCommentReplyPrompt: v })) },
-                  { key: "npcMoreCommentsPrompt", label: "加载更多评论", value: settingsDraft.npcMoreCommentsPrompt ?? "", onChange: (v: string) => setSettingsDraft(prev => ({ ...prev, npcMoreCommentsPrompt: v })) },
-                  { key: "npcDmReplyPrompt", label: "回复私信", value: settingsDraft.npcDmReplyPrompt ?? "", onChange: (v: string) => setSettingsDraft(prev => ({ ...prev, npcDmReplyPrompt: v })) },
-                  { key: "bilingualTranslationPrompt", label: "双语翻译", value: settingsDraft.bilingualTranslationPrompt || DEFAULT_XIAOHONGSHU_BILINGUAL_PROMPT, onChange: (v: string) => setSettingsDraft(prev => ({ ...prev, bilingualTranslationPrompt: v })) },
+                  { key: "npcIdentityGuardPrompt", label: "NPC Identity Guard", value: settingsDraft.npcIdentityGuardPrompt ?? DEFAULT_XIAOHONGSHU_SETTINGS.npcIdentityGuardPrompt, onChange: (v: string) => setSettingsDraft(prev => ({ ...prev, npcIdentityGuardPrompt: v })) },
+                  { key: "npcFeedPrompt", label: "Post Generation", value: settingsDraft.npcFeedPrompt, onChange: (v: string) => setSettingsDraft(prev => ({ ...prev, npcFeedPrompt: v })) },
+                  { key: "npcUserPostReactionPrompt", label: "Comment on User's Post", value: settingsDraft.npcUserPostReactionPrompt, onChange: (v: string) => setSettingsDraft(prev => ({ ...prev, npcUserPostReactionPrompt: v })) },
+                  { key: "npcCommentReplyPrompt", label: "Reply to User's Comment", value: settingsDraft.npcCommentReplyPrompt, onChange: (v: string) => setSettingsDraft(prev => ({ ...prev, npcCommentReplyPrompt: v })) },
+                  { key: "npcMoreCommentsPrompt", label: "Load More Comments", value: settingsDraft.npcMoreCommentsPrompt ?? "", onChange: (v: string) => setSettingsDraft(prev => ({ ...prev, npcMoreCommentsPrompt: v })) },
+                  { key: "npcDmReplyPrompt", label: "Reply to Message", value: settingsDraft.npcDmReplyPrompt ?? "", onChange: (v: string) => setSettingsDraft(prev => ({ ...prev, npcDmReplyPrompt: v })) },
+                  { key: "bilingualTranslationPrompt", label: "Bilingual Translation", value: settingsDraft.bilingualTranslationPrompt || DEFAULT_XIAOHONGSHU_BILINGUAL_PROMPT, onChange: (v: string) => setSettingsDraft(prev => ({ ...prev, bilingualTranslationPrompt: v })) },
                 ].map(({ key, label, value, onChange }) => {
                   const isOpen = expandedPrompts.has(key);
                   return (
@@ -3228,14 +3228,14 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                 className="xhs-profile-edit-footer-cancel"
                 onClick={handleResetSettingsDraft}
               >
-                恢复默认
+                Restore Defaults
               </button>
               <button
                 type="button"
                 className="xhs-profile-edit-footer-save"
                 onClick={handleSaveSettings}
               >
-                保存设置
+                Save Settings
               </button>
             </footer>
           </section>
@@ -3246,27 +3246,27 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
         <div className="xhs-modal-backdrop" onClick={() => setProfileOpen(false)}>
           <section className="xhs-profile-edit-sheet" onClick={event => event.stopPropagation()}>
             <header className="xhs-profile-edit-header">
-              <strong>编辑资料</strong>
-              <button type="button" className="xhs-sheet-close-btn" onClick={() => setProfileOpen(false)} aria-label="关闭">×</button>
+              <strong>Edit Profile</strong>
+              <button type="button" className="xhs-sheet-close-btn" onClick={() => setProfileOpen(false)} aria-label="Close">×</button>
             </header>
 
             <div className="xhs-profile-edit-body">
               <div className="xhs-profile-edit-row-2">
                 <div className="xhs-profile-edit-field">
-                  <span className="xhs-profile-edit-section-title">NICKNAME <em>昵称</em></span>
+                  <span className="xhs-profile-edit-section-title">NICKNAME <em>Nickname</em></span>
                   <input
                     className="xhs-profile-edit-pill"
                     value={profileDraft.nickname}
-                    placeholder="给自己起个名字"
+                    placeholder="Give yourself a name"
                     onChange={event => setProfileDraft(prev => ({ ...prev, nickname: event.target.value }))}
                   />
                 </div>
                 <div className="xhs-profile-edit-field">
-                  <span className="xhs-profile-edit-section-title">ID <em>小红书号</em></span>
+                  <span className="xhs-profile-edit-section-title">ID <em>Xiaohongshu ID</em></span>
                   <input
                     className="xhs-profile-edit-pill"
                     value={profileDraft.handle}
-                    placeholder="未设置"
+                    placeholder="Not set"
                     onChange={event => setProfileDraft(prev => ({ ...prev, handle: event.target.value }))}
                   />
                 </div>
@@ -3274,13 +3274,13 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
 
               <div className="xhs-profile-edit-row-2">
                 <div className="xhs-profile-edit-field">
-                  <span className="xhs-profile-edit-section-title">GENDER <em>性别</em></span>
+                  <span className="xhs-profile-edit-section-title">GENDER <em>Gender</em></span>
                   <div className="xhs-profile-edit-gender">
                     <button
                       type="button"
                       className={/女|♀|female/i.test(profileDraft.gender ?? "") ? "is-active" : ""}
                       onClick={() => setProfileDraft(prev => ({ ...prev, gender: "♀" }))}
-                      aria-label="女"
+                      aria-label="Female"
                     >
                       ♀
                     </button>
@@ -3288,29 +3288,29 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                       type="button"
                       className={/男|♂|male/i.test(profileDraft.gender ?? "") ? "is-active" : ""}
                       onClick={() => setProfileDraft(prev => ({ ...prev, gender: "♂" }))}
-                      aria-label="男"
+                      aria-label="Male"
                     >
                       ♂
                     </button>
                   </div>
                 </div>
                 <div className="xhs-profile-edit-field">
-                  <span className="xhs-profile-edit-section-title">IP LOCATION <em>属地</em></span>
+                  <span className="xhs-profile-edit-section-title">IP LOCATION <em>Location</em></span>
                   <input
                     className="xhs-profile-edit-pill"
                     value={profileDraft.ipLocation}
-                    placeholder="北京"
+                    placeholder="Beijing"
                     onChange={event => setProfileDraft(prev => ({ ...prev, ipLocation: event.target.value }))}
                   />
                 </div>
               </div>
 
               <div className="xhs-profile-edit-field">
-                <span className="xhs-profile-edit-section-title">SIGNATURE <em>签名</em></span>
+                <span className="xhs-profile-edit-section-title">SIGNATURE <em>Signature</em></span>
                 <textarea
                   className="xhs-profile-edit-pill xhs-profile-edit-bio"
                   value={profileDraft.signature}
-                  placeholder="说点什么..."
+                  placeholder="Say something..."
                   onChange={event => setProfileDraft(prev => ({ ...prev, signature: event.target.value }))}
                 />
               </div>
@@ -3322,14 +3322,14 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                 className="xhs-profile-edit-footer-cancel"
                 onClick={() => setProfileOpen(false)}
               >
-                关闭
+                Close
               </button>
               <button
                 type="button"
                 className="xhs-profile-edit-footer-save"
                 onClick={handleSaveProfile}
               >
-                保存
+                Save
               </button>
             </footer>
           </section>
@@ -3338,22 +3338,22 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
 
       {deleteTarget ? (
         <div className="xhs-modal-backdrop" onClick={() => setDeleteTarget(null)}>
-          <section className="xhs-confirm-sheet" onClick={event => event.stopPropagation()} role="dialog" aria-modal="true" aria-label="确认删除">
+          <section className="xhs-confirm-sheet" onClick={event => event.stopPropagation()} role="dialog" aria-modal="true" aria-label="Confirm delete">
             <header>
-              <strong>{deleteTarget.type === "note" ? "删除这篇笔记？" : "删除这条评论？"}</strong>
-              <button type="button" className="xhs-sheet-close-btn" onClick={() => setDeleteTarget(null)} aria-label="关闭">×</button>
+              <strong>{deleteTarget.type === "note" ? "Delete this note?" : "Delete this comment?"}</strong>
+              <button type="button" className="xhs-sheet-close-btn" onClick={() => setDeleteTarget(null)} aria-label="Close">×</button>
             </header>
             <p>
               {deleteTarget.type === "note"
-                ? `将删除《${deleteTarget.title}》，相关评论、消息和短期记忆事件也会一并清理。`
-                : `将删除 ${deleteTarget.comment.authorName} 在《${deleteTarget.noteTitle}》下的评论，相关短期记忆事件也会一并清理。`}
+                ? `This will delete "${deleteTarget.title}". Related comments, messages, and short-term memory events will also be cleared.`
+                : `This will delete ${deleteTarget.comment.authorName}'s comment on "${deleteTarget.noteTitle}". Related short-term memory events will also be cleared.`}
             </p>
             {deleteTarget.type === "comment" ? (
               <blockquote>{deleteTarget.comment.text}</blockquote>
             ) : null}
             <div className="xhs-confirm-actions">
-              <button type="button" onClick={() => setDeleteTarget(null)}>取消</button>
-              <button type="button" className="xhs-confirm-delete-btn" onClick={handleConfirmDelete}>确认删除</button>
+              <button type="button" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button type="button" className="xhs-confirm-delete-btn" onClick={handleConfirmDelete}>Confirm Delete</button>
             </div>
           </section>
         </div>
@@ -3361,24 +3361,24 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
 
       {pendingFeedAction ? (
         <div className="xhs-modal-backdrop" onClick={() => setPendingFeedAction(null)}>
-          <section className="xhs-confirm-sheet" onClick={event => event.stopPropagation()} role="dialog" aria-modal="true" aria-label={pendingFeedAction === "refresh" ? "确认刷新" : "确认清空内容流"}>
+          <section className="xhs-confirm-sheet" onClick={event => event.stopPropagation()} role="dialog" aria-modal="true" aria-label={pendingFeedAction === "refresh" ? "Confirm refresh" : "Confirm clear content"}>
             <header>
-              <strong>{pendingFeedAction === "refresh" ? "新增一批小红书内容？" : "清空首页、附近和视频内容？"}</strong>
-              <button type="button" className="xhs-sheet-close-btn" onClick={() => setPendingFeedAction(null)} aria-label="关闭">×</button>
+              <strong>{pendingFeedAction === "refresh" ? "Generate new Xiaohongshu content?" : "Clear home, nearby, and video content?"}</strong>
+              <button type="button" className="xhs-sheet-close-btn" onClick={() => setPendingFeedAction(null)} aria-label="Close">×</button>
             </header>
             <p>
               {pendingFeedAction === "refresh"
-                ? "将生成一批新的首页与视频内容，已有内容会保留，旧内容不会回传给本次生成链路。"
-                : "将清空首页推荐、附近和视频页当前可见内容；消息、私信、用户主页和互动记录会保留。"}
+                ? "This will generate a new batch of home and video content. Existing content is kept, and old content is not fed back into this generation."
+                : "This will clear the currently visible home, nearby, and video content. Messages, direct messages, your profile, and interaction history will be kept."}
             </p>
             <div className="xhs-confirm-actions">
-              <button type="button" onClick={() => setPendingFeedAction(null)}>取消</button>
+              <button type="button" onClick={() => setPendingFeedAction(null)}>Cancel</button>
               <button
                 type="button"
                 className={pendingFeedAction === "clear" ? "xhs-confirm-delete-btn" : "xhs-confirm-primary-btn"}
                 onClick={() => void handleConfirmFeedAction()}
               >
-                {pendingFeedAction === "refresh" ? "确认新增" : "确认清空"}
+                {pendingFeedAction === "refresh" ? "Confirm Add" : "Confirm Clear"}
               </button>
             </div>
           </section>

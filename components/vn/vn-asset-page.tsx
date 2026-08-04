@@ -74,7 +74,7 @@ export function VnAssetPage({ onNotice }: VnAssetPageProps) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (tab === "sprites" && !selectedCharId) {
-      onNotice?.("请先选择角色");
+      onNotice?.("Please select a character first");
       e.target.value = "";
       return;
     }
@@ -92,11 +92,11 @@ export function VnAssetPage({ onNotice }: VnAssetPageProps) {
     const charId = selectedCharId;
     if (tab === "scenes") {
       await addVnScene(charId, name, pendingFile);
-      onNotice?.(`已添加场景「${name}」${charId ? "" : "（所有角色）"}`);
+      onNotice?.(`Added scene "${name}"${charId ? "" : " (All Characters)"}`);
     } else {
       if (!charId) return; // sprites require a character
       await addVnSprite(charId, name, pendingFile);
-      onNotice?.(`已添加立绘「${name}」`);
+      onNotice?.(`Added sprite "${name}"`);
     }
     setPendingFile(null);
     setPendingName("");
@@ -129,10 +129,10 @@ export function VnAssetPage({ onNotice }: VnAssetPageProps) {
       if (refreshed) {
         setThumbs((prev) => ({ ...prev, [assetId]: refreshed }));
       }
-      onNotice?.(result.removedPixels > 0 ? "已去除立绘边缘底色" : "没有检测到可去除的边缘底色");
+      onNotice?.(result.removedPixels > 0 ? "Removed sprite edge background" : "No removable edge background detected");
     } catch (error) {
       console.error("[VN] remove sprite background failed", error);
-      onNotice?.("去底失败，请换一张图片或稍后重试");
+      onNotice?.("Background removal failed, please try a different image or try again later");
     } finally {
       setRemovingBackgroundAssetId(null);
     }
@@ -615,10 +615,10 @@ export function VnAssetPage({ onNotice }: VnAssetPageProps) {
           {/* ── Tabs ── */}
           <div className="vna-tabs">
             <button type="button" className="vna-tab" data-active={tab === "scenes" ? "true" : undefined} onClick={() => setTab("scenes")}>
-              <Mountain size={14} strokeWidth={1.75} /> 场景
+              <Mountain size={14} strokeWidth={1.75} /> Scenes
             </button>
             <button type="button" className="vna-tab" data-active={tab === "sprites" ? "true" : undefined} onClick={() => setTab("sprites")}>
-              <User size={14} strokeWidth={1.75} /> 立绘
+              <User size={14} strokeWidth={1.75} /> Sprites
             </button>
           </div>
 
@@ -629,14 +629,14 @@ export function VnAssetPage({ onNotice }: VnAssetPageProps) {
               className="vna-add-btn"
               onClick={() => {
                 if (tab === "sprites" && !selectedCharId) {
-                  onNotice?.("请先选择角色");
+                  onNotice?.("Please select a character first");
                   return;
                 }
                 fileRef.current?.click();
               }}
             >
               <ImagePlus size={15} strokeWidth={1.85} />
-              {tab === "scenes" ? "添加场景" : "添加立绘"}
+              {tab === "scenes" ? "Add Scene" : "Add Sprite"}
             </button>
             <span className="vna-select-shell">
               <select
@@ -644,8 +644,8 @@ export function VnAssetPage({ onNotice }: VnAssetPageProps) {
                 value={selectedCharId}
                 onChange={(e) => setSelectedCharId(e.target.value)}
               >
-                {tab === "scenes" && <option value="">所有角色</option>}
-                {tab === "sprites" && <option value="">选择角色</option>}
+                {tab === "scenes" && <option value="">All Characters</option>}
+                {tab === "sprites" && <option value="">Select Character</option>}
                 {characters.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
@@ -657,7 +657,7 @@ export function VnAssetPage({ onNotice }: VnAssetPageProps) {
         <div className="vna-assets-body">
           <div className="vna-assets-heading">
             <div>
-              <h3 className="vna-assets-title">{tab === "scenes" ? "场景资源" : "立绘资源"}</h3>
+              <h3 className="vna-assets-title">{tab === "scenes" ? "Scene Assets" : "Sprite Assets"}</h3>
               <span className="vna-assets-subtitle">
                 {tab === "scenes" ? "Visual novel backgrounds" : "Character sprite library"}
               </span>
@@ -669,8 +669,8 @@ export function VnAssetPage({ onNotice }: VnAssetPageProps) {
           {tab === "scenes" && (
             filteredScenes.length === 0 ? (
               <div className="vna-empty">
-                暂无场景
-                <div className="vna-empty-hint">上传背景图片，AI 会在创作中使用场景名称引用</div>
+                No scenes yet
+                <div className="vna-empty-hint">Upload background images — the AI will reference them by scene name during creation</div>
               </div>
             ) : (
               <div className="vna-grid">
@@ -689,7 +689,7 @@ export function VnAssetPage({ onNotice }: VnAssetPageProps) {
                     )}
                     <div className="vna-card-info">
                       <span className="vna-card-name">{s.name}</span>
-                      <button type="button" className="vna-card-del" onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(s.id); }} aria-label="删除场景">
+                      <button type="button" className="vna-card-del" onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(s.id); }} aria-label="Delete Scene">
                         <Trash2 size={12} />
                       </button>
                     </div>
@@ -702,8 +702,8 @@ export function VnAssetPage({ onNotice }: VnAssetPageProps) {
           {tab === "sprites" && (
             filteredSprites.length === 0 ? (
               <div className="vna-empty">
-                暂无立绘
-                <div className="vna-empty-hint">上传立绘图片，AI 会在创作中使用名称引用</div>
+                No sprites yet
+                <div className="vna-empty-hint">Upload sprite images — the AI will reference them by name during creation</div>
               </div>
             ) : (
               <div className="vna-grid">
@@ -730,7 +730,7 @@ export function VnAssetPage({ onNotice }: VnAssetPageProps) {
                     )}
                     <div className="vna-card-info">
                       <span className="vna-card-name">{s.key}</span>
-                      <button type="button" className="vna-card-del" onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(s.id); }} aria-label="删除立绘">
+                      <button type="button" className="vna-card-del" onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(s.id); }} aria-label="Delete Sprite">
                         <Trash2 size={12} />
                       </button>
                     </div>
@@ -753,12 +753,12 @@ export function VnAssetPage({ onNotice }: VnAssetPageProps) {
       {/* ── Delete Confirm ── */}
       {confirmDeleteId && (
         <ConfirmDialog
-          title="确认删除？"
-          message="删除后无法恢复。是否继续？"
+          title="Confirm deletion?"
+          message="This cannot be undone once deleted. Continue?"
           icon={AlertCircle}
           variant="danger"
-          confirmLabel="确认删除"
-          cancelLabel="取消"
+          confirmLabel="Confirm Delete"
+          cancelLabel="Cancel"
           onConfirm={() => {
             if (tab === "scenes") handleDeleteScene(confirmDeleteId);
             else handleDeleteSprite(confirmDeleteId);
@@ -773,12 +773,12 @@ export function VnAssetPage({ onNotice }: VnAssetPageProps) {
         <div className="vna-naming-overlay" onClick={handleCancelAdd}>
           <div className="vna-naming-dialog" onClick={(e) => e.stopPropagation()}>
             <div className="vna-naming-title">
-              {tab === "scenes" ? "命名场景" : "命名立绘"}
+              {tab === "scenes" ? "Name Scene" : "Name Sprite"}
             </div>
             <div className="vna-naming-hint">
               {tab === "scenes"
-                ? "AI 会通过这个名称在创作中引用该场景"
-                : "AI 会通过这个名称在创作中引用该立绘"}
+                ? "The AI will reference this scene by this name during creation"
+                : "The AI will reference this sprite by this name during creation"}
             </div>
             <input
               ref={nameInputRef}
@@ -786,10 +786,10 @@ export function VnAssetPage({ onNotice }: VnAssetPageProps) {
               value={pendingName}
               onChange={(e) => setPendingName(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleConfirmAdd(); }}
-              placeholder={tab === "scenes" ? "如：雨夜街道、教室走廊" : "如：微笑、生气、害羞"}
+              placeholder={tab === "scenes" ? "e.g. Rainy Night Street, Classroom Hallway" : "e.g. Smiling, Angry, Shy"}
             />
             <div className="vna-naming-btns">
-              <button type="button" className="vna-naming-btn" onClick={handleCancelAdd}>取消</button>
+              <button type="button" className="vna-naming-btn" onClick={handleCancelAdd}>Cancel</button>
               <button
                 type="button"
                 className="vna-naming-btn"
@@ -797,7 +797,7 @@ export function VnAssetPage({ onNotice }: VnAssetPageProps) {
                 onClick={handleConfirmAdd}
                 disabled={!pendingName.trim()}
               >
-                确认
+                Confirm
               </button>
             </div>
           </div>
@@ -839,8 +839,8 @@ export function VnAssetPage({ onNotice }: VnAssetPageProps) {
                         void handleRemoveSpriteBackground(assetId, imgUrl);
                       }}
                       disabled={isRemovingBackground}
-                      aria-label="自动去底"
-                      title="自动去底"
+                      aria-label="Auto Remove Background"
+                      title="Auto Remove Background"
                     >
                       {isRemovingBackground ? <Loader2 className="vna-remove-bg-spinner" size={17} /> : <Eraser size={17} />}
                     </button>
@@ -869,7 +869,7 @@ export function VnAssetPage({ onNotice }: VnAssetPageProps) {
                   )}
                   {!imgUrl && (
                     <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--c-icon)" }}>
-                      加载中...
+                      Loading...
                     </div>
                   )}
                 </div>
@@ -877,19 +877,19 @@ export function VnAssetPage({ onNotice }: VnAssetPageProps) {
                 {/* Sliders */}
                 <div className="vna-layout-controls">
                   <div className="ui-slider-row">
-                    <span className="ui-slider-label">比例</span>
+                    <span className="ui-slider-label">Scale</span>
                     <input type="range" className="ui-slider" min={isSprite ? 30 : 100} max={200} step="any" value={scale}
                       onChange={(e) => updateLayout({ scale: Number(e.target.value) })} />
                     <span className="ui-slider-value">{Math.round(scale)}%</span>
                   </div>
                   <div className="ui-slider-row">
-                    <span className="ui-slider-label">水平</span>
+                    <span className="ui-slider-label">Horizontal</span>
                     <input type="range" className="ui-slider" min={0} max={100} step="any" value={x}
                       onChange={(e) => updateLayout({ x: Number(e.target.value) })} />
                     <span className="ui-slider-value">{Math.round(x)}%</span>
                   </div>
                   <div className="ui-slider-row">
-                    <span className="ui-slider-label">垂直</span>
+                    <span className="ui-slider-label">Vertical</span>
                     <input type="range" className="ui-slider" min={isSprite ? 50 : 0} max={100} step="any" value={y}
                       onChange={(e) => updateLayout({ y: Number(e.target.value) })} />
                     <span className="ui-slider-value">{Math.round(y)}%</span>
@@ -901,8 +901,8 @@ export function VnAssetPage({ onNotice }: VnAssetPageProps) {
                   const fn = la.type === "scene" ? updateVnSceneLayout : updateVnSpriteLayout;
                   fn(la.id, {});
                   setEditingLayoutAsset((prev) => prev ? { ...prev, layout: {} } : null);
-                }}>重置</button>
-                <button className="ui-btn ui-btn-primary" onClick={() => { setEditingLayoutAsset(null); reload(); }}>完成</button>
+                }}>Reset</button>
+                <button className="ui-btn ui-btn-primary" onClick={() => { setEditingLayoutAsset(null); reload(); }}>Done</button>
               </div>
             </div>
           </div>,

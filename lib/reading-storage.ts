@@ -145,20 +145,31 @@ function annotationKey(bookId: string, chapterIndex: number): string {
 
 export async function loadAnnotations(bookId: string, chapterIndex: number): Promise<ReadingAnnotation[]> {
     const key = annotationKey(bookId, chapterIndex);
-    if (_annotationsCache.has(key)) return _annotationsCache.get(key)!;
+    // Hand out a COPY, never the cached array itself. `reading-viewer` puts this straight
+    // into React state, and `saveAnnotation` below used to `push` into the cached array in
+    // place — so the caller's "current" array silently grew the new annotation, and the
+    // caller's own append then produced the SAME id twice (React duplicate-key warning).
+    // Copying on the way out is what makes the cache genuinely private.
+    const cached = _annotationsCache.get(key);
+    if (cached) return [...cached];
     const annots = await db.annotations.where("[bookId+chapterIndex]").equals([bookId, chapterIndex]).toArray();
     _annotationsCache.set(key, annots);
-    return annots;
+    return [...annots];
 }
 
 export async function saveAnnotation(annotation: ReadingAnnotation): Promise<void> {
     await db.annotations.put(annotation);
     const key = annotationKey(annotation.bookId, annotation.chapterIndex);
     const cached = _annotationsCache.get(key) || [];
+    // Replace, never mutate in place — matching deleteAnnotation below, which already
+    // rebuilds the array. Anything handed out by loadAnnotations must stay frozen in time.
     const existingIndex = cached.findIndex((item) => item.id === annotation.id);
-    if (existingIndex >= 0) cached[existingIndex] = annotation;
-    else cached.push(annotation);
-    _annotationsCache.set(key, cached);
+    _annotationsCache.set(
+        key,
+        existingIndex >= 0
+            ? cached.map((item, index) => (index === existingIndex ? annotation : item))
+            : [...cached, annotation],
+    );
 }
 
 export async function saveAnnotations(annotations: ReadingAnnotation[]): Promise<void> {

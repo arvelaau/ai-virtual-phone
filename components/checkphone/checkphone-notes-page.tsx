@@ -202,7 +202,7 @@ export function CheckPhoneNotesPage({
           className="cp-refresh-indicator cp-refresh-indicator--floating"
           aria-live="polite"
         >
-          <span className="cp-refresh-indicator-text">正在刷新备忘录</span>
+          <span className="cp-refresh-indicator-text">Refreshing Notes</span>
           <span className="cp-refresh-indicator-dots" aria-hidden="true">
             <i></i>
             <i></i>
@@ -255,8 +255,8 @@ export function CheckPhoneNotesPage({
 
         {loaded && !payload && !loading && (
           <div className="cp-empty-copy">
-            <p>暂无备忘录内容</p>
-            <span>点刷新同步备忘录片段</span>
+            <p>No notes yet</p>
+            <span>Tap refresh to sync note fragments</span>
           </div>
         )}
 
@@ -353,7 +353,7 @@ export function CheckPhoneNotesPage({
                           fontWeight: 500,
                         }}
                       >
-                        ✓ 置顶
+                        ✓ Pinned
                       </div>
                     ) : note.tagLabel ? (
                       <div
@@ -443,11 +443,11 @@ export function CheckPhoneNotesPage({
       </div>
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空备忘录内容？"
-          message="确认后会清空当前备忘录缓存。之后重新刷新时，不会再带入旧备忘录内容。"
+          title="Clear notes content?"
+          message="This clears the current notes cache. The next refresh will not reuse old notes content."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

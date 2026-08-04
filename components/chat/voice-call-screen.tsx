@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { ChatSession, ChatMessage, loadChatMessages, pushChatMessage, getLatestCharacterStateValues } from "@/lib/chat-storage";
 import type { StateValue } from "@/lib/chat-storage";
+import { buildCallCancelTag, buildCallHangupTag, buildCallInitiateTag, buildCallRejectTag } from "@/lib/call-tag-patterns";
 import { parseStateValues, mergeStateValues } from "@/lib/state-value-parser";
 import { parseAIResponse } from "@/lib/rich-message-parser";
 import { generateChatCompletion, flattenCompletionResult, ChatEngineError } from "@/lib/chat-engine";
@@ -163,10 +164,15 @@ export function VoiceCallScreen({ session, character, onEnd, onConnect, initiato
         // Insert system message (skip if already exists from strict mode remount)
         const lastMsg = messagesRef.current[messagesRef.current.length - 1];
         const initRole = initiator === "character" ? "assistant" : "user";
-        if (!lastMsg || !(lastMsg.content.includes("发起了语音通话"))) {
+        // Dedupe guard: accepts the legacy Chinese tag and the English one
+        // (see lib/call-tag-patterns.ts) so a remount doesn't double-insert.
+        const alreadyInitiated = !!lastMsg
+            && (lastMsg.content.includes("发起了语音通话")
+                || /I started (?:a|the) (?:group )?voice call/i.test(lastMsg.content));
+        if (!alreadyInitiated) {
             const callMsg = initiator === "character"
-                ? `[我向${userNameRef.current}发起了语音通话]`
-                : `[我向${character.name}发起了语音通话]`;
+                ? buildCallInitiateTag("voice", userNameRef.current)
+                : buildCallInitiateTag("voice", character.name);
             const sysMsg = pushChatMessage({
                 sessionId: session.id,
                 role: initRole,
@@ -511,7 +517,7 @@ export function VoiceCallScreen({ session, character, onEnd, onConnect, initiato
         const endMsg = pushChatMessage({
             sessionId: session.id,
             role: "user",
-            content: `[我挂断了语音通话]`,
+            content: buildCallHangupTag("voice", false),
             mediaData: { callDuration: formatTime(callDuration) },
         });
         messagesRef.current = [...messagesRef.current, endMsg];
@@ -735,7 +741,7 @@ export function VoiceCallScreen({ session, character, onEnd, onConnect, initiato
                                     pushChatMessage({
                                         sessionId: session.id,
                                         role: "user",
-                                        content: `[我拒绝了语音通话]`,
+                                        content: buildCallRejectTag("voice", false),
                                     });
                                     onEnd();
                                 }}
@@ -763,7 +769,7 @@ export function VoiceCallScreen({ session, character, onEnd, onConnect, initiato
                                 pushChatMessage({
                                     sessionId: session.id,
                                     role: "user",
-                                    content: `[我取消了语音通话]`,
+                                    content: buildCallCancelTag("voice", false),
                                 });
                                 onEnd();
                             }}

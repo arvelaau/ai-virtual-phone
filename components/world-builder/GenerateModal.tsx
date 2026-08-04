@@ -9,7 +9,7 @@ import type { Character } from "@/lib/character-types";
 interface Props {
   open: boolean;
   categories: string[];
-  /** 角色库（角色化身模式用） */
+  /** Character library (used by Character Avatar mode) */
   characters?: Character[];
   onClose: () => void;
   onModelAdded: () => void;
@@ -21,21 +21,21 @@ export default function GenerateModal({ open, categories, characters = [], onClo
   const [apiKey, setApiKey] = useState("");
   const [keyStatus, setKeyStatus] = useState<"" | "checking" | "ok" | "fail">("");
   const [mode, setMode] = useState<"text" | "image" | "avatar">("text");
-  // 角色化身模式：选中的角色 + 图片来源（角色头像 / 上传立绘）
+  // Character Avatar mode: selected character + image source (character avatar / uploaded artwork)
   const [avatarCharacterId, setAvatarCharacterId] = useState("");
   const [avatarSource, setAvatarSource] = useState<"avatar" | "upload">("upload");
-  // 生成后自动绑骨+走路动画（额外消耗额度；化身可在场景中漫步）
+  // Auto rig + walk animation after generation (extra quota cost; lets the avatar walk around the scene)
   const [animateAvatar, setAnimateAvatar] = useState(true);
   const avatarCharacter = characters.find((c) => c.id === avatarCharacterId) ?? null;
   const [prompt, setPrompt] = useState("");
   const [faceLimit, setFaceLimit] = useState<number>(0);
-  const [simplifyRatio, setSimplifyRatio] = useState<number>(15); // 存整数百分比，避免浮点问题
+  const [simplifyRatio, setSimplifyRatio] = useState<number>(15); // stored as an integer percentage to avoid floating-point issues
   const [status, setStatus] = useState<"idle" | "generating" | "done" | "failed">("idle");
   const [progress, setProgress] = useState("");
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [modelName, setModelName] = useState("");
-  const [category, setCategory] = useState("导入");
+  const [category, setCategory] = useState("Import");
   const [customCat, setCustomCat] = useState("");
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -63,7 +63,7 @@ export default function GenerateModal({ open, categories, characters = [], onClo
       const data = await res.json();
       setKeyStatus(data.ok ? "ok" : "fail");
       if (data.ok && data.balance != null) {
-        setProgress(`余额: ${data.balance}`);
+        setProgress(`Balance: ${data.balance}`);
       }
     } catch {
       setKeyStatus("fail");
@@ -71,10 +71,10 @@ export default function GenerateModal({ open, categories, characters = [], onClo
   }
 
   const STATUS_TEXT: Record<string, string> = {
-    queued: "排队中", running: "生成中", success: "完成", failed: "失败", pending: "等待中",
+    queued: "Queued", running: "Generating", success: "Done", failed: "Failed", pending: "Pending",
   };
 
-  /** 轮询任务状态（8s 间隔省函数调用；页面切后台时暂停）。成功返回结果（含 Tripo 模型直链），失败抛错。 */
+  /** Poll task status (8s interval to save function calls; pauses when the tab is backgrounded). Returns the result on success (including the direct Tripo model URL), throws on failure. */
   async function pollTaskStatus(taskId: string, stageLabel: string): Promise<{ modelUrl?: string }> {
     let consecutiveErrors = 0;
     for (let i = 0; i < 90; i++) {
@@ -88,31 +88,31 @@ export default function GenerateModal({ open, categories, characters = [], onClo
       const data = await res.json();
       if (data.status === "success") return data;
       if (data.status === "failed" || data.status === "cancelled" || data.status === "banned" || data.status === "expired") {
-        throw new Error(data.error || `${stageLabel}失败（${data.status}）`);
+        throw new Error(data.error || `${stageLabel} failed (${data.status})`);
       }
-      // 状态缺失/查询报错：不再伪装成「等待中」死等——连续 3 次就报真实原因
-      //（刚创建的任务可能有几秒查询延迟，给一点宽限）
+      // Missing status / query error: don't fake "pending" forever — report the real reason after 3 consecutive misses
+      // (a just-created task may have a few seconds of query lag, so give it some grace)
       if (!data.status) {
         consecutiveErrors++;
         if (consecutiveErrors >= 3) {
-          throw new Error(`${stageLabel}状态查询失败：${data.error || `HTTP ${res.status}`}`);
+          throw new Error(`${stageLabel} status query failed: ${data.error || `HTTP ${res.status}`}`);
         }
-        setProgress(`${stageLabel}·状态查询重试中…`);
+        setProgress(`${stageLabel} - retrying status query...`);
         continue;
       }
       consecutiveErrors = 0;
       const label = STATUS_TEXT[data.status] || data.status;
       const elapsed = Math.round(((i + 1) * 8) / 60 * 10) / 10;
-      setProgress(data.progress > 0 ? `${stageLabel}·${label} ${data.progress}%` : `${stageLabel}·${label}（已等待 ${elapsed} 分钟）`);
+      setProgress(data.progress > 0 ? `${stageLabel} - ${label} ${data.progress}%` : `${stageLabel} - ${label} (waited ${elapsed} min)`);
     }
-    throw new Error(`${stageLabel}超时`);
+    throw new Error(`${stageLabel} timed out`);
   }
 
-  /** 浏览器直连 Tripo 下载模型 + 客户端减面/缩贴图（不经过服务器，不耗 Netlify 额度）。 */
+  /** Download the model via a direct browser connection to Tripo + client-side decimation/texture downscale (bypasses the server, saves Netlify quota). */
   async function downloadAndOptimize(modelUrl: string, hasAnimation: boolean): Promise<Blob> {
-    setProgress("下载模型…");
+    setProgress("Downloading model...");
     const glbRes = await fetch(modelUrl);
-    if (!glbRes.ok) throw new Error("模型下载失败");
+    if (!glbRes.ok) throw new Error("Model download failed");
     const raw = await glbRes.blob();
     return optimizeModelBlob(raw, {
       ratio: simplifyRatio / 100,
@@ -132,20 +132,20 @@ export default function GenerateModal({ open, categories, characters = [], onClo
         body: JSON.stringify({ apiKey }),
       });
       const data = await res.json();
-      const s = data.status || "等待中";
+      const s = data.status || "pending";
       const statusText: Record<string, string> = {
-        queued: "排队中",
-        running: "生成中",
-        success: "完成",
-        failed: "失败",
-        pending: "等待中",
+        queued: "Queued",
+        running: "Generating",
+        success: "Done",
+        failed: "Failed",
+        pending: "Pending",
       };
       const label = statusText[s] || s;
       const pct = data.progress;
       setProgress(pct != null && pct > 0 ? `${label} ${pct}%` : label);
 
       if (data.status === "success" && data.modelUrl) {
-        // 浏览器直连 Tripo 下载 + 客户端优化；跨域被拒时给手动下载兜底
+        // Download via a direct browser connection to Tripo + client-side optimization; falls back to manual download if CORS is blocked
         try {
           const blob = await downloadAndOptimize(data.modelUrl, false);
           setResultBlob(blob);
@@ -154,76 +154,76 @@ export default function GenerateModal({ open, categories, characters = [], onClo
         } catch {
           setResultUrl(data.modelUrl);
           setStatus("failed");
-          setProgress("自动下载失败，请手动下载后通过「导入模型」添加");
+          setProgress("Automatic download failed. Please download it manually and add it via \"Import Model\"");
           return;
         }
       }
       if (data.status === "failed" || data.status === "cancelled") {
         setStatus("failed");
-        setProgress(data.error || "生成失败");
+        setProgress(data.error || "Generation failed");
         return;
       }
     }
     setStatus("failed");
-    setProgress("超时");
+    setProgress("Timed out");
   }
 
   async function handleGenerate() {
-    if (!apiKey.trim()) { setProgress("请先填写 API Key"); return; }
+    if (!apiKey.trim()) { setProgress("Please enter an API Key first"); return; }
     setStatus("generating");
-    setProgress("提交中...");
+    setProgress("Submitting...");
 
     try {
       if (mode === "avatar") {
-        if (!avatarCharacter) { setProgress("请先选择角色"); setStatus("idle"); return; }
+        if (!avatarCharacter) { setProgress("Please select a character first"); setStatus("idle"); return; }
         let files: File[] = imageFiles;
         if (avatarSource === "avatar") {
-          if (!avatarCharacter.avatar) { setProgress("该角色没有头像，请改用上传立绘"); setStatus("idle"); return; }
+          if (!avatarCharacter.avatar) { setProgress("This character has no avatar. Please upload artwork instead"); setStatus("idle"); return; }
           const imgRes = await fetch(avatarCharacter.avatar);
-          if (!imgRes.ok) throw new Error("头像读取失败，请改用上传立绘");
+          if (!imgRes.ok) throw new Error("Failed to read avatar. Please upload artwork instead");
           const blob = await imgRes.blob();
           files = [new File([blob], "avatar.png", { type: blob.type || "image/png" })];
         }
-        if (files.length === 0) { setProgress("请上传该角色的全身立绘"); setStatus("idle"); return; }
-        setModelName(`${avatarCharacter.name || "角色"}·化身`);
+        if (files.length === 0) { setProgress("Please upload full-body artwork for this character"); setStatus("idle"); return; }
+        setModelName(`${avatarCharacter.name || "Character"} Avatar`);
         const form = new FormData();
         files.forEach((f) => form.append("files", f));
         form.append("apiKey", apiKey);
         form.append("faceLimit", String(faceLimit));
         const res = await fetch("/api/tripo/generate", { method: "POST", body: form });
         const data = await res.json();
-        if (!data.taskId) throw new Error(data.error || "提交失败");
+        if (!data.taskId) throw new Error(data.error || "Submission failed");
         if (animateAvatar) {
-          // 动画链：基础模型（不落盘）→ 自动绑骨 → 套走路动画（跳过减面，保护骨骼）
-          await pollTaskStatus(data.taskId, "基础模型");
-          setProgress("提交自动绑骨…");
+          // Animation chain: base model (not saved) -> auto-rig -> apply walk animation (skips decimation to protect the skeleton)
+          await pollTaskStatus(data.taskId, "Base model");
+          setProgress("Submitting auto-rig...");
           const rigRes = await fetch("/api/tripo/animate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ mode: "rig", taskId: data.taskId, apiKey }),
           });
           const rigData = await rigRes.json();
-          if (!rigData.taskId) throw new Error(rigData.error || "绑骨提交失败");
-          await pollTaskStatus(rigData.taskId, "自动绑骨");
-          setProgress("提交走路动画…");
+          if (!rigData.taskId) throw new Error(rigData.error || "Rig submission failed");
+          await pollTaskStatus(rigData.taskId, "Auto-rig");
+          setProgress("Submitting walk animation...");
           const retRes = await fetch("/api/tripo/animate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ mode: "retarget", taskId: rigData.taskId, apiKey, animation: "preset:walk" }),
           });
           const retData = await retRes.json();
-          if (!retData.taskId) throw new Error(retData.error || "动画提交失败");
-          const finalData = await pollTaskStatus(retData.taskId, "走路动画");
-          if (!finalData.modelUrl) throw new Error("动画模型下载失败");
-          // 动画模型跳过几何操作（保护骨骼蒙皮），只缩贴图
+          if (!retData.taskId) throw new Error(retData.error || "Animation submission failed");
+          const finalData = await pollTaskStatus(retData.taskId, "Walk animation");
+          if (!finalData.modelUrl) throw new Error("Animated model download failed");
+          // Animated models skip geometry operations (to protect the skeleton/skinning) and only downscale textures
           setResultBlob(await downloadAndOptimize(finalData.modelUrl, true));
           setStatus("done");
         } else {
-          setProgress("生成中...");
+          setProgress("Generating...");
           await pollAndDownload(data.taskId);
         }
       } else if (mode === "text") {
-        if (!prompt.trim()) { setProgress("请输入描述"); setStatus("idle"); return; }
+        if (!prompt.trim()) { setProgress("Please enter a description"); setStatus("idle"); return; }
         setModelName(prompt.trim());
         const res = await fetch("/api/tripo/generate", {
           method: "POST",
@@ -231,11 +231,11 @@ export default function GenerateModal({ open, categories, characters = [], onClo
           body: JSON.stringify({ prompt: prompt.trim(), apiKey, faceLimit }),
         });
         const data = await res.json();
-        if (!data.taskId) throw new Error(data.error || "提交失败");
-        setProgress("生成中...");
+        if (!data.taskId) throw new Error(data.error || "Submission failed");
+        setProgress("Generating...");
         await pollAndDownload(data.taskId);
       } else {
-        if (imageFiles.length === 0) { setProgress("请选择图片"); setStatus("idle"); return; }
+        if (imageFiles.length === 0) { setProgress("Please select an image"); setStatus("idle"); return; }
         setModelName(imageFiles[0].name.replace(/\.\w+$/, ""));
         const form = new FormData();
         imageFiles.forEach((f) => form.append("files", f));
@@ -243,8 +243,8 @@ export default function GenerateModal({ open, categories, characters = [], onClo
         form.append("faceLimit", String(faceLimit));
         const res = await fetch("/api/tripo/generate", { method: "POST", body: form });
         const data = await res.json();
-        if (!data.taskId) throw new Error(data.error || "提交失败");
-        setProgress("生成中...");
+        if (!data.taskId) throw new Error(data.error || "Submission failed");
+        setProgress("Generating...");
         await pollAndDownload(data.taskId);
       }
     } catch (e: any) {
@@ -256,9 +256,9 @@ export default function GenerateModal({ open, categories, characters = [], onClo
   async function handleAddToLibrary() {
     if (!resultBlob) return;
     const isAvatar = mode === "avatar" && !!avatarCharacter;
-    const cat = isAvatar ? "角色" : (customCat.trim() || category);
+    const cat = isAvatar ? "Character" : (customCat.trim() || category);
     await saveModel({
-      name: modelName || "未命名",
+      name: modelName || "Unnamed",
       category: cat,
       blob: resultBlob,
       ...(isAvatar ? { characterId: avatarCharacter.id } : {}),
@@ -288,7 +288,7 @@ export default function GenerateModal({ open, categories, characters = [], onClo
     <div className="wb-modal-overlay" onClick={resetAndClose}>
       <div className="wb-modal" onClick={(e) => e.stopPropagation()}>
         <div className="wb-modal-header">
-          <span>生成模型</span>
+          <span>Generate Model</span>
           <button className="wb-float-close" onClick={resetAndClose}>✕</button>
         </div>
 
@@ -300,7 +300,7 @@ export default function GenerateModal({ open, categories, characters = [], onClo
               className="wb-modal-input"
               style={{ flex: 1 }}
               type="password"
-              placeholder="输入 Tripo API Key"
+              placeholder="Enter Tripo API Key"
               value={apiKey}
               onChange={(e) => saveApiKey(e.target.value)}
             />
@@ -310,33 +310,33 @@ export default function GenerateModal({ open, categories, characters = [], onClo
               onClick={verifyApiKey}
               disabled={!apiKey.trim() || keyStatus === "checking"}
             >
-              {keyStatus === "checking" ? "验证中" : "验证"}
+              {keyStatus === "checking" ? "Verifying" : "Verify"}
             </button>
           </div>
-          {keyStatus === "ok" && <span className="wb-modal-hint" style={{ color: "rgba(100,220,140,0.8)" }}>已连接</span>}
-          {keyStatus === "fail" && <span className="wb-modal-hint" style={{ color: "rgba(255,120,100,0.8)" }}>连接失败，请检查 Key</span>}
+          {keyStatus === "ok" && <span className="wb-modal-hint" style={{ color: "rgba(100,220,140,0.8)" }}>Connected</span>}
+          {keyStatus === "fail" && <span className="wb-modal-hint" style={{ color: "rgba(255,120,100,0.8)" }}>Connection failed, please check the Key</span>}
         </div>
 
-        {/* 模式切换 */}
+        {/* Mode switch */}
         <div className="wb-modal-section">
           <div className="wb-modal-tabs">
-            <button className={mode === "text" ? "active" : ""} onClick={() => setMode("text")}>文字生成</button>
-            <button className={mode === "image" ? "active" : ""} onClick={() => setMode("image")}>图片生成</button>
+            <button className={mode === "text" ? "active" : ""} onClick={() => setMode("text")}>Text to Model</button>
+            <button className={mode === "image" ? "active" : ""} onClick={() => setMode("image")}>Image to Model</button>
             <button
               className={mode === "avatar" ? "active" : ""}
               onClick={() => {
                 setMode("avatar");
-                // 化身跳过后处理减面（保护骨骼蒙皮），face_limit 是唯一控面手段；
-                // 不限面时 Tripo 原始输出 20 万+ 面，实时骨骼动画太重——默认 4 万
+                // Avatars skip post-process decimation (to protect skeleton/skinning), so face_limit is the only way to control face count;
+                // with no limit, Tripo's raw output is 200k+ faces, which is too heavy for real-time skeletal animation — default to 40k
                 if (faceLimit === 0) setFaceLimit(40000);
               }}
-            >角色化身</button>
+            >Character Avatar</button>
           </div>
         </div>
 
-        {/* 面数控制 */}
+        {/* Face count control */}
         <div className="wb-modal-section">
-          <label className="wb-modal-label">生成面数（0 = 不限制）</label>
+          <label className="wb-modal-label">Face count (0 = unlimited)</label>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input
               className="wb-scale-slider"
@@ -347,12 +347,12 @@ export default function GenerateModal({ open, categories, characters = [], onClo
               value={faceLimit}
               onChange={(e) => setFaceLimit(parseInt(e.target.value))}
             />
-            <span className="wb-scale-value" style={{ minWidth: 40 }}>{faceLimit || "无限"}</span>
+            <span className="wb-scale-value" style={{ minWidth: 40 }}>{faceLimit || "Unlimited"}</span>
           </div>
         </div>
 
         <div className="wb-modal-section">
-          <label className="wb-modal-label">重拓扑保留比例（{simplifyRatio}%）</label>
+          <label className="wb-modal-label">Retopology retain ratio ({simplifyRatio}%)</label>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input
               className="wb-scale-slider"
@@ -367,20 +367,20 @@ export default function GenerateModal({ open, categories, characters = [], onClo
           </div>
         </div>
 
-        {/* 输入 */}
+        {/* Input */}
         <div className="wb-modal-section">
           {mode === "avatar" ? (
             <>
-              <label className="wb-modal-label">选择角色</label>
+              <label className="wb-modal-label">Select Character</label>
               <select
                 className="wb-modal-input"
                 value={avatarCharacterId}
                 onChange={(e) => setAvatarCharacterId(e.target.value)}
                 disabled={status === "generating"}
               >
-                <option value="">请选择…</option>
+                <option value="">Please select...</option>
                 {characters.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name || "未命名角色"}</option>
+                  <option key={c.id} value={c.id}>{c.name || "Unnamed Character"}</option>
                 ))}
               </select>
               <div className="wb-modal-tabs" style={{ marginTop: 8 }}>
@@ -388,12 +388,12 @@ export default function GenerateModal({ open, categories, characters = [], onClo
                   className={avatarSource === "upload" ? "active" : ""}
                   onClick={() => setAvatarSource("upload")}
                   disabled={status === "generating"}
-                >上传立绘（推荐）</button>
+                >Upload Artwork (Recommended)</button>
                 <button
                   className={avatarSource === "avatar" ? "active" : ""}
                   onClick={() => setAvatarSource("avatar")}
                   disabled={status === "generating"}
-                >用角色头像</button>
+                >Use Character Avatar</button>
               </div>
               {avatarSource === "upload" ? (
                 <>
@@ -414,7 +414,7 @@ export default function GenerateModal({ open, categories, characters = [], onClo
                     onClick={() => fileRef.current?.click()}
                     disabled={status === "generating"}
                   >
-                    选择立绘图片（可多选多视角）
+                    Select Artwork Images (multi-select for multiple angles)
                   </button>
                   {imageFiles.length > 0 && (
                     <div className="wb-modal-images">
@@ -430,7 +430,7 @@ export default function GenerateModal({ open, categories, characters = [], onClo
               ) : (
                 avatarCharacter?.avatar
                   ? <div className="wb-modal-images" style={{ marginTop: 8 }}><div className="wb-modal-img-item"><img src={avatarCharacter.avatar} alt="" /></div></div>
-                  : <span className="wb-modal-hint" style={{ marginTop: 8 }}>该角色没有头像，请改用上传立绘</span>
+                  : <span className="wb-modal-hint" style={{ marginTop: 8 }}>This character has no avatar. Please upload artwork instead</span>
               )}
               <label className="wb-modal-hint" style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", marginTop: 8 }}>
                 <input
@@ -439,16 +439,16 @@ export default function GenerateModal({ open, categories, characters = [], onClo
                   onChange={(e) => setAnimateAvatar(e.target.checked)}
                   disabled={status === "generating"}
                 />
-                生成后自动绑骨+走路动画（多消耗额度，化身可在场景中走动）
+                Auto rig + walk animation after generation (uses more quota; lets the avatar walk around the scene)
               </label>
               <span className="wb-modal-hint">
-                立绘建议：全身、自然站姿/T-pose、无遮挡——大头照会生成奇怪的半身像
+                Artwork tips: full body, natural standing pose/T-pose, unobstructed — headshots will produce odd half-body models
               </span>
             </>
           ) : mode === "text" ? (
             <input
               className="wb-modal-input"
-              placeholder="描述你想要的物体..."
+              placeholder="Describe the object you want..."
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && status === "idle" && handleGenerate()}
@@ -472,7 +472,7 @@ export default function GenerateModal({ open, categories, characters = [], onClo
                 onClick={() => fileRef.current?.click()}
                 disabled={status === "generating"}
               >
-                选择图片（可多选）
+                Select Images (multi-select)
               </button>
               {imageFiles.length > 0 && (
                 <div className="wb-modal-images">
@@ -485,34 +485,34 @@ export default function GenerateModal({ open, categories, characters = [], onClo
                 </div>
               )}
               <span className="wb-modal-hint">
-                1张=单图生成 · 多张=多视角生成（效果更好）
+                1 image = single-view generation, multiple = multi-view generation (better results)
               </span>
             </>
           )}
         </div>
 
-        {/* 生成按钮 */}
+        {/* Generate button */}
         {status === "idle" && (
           <button className="wb-modal-btn wb-modal-primary" onClick={handleGenerate}>
-            开始生成
+            Start Generating
           </button>
         )}
 
-        {/* 进度 */}
+        {/* Progress */}
         {progress && <div className="wb-modal-progress">{progress}</div>}
 
-        {/* 下载失败提示 */}
+        {/* Download failure hint */}
         {status === "failed" && resultUrl && (
           <a href={resultUrl} target="_blank" rel="noreferrer" className="wb-modal-link">
-            手动下载模型
+            Download Model Manually
           </a>
         )}
 
-        {/* 生成完成：添加到库 */}
+        {/* Generation complete: add to library */}
         {status === "done" && resultBlob && (
           <div className="wb-modal-result">
             <div className="wb-modal-section">
-              <label className="wb-modal-label">模型名称</label>
+              <label className="wb-modal-label">Model Name</label>
               <input
                 className="wb-modal-input"
                 value={modelName}
@@ -520,20 +520,20 @@ export default function GenerateModal({ open, categories, characters = [], onClo
               />
             </div>
             <div className="wb-modal-section">
-              <label className="wb-modal-label">分类</label>
+              <label className="wb-modal-label">Category</label>
               <div className="wb-modal-cat-list">
-                {[...categories, "自定义"].map((c) => (
+                {[...categories, "Custom"].map((c) => (
                   <button
                     key={c}
                     className={`wb-modal-cat ${category === c ? "active" : ""}`}
-                    onClick={() => { setCategory(c); if (c !== "自定义") setCustomCat(""); }}
+                    onClick={() => { setCategory(c); if (c !== "Custom") setCustomCat(""); }}
                   >{c}</button>
                 ))}
               </div>
-              {category === "自定义" && (
+              {category === "Custom" && (
                 <input
                   className="wb-modal-input"
-                  placeholder="输入新分类名"
+                  placeholder="Enter new category name"
                   value={customCat}
                   onChange={(e) => setCustomCat(e.target.value)}
                   style={{ marginTop: 6 }}
@@ -541,8 +541,8 @@ export default function GenerateModal({ open, categories, characters = [], onClo
               )}
             </div>
             <div className="wb-modal-actions">
-              <button className="wb-modal-btn wb-modal-primary" onClick={handleAddToLibrary}>添加到库</button>
-              <button className="wb-modal-btn" onClick={resetAndClose}>丢弃</button>
+              <button className="wb-modal-btn wb-modal-primary" onClick={handleAddToLibrary}>Add to Library</button>
+              <button className="wb-modal-btn" onClick={resetAndClose}>Discard</button>
             </div>
           </div>
         )}

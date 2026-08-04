@@ -1,6 +1,6 @@
 import type { CalendarColorKey, CalendarScheduleItem } from "./calendar-types";
 
-const WEEKDAY_LABELS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"] as const;
+const WEEKDAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
 
 export const CALENDAR_HOUR_START = 8;
 export const CALENDAR_HOUR_END = 23;
@@ -120,7 +120,7 @@ export function formatWeekRangeLabel(weekStart: string): string {
   const dates = getWeekDates(weekStart);
   const start = parseIsoDate(dates[0]);
   const end = parseIsoDate(dates[6]);
-  return `${start.getMonth() + 1}月${start.getDate()}日 - ${end.getMonth() + 1}月${end.getDate()}日`;
+  return `${start.getMonth() + 1}/${start.getDate()} - ${end.getMonth() + 1}/${end.getDate()}`;
 }
 
 export function getOwnerStorageKey(ownerType: string, ownerId: string): string {

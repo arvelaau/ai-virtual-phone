@@ -187,9 +187,9 @@ function ModulePieChart({ modules, totalBytes }: { modules: ModuleStats[]; total
   let offset = 0;
 
   return (
-    <div className="data-pie-panel" aria-label="模块数据占比">
+    <div className="data-pie-panel" aria-label="Module data breakdown">
       <div className="data-pie-chart">
-        <svg viewBox="0 0 120 120" role="img" aria-label="模块占比饼图">
+        <svg viewBox="0 0 120 120" role="img" aria-label="Module breakdown pie chart">
           <circle className="data-pie-track" cx="60" cy="60" r={radius} />
           {visibleModules.length > 0 ? visibleModules.map((module) => {
             const length = totalBytes > 0 ? (module.bytes / totalBytes) * circumference : 0;
@@ -213,7 +213,7 @@ function ModulePieChart({ modules, totalBytes }: { modules: ModuleStats[]; total
         </svg>
         <div className="data-pie-center">
           <span>{formatBytes(totalBytes)}</span>
-          <small>总量</small>
+          <small>Total</small>
         </div>
       </div>
       <div className="data-pie-legend">
@@ -239,9 +239,9 @@ function moduleLabel(id: DataModuleId): string {
 }
 
 function formatTime(value?: string): string {
-  if (!value) return "无记录";
+  if (!value) return "No record";
   try {
-    return new Intl.DateTimeFormat("zh-CN", {
+    return new Intl.DateTimeFormat("en-US", {
       month: "2-digit",
       day: "2-digit",
       hour: "2-digit",
@@ -303,14 +303,14 @@ export function DataManagement({ onNotice }: DataManagementProps) {
       const result = await runCloudBackup(cloudConfig, { force: true, excludeMedia: false, onProgress: setCloudProgress });
       setCloudState(loadCloudBackupState());
       if (result.status === "anomaly") {
-        onNotice?.("数据明显变小，已存为待复核备份并保留之前的备份。");
+        onNotice?.("Data shrank significantly; saved as a pending-review backup and kept the previous backup.");
       } else if (result.status === "skipped") {
-        onNotice?.("数据没有变化，已跳过本次备份。");
+        onNotice?.("No changes detected; this backup was skipped.");
       } else {
-        onNotice?.(`已备份：上传 ${result.uploadedModules} 个模块，${formatBytes(result.totalBytes)}。`);
+        onNotice?.(`Backed up: uploaded ${result.uploadedModules} module(s), ${formatBytes(result.totalBytes)}.`);
       }
     } catch (error) {
-      onNotice?.(error instanceof Error ? error.message : "备份失败。");
+      onNotice?.(error instanceof Error ? error.message : "Backup failed.");
       setCloudState(loadCloudBackupState());
     } finally {
       setCloudBackingUp(false);
@@ -327,14 +327,14 @@ export function DataManagement({ onNotice }: DataManagementProps) {
       saveCloudBackupConfig(cloudConfig);
       setRestoreList(await listCloudBackups(cloudConfig));
     } catch (error) {
-      onNotice?.(error instanceof Error ? error.message : "读取云端备份列表失败。");
+      onNotice?.(error instanceof Error ? error.message : "Failed to load the cloud backup list.");
       setRestoreList([]);
     } finally {
       setRestoreLoading(false);
     }
   };
 
-  const confirmRestore = (pending: PendingCloudRestore) => runAction("恢复中", async () => {
+  const confirmRestore = (pending: PendingCloudRestore) => runAction("Restoring", async () => {
     try {
       // Cloud restore is a recovery path: "merge" keeps extra local records, but
       // same-ID conflicts should still prefer the backup so partial/empty local
@@ -345,9 +345,9 @@ export function DataManagement({ onNotice }: DataManagementProps) {
       if (result.errors.length > 0) {
         console.warn("[DataManagement] cloud restore errors:", result.errors);
       }
-      const errorNote = result.errors.length > 0 ? `，${result.errors.length} 项出错` : "";
-      const firstError = result.errors[0] ? `首个错误：${result.errors[0]}。` : "";
-      return `已从云端恢复：新增 ${result.added}，覆盖 ${result.overwritten}，跳过 ${result.skipped}${errorNote}。${firstError}请刷新应用让缓存重新载入。`;
+      const errorNote = result.errors.length > 0 ? `, ${result.errors.length} item(s) failed` : "";
+      const firstError = result.errors[0] ? `First error: ${result.errors[0]}. ` : "";
+      return `Restored from cloud: added ${result.added}, overwritten ${result.overwritten}, skipped ${result.skipped}${errorNote}. ${firstError}Please refresh the app to reload the cache.`;
     } finally {
       setCloudProgress(null);
     }
@@ -375,10 +375,10 @@ export function DataManagement({ onNotice }: DataManagementProps) {
       saveCloudBackupConfig(cloudConfig);
       const result = await testCloudBackupConnection(cloudConfig);
       setCloudTestMsg(result.ok
-        ? { ok: true, text: "连接成功，备份桶已就绪。" }
+        ? { ok: true, text: "Connection succeeded; the backup bucket is ready." }
         : { ok: false, text: result.error });
     } catch (error) {
-      setCloudTestMsg({ ok: false, text: error instanceof Error ? error.message : "测试失败。" });
+      setCloudTestMsg({ ok: false, text: error instanceof Error ? error.message : "Test failed." });
     } finally {
       setCloudTesting(false);
     }
@@ -392,7 +392,7 @@ export function DataManagement({ onNotice }: DataManagementProps) {
     () => pendingImport?.envelope.manifest.modules.map((module) => ({
       id: module.id,
       label: module.label,
-      meta: `${module.records} 项 · ${formatBytes(module.bytes)}`,
+      meta: `${module.records} item(s) · ${formatBytes(module.bytes)}`,
     })) ?? [],
     [pendingImport],
   );
@@ -405,7 +405,7 @@ export function DataManagement({ onNotice }: DataManagementProps) {
   useEffect(() => {
     setPersistSupported(typeof navigator !== "undefined" && Boolean(navigator.storage?.persist));
     void reloadStats().catch((error) => {
-      onNotice?.("读取数据统计失败。");
+      onNotice?.("Failed to load data statistics.");
       console.warn("[DataManagement] inspect failed:", error);
     });
   }, [onNotice]);
@@ -417,7 +417,7 @@ export function DataManagement({ onNotice }: DataManagementProps) {
       if (message) onNotice?.(message);
       await reloadStats();
     } catch (error) {
-      onNotice?.(error instanceof Error ? error.message : "操作失败，请稍后再试。");
+      onNotice?.(error instanceof Error ? error.message : "Action failed, please try again later.");
       console.warn("[DataManagement] action failed:", error);
     } finally {
       setBusy(null);
@@ -426,22 +426,22 @@ export function DataManagement({ onNotice }: DataManagementProps) {
 
   const handleExport = (moduleIds: DataModuleId[]) => {
     if (moduleIds.length === 0) {
-      onNotice?.("请选择要导出的模块。");
+      onNotice?.("Please select the modules to export.");
       return;
     }
-    const labels = moduleIds.map(moduleLabel).join("、");
+    const labels = moduleIds.map(moduleLabel).join(", ");
     setConfirmRequest({ type: "export", moduleIds, labels });
   };
 
-  const executeExport = (moduleIds: DataModuleId[]) => runAction("导出中", async () => {
+  const executeExport = (moduleIds: DataModuleId[]) => runAction("Exporting", async () => {
     const { blob, manifest } = await createBackupBlob(moduleIds, { excludeMedia: cloudConfig.excludeMedia });
-    const note = manifest.mediaExcluded ? "（不含图片/多媒体）" : "";
+    const note = manifest.mediaExcluded ? " (excludes images/media)" : "";
     if (isIOSBrowser() || isAndroidBrowser()) {
       setPendingExport({ blob, manifest });
-      return `备份文件已生成：${manifest.modules.length} 个模块，${formatBytes(manifest.totalBytes)}${note}。请点“保存备份文件”。`;
+      return `Backup file created: ${manifest.modules.length} module(s), ${formatBytes(manifest.totalBytes)}${note}. Tap "Save Backup File".`;
     }
     await downloadBackupBlob(blob, manifest, { disableNativeShare: true });
-    return `已导出 ${manifest.modules.length} 个模块，${formatBytes(manifest.totalBytes)}${note}。`;
+    return `Exported ${manifest.modules.length} module(s), ${formatBytes(manifest.totalBytes)}${note}.`;
   });
 
   const savePendingExport = async () => {
@@ -451,9 +451,9 @@ export function DataManagement({ onNotice }: DataManagementProps) {
       const useNativeShare = isIOSBrowser();
       await downloadBackupBlob(pendingExport.blob, pendingExport.manifest, useNativeShare ? { nativeShareOnly: true } : { disableNativeShare: true });
       setPendingExport(null);
-      onNotice?.(useNativeShare ? "已打开系统分享，请选择“存储到文件”。" : "已开始下载备份文件。");
+      onNotice?.(useNativeShare ? "Opened the system share sheet; choose \"Save to Files\"." : "Started downloading the backup file.");
     } catch (error) {
-      onNotice?.(error instanceof Error ? error.message : "无法打开系统分享，请稍后再试。");
+      onNotice?.(error instanceof Error ? error.message : "Couldn't open the system share sheet, please try again later.");
     } finally {
       setExportSaving(false);
     }
@@ -461,45 +461,45 @@ export function DataManagement({ onNotice }: DataManagementProps) {
 
   const handleFileSelected = async (file: File | undefined) => {
     if (!file) return;
-    await runAction("读取备份", async () => {
+    await runAction("Reading backup", async () => {
       const envelope = await readBackupBlob(file);
       setPendingImport({ file, envelope });
       setSelectedImportModules(envelope.manifest.modules.map((module) => module.id));
-      return `已读取备份：${envelope.manifest.modules.map((module) => module.label).join("、")}`;
+      return `Backup loaded: ${envelope.manifest.modules.map((module) => module.label).join(", ")}`;
     });
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleImport = (overwrite = false) => {
     if (!pendingImport) {
-      onNotice?.("请先选择备份文件。");
+      onNotice?.("Please select a backup file first.");
       return;
     }
     if (selectedImportModules.length === 0) {
-      onNotice?.("请选择要导入的模块。");
+      onNotice?.("Please select the modules to import.");
       return;
     }
-    const labels = selectedImportModules.map(moduleLabel).join("、");
+    const labels = selectedImportModules.map(moduleLabel).join(", ");
     setConfirmRequest({ type: "import", moduleIds: selectedImportModules, labels, overwrite });
   };
 
-  const executeImport = (moduleIds: DataModuleId[], overwrite = false) => runAction("导入中", async () => {
-    if (!pendingImport) return "请先选择备份文件。";
+  const executeImport = (moduleIds: DataModuleId[], overwrite = false) => runAction("Importing", async () => {
+    if (!pendingImport) return "Please select a backup file first.";
     const result: ImportResult = await importBackupBlob(pendingImport.file, moduleIds, { overwrite });
     setPendingImport(null);
-    const summary = `导入完成：新增 ${result.added}，跳过 ${result.skipped}，覆盖 ${result.overwritten}`;
+    const summary = `Import complete: added ${result.added}, skipped ${result.skipped}, overwritten ${result.overwritten}`;
     if (result.errors.length > 0) {
-      const firstError = result.errors[0] ? `首个错误：${result.errors[0]}。` : "";
-      return `${summary}。错误 ${result.errors.length} 个，${firstError}建议刷新后检查。`;
+      const firstError = result.errors[0] ? `First error: ${result.errors[0]}. ` : "";
+      return `${summary}. ${result.errors.length} error(s), ${firstError}we recommend refreshing and checking.`;
     }
-    return `${summary}。请刷新应用让缓存重新载入。`;
+    return `${summary}. Please refresh the app to reload the cache.`;
   });
 
-  const handlePersist = () => runAction("申请保护", async () => {
-    if (!navigator.storage?.persist) return "当前浏览器不支持持久化存储申请。";
+  const handlePersist = () => runAction("Requesting protection", async () => {
+    if (!navigator.storage?.persist) return "This browser doesn't support requesting persistent storage.";
     const ok = await navigator.storage.persist();
     setPersisted(ok);
-    return ok ? "已开启浏览器持久化保护。" : "浏览器未授予持久化保护，可继续使用文件备份。";
+    return ok ? "Browser persistent storage protection enabled." : "The browser didn't grant persistent protection; you can still use file backups.";
   });
 
   const handlePersistToggle = (next: boolean) => {
@@ -507,36 +507,36 @@ export function DataManagement({ onNotice }: DataManagementProps) {
       void handlePersist();
       return;
     }
-    void runAction("更新保护", async () => "浏览器不允许网页主动关闭持久化保护，请在浏览器的网站设置中撤销或清除站点数据。");
+    void runAction("Updating protection", async () => "Browsers don't allow web pages to disable persistent protection directly; revoke or clear site data in your browser's site settings.");
   };
 
   const handleClearSelected = () => {
     if (selectedClearModules.length === 0) {
-      onNotice?.("请选择要清理的模块。");
+      onNotice?.("Please select the modules to clean up.");
       return;
     }
-    const labels = selectedClearModules.map(moduleLabel).join("、");
+    const labels = selectedClearModules.map(moduleLabel).join(", ");
     setConfirmRequest({ type: "clear", moduleIds: selectedClearModules, labels });
   };
 
-  const executeClearSelected = (moduleIds: DataModuleId[]) => runAction("清理中", async () => {
+  const executeClearSelected = (moduleIds: DataModuleId[]) => runAction("Cleaning", async () => {
     const result = await clearModules(moduleIds);
     setSelectedClearModules([]);
-    if (result.errors.length > 0) return `已清理 ${result.removed} 项，另有 ${result.errors.length} 个错误。`;
-    return `已清理 ${result.removed} 项。请刷新应用让缓存重新载入。`;
+    if (result.errors.length > 0) return `Cleaned up ${result.removed} item(s), with ${result.errors.length} error(s).`;
+    return `Cleaned up ${result.removed} item(s). Please refresh the app to reload the cache.`;
   });
 
-  const executeMediaMaintenance = () => runAction("媒体清理中", async () => {
+  const executeMediaMaintenance = () => runAction("Cleaning media", async () => {
     const result = await runMediaMaintenance({ force: true });
     setMediaState(loadMediaMaintenanceState());
     return formatMediaMaintenanceResult(result);
   });
 
-  const executeOrphanThemeCleanup = () => runAction("孤儿素材清理中", async () => {
+  const executeOrphanThemeCleanup = () => runAction("Cleaning orphaned assets", async () => {
     const result = await cleanupOrphanThemeAssets();
     setMediaState(loadMediaMaintenanceState());
-    if (result.deletedAssets === 0) return "没有发现确定无引用的主题素材。";
-    return `已删除 ${result.deletedAssets} 个未引用主题素材，预计释放 ${formatBytes(result.freedBytes)}。`;
+    if (result.deletedAssets === 0) return "No definitely unreferenced theme assets were found.";
+    return `Deleted ${result.deletedAssets} unreferenced theme asset(s), freeing an estimated ${formatBytes(result.freedBytes)}.`;
   });
 
   const handleConfirmRequest = () => {
@@ -575,8 +575,8 @@ export function DataManagement({ onNotice }: DataManagementProps) {
             <div className="menu-item data-readonly-item">
               <DataSettingsIcon icon={Database} color={BINDING_ACCENTS.api} />
               <div className="menu-label-group">
-                <span className="menu-label">正在统计</span>
-                <span className="menu-desc">读取本地存储中</span>
+                <span className="menu-label">Calculating</span>
+                <span className="menu-desc">Reading local storage</span>
               </div>
             </div>
           )}
@@ -589,8 +589,8 @@ export function DataManagement({ onNotice }: DataManagementProps) {
           <div className="menu-item data-readonly-item">
             <DataSettingsIcon icon={ShieldCheck} color={persisted ? BINDING_ACCENTS.embedding : BINDING_ACCENTS.regex} />
             <div className="menu-label-group">
-              <span className="menu-label">浏览器持久化保护</span>
-              <span className="menu-desc">{persistSupported ? persisted ? "已开启；关闭需到浏览器网站设置中撤销" : "降低被自动清理的概率，但不能替代备份" : "当前浏览器不支持持久化申请，请依赖文件备份"}</span>
+              <span className="menu-label">Browser Persistent Storage Protection</span>
+              <span className="menu-desc">{persistSupported ? persisted ? "Enabled; disabling requires revoking it in your browser's site settings" : "Reduces the chance of automatic cleanup, but doesn't replace backups" : "This browser doesn't support persistence requests; rely on file backups instead"}</span>
             </div>
             <span className="menu-right">
               <Toggle checked={Boolean(persisted)} onChange={handlePersistToggle} disabled={!persistSupported || Boolean(busy && !persisted)} />
@@ -605,8 +605,8 @@ export function DataManagement({ onNotice }: DataManagementProps) {
           <div className="menu-item data-readonly-item">
             <DataSettingsIcon icon={Archive} color={CONTENT_APP_ACCENTS.moments} />
             <div className="menu-label-group">
-              <span className="menu-label">图片/多媒体文件自动压缩及清理</span>
-              <span className="menu-desc">开启后每天最多执行一次：4 天以上压缩聊天、朋友圈、小红书动态图片；7 天以上清理聊天图片、朋友圈/小红书真实图和本地音乐。壁纸、图标、dock、字体等常驻资源不纳入自动清理。</span>
+              <span className="menu-label">Automatic Image/Media Compression &amp; Cleanup</span>
+              <span className="menu-desc">When enabled, runs at most once per day: compresses chat, Moments, and Xiaohongshu post images older than 4 days; cleans up chat images, Moments/Xiaohongshu original images, and local music older than 7 days. Persistent resources like wallpapers, icons, the dock, and fonts are not included in automatic cleanup.</span>
             </div>
             <span className="menu-right">
               <Toggle checked={mediaConfig.enabled} onChange={updateMediaMaintenance} disabled={Boolean(busy)} />
@@ -614,30 +614,30 @@ export function DataManagement({ onNotice }: DataManagementProps) {
           </div>
           <div className="menu-item data-readonly-item">
             <div className="menu-label-group">
-              <span className="menu-label">清理状态</span>
+              <span className="menu-label">Cleanup Status</span>
               <span className="menu-desc">
-                {mediaState.lastRunAt ? `上次执行：${formatTime(mediaState.lastRunAt)}。` : "尚未执行。"}
+                {mediaState.lastRunAt ? `Last run: ${formatTime(mediaState.lastRunAt)}.` : "Not run yet."}
                 {mediaState.lastResult ? formatMediaMaintenanceResult(mediaState.lastResult) : ""}
-                {mediaState.lastError ? ` 最近错误：${mediaState.lastError}` : ""}
+                {mediaState.lastError ? ` Last error: ${mediaState.lastError}` : ""}
               </span>
             </div>
           </div>
           <div className="data-menu-actions">
             <button
               type="button"
-              className={`ui-btn ui-btn-primary ${busy === "媒体清理中" ? "is-busy" : ""}`}
+              className={`ui-btn ui-btn-primary ${busy === "Cleaning media" ? "is-busy" : ""}`}
               onClick={() => setConfirmRequest({ type: "media-maintenance" })}
               disabled={Boolean(busy)}
             >
-              {busy === "媒体清理中" ? <><Loader2 size={16} className="animate-spin" /> 执行中…</> : <><Archive size={16} /> 立即执行</>}
+              {busy === "Cleaning media" ? <><Loader2 size={16} className="animate-spin" /> Running…</> : <><Archive size={16} /> Run Now</>}
             </button>
             <button
               type="button"
-              className={`ui-btn ui-btn-outline ${busy === "孤儿素材清理中" ? "is-busy" : ""}`}
+              className={`ui-btn ui-btn-outline ${busy === "Cleaning orphaned assets" ? "is-busy" : ""}`}
               onClick={() => setConfirmRequest({ type: "orphan-theme" })}
               disabled={Boolean(busy)}
             >
-              {busy === "孤儿素材清理中" ? <><Loader2 size={16} className="animate-spin" /> 清理中…</> : <><Trash2 size={16} /> 清理未引用主题素材</>}
+              {busy === "Cleaning orphaned assets" ? <><Loader2 size={16} className="animate-spin" /> Cleaning…</> : <><Trash2 size={16} /> Clean Up Unreferenced Theme Assets</>}
             </button>
           </div>
         </div>
@@ -648,8 +648,8 @@ export function DataManagement({ onNotice }: DataManagementProps) {
         <div className="menu-group">
           <div className="menu-item data-readonly-item">
             <div className="menu-label-group">
-              <span className="menu-label">本地导出·不含图片/多媒体</span>
-              <span className="menu-desc">仅【本地导出备份文件】生效：去掉壁纸、聊天图、朋友圈图等大文件（保留角色头像），文件更小、导出不卡。云端备份已支持分片上传，会完整备份图片，不受此开关影响。</span>
+              <span className="menu-label">Local Export · Excludes Images/Media</span>
+              <span className="menu-desc">Only applies to "Local Export Backup File": removes large files like wallpapers, chat images, and Moments images (character avatars are kept), making the file smaller and export faster. Cloud backup already supports chunked uploads and backs up images in full, unaffected by this toggle.</span>
             </div>
             <span className="menu-right">
               <Toggle checked={cloudConfig.excludeMedia} onChange={(checked) => updateCloud({ excludeMedia: checked })} />
@@ -657,15 +657,15 @@ export function DataManagement({ onNotice }: DataManagementProps) {
           </div>
           <div className="menu-item data-readonly-item">
             <div className="menu-label-group">
-              <span className="menu-label">导出模块</span>
-              <span className="menu-desc">已选择 {selectedExportModules.length} / {DATA_MODULES.length} 个模块</span>
+              <span className="menu-label">Export Modules</span>
+              <span className="menu-desc">Selected {selectedExportModules.length} / {DATA_MODULES.length} modules</span>
             </div>
             <div className="menu-right data-inline-actions">
               <button type="button" className="ui-btn ui-btn-outline py-1 px-3 ts-12" onClick={() => setSelectedExportModules(ALL_MODULE_IDS)}>
-                全选
+                Select All
               </button>
               <button type="button" className="ui-btn ui-btn-outline py-1 px-3 ts-12" onClick={() => setSelectedExportModules(getLightModuleIds())}>
-                轻量
+                Light
               </button>
             </div>
           </div>
@@ -674,15 +674,15 @@ export function DataManagement({ onNotice }: DataManagementProps) {
               items={moduleChipItems}
               selectedIds={selectedExportModules}
               onChange={setSelectedExportModules}
-              ariaLabel="选择导出模块"
+              ariaLabel="Select modules to export"
             />
           </div>
           <div className="data-menu-actions">
-            <button type="button" className={`ui-btn ui-btn-primary ${busy === "导出中" ? "is-busy" : ""}`} onClick={() => handleExport(selectedExportModules)} disabled={Boolean(busy)}>
-              {busy === "导出中" ? <><Loader2 size={16} className="animate-spin" /> 导出中…</> : <><Download size={16} /> 导出备份</>}
+            <button type="button" className={`ui-btn ui-btn-primary ${busy === "Exporting" ? "is-busy" : ""}`} onClick={() => handleExport(selectedExportModules)} disabled={Boolean(busy)}>
+              {busy === "Exporting" ? <><Loader2 size={16} className="animate-spin" /> Exporting…</> : <><Download size={16} /> Export Backup</>}
             </button>
-            <button type="button" className={`ui-btn ui-btn-outline ${busy === "读取备份" ? "is-busy" : ""}`} onClick={() => fileInputRef.current?.click()} disabled={Boolean(busy)}>
-              {busy === "读取备份" ? <><Loader2 size={16} className="animate-spin" /> 读取中…</> : <><Upload size={16} /> 导入备份</>}
+            <button type="button" className={`ui-btn ui-btn-outline ${busy === "Reading backup" ? "is-busy" : ""}`} onClick={() => fileInputRef.current?.click()} disabled={Boolean(busy)}>
+              {busy === "Reading backup" ? <><Loader2 size={16} className="animate-spin" /> Reading…</> : <><Upload size={16} /> Import Backup</>}
             </button>
           </div>
           <input
@@ -701,14 +701,14 @@ export function DataManagement({ onNotice }: DataManagementProps) {
           <div className="menu-item data-readonly-item">
             <DataSettingsIcon icon={CloudUpload} color={BINDING_ACCENTS.api} />
             <div className="menu-label-group">
-              <span className="menu-label">备份到你的 Supabase</span>
-              <span className="menu-desc">填入你自己的 Supabase 地址与 service_role key，点测试连接会自动建好备份桶（无需手动设置）。</span>
+              <span className="menu-label">Back Up to Your Supabase</span>
+              <span className="menu-desc">Enter your own Supabase URL and service_role key. Clicking Test Connection will automatically create the backup bucket (no manual setup needed).</span>
             </div>
           </div>
 
           <div className="data-cloud-form">
             <label className="data-cloud-field">
-              <span className="menu-desc ml-1">Supabase 地址 (URL)</span>
+              <span className="menu-desc ml-1">Supabase URL</span>
               <Input
                 value={cloudConfig.url}
                 onChange={(e) => updateCloud({ url: e.target.value })}
@@ -734,7 +734,7 @@ export function DataManagement({ onNotice }: DataManagementProps) {
                 onClick={() => void testCloud()}
                 disabled={cloudTesting || cloudBackingUp || !isCloudBackupConfigured(cloudConfig)}
               >
-                {cloudTesting ? <><Loader2 size={16} className="animate-spin" /> 测试中…</> : "测试连接"}
+                {cloudTesting ? <><Loader2 size={16} className="animate-spin" /> Testing…</> : "Test Connection"}
               </button>
               <button
                 type="button"
@@ -742,7 +742,7 @@ export function DataManagement({ onNotice }: DataManagementProps) {
                 onClick={() => void runBackupNow()}
                 disabled={cloudTesting || cloudBackingUp || !isCloudBackupConfigured(cloudConfig)}
               >
-                {cloudBackingUp ? <><Loader2 size={16} className="animate-spin" /> 备份中…</> : <><CloudUpload size={16} /> 立即备份</>}
+                {cloudBackingUp ? <><Loader2 size={16} className="animate-spin" /> Backing up…</> : <><CloudUpload size={16} /> Back Up Now</>}
               </button>
               <button
                 type="button"
@@ -750,7 +750,7 @@ export function DataManagement({ onNotice }: DataManagementProps) {
                 onClick={() => void openRestore()}
                 disabled={cloudBackingUp || !isCloudBackupConfigured(cloudConfig)}
               >
-                <CloudDownload size={16} /> {showRestore ? "收起" : "云端恢复"}
+                <CloudDownload size={16} /> {showRestore ? "Collapse" : "Cloud Restore"}
               </button>
             </div>
 
@@ -771,10 +771,10 @@ export function DataManagement({ onNotice }: DataManagementProps) {
 
             {cloudState.lastCreatedAt && (
               <div className="data-cloud-status">
-                上次备份：{formatTime(cloudState.lastCreatedAt)}
+                Last backup: {formatTime(cloudState.lastCreatedAt)}
                 {typeof cloudState.lastTotalBytes === "number" ? ` · ${formatBytes(cloudState.lastTotalBytes)}` : ""}
-                {cloudState.lastResult === "anomaly" ? " · ⚠️ 待复核（数据异常变小）" : ""}
-                {cloudState.lastResult === "skipped" ? " · 无变化已跳过" : ""}
+                {cloudState.lastResult === "anomaly" ? " · ⚠️ Pending review (data shrank abnormally)" : ""}
+                {cloudState.lastResult === "skipped" ? " · Skipped, no changes" : ""}
               </div>
             )}
 
@@ -782,28 +782,28 @@ export function DataManagement({ onNotice }: DataManagementProps) {
               <div className="data-cloud-restore">
                 <label className="data-cloud-restore-overwrite">
                   <input type="checkbox" checked={restoreOverwrite} onChange={(e) => setRestoreOverwrite(e.target.checked)} />
-                  <span>覆盖恢复提醒（不勾选则合并；同 ID 仍以云端为准）</span>
+                  <span>Overwrite restore (leave unchecked to merge; same-ID items still follow the cloud version)</span>
                 </label>
-                {busy === "恢复中" ? (
+                {busy === "Restoring" ? (
                   <div className="data-cloud-progress" role="status">
                     <div className="data-cloud-progress-track">
                       <div className="data-cloud-progress-fill" style={{ width: `${Math.min(100, Math.round(cloudProgress?.percent ?? 0))}%` }} />
                     </div>
                     <span className="data-cloud-progress-text">
-                      {cloudProgress ? `${cloudProgress.detail} · ${Math.round(cloudProgress.percent)}%` : "正在从云端恢复，请稍候…"}
+                      {cloudProgress ? `${cloudProgress.detail} · ${Math.round(cloudProgress.percent)}%` : "Restoring from the cloud, please wait…"}
                     </span>
                   </div>
                 ) : restoreLoading ? (
-                  <div className="data-cloud-status"><Loader2 size={14} className="animate-spin" /> 读取云端备份…</div>
+                  <div className="data-cloud-status"><Loader2 size={14} className="animate-spin" /> Loading cloud backups…</div>
                 ) : restoreList.length === 0 ? (
-                  <div className="data-cloud-status">云端还没有备份。</div>
+                  <div className="data-cloud-status">No backups in the cloud yet.</div>
                 ) : (
                   <ul className="data-cloud-restore-list">
                     {restoreList.map((item) => (
                       <li key={item.name} className="data-cloud-restore-item">
                         <div className="menu-label-group">
-                          <span className="menu-label">{formatTime(item.createdAt)}{item.quarantine ? " · 待复核" : ""}</span>
-                          <span className="menu-desc">{formatBytes(item.totalBytes)} · {item.totalRecords} 项</span>
+                          <span className="menu-label">{formatTime(item.createdAt)}{item.quarantine ? " · Pending review" : ""}</span>
+                          <span className="menu-desc">{formatBytes(item.totalBytes)} · {item.totalRecords} item(s)</span>
                         </div>
                         <button
                           type="button"
@@ -811,7 +811,7 @@ export function DataManagement({ onNotice }: DataManagementProps) {
                           onClick={() => setRestorePending({ item, overwrite: restoreOverwrite })}
                           disabled={Boolean(busy)}
                         >
-                          恢复
+                          Restore
                         </button>
                       </li>
                     ))}
@@ -823,8 +823,8 @@ export function DataManagement({ onNotice }: DataManagementProps) {
 
           <div className="menu-item data-readonly-item">
             <div className="menu-label-group">
-              <span className="menu-label">自动备份</span>
-              <span className="menu-desc">开启后按间隔在后台静默备份。</span>
+              <span className="menu-label">Automatic Backup</span>
+              <span className="menu-desc">When enabled, backs up silently in the background at the set interval.</span>
             </div>
             <span className="menu-right">
               <Toggle
@@ -837,28 +837,28 @@ export function DataManagement({ onNotice }: DataManagementProps) {
 
           <div className="data-cloud-options">
             <label className="data-cloud-field">
-              <span className="menu-desc ml-1">备份间隔</span>
+              <span className="menu-desc ml-1">Backup Interval</span>
               <Select
                 value={String(cloudConfig.intervalHours)}
                 onChange={(e) => updateCloud({ intervalHours: Number(e.target.value) })}
                 disabled={!cloudConfig.enabled}
               >
-                <option value="0.5">每 30 分钟</option>
-                <option value="1">每小时</option>
-                <option value="6">每 6 小时</option>
-                <option value="12">每 12 小时</option>
-                <option value="24">每天</option>
+                <option value="0.5">Every 30 minutes</option>
+                <option value="1">Every hour</option>
+                <option value="6">Every 6 hours</option>
+                <option value="12">Every 12 hours</option>
+                <option value="24">Every day</option>
               </Select>
             </label>
             <label className="data-cloud-field">
-              <span className="menu-desc ml-1">保留份数</span>
+              <span className="menu-desc ml-1">Backups to Keep</span>
               <Select
                 value={String(cloudConfig.keepCount)}
                 onChange={(e) => updateCloud({ keepCount: Number(e.target.value) })}
                 disabled={!cloudConfig.enabled}
               >
-                <option value="2">2 份</option>
-                <option value="3">3 份</option>
+                <option value="2">2 copies</option>
+                <option value="3">3 copies</option>
               </Select>
             </label>
           </div>
@@ -869,28 +869,28 @@ export function DataManagement({ onNotice }: DataManagementProps) {
         <div className="modal-overlay" data-ui="modal" onClick={() => { if (!exportSaving) setPendingExport(null); }}>
           <div className="modal-dialog data-import-modal" data-ui="modal-dialog" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header" data-ui="modal-header">
-              <h3 className="modal-title">保存备份文件</h3>
+              <h3 className="modal-title">Save Backup File</h3>
             </div>
             <div className="modal-body" data-ui="modal-body" style={{ textAlign: "left", width: "100%" }}>
               <p className="menu-desc" style={{ marginBottom: 12 }}>
-                {pendingExport.manifest.modules.length} 个模块 · {formatBytes(pendingExport.manifest.totalBytes)}
-                {pendingExport.manifest.mediaExcluded ? " · 不含图片/多媒体" : ""}
+                {pendingExport.manifest.modules.length} module(s) · {formatBytes(pendingExport.manifest.totalBytes)}
+                {pendingExport.manifest.mediaExcluded ? " · Excludes images/media" : ""}
               </p>
               <p className="menu-desc">
                 {isIOSBrowser()
-                  ? "iOS 需要从系统分享面板保存备份文件。请点击下方按钮，然后选择“存储到文件”。"
-                  : "备份文件已准备好。请点击下方按钮下载文件。"}
+                  ? 'iOS requires saving the backup file from the system share panel. Tap the button below, then choose "Save to Files".'
+                  : "The backup file is ready. Tap the button below to download it."}
               </p>
             </div>
             <div className="modal-footer" data-ui="modal-footer" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <button type="button" className="ui-btn ui-btn-primary" style={{ width: "100%", whiteSpace: "nowrap" }} onClick={() => void savePendingExport()} disabled={exportSaving}>
                 {exportSaving
-                  ? <><Loader2 size={16} className="animate-spin" /> {isIOSBrowser() ? "打开中…" : "下载中…"}</>
+                  ? <><Loader2 size={16} className="animate-spin" /> {isIOSBrowser() ? "Opening…" : "Downloading…"}</>
                   : isIOSBrowser()
-                    ? <><Share2 size={16} /> 分享/保存文件</>
-                    : <><Download size={16} /> 下载备份文件</>}
+                    ? <><Share2 size={16} /> Share / Save File</>
+                    : <><Download size={16} /> Download Backup File</>}
               </button>
-              <button type="button" className="ui-btn ui-btn-outline" style={{ width: "100%", whiteSpace: "nowrap" }} onClick={() => setPendingExport(null)} disabled={exportSaving}>取消</button>
+              <button type="button" className="ui-btn ui-btn-outline" style={{ width: "100%", whiteSpace: "nowrap" }} onClick={() => setPendingExport(null)} disabled={exportSaving}>Cancel</button>
             </div>
           </div>
         </div>
@@ -900,35 +900,35 @@ export function DataManagement({ onNotice }: DataManagementProps) {
         <div className="modal-overlay" data-ui="modal" onClick={() => { if (!busy) setPendingImport(null); }}>
           <div className="modal-dialog data-import-modal" data-ui="modal-dialog" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header" data-ui="modal-header">
-              <h3 className="modal-title">导入备份</h3>
+              <h3 className="modal-title">Import Backup</h3>
             </div>
             <div className="modal-body" data-ui="modal-body" style={{ textAlign: "left", width: "100%" }}>
               <p className="menu-desc" style={{ marginBottom: 12 }}>
                 {formatTime(pendingImport.envelope.manifest.createdAt)} · {formatBytes(pendingImport.envelope.manifest.totalBytes)}
-                {pendingImport.envelope.manifest.mediaExcluded ? " · 不含图片" : ""}
+                {pendingImport.envelope.manifest.mediaExcluded ? " · Excludes images" : ""}
               </p>
               <div className="data-inline-actions" style={{ marginBottom: 10 }}>
-                <span className="menu-desc" style={{ marginRight: "auto" }}>选择要导入的模块（{selectedImportModules.length} / {pendingImportItems.length}）</span>
-                <button type="button" className="ui-btn ui-btn-outline py-1 px-3 ts-12" onClick={() => setSelectedImportModules(pendingImportItems.map((item) => item.id))}>全选</button>
-                <button type="button" className="ui-btn ui-btn-outline py-1 px-3 ts-12" onClick={() => setSelectedImportModules([])}>清空</button>
+                <span className="menu-desc" style={{ marginRight: "auto" }}>Select modules to import ({selectedImportModules.length} / {pendingImportItems.length})</span>
+                <button type="button" className="ui-btn ui-btn-outline py-1 px-3 ts-12" onClick={() => setSelectedImportModules(pendingImportItems.map((item) => item.id))}>Select All</button>
+                <button type="button" className="ui-btn ui-btn-outline py-1 px-3 ts-12" onClick={() => setSelectedImportModules([])}>Clear</button>
               </div>
               <div className="data-chip-panel">
                 <ModuleChipSelector
                   items={pendingImportItems}
                   selectedIds={selectedImportModules}
                   onChange={setSelectedImportModules}
-                  ariaLabel="选择导入模块"
+                  ariaLabel="Select modules to import"
                 />
               </div>
             </div>
             <div className="modal-footer" data-ui="modal-footer" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <button type="button" className="ui-btn ui-btn-primary" style={{ width: "100%", whiteSpace: "nowrap" }} onClick={() => handleImport(false)} disabled={Boolean(busy)}>
-                {busy === "导入中" ? <Loader2 size={16} className="animate-spin" /> : null} 合并导入
+                {busy === "Importing" ? <Loader2 size={16} className="animate-spin" /> : null} Merge Import
               </button>
               <button type="button" className="ui-btn ui-btn-outline" style={{ width: "100%", whiteSpace: "nowrap" }} onClick={() => handleImport(true)} disabled={Boolean(busy)}>
-                {busy === "导入中" ? <Loader2 size={16} className="animate-spin" /> : null} 覆盖导入
+                {busy === "Importing" ? <Loader2 size={16} className="animate-spin" /> : null} Overwrite Import
               </button>
-              <button type="button" className="ui-btn ui-btn-outline" style={{ width: "100%", whiteSpace: "nowrap" }} onClick={() => setPendingImport(null)} disabled={Boolean(busy)}>取消</button>
+              <button type="button" className="ui-btn ui-btn-outline" style={{ width: "100%", whiteSpace: "nowrap" }} onClick={() => setPendingImport(null)} disabled={Boolean(busy)}>Cancel</button>
             </div>
           </div>
         </div>
@@ -936,25 +936,25 @@ export function DataManagement({ onNotice }: DataManagementProps) {
 
       <div className="data-section data-cleanup-section">
         <DataSectionTitle>Module Cleanup</DataSectionTitle>
-        <div className="data-danger-alert" role="note" aria-label="危险操作提示">
+        <div className="data-danger-alert" role="note" aria-label="Dangerous action notice">
           <span className="data-danger-icon" aria-hidden="true">
             <AlertTriangle size={17} strokeWidth={2.1} />
           </span>
           <div className="data-danger-copy">
-            <span>危险操作</span>
-            <p>清理会删除所选模块的本地数据。执行前请先导出备份，误删后只能通过备份文件恢复。</p>
+            <span>Dangerous Action</span>
+            <p>Cleanup will delete local data for the selected modules. Export a backup first — accidental deletion can only be undone by restoring from a backup file.</p>
           </div>
         </div>
         <div className="menu-group">
           <div className="menu-item data-readonly-item">
             <DataSettingsIcon icon={Trash2} color="#E5484D" />
             <div className="menu-label-group">
-              <span className="menu-label">清理模块</span>
-              <span className="menu-desc">已选择 {selectedClearModules.length} / {DATA_MODULES.length} 个模块，清理前会先尝试备份</span>
+              <span className="menu-label">Clean Up Modules</span>
+              <span className="menu-desc">Selected {selectedClearModules.length} / {DATA_MODULES.length} modules; a backup will be attempted before cleanup</span>
             </div>
             <div className="menu-right data-inline-actions">
               <button type="button" className="ui-btn ui-btn-outline py-1 px-3 ts-12" onClick={() => setSelectedClearModules([])}>
-                清空
+                Clear
               </button>
             </div>
           </div>
@@ -963,12 +963,12 @@ export function DataManagement({ onNotice }: DataManagementProps) {
               items={moduleChipItems}
               selectedIds={selectedClearModules}
               onChange={setSelectedClearModules}
-              ariaLabel="选择清理模块"
+              ariaLabel="Select modules to clean up"
             />
           </div>
           <div className="data-menu-actions data-menu-actions-single">
             <button type="button" className="ui-btn ui-btn-danger" onClick={handleClearSelected} disabled={Boolean(busy)}>
-              <Trash2 size={16} /> 清理选中模块
+              <Trash2 size={16} /> Clean Up Selected Modules
             </button>
           </div>
         </div>
@@ -978,38 +978,38 @@ export function DataManagement({ onNotice }: DataManagementProps) {
         <ConfirmDialog
           title={
             confirmRequest.type === "export"
-              ? "确认导出备份？"
+              ? "Confirm export backup?"
               : confirmRequest.type === "import"
-                ? confirmRequest.overwrite ? "确认覆盖导入？" : "确认合并导入？"
+                ? confirmRequest.overwrite ? "Confirm overwrite import?" : "Confirm merge import?"
                 : confirmRequest.type === "media-maintenance"
-                  ? "确认立即清理媒体？"
+                  ? "Confirm clean up media now?"
                   : confirmRequest.type === "orphan-theme"
-                    ? "确认清理未引用主题素材？"
-                    : "确认清理模块？"
+                    ? "Confirm cleanup of unreferenced theme assets?"
+                    : "Confirm module cleanup?"
           }
           message={
             confirmRequest.type === "export"
-              ? `将导出以下模块：${confirmRequest.labels}。是否继续？`
+              ? `The following modules will be exported: ${confirmRequest.labels}. Continue?`
               : confirmRequest.type === "import"
                 ? confirmRequest.overwrite
-                  ? `覆盖导入会用备份中的数据覆盖已选模块：${confirmRequest.labels}。建议先导出当前数据。是否继续？`
-                  : `将合并导入以下模块：${confirmRequest.labels}。列表型数据会按 ID 去重合并，同 ID 项以备份为准。是否继续？`
+                  ? `Overwrite import will replace data in the selected modules with the backup's data: ${confirmRequest.labels}. We recommend exporting your current data first. Continue?`
+                  : `The following modules will be merge-imported: ${confirmRequest.labels}. List-type data will be deduplicated and merged by ID; items with the same ID will follow the backup. Continue?`
                 : confirmRequest.type === "media-maintenance"
-                  ? "将按规则压缩/清理过期动态媒体：4 天以上压缩图片，7 天以上清理聊天图片、朋友圈/小红书真实图和本地音乐，并清理确定无引用的旧主题素材。壁纸、图标、dock、字体等仍在引用的常驻资源不会删除。是否继续？"
+                  ? "This will compress/clean up expired media per the rules: compress images older than 4 days, clean up chat images, Moments/Xiaohongshu original images, and local music older than 7 days, and remove old theme assets confirmed to be unreferenced. Persistent resources still in use, like wallpapers, icons, the dock, and fonts, will not be deleted. Continue?"
                   : confirmRequest.type === "orphan-theme"
-                    ? "将扫描当前仍被引用的主题素材，只删除确定无引用的旧图片、旧字体、旧 dock、旧图标皮肤等素材。是否继续？"
-                    : `清理 ${confirmRequest.labels} 会删除对应数据。建议先备份。是否继续？`
+                    ? "This will scan for theme assets still in use and only delete old images, fonts, dock, and icon skins confirmed to be unreferenced. Continue?"
+                    : `Cleaning up ${confirmRequest.labels} will delete the corresponding data. We recommend backing up first. Continue?`
           }
           icon={confirmRequest.type === "export" ? Download : confirmRequest.type === "import" ? Upload : confirmRequest.type === "media-maintenance" ? Archive : AlertTriangle}
           variant={confirmRequest.type === "clear" || confirmRequest.type === "media-maintenance" || confirmRequest.type === "orphan-theme" || (confirmRequest.type === "import" && confirmRequest.overwrite) ? "danger" : "action"}
           confirmLabel={
             confirmRequest.type === "export"
-              ? "确认导出"
+              ? "Confirm Export"
               : confirmRequest.type === "import"
-                ? confirmRequest.overwrite ? "确认覆盖" : "确认导入"
+                ? confirmRequest.overwrite ? "Confirm Overwrite" : "Confirm Import"
                 : confirmRequest.type === "media-maintenance"
-                  ? "立即执行"
-                  : "确认清理"
+                  ? "Run Now"
+                  : "Confirm Cleanup"
           }
           onConfirm={handleConfirmRequest}
           onCancel={() => setConfirmRequest(null)}
@@ -1018,15 +1018,15 @@ export function DataManagement({ onNotice }: DataManagementProps) {
 
       {restorePending && (
         <ConfirmDialog
-          title={restorePending.overwrite ? "确认覆盖恢复？" : "确认合并恢复？"}
+          title={restorePending.overwrite ? "Confirm overwrite restore?" : "Confirm merge restore?"}
           message={
             restorePending.overwrite
-              ? `将用 ${formatTime(restorePending.item.createdAt)} 这份云端备份覆盖本机同 ID 数据。建议先「立即备份」当前数据。是否继续？`
-              : `将把 ${formatTime(restorePending.item.createdAt)} 这份云端备份合并到本机数据；本机没有的数据会新增，同 ID 数据以备份为准。是否继续？`
+              ? `This will overwrite local data with matching IDs using the cloud backup from ${formatTime(restorePending.item.createdAt)}. We recommend running "Back Up Now" on your current data first. Continue?`
+              : `This will merge the cloud backup from ${formatTime(restorePending.item.createdAt)} into local data; data not present locally will be added, and items with the same ID will follow the backup. Continue?`
           }
           icon={CloudDownload}
           variant={restorePending.overwrite ? "danger" : "action"}
-          confirmLabel={restorePending.overwrite ? "确认覆盖" : "确认合并"}
+          confirmLabel={restorePending.overwrite ? "Confirm Overwrite" : "Confirm Merge"}
           onConfirm={() => { const pending = restorePending; setRestorePending(null); if (pending) void confirmRestore(pending); }}
           onCancel={() => setRestorePending(null)}
         />

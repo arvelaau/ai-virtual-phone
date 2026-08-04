@@ -277,7 +277,7 @@ export default function MapRenderer({ data, currentNodeId, selectedNodeId, disco
               <circle cx={px} cy={py} r="10" fill="none" stroke="#e8d0a0" strokeWidth="1.5" />
               {/* Name */}
               <text x={px} y={py + 18} textAnchor="middle" fontSize="8" fill="#e8d0a0" fontWeight="600">
-                {playerName || "我"}
+                {playerName || "Me"}
               </text>
             </g>
           );

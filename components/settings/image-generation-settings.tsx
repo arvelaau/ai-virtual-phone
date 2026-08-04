@@ -22,15 +22,15 @@ import { Input, Select, Textarea, Toggle } from "@/components/ui/form";
 const SIZE_OPTIONS = ["auto", "1024x1024", "1024x1536", "1536x1024"];
 const QUALITY_OPTIONS = ["auto", "low", "medium", "high"];
 
-// Some relay APIs (e.g. dzzi 的 gpt-image-2) ignore the `size` param and pick
+// Some relay APIs (e.g. dzzi's gpt-image-2) ignore the `size` param and pick
 // their own aspect ratio. As a fallback we append a natural-language ratio hint
 // to the prompt, which these models DO respect. The marker lets us replace the
 // previously-appended hint instead of stacking them when the size changes.
-const RATIO_HINT_MARKER = "【画面比例】";
+const RATIO_HINT_MARKER = "[Aspect Ratio]";
 const SIZE_RATIO_HINTS: Record<string, string> = {
-    "1024x1024": "正方形 1:1 构图，square 1:1 composition",
-    "1024x1536": "竖向 2:3 构图，vertical portrait composition",
-    "1536x1024": "横向 3:2 构图，horizontal landscape composition",
+    "1024x1024": "square 1:1 composition",
+    "1024x1536": "vertical portrait 2:3 composition",
+    "1536x1024": "horizontal landscape 3:2 composition",
 };
 
 // Remove any auto-appended ratio hint line(s), preserving the user's own text.
@@ -47,7 +47,7 @@ function withRatioHint(extraPrompt: string, size: string): string {
     return base ? `${base}\n${RATIO_HINT_MARKER}${hint}` : `${RATIO_HINT_MARKER}${hint}`;
 }
 const IMAGE_HOSTING_PROVIDER_OPTIONS = [
-    { value: "none", label: "不使用图床" },
+    { value: "none", label: "No image hosting" },
     { value: "imgbb", label: "ImgBB" },
 ] as const;
 const imageGenerationIconStyle = { "--icon-color": "#0EA5E9" } as CSSProperties;
@@ -112,7 +112,7 @@ export function ImageGenerationSettings() {
     }, [persist, settings]);
 
     // Changing the size also refreshes the auto-appended ratio hint in the
-    // 补充提示词 box (replacing any previous hint), so models that ignore the
+    // Extra Prompt box (replacing any previous hint), so models that ignore the
     // `size` param still produce the requested orientation.
     const applySize = useCallback((size: string) => {
         persist({ ...settings, size, extraPrompt: withRatioHint(settings.extraPrompt, size) });
@@ -133,7 +133,7 @@ export function ImageGenerationSettings() {
     const fetchModels = async () => {
         setStatus(null);
         if (!settings.apiKey.trim() || !settings.baseUrl.trim()) {
-            setStatus({ success: false, message: "请先填写 Base URL 和 API Key。" });
+            setStatus({ success: false, message: "Please fill in the Base URL and API Key first." });
             return;
         }
         setIsFetchingModels(true);
@@ -142,7 +142,7 @@ export function ImageGenerationSettings() {
             setModels(fetched);
             setStatus({
                 success: true,
-                message: fetched.length > 0 ? `已拉取 ${fetched.length} 个模型。` : "接口返回为空，可手动填写模型名。",
+                message: fetched.length > 0 ? `Fetched ${fetched.length} models.` : "The endpoint returned nothing. You can enter the model name manually.",
             });
         } catch (err) {
             setModels([]);
@@ -157,13 +157,13 @@ export function ImageGenerationSettings() {
         setIsTesting(true);
         try {
             const result = await generateImageFromConfiguredApi({
-                description: "一张放在桌面上的白色咖啡杯，柔和自然光，真实照片风格",
+                description: "A white coffee cup on a desk, soft natural light, realistic photo style",
                 settings: { ...settings, enabled: true },
             });
-            if (!result) throw new Error("图像生成未返回结果。");
+            if (!result) throw new Error("Image generation returned no result.");
             if (testPreviewUrl) URL.revokeObjectURL(testPreviewUrl);
             setTestPreviewUrl(URL.createObjectURL(result.blob));
-            setStatus({ success: true, message: "测试生图成功。" });
+            setStatus({ success: true, message: "Test image generated successfully." });
         } catch (err) {
             setStatus({ success: false, message: err instanceof Error ? err.message : String(err) });
         } finally {
@@ -205,8 +205,8 @@ export function ImageGenerationSettings() {
                         <Sparkles size={22} strokeWidth={1.75} />
                     </span>
                     <span className="settings-tools-menu-copy">
-                        <span className="menu-label appearance-menu-item-label">启用自动生图</span>
-                        <span className="menu-desc settings-tools-menu-desc">角色输出照片标签时自动调用图像生成 API。</span>
+                        <span className="menu-label appearance-menu-item-label">Enable auto image generation</span>
+                        <span className="menu-desc settings-tools-menu-desc">Automatically calls the image generation API when the character outputs a photo tag.</span>
                     </span>
                     <span className="menu-right settings-tools-menu-toggle">
                         <Toggle checked={settings.enabled} onChange={(enabled) => updateSettings({ enabled })} className="settings-toggle-control" />
@@ -216,18 +216,18 @@ export function ImageGenerationSettings() {
 
             <div className="menu-group p-4 flex flex-col gap-4">
                 <div className="flex flex-col gap-1">
-                    <label className="menu-desc ml-1">请求方式</label>
+                    <label className="menu-desc ml-1">Request method</label>
                     <Select
                         value={settings.requestMode}
                         onChange={(event) => updateSettings({
                             requestMode: event.target.value as ImageGenerationSettingsType["requestMode"],
                         })}
                     >
-                        <option value="server">服务端转发</option>
-                        <option value="direct">浏览器直连</option>
+                        <option value="server">Server-side relay</option>
+                        <option value="direct">Direct browser connection</option>
                     </Select>
                     <span className="menu-desc ml-1">
-                        浏览器直连会从当前设备直接请求生图 API，可绕开部署平台函数超时；需要接口允许跨域。
+                        Direct browser connection requests the image generation API straight from this device, bypassing deployment-platform function timeouts; the endpoint must allow CORS.
                     </span>
                 </div>
 
@@ -252,9 +252,9 @@ export function ImageGenerationSettings() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                    <label className="menu-desc ml-1">模型名</label>
+                    <label className="menu-desc ml-1">Model name</label>
                     <div className="flex gap-2">
-                        {/* 单框合一:可手动输入;拉取到模型后右侧出现下拉箭头,点开原生选择器选中即回填 */}
+                        {/* Single combined field: type manually; after fetching models, a dropdown arrow appears on the right -- open the native picker to select and fill it in */}
                         <div className="relative flex-1">
                             <Input
                                 type="text"
@@ -267,14 +267,14 @@ export function ImageGenerationSettings() {
                                 <>
                                     <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 opacity-60" />
                                     <select
-                                        aria-label="选择拉取到的模型"
+                                        aria-label="Select a fetched model"
                                         value=""
                                         onChange={(event) => {
                                             if (event.target.value) updateSettings({ model: event.target.value });
                                         }}
                                         className="absolute inset-y-0 right-0 w-10 cursor-pointer opacity-0"
                                     >
-                                        <option value="">选择拉取到的模型...</option>
+                                        <option value="">Select a fetched model...</option>
                                         {likelyModels.map(model => <option key={model} value={model}>{model}</option>)}
                                     </select>
                                 </>
@@ -287,20 +287,20 @@ export function ImageGenerationSettings() {
                             className="ui-btn ui-btn-soft-action shrink-0"
                         >
                             <RefreshCw size={16} className={isFetchingModels ? "animate-spin" : ""} />
-                            {isFetchingModels ? "拉取中" : "拉取模型"}
+                            {isFetchingModels ? "Fetching" : "Fetch models"}
                         </button>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1">
-                        <label className="menu-desc ml-1">尺寸</label>
+                        <label className="menu-desc ml-1">Size</label>
                         <Select value={settings.size} onChange={(event) => applySize(event.target.value)}>
                             {SIZE_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
                         </Select>
                     </div>
                     <div className="flex flex-col gap-1">
-                        <label className="menu-desc ml-1">质量</label>
+                        <label className="menu-desc ml-1">Quality</label>
                         <Select value={settings.quality} onChange={(event) => updateSettings({ quality: event.target.value })}>
                             {QUALITY_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
                         </Select>
@@ -308,15 +308,15 @@ export function ImageGenerationSettings() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                    <label className="menu-desc ml-1">补充提示词</label>
+                    <label className="menu-desc ml-1">Extra prompt</label>
                     <Textarea
                         value={settings.extraPrompt}
                         onChange={(event) => updateSettings({ extraPrompt: event.target.value })}
-                        placeholder="会和角色输出的图片描述一起发送给生图模型。"
+                        placeholder="Sent to the image model together with the character's photo description."
                         rows={4}
                     />
                     <p className="menu-desc ml-1 opacity-70">
-                        选择尺寸后会自动在末尾追加一句「{RATIO_HINT_MARKER}…」构图提示，用于纠正部分不认 size 参数的接口（如 gpt-image-2）。可手动修改或删除。
+                        After choosing a size, a composition hint like "{RATIO_HINT_MARKER}..." is automatically appended at the end, to correct APIs that ignore the size parameter (e.g. gpt-image-2). You can edit or remove it manually.
                     </p>
                 </div>
 
@@ -328,7 +328,7 @@ export function ImageGenerationSettings() {
                         className="ui-btn ui-btn-success flex-1"
                     >
                         <Image size={16} />
-                        {isTesting ? "测试中..." : "测试生图"}
+                        {isTesting ? "Testing..." : "Test generation"}
                     </button>
                 </div>
 
@@ -341,7 +341,7 @@ export function ImageGenerationSettings() {
                 {testPreviewUrl && (
                     <img
                         src={testPreviewUrl}
-                        alt="测试生图结果"
+                        alt="Test generation result"
                         className="max-h-[220px] max-w-full self-start rounded-xl border border-[var(--c-card-border)] object-contain"
                     />
                 )}
@@ -355,8 +355,8 @@ export function ImageGenerationSettings() {
                             <Upload size={22} strokeWidth={1.75} />
                         </span>
                         <span className="settings-tools-menu-copy">
-                            <span className="menu-label appearance-menu-item-label">允许小卷上传图床</span>
-                            <span className="menu-desc settings-tools-menu-desc">开启后，小卷的图像处理套件可以把本地素材上传到公开图床并拿 URL 写 CSS。</span>
+                            <span className="menu-label appearance-menu-item-label">Allow the mascot to upload to image hosting</span>
+                            <span className="menu-desc settings-tools-menu-desc">When enabled, the mascot's image toolkit can upload local assets to public image hosting and use the URL in CSS.</span>
                         </span>
                         <span className="menu-right settings-tools-menu-toggle">
                             <Toggle
@@ -370,7 +370,7 @@ export function ImageGenerationSettings() {
 
                 <div className="menu-group p-4 flex flex-col gap-4">
                     <div className="flex flex-col gap-1">
-                        <label className="menu-desc ml-1">图床提供方</label>
+                        <label className="menu-desc ml-1">Image hosting provider</label>
                         <Select
                             value={settings.imageHosting.provider}
                             onChange={(event) => updateImageHosting({
@@ -389,15 +389,15 @@ export function ImageGenerationSettings() {
                             type="password"
                             value={settings.imageHosting.imgbbApiKey}
                             onChange={(event) => updateImageHosting({ imgbbApiKey: event.target.value })}
-                            placeholder="从 imgbb.com/api/1 获取"
+                            placeholder="Get it from imgbb.com/api/1"
                             disabled={settings.imageHosting.provider !== "imgbb"}
                         />
-                        <span className="menu-desc ml-1">Key 只保存在当前项目设置里；小卷工具结果不会显示它。</span>
+                        <span className="menu-desc ml-1">The key is only stored in this project's settings; it won't be shown in the mascot's tool results.</span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                         <div className="flex flex-col gap-1">
-                            <label className="menu-desc ml-1">默认过期秒数</label>
+                            <label className="menu-desc ml-1">Default expiration (seconds)</label>
                             <Input
                                 type="number"
                                 min={0}
@@ -408,10 +408,10 @@ export function ImageGenerationSettings() {
                                 })}
                                 disabled={settings.imageHosting.provider !== "imgbb"}
                             />
-                            <span className="menu-desc ml-1">0 表示不过期。</span>
+                            <span className="menu-desc ml-1">0 means never expires.</span>
                         </div>
                         <div className="flex flex-col gap-1">
-                            <label className="menu-desc ml-1">上传上限 KB</label>
+                            <label className="menu-desc ml-1">Upload limit (KB)</label>
                             <Input
                                 type="number"
                                 min={64}
@@ -422,14 +422,14 @@ export function ImageGenerationSettings() {
                                 })}
                                 disabled={settings.imageHosting.provider !== "imgbb"}
                             />
-                            <span className="menu-desc ml-1">默认 900KB，适合 CSS 主题素材。</span>
+                            <span className="menu-desc ml-1">Default 900KB, suitable for CSS theme assets.</span>
                         </div>
                     </div>
 
                     <div className="menu-item !px-0 !py-0">
                         <span className="settings-tools-menu-copy">
-                            <span className="menu-label appearance-menu-item-label">上传前自动转 WebP</span>
-                            <span className="menu-desc settings-tools-menu-desc">减小 PNG/JPEG 体积；GIF 会保留原格式。</span>
+                            <span className="menu-label appearance-menu-item-label">Auto-convert to WebP before upload</span>
+                            <span className="menu-desc settings-tools-menu-desc">Reduces PNG/JPEG size; GIF keeps its original format.</span>
                         </span>
                         <span className="menu-right settings-tools-menu-toggle">
                             <Toggle
@@ -449,7 +449,7 @@ export function ImageGenerationSettings() {
                     {characters.length === 0 ? (
                         <div className="ui-empty py-8">
                             <Camera size={22} />
-                            <span className="menu-desc">暂无角色。</span>
+                            <span className="menu-desc">No characters yet.</span>
                         </div>
                     ) : characters.map(character => {
                         const preview = referencePreviews[character.id];
@@ -468,13 +468,13 @@ export function ImageGenerationSettings() {
                                 </span>
                                 <span className="min-w-0 flex flex-1 flex-col">
                                     <span className="menu-label truncate">{character.name}</span>
-                                    <span className="menu-desc truncate">{preview ? "已上传参考图" : "未上传参考图"}</span>
+                                    <span className="menu-desc truncate">{preview ? "Reference image uploaded" : "No reference image uploaded"}</span>
                                 </span>
                                 <span className="menu-right flex gap-2">
                                     <button
                                         type="button"
                                         className="ui-link-btn"
-                                        aria-label={`上传 ${character.name} 的参考图`}
+                                        aria-label={`Upload reference image for ${character.name}`}
                                         onClick={() => {
                                             const input = document.createElement("input");
                                             input.type = "file";
@@ -493,7 +493,7 @@ export function ImageGenerationSettings() {
                                             type="button"
                                             className="ui-link-btn"
                                             data-variant="danger"
-                                            aria-label={`删除 ${character.name} 的参考图`}
+                                            aria-label={`Delete reference image for ${character.name}`}
                                             onClick={() => removeReference(character.id)}
                                         >
                                             <Trash2 size={18} />

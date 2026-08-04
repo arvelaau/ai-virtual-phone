@@ -1,5 +1,7 @@
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
 import {
+  INTERVIEW_MAGAZINE_CN_DEFAULT_HOST_PROMPT,
+  INTERVIEW_MAGAZINE_CN_DEFAULT_MEMORY_PROMPT,
   INTERVIEW_MAGAZINE_DEFAULT_HOST_PROMPT,
   INTERVIEW_MAGAZINE_DEFAULT_MEMORY_PROMPT,
   INTERVIEW_MAGAZINE_GENERIC_HOST_PROMPT,
@@ -102,6 +104,7 @@ export function loadInterviewHostPrompt(): string {
       || trimmed === INTERVIEW_MAGAZINE_GENERIC_HOST_PROMPT
       || trimmed === INTERVIEW_MAGAZINE_SINGLE_HOST_PROMPT
       || trimmed === INTERVIEW_MAGAZINE_PRIOR_DEFAULT_HOST_PROMPT
+      || trimmed === INTERVIEW_MAGAZINE_CN_DEFAULT_HOST_PROMPT
     ) {
       return INTERVIEW_MAGAZINE_DEFAULT_HOST_PROMPT;
     }
@@ -122,7 +125,12 @@ export function loadInterviewMemoryPrompt(): string {
   try {
     const raw = kvGet(INTERVIEW_MEMORY_PROMPT_KEY);
     const trimmed = raw?.trim();
-    return trimmed || INTERVIEW_MAGAZINE_DEFAULT_MEMORY_PROMPT;
+    // Same superseded-default handling as the host prompt: a stored value that is
+    // simply an older shipped default gets upgraded rather than treated as custom.
+    if (!trimmed || trimmed === INTERVIEW_MAGAZINE_CN_DEFAULT_MEMORY_PROMPT) {
+      return INTERVIEW_MAGAZINE_DEFAULT_MEMORY_PROMPT;
+    }
+    return trimmed;
   } catch {
     return INTERVIEW_MAGAZINE_DEFAULT_MEMORY_PROMPT;
   }

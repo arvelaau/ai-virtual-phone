@@ -127,7 +127,7 @@ function createCustomAppSrcDoc(app: InstalledCustomApp, frameId: string, launchC
   const base = /<html[\s>]/i.test(body)
     ? body
     : `<!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
@@ -223,8 +223,8 @@ html, body { min-height: 100%; }
   });
   function onEvent(eventName, handler){
     var key = String(eventName || '').trim();
-    if (!key) throw new Error('AiPhone.on 需要 eventName');
-    if (typeof handler !== 'function') throw new Error('AiPhone.on 需要 handler 函数');
+    if (!key) throw new Error('AiPhone.on requires an eventName');
+    if (typeof handler !== 'function') throw new Error('AiPhone.on requires a handler function');
     if (!eventHandlers[key]) eventHandlers[key] = [];
     eventHandlers[key].push(handler);
     request('events.subscribe', { event: key }).catch(function(err){
@@ -323,8 +323,8 @@ html, body { min-height: 100%; }
     tools: {
       handle: function(name, handler){
         var key = String(name || '').trim();
-        if (!key) throw new Error('AiPhone.tools.handle 需要工具名或工具 id');
-        if (typeof handler !== 'function') throw new Error('AiPhone.tools.handle 需要 handler 函数');
+        if (!key) throw new Error('AiPhone.tools.handle requires a tool name or tool id');
+        if (typeof handler !== 'function') throw new Error('AiPhone.tools.handle requires a handler function');
         toolHandlers[key] = handler;
         request('tools.registerHandler', { name: key }).catch(function(err){
           if (typeof console !== 'undefined' && console.warn) console.warn(err);
@@ -445,7 +445,7 @@ function hasPermission(app: InstalledCustomApp, permission: string): boolean {
 
 function collectionName(value: unknown): string {
   const text = String(value ?? "").trim().replace(/[^\w.-]+/g, "_").slice(0, 80);
-  if (!text) throw new Error("collection 不能为空。");
+  if (!text) throw new Error("collection cannot be empty.");
   return text;
 }
 
@@ -454,29 +454,34 @@ function recordId(value?: unknown): string {
   return text || `rec_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// ── 媒体库(media.*)──
-// APP 的音频/图片以 Blob 存 IndexedDB(复用聊天媒体库),db 记录里只存
-// media-store:// 引用。Blob 是磁盘背书的句柄,不占 JS 堆,也不进 kv 的
-// 全量内存缓存——这是大配音库不再压崩页面的根本解法。旧的 dataURL 数据
-// 原地不动,继续按字符串使用。
+// ── Media library (media.*) ──
+// App audio/images are stored as Blobs in IndexedDB (reusing the chat media
+// library); db records only store media-store:// references. A Blob is a
+// disk-backed handle that doesn't occupy the JS heap and doesn't enter kv's
+// full in-memory cache — this is the fundamental fix that keeps large voice
+// libraries from crushing the page. Legacy dataURL data is left as-is and
+// continues to be used as a string.
 const CUSTOM_APP_MEDIA_REFS_COLLECTION = "__media_refs";
-// 单件媒体上限(按 base64 长度计约 25MB),防止单次写入把宿主进程压崩
+// Per-item media cap (based on base64 length, roughly 25MB), to prevent a
+// single write from crashing the host process
 const CUSTOM_APP_MEDIA_MAX_BASE64_LENGTH = 34_000_000;
 
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(new Error("媒体读取失败"));
+    reader.onerror = () => reject(new Error("Failed to read media"));
     reader.readAsDataURL(blob);
   });
 }
 
-// ── 宿主代播(voice.play)──
-// APP 沙盒 iframe 里的 <audio> 会让 iOS 锁屏媒体卡片绑到 about:srcdoc(点了
-// 就把 PWA 导航到空白页);而 Web Audio 又会被 iOS 静音拨键掐掉输出。所以
-// 播放必须由宿主页面持有的 <audio> 元素来做:卡片绑到站点本身,点击无害,
-// 静音拨键也不影响媒体元素。
+// ── Host-side playback (voice.play) ──
+// An <audio> element inside the app's sandboxed iframe would bind the iOS
+// lock-screen media card to about:srcdoc (tapping it navigates the PWA to a
+// blank page); meanwhile Web Audio output gets cut by the iOS mute switch.
+// So playback must be handled by an <audio> element owned by the host page:
+// the media card binds to the site itself, taps are harmless, and the mute
+// switch doesn't affect the media element.
 type FrameAudioChannel = { el: HTMLAudioElement; settle: (() => void) | null; objectUrl: string | null };
 
 const FRAME_AUDIO_UNLOCK_WAV = "data:audio/wav;base64,UklGRjQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YRAAAACAgICAgICAgICAgICAgICA";
@@ -490,7 +495,7 @@ function cleanupFrameAudioChannel(entry: FrameAudioChannel): void {
   el.onended = null;
   el.onerror = null;
   el.loop = false;
-  // 清掉 src 让 iOS 撤下锁屏媒体卡片
+  // Clear src so iOS dismisses the lock-screen media card
   try { el.pause(); el.removeAttribute("src"); el.load(); } catch { /* ignore */ }
   if (entry.objectUrl) {
     try { URL.revokeObjectURL(entry.objectUrl); } catch { /* ignore */ }
@@ -498,8 +503,9 @@ function cleanupFrameAudioChannel(entry: FrameAudioChannel): void {
   }
 }
 
-// iOS 的播放解锁按元素记账:在用户手势窗口里让元素静音播一次,之后
-// 程序化 play() 才不会被自动播放策略拦截。
+// iOS tracks playback unlock per element: play it once muted within the
+// user-gesture window, and only then will a programmatic play() call avoid
+// being blocked by the autoplay policy.
 function unlockFrameAudioEl(el: HTMLAudioElement): void {
   if (el.dataset.unlocked === "1") return;
   try {
@@ -516,7 +522,7 @@ function unlockFrameAudioEl(el: HTMLAudioElement): void {
       el.muted = false;
       el.dataset.unlocked = "1";
     }
-  } catch { /* 解锁失败不阻断,播放时 APP 侧还有回落 */ }
+  } catch { /* Unlock failure doesn't block anything; the app side still has a fallback on playback */ }
 }
 
 function ensureCharacterSession(characterId: string) {
@@ -585,7 +591,8 @@ async function pickCustomAppMedia(record: Record<string, unknown>): Promise<Reco
   return new Promise((resolve, reject) => {
     const input = document.createElement("input");
     input.type = "file";
-    // iOS「文件」App 对宽泛的 audio/* / video/* 常把具体文件灰掉,补上常见扩展名兜底
+    // iOS's Files app often greys out specific files for broad audio/* / video/* accept
+    // types, so add common extensions as a fallback
     let accept = typeof record.accept === "string" ? record.accept : "";
     if (accept === "audio/*") accept = "audio/*,.mp3,.m4a,.wav,.aac,.ogg,.flac,.opus";
     else if (accept === "video/*") accept = "video/*,.mp4,.mov,.m4v,.webm";
@@ -720,7 +727,7 @@ export function CustomAppRunner({
   const frameObjectUrlsRef = useRef<Set<string>>(new Set());
   const onlineRoomRef = useRef<OnlineRoomConnection | null>(null);
 
-  // 联机房间随 APP 生命周期走：关 APP 即退房（房主退房 = 关房）
+  // The online room follows the app's lifecycle: closing the app leaves the room (host leaving = closing the room)
   useEffect(() => () => {
     onlineRoomRef.current?.leave();
     onlineRoomRef.current = null;
@@ -738,8 +745,8 @@ export function CustomAppRunner({
   const [menuActionError, setMenuActionError] = useState("");
   const launchSource = launchContext && typeof launchContext === "object" ? String(launchContext.source ?? "") : "";
   const closeLabel = launchSource === "chat_plus_action" || launchSource === "chat_card" || launchSource === "chat_directive"
-    ? "返回聊天室"
-    : "返回桌面";
+    ? "Back to Chat"
+    : "Back to Home";
 
   const getFrameAudioChannel = useCallback((name: string): FrameAudioChannel => {
     let entry = frameAudioChannelsRef.current.get(name);
@@ -752,8 +759,10 @@ export function CustomAppRunner({
     return entry;
   }, []);
 
-  // 挂载发生在"打开 APP"那次点击的任务内(useLayoutEffect 同步执行),趁手势
-  // 窗口把代播元素解锁;之后宿主层的任何触摸(如返回胶囊)也会补解锁。
+  // Mounting happens within the task of the "open app" click (useLayoutEffect runs
+  // synchronously), so we unlock the playback elements while inside the gesture
+  // window; any later touch on the host layer (e.g. the back capsule) will also
+  // re-trigger the unlock.
   useLayoutEffect(() => {
     const unlockAll = () => {
       unlockFrameAudioEl(getFrameAudioChannel("voice").el);
@@ -785,7 +794,7 @@ export function CustomAppRunner({
     const removal = await removeCustomAppRegistrationsAsync(app.id, { deleteResources: deleteData });
     const removalText = formatCustomAppRegistrationRemovalSummary(removal);
     await uninstallCustomAppAsync(app.id, { deleteData });
-    const base = deleteData ? `已卸载「${app.name}」并删除数据` : `已卸载「${app.name}」`;
+    const base = deleteData ? `Uninstalled "${app.name}" and deleted its data` : `Uninstalled "${app.name}"`;
     onNotice?.(removalText ? `${base}，${removalText}` : base);
     onClose();
   }, [app, onNotice, onClose]);
@@ -798,8 +807,8 @@ export function CustomAppRunner({
       const result = await updateInstalledCustomAppFromMarket(app);
       setMenuOpen(false);
       onNotice?.(result.previousVersion === result.installed.version
-        ? `已同步「${result.installed.name}」`
-        : `已更新「${result.installed.name}」到 v${result.installed.version}`);
+        ? `Synced "${result.installed.name}"`
+        : `Updated "${result.installed.name}" to v${result.installed.version}`);
     } catch (err) {
       setMenuActionError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -845,7 +854,7 @@ export function CustomAppRunner({
     }, "*");
   }, [backgroundEvent, frameId]);
 
-  // APP 关闭/卸载运行器时停掉定位监听，避免后台白耗电
+  // Stop location watching when the app closes/unmounts the runner, to avoid wasting battery in the background
   useEffect(() => () => {
     if (geoWatchIdRef.current != null && typeof navigator !== "undefined" && navigator.geolocation) {
       navigator.geolocation.clearWatch(geoWatchIdRef.current);
@@ -898,13 +907,13 @@ export function CustomAppRunner({
 
   const requirePermission = useCallback((permission: string) => {
     if (!hasPermission(app, permission)) {
-      throw new Error(`应用未声明权限：${permission}`);
+      throw new Error(`App has not declared permission: ${permission}`);
     }
   }, [app]);
 
   const requireAnyPermission = useCallback((permissions: string[]) => {
     if (permissions.some(permission => hasPermission(app, permission))) return;
-    throw new Error(`应用未声明权限：${permissions.join(" 或 ")}`);
+    throw new Error(`App has not declared permission: ${permissions.join(" or ")}`);
   }, [app]);
 
   const handleBridgeRequest = useCallback(async (action: string, payload: unknown): Promise<BridgeResult> => {
@@ -963,9 +972,9 @@ export function CustomAppRunner({
 
     if (action === "events.subscribe") {
       const eventName = String(record.event ?? record.name ?? "").trim();
-      if (!eventName) throw new Error("events.subscribe 缺少 event。");
+      if (!eventName) throw new Error("events.subscribe is missing event.");
       if (!declaredEvents.has(eventName) && !declaredEvents.has("*")) {
-        throw new Error(`manifest.extensions.events 未声明事件：${eventName}`);
+        throw new Error(`manifest.extensions.events does not declare event: ${eventName}`);
       }
       if (eventName === "chat.message.created") requireAnyPermission(["chat.read", "chat.read.background"]);
       subscribedEventsRef.current.add(eventName);
@@ -988,9 +997,9 @@ export function CustomAppRunner({
     if (action === "tools.registerHandler") {
       requirePermission("chat.tools");
       const toolKey = String(record.name ?? record.id ?? record.tool ?? "").trim();
-      if (!toolKey) throw new Error("tools.registerHandler 缺少工具名。");
+      if (!toolKey) throw new Error("tools.registerHandler is missing a tool name.");
       if (declaredToolKeys.size > 0 && !declaredToolKeys.has(toolKey)) {
-        throw new Error(`manifest.extensions.tools 未声明工具 handler：${toolKey}`);
+        throw new Error(`manifest.extensions.tools does not declare tool handler: ${toolKey}`);
       }
       registeredToolHandlersRef.current.add(toolKey);
       if (backgroundTool) window.setTimeout(postBackgroundToolIfReady, 0);
@@ -1018,7 +1027,7 @@ export function CustomAppRunner({
     if (action === "tools.invoke") {
       requirePermission("chat.tools");
       const name = String(record.name ?? record.tool ?? "").trim();
-      if (!name) throw new Error("tools.invoke 缺少工具名。");
+      if (!name) throw new Error("tools.invoke is missing a tool name.");
       const args = record.args && typeof record.args === "object" && !Array.isArray(record.args)
         ? record.args as Record<string, unknown>
         : {};
@@ -1035,7 +1044,7 @@ export function CustomAppRunner({
         characterId,
         sourceEngine: "custom_app",
       });
-      return result ?? { name, success: false, error: "工具没有返回结果。" };
+      return result ?? { name, success: false, error: "Tool returned no result." };
     }
 
     if (action.startsWith("room.") || action.startsWith("cloud.")) {
@@ -1046,7 +1055,7 @@ export function CustomAppRunner({
         const cloudAction = action.slice("cloud.".length);
         if (cloudAction === "report") {
           const reportId = String(record.id ?? "").trim();
-          if (!reportId) throw new Error("cloud.report 缺少 id。");
+          if (!reportId) throw new Error("cloud.report is missing id.");
           await submitContentReport({
             contentType: "online_doc",
             contentId: reportId,
@@ -1055,7 +1064,7 @@ export function CustomAppRunner({
           return true;
         }
         if (!["put", "get", "list", "update", "delete", "takeRandom"].includes(cloudAction)) {
-          throw new Error(`未知云端动作：${action}`);
+          throw new Error(`Unknown cloud action: ${action}`);
         }
         const response = await onlineCloudApi({
           action: cloudAction,
@@ -1128,7 +1137,7 @@ export function CustomAppRunner({
         }
         return true;
       }
-      if (!current) throw new Error("当前没有已连接的联机房间，请先 room.create 或 room.join。");
+      if (!current) throw new Error("No online room is currently connected. Call room.create or room.join first.");
       if (action === "room.report") {
         await submitContentReport({
           contentType: "online_room",
@@ -1143,7 +1152,7 @@ export function CustomAppRunner({
       }
       if (action === "room.setState") {
         const state = record.state ?? record.data;
-        if (!state || typeof state !== "object" || Array.isArray(state)) throw new Error("room.setState 需要对象 state。");
+        if (!state || typeof state !== "object" || Array.isArray(state)) throw new Error("room.setState requires an object state.");
         await current.setState(state as Record<string, unknown>);
         return true;
       }
@@ -1158,7 +1167,7 @@ export function CustomAppRunner({
         onlineRoomRef.current = null;
         return true;
       }
-      throw new Error(`未知联机动作：${action}`);
+      throw new Error(`Unknown online action: ${action}`);
     }
 
     if (action.startsWith("db.")) {
@@ -1226,13 +1235,14 @@ export function CustomAppRunner({
       let src = rawSrc;
       let mediaObjectUrl: string | null = null;
       if (isMediaStoreRef(rawSrc)) {
-        // 媒体库引用:宿主直接读 Blob 转 objectURL,音频数据不过桥
+        // Media library reference: the host reads the Blob directly and converts it to an
+        // objectURL, so audio data doesn't cross the bridge
         const media = await loadMediaBlob(rawSrc);
-        if (!media) throw new Error("voice.play 找不到对应媒体,可能已被删除。");
+        if (!media) throw new Error("voice.play could not find the media, it may have been deleted.");
         mediaObjectUrl = URL.createObjectURL(media.blob);
         src = mediaObjectUrl;
       } else if (!src.startsWith("data:audio/") && !src.startsWith("blob:")) {
-        throw new Error("voice.play 需要音频 dataUrl 或 media-store:// 引用。");
+        throw new Error("voice.play requires an audio dataUrl or a media-store:// reference.");
       }
       const entry = getFrameAudioChannel(channel);
       const prevSettle = entry.settle;
@@ -1248,7 +1258,7 @@ export function CustomAppRunner({
       if (el.loop) {
         try { await el.play(); } catch (err) {
           cleanupFrameAudioChannel(entry);
-          throw new Error(`宿主音频播放被拦截:${err instanceof Error ? err.message : String(err)}`);
+          throw new Error(`Host audio playback was blocked: ${err instanceof Error ? err.message : String(err)}`);
         }
         return { ok: true, loop: true };
       }
@@ -1270,10 +1280,10 @@ export function CustomAppRunner({
         };
         entry.settle = settle;
         el.onended = settle;
-        el.onerror = () => fail("宿主音频解码或播放失败");
+        el.onerror = () => fail("Host audio decoding or playback failed");
         const p = el.play();
         if (p && typeof p.catch === "function") {
-          p.catch(err => fail(`宿主音频播放被拦截:${err instanceof Error ? err.message : String(err)}`));
+          p.catch(err => fail(`Host audio playback was blocked: ${err instanceof Error ? err.message : String(err)}`));
         }
       });
     }
@@ -1284,13 +1294,13 @@ export function CustomAppRunner({
       let declaredMime = String(record.mime ?? "").trim() || undefined;
       if (dataUrl.startsWith("data:")) {
         const comma = dataUrl.indexOf(",");
-        if (comma < 0) throw new Error("media.put 的 dataUrl 格式不合法。");
+        if (comma < 0) throw new Error("media.put dataUrl format is invalid.");
         declaredMime = declaredMime || dataUrl.slice(5, comma).split(";")[0] || undefined;
         base64 = dataUrl.slice(comma + 1);
       }
-      if (!base64) throw new Error("media.put 需要 dataUrl 或 base64。");
+      if (!base64) throw new Error("media.put requires dataUrl or base64.");
       if (base64.length > CUSTOM_APP_MEDIA_MAX_BASE64_LENGTH) {
-        throw new Error("media.put 单个媒体不能超过 25MB。");
+        throw new Error("media.put: a single media file cannot exceed 25MB.");
       }
       const stored = await storeMediaBase64(base64, declaredMime);
       const refRows = readCustomAppCollection(app.id, CUSTOM_APP_MEDIA_REFS_COLLECTION);
@@ -1303,16 +1313,18 @@ export function CustomAppRunner({
     if (action === "media.get") {
       requirePermission("app.data.read");
       const ref = String(record.ref ?? record.id ?? "");
-      if (!isMediaStoreRef(ref)) throw new Error("media.get 需要 media-store:// 引用。");
+      if (!isMediaStoreRef(ref)) throw new Error("media.get requires a media-store:// reference.");
       const refRows = readCustomAppCollection(app.id, CUSTOM_APP_MEDIA_REFS_COLLECTION);
       if (!refRows.some(row => String(row.id) === ref)) {
-        throw new Error("media.get 只能读取本 APP 存入的媒体。");
+        throw new Error("media.get can only read media stored by this app.");
       }
       const media = await loadMediaBlob(ref);
       if (!media) return null;
-      // 一律返回 dataURL:宿主创建的 blob objectURL 在沙盒 iframe(空源)里
-      // 会被同源规则拒载,APP 根本用不了。音频播放走 voice.play(宿主自播)
-      // 不经过这里,所以大文件驻留内存的问题只剩"正在显示的图片",可接受。
+      // Always return a dataURL: a blob objectURL created by the host would be rejected
+      // by same-origin rules inside the sandboxed iframe (opaque origin), so the app
+      // couldn't use it at all. Audio playback goes through voice.play (host self-plays)
+      // and doesn't pass through here, so the only remaining memory concern is "the
+      // image currently being displayed," which is acceptable.
       return { ref, mime: media.mimeType, dataUrl: await blobToDataUrl(media.blob) };
     }
     if (action === "media.revoke") {
@@ -1407,12 +1419,13 @@ export function CustomAppRunner({
       return saveCustomAppMedia(record);
     }
 
-    // 定位：沙盒 iframe 是不透明源拿不到 navigator.geolocation 权限，由宿主页面代理
+    // Geolocation: the sandboxed iframe is an opaque origin and can't get navigator.geolocation
+    // permission, so the host page proxies it
     if (action === "geo.get") {
       requirePermission("geo.read");
       return new Promise((resolve, reject) => {
         if (typeof navigator === "undefined" || !navigator.geolocation) {
-          reject(new Error("当前设备或环境不支持定位。"));
+          reject(new Error("Location is not supported on this device or environment."));
           return;
         }
         navigator.geolocation.getCurrentPosition(
@@ -1422,7 +1435,7 @@ export function CustomAppRunner({
             accuracy: pos.coords.accuracy,
             timestamp: pos.timestamp,
           }),
-          err => reject(new Error(err?.message ? `定位失败：${err.message}` : "定位失败或未授权。")),
+          err => reject(new Error(err?.message ? `Location failed: ${err.message}` : "Location failed or was not authorized.")),
           {
             enableHighAccuracy: record.highAccuracy !== false,
             timeout: Math.min(30000, Math.max(1000, Number(record.timeoutMs) || 10000)),
@@ -1434,7 +1447,7 @@ export function CustomAppRunner({
     if (action === "geo.watch.start") {
       requirePermission("geo.watch");
       if (typeof navigator === "undefined" || !navigator.geolocation) {
-        throw new Error("当前设备或环境不支持定位。");
+        throw new Error("Location is not supported on this device or environment.");
       }
       if (geoWatchIdRef.current != null) navigator.geolocation.clearWatch(geoWatchIdRef.current);
       geoWatchIdRef.current = navigator.geolocation.watchPosition(
@@ -1444,7 +1457,7 @@ export function CustomAppRunner({
           accuracy: pos.coords.accuracy,
           timestamp: pos.timestamp,
         }),
-        err => postHostEvent("geo.error", { message: err?.message ?? "定位失败" }),
+        err => postHostEvent("geo.error", { message: err?.message ?? "Location failed" }),
         { enableHighAccuracy: record.highAccuracy !== false, maximumAge: Math.max(0, Number(record.maximumAgeMs) || 5000) },
       );
       return { ok: true };
@@ -1524,7 +1537,7 @@ export function CustomAppRunner({
 
     if (action === "chat.openConversation") {
       const characterId = String(record.characterId ?? "").trim();
-      if (!characterId) throw new Error("chat.openConversation 缺少 characterId。");
+      if (!characterId) throw new Error("chat.openConversation is missing characterId.");
       const session = ensureCharacterSession(characterId);
       window.dispatchEvent(new CustomEvent("open-app", { detail: { appId: "chat", sessionId: session.id } }));
       return { sessionId: session.id };
@@ -1543,7 +1556,8 @@ export function CustomAppRunner({
 
     if (action === "ai.generate") {
       requirePermission("ai.generate");
-      // 分流只看 APP 显式传参，避免 launchContext 里的 sessionId 误触发群聊模式
+      // Routing only looks at params explicitly passed by the app, to avoid the sessionId
+      // in launchContext accidentally triggering group chat mode
       return isCustomAppGroupGenerateRecord(record)
         ? generateCustomAppGroupText(app, { ...launchRecord, ...record })
         : generateCustomAppText(app, { ...launchRecord, ...record });
@@ -1567,7 +1581,7 @@ export function CustomAppRunner({
 
     if (action === "ui.toast") {
       requirePermission("ui.toast");
-      onNotice?.(String(record.message ?? "已完成"));
+      onNotice?.(String(record.message ?? "Done"));
       return true;
     }
 
@@ -1578,18 +1592,18 @@ export function CustomAppRunner({
 
     if (action === "ui.showSmsThread") {
       requirePermission("ui.sms");
-      onNotice?.("已触发短信界面（MVP 先以通知形式展示）。");
+      onNotice?.("SMS screen triggered (MVP shows this as a notification for now).");
       return true;
     }
 
     if (action === "ui.showCallScreen") {
       requirePermission("ui.call");
-      onNotice?.("已触发通话界面（MVP 先以通知形式展示）。");
+      onNotice?.("Call screen triggered (MVP shows this as a notification for now).");
       return true;
     }
 
     if (action === "ui.confirm") {
-      const message = String(record.message ?? record.title ?? "确认操作？");
+      const message = String(record.message ?? record.title ?? "Confirm action?");
       return window.confirm(message);
     }
 
@@ -1684,7 +1698,7 @@ export function CustomAppRunner({
       return payCustomAppWallet(app, record);
     }
 
-    throw new Error(`未知 AiPhone 动作：${action}`);
+    throw new Error(`Unknown AiPhone action: ${action}`);
   }, [app, backgroundEvent, backgroundTool, declaredEvents, declaredToolKeys, getFrameAudioChannel, launchContext, onClose, onNotice, postBackgroundEventIfReady, postBackgroundToolIfReady, postHostEvent, requireAnyPermission, requirePermission]);
 
   useEffect(() => {
@@ -1730,7 +1744,7 @@ export function CustomAppRunner({
         reason: backgroundToolSentRef.current ? "timeout" : "handler_not_registered",
         error: backgroundToolSentRef.current
           ? `AiPhone tool timeout: ${backgroundTool.payload.tool.name}`
-          : `APP 未注册工具 handler：${toolInvocationKeys(backgroundTool.payload).join(" / ")}`,
+          : `App has not registered tool handler: ${toolInvocationKeys(backgroundTool.payload).join(" / ")}`,
       });
     }, Math.max(1000, backgroundTool.timeoutMs ?? CUSTOM_APP_BACKGROUND_RUNNER_TIMEOUT_MS));
     return () => window.clearTimeout(timeout);
@@ -1790,7 +1804,7 @@ export function CustomAppRunner({
     <div className={`custom-app-runner${embedded ? " custom-app-runner-embedded" : ""}`}>
       {!embedded ? (
         <div className="custom-app-runner-capsule">
-          <button type="button" className="cap-btn" onClick={() => { setMenuActionError(""); setMenuOpen(true); }} aria-label="应用菜单">
+          <button type="button" className="cap-btn" onClick={() => { setMenuActionError(""); setMenuOpen(true); }} aria-label="App menu">
             <MoreHorizontal size={15} strokeWidth={2.4} />
           </button>
           <span className="cap-divider" />
@@ -1810,10 +1824,10 @@ export function CustomAppRunner({
 
       {menuOpen ? (
         <div className="app-market-overlay app-market-drawer-overlay" role="presentation" onClick={() => setMenuOpen(false)}>
-          <div className="app-market-sheet app-market-detail-sheet" role="dialog" aria-modal="true" aria-label="应用详情" onClick={event => event.stopPropagation()}>
+          <div className="app-market-sheet app-market-detail-sheet" role="dialog" aria-modal="true" aria-label="App details" onClick={event => event.stopPropagation()}>
             <div className="app-market-sheet-head">
-              <strong>应用详情</strong>
-              <button type="button" onClick={() => setMenuOpen(false)} aria-label="关闭">
+              <strong>App Details</strong>
+              <button type="button" onClick={() => setMenuOpen(false)} aria-label="Close">
                 <X size={20} />
               </button>
             </div>
@@ -1824,16 +1838,16 @@ export function CustomAppRunner({
                 </span>
                 <div>
                   <strong>{app.name}</strong>
-                  <p>{app.description || "本地自定义 APP"}</p>
-                  <span>{app.author || "本地作者"} · v{app.version}</span>
+                  <p>{app.description || "Local custom app"}</p>
+                  <span>{app.author || "Local author"} · v{app.version}</span>
                 </div>
               </div>
               <div className="app-market-declaration-strip">
                 {[
-                  { file: "presets.json", label: "预设", Icon: Layers },
-                  { file: "regex.json", label: "正则", Icon: Sparkles },
-                  { file: "worldbooks.json", label: "世界书", Icon: FileJson },
-                  { file: "bindings.json", label: "默认绑定", Icon: CheckCircle2 },
+                  { file: "presets.json", label: "Presets", Icon: Layers },
+                  { file: "regex.json", label: "Regex", Icon: Sparkles },
+                  { file: "worldbooks.json", label: "World Book", Icon: FileJson },
+                  { file: "bindings.json", label: "Default Bindings", Icon: CheckCircle2 },
                 ].map(item => {
                   const Icon = item.Icon;
                   const active = Object.values(app.assets).some(asset => asset.path.toLowerCase() === item.file);
@@ -1846,9 +1860,9 @@ export function CustomAppRunner({
                 })}
               </div>
               <div className="app-market-permissions">
-                <span>已授权能力</span>
+                <span>Granted Permissions</span>
                 {app.permissions.length === 0 ? (
-                  <p>未声明特殊权限。</p>
+                  <p>No special permissions declared.</p>
                 ) : (
                   <ul>
                     {app.permissions.map(permission => (
@@ -1861,11 +1875,11 @@ export function CustomAppRunner({
               <div className="app-market-sheet-actions">
                 <button type="button" className="app-market-secondary" onClick={() => void updateCurrentApp()} disabled={updating}>
                   {updating ? <LoaderCircle className="am-spin" size={18} /> : <RefreshCw size={18} />}
-                  <span>{updating ? "更新中" : "更新"}</span>
+                  <span>{updating ? "Updating" : "Update"}</span>
                 </button>
                 <button type="button" className="app-market-danger" onClick={() => { setMenuOpen(false); setConfirmDelete(true); }} disabled={updating}>
                   <Trash2 size={18} />
-                  <span>卸载</span>
+                  <span>Uninstall</span>
                 </button>
               </div>
             </div>
@@ -1875,26 +1889,26 @@ export function CustomAppRunner({
 
       {confirmDelete ? (
         <div className="app-market-overlay" role="presentation" onClick={() => setConfirmDelete(false)}>
-          <div className="app-market-sheet" role="dialog" aria-modal="true" aria-label="卸载 APP" onClick={event => event.stopPropagation()}>
+          <div className="app-market-sheet" role="dialog" aria-modal="true" aria-label="Uninstall App" onClick={event => event.stopPropagation()}>
             <div className="app-market-sheet-head">
-              <strong>卸载「{app.name}」？</strong>
-              <button type="button" onClick={() => setConfirmDelete(false)} aria-label="关闭">
+              <strong>Uninstall "{app.name}"?</strong>
+              <button type="button" onClick={() => setConfirmDelete(false)} aria-label="Close">
                 <X size={20} />
               </button>
             </div>
             <div className="app-market-sheet-body">
               <p className="app-market-delete-copy">
-                将移除桌面图标、权限授权和运行文件。聊天历史里的 APP 卡片会保留。
+                This will remove the home screen icon, permission grants, and runtime files. App cards in chat history will be kept.
               </p>
               <div className="app-market-sheet-actions stacked">
                 <button type="button" className="app-market-secondary" onClick={() => void handleUninstall(false)}>
-                  卸载并保留数据
+                  Uninstall and Keep Data
                 </button>
                 <button type="button" className="app-market-danger" onClick={() => void handleUninstall(true)}>
-                  卸载并删除数据
+                  Uninstall and Delete Data
                 </button>
                 <button type="button" className="app-market-secondary" onClick={() => setConfirmDelete(false)}>
-                  取消
+                  Cancel
                 </button>
               </div>
             </div>

@@ -27,6 +27,7 @@ import { loadCharacters } from "./character-storage";
 import { bgSetInterval } from "./bg-timer";
 import { dispatchChatMessageNotice } from "./chat-notification-events";
 import { settleShoppingPaymentRequest } from "./shopping-payment-request";
+import { buildCallInitiateNoTargetTag } from "./call-tag-patterns";
 import {
     createPendingChatGeneratedImageData,
     generateAndApplyChatGeneratedImage,
@@ -295,7 +296,7 @@ async function fireFollowUp(sched: { sessionId: string; count: number; delaySec?
                     id: `_marker_${currentRound}_${Date.now()}`,
                     sessionId: session.id,
                     role: "user",
-                    content: `[对方没有回复你的消息，距上次回复已过约${silenceSec}秒]`,
+                    content: `[The other person has not replied; about ${silenceSec}s have passed since your last message]`,
                     status: "sent",
                     createdAt: msg.createdAt,
                 });
@@ -311,7 +312,7 @@ async function fireFollowUp(sched: { sessionId: string; count: number; delaySec?
                 id: `_silence_${nowMs}`,
                 sessionId: session.id,
                 role: "system",
-                content: `[对方没有回复你的消息，距上次回复已过约${finalSilenceSec}秒]`,
+                content: `[The other person has not replied; about ${finalSilenceSec}s have passed since your last message]`,
                 status: "sent",
                 createdAt: new Date().toISOString(),
             },
@@ -638,13 +639,13 @@ export async function parseAndSaveResponse(
 
     // Save call trigger as system message (persists even when user is not in chat room)
     if (triggerCall) {
-        const callLabel = triggerCall === "voice" ? "语音通话" : "视频通话";
+        const callTag = buildCallInitiateNoTargetTag(triggerCall === "voice" ? "voice" : "video");
         pushChatMessage({
             sessionId,
             role: "system",
-            content: `[我发起了${callLabel}]`,
+            content: callTag,
             responseBatchId: createResponseBatchId(),
-            rawResponseText: `[我发起了${callLabel}]`,
+            rawResponseText: callTag,
         });
     }
 

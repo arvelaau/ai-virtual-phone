@@ -10,6 +10,34 @@ import { loadCharacters } from "./character-storage";
 import { resolveUserIdentity } from "./settings-storage";
 import { loadMemoryConfig } from "./memory-storage";
 import { estimateTokens } from "./token-counter";
+import { buildCallInitiateNoTargetTag } from "./call-tag-patterns";
+import {
+    TAG_ACCEPT_PAYMENT_REQUEST,
+    TAG_CLAIM_RED_PACKET,
+    TAG_CLAIM_TRANSFER,
+    TAG_DECLINE_PAYMENT_REQUEST,
+    TAG_DECLINE_RED_PACKET,
+    TAG_DECLINE_TRANSFER,
+    DEFAULT_CONTACT_NAME,
+    DEFAULT_GIFT_NAME,
+    DEFAULT_LOCATION_NAME,
+    DEFAULT_MUSIC_TITLE,
+    DEFAULT_PHOTO_DESCRIPTION,
+    DEFAULT_RED_PACKET_BLESSING,
+    DEFAULT_STICKER_NAME,
+    DEFAULT_TRANSFER_NOTE,
+    DEFAULT_VOICE_NOTE_TEXT,
+    buildContactCardTag,
+    buildGiftTag,
+    buildLocationTag,
+    buildMusicShareTag,
+    buildPhotoTag,
+    buildPokeSelfTag,
+    buildRedPacketTag,
+    buildStickerTag,
+    buildTransferTag,
+    buildVoiceNoteTag,
+} from "./rich-tag-builders";
 import { loadStoryProjectionEntries } from "./story-storage";
 import { buildTwoLevelMomentThreads } from "./moments-comment-threading";
 import { loadVnProjectionEntries } from "./vn-storage";
@@ -43,9 +71,8 @@ import {
 } from "./prompt-time";
 
 function formatPhotoDirectiveForPrompt(msg: ChatMessage): string {
-    const description = msg.mediaData?.label?.trim() || "图片";
-    const mode = msg.mediaData?.useReferenceImage === true ? "使用参考图" : "不使用参考图";
-    return `[照片:${mode}:${description}]`;
+    const description = msg.mediaData?.label?.trim() || DEFAULT_PHOTO_DESCRIPTION;
+    return buildPhotoTag(description, msg.mediaData?.useReferenceImage === true);
 }
 
 export type NativeTimelineEntry = {
@@ -217,30 +244,21 @@ export function loadNativeTimeline(
             }
             // Represent rich media as text when content is empty
             else if (!content && msg.mediaType) {
-                if (msg.mediaType === "sticker") content = `[表情包:${msg.mediaData?.label || "贴纸"}]`;
-                else if (msg.mediaType === "audio") content = `[语音条:${msg.mediaData?.label || "语音消息"}]`;
+                if (msg.mediaType === "sticker") content = buildStickerTag(msg.mediaData?.label || DEFAULT_STICKER_NAME);
+                else if (msg.mediaType === "audio") content = buildVoiceNoteTag(msg.mediaData?.label || DEFAULT_VOICE_NOTE_TEXT);
                 else if (msg.mediaType === "image") content = formatPhotoDirectiveForPrompt(msg);
                 else if (msg.mediaType === "red_packet") {
-                    const cnt = msg.mediaData?.count;
-                    content = cnt && cnt > 1
-                        ? `[红包:${msg.mediaData?.amount ?? 0}:${cnt}:${msg.mediaData?.label || "恭喜发财"}]`
-                        : `[红包:${msg.mediaData?.amount ?? 0}:${msg.mediaData?.label || "恭喜发财"}]`;
+                    content = buildRedPacketTag(msg.mediaData?.amount ?? 0, msg.mediaData?.label || DEFAULT_RED_PACKET_BLESSING, msg.mediaData?.count);
                 }
                 else if (msg.mediaType === "transfer") {
-                    const sn = msg.mediaData?.senderName;
-                    const rn = msg.mediaData?.recipientName;
-                    content = sn && rn
-                        ? `[转账:${msg.mediaData?.amount ?? 0}:${msg.mediaData?.label || "转账"}:${sn}:${rn}]`
-                        : `[转账:${msg.mediaData?.amount ?? 0}:${msg.mediaData?.label || "转账"}]`;
+                    content = buildTransferTag(msg.mediaData?.amount ?? 0, msg.mediaData?.label || DEFAULT_TRANSFER_NOTE, msg.mediaData?.senderName, msg.mediaData?.recipientName);
                 }
                 else if (msg.mediaType === "contact_card") {
-                    content = `[名片:${msg.mediaData?.contactCardName || msg.mediaData?.label || "联系人"}]`;
+                    content = buildContactCardTag(msg.mediaData?.contactCardName || msg.mediaData?.label || DEFAULT_CONTACT_NAME);
                 }
                 else if (msg.mediaType === "gift") {
-                    const giftName = msg.mediaData?.giftName || msg.mediaData?.label || "礼物";
-                    content = msg.mediaData?.recipientName
-                        ? `[礼物:${giftName}:${msg.mediaData.recipientName}]`
-                        : `[礼物:${giftName}]`;
+                    const giftName = msg.mediaData?.giftName || msg.mediaData?.label || DEFAULT_GIFT_NAME;
+                    content = buildGiftTag(giftName, msg.mediaData?.recipientName);
                 }
                 else if (msg.mediaType === "payment_request") content = formatShoppingPaymentRequestHistory({
                     amount: msg.mediaData?.amount,
@@ -248,14 +266,14 @@ export function loadNativeTimeline(
                     items: msg.mediaData?.paymentRequestItems,
                     itemsText: msg.mediaData?.paymentRequestItemsText,
                 });
-                else if (msg.mediaType === "music_share") content = `[音乐分享:${msg.mediaData?.musicTitle || ""}]`;
+                else if (msg.mediaType === "music_share") content = buildMusicShareTag(msg.mediaData?.musicTitle || "");
                 else if (msg.mediaType === "xiaohongshu_note_share") content = formatXiaohongshuShareForPrompt({
                     author: msg.mediaData?.xiaohongshuAuthor,
                     title: msg.mediaData?.xiaohongshuTitle,
                     body: msg.mediaData?.xiaohongshuBody,
                     description: msg.mediaData?.xiaohongshuDescription,
                 });
-                else if (msg.mediaType === "location") content = `[位置:${msg.mediaData?.label || ""}]`;
+                else if (msg.mediaType === "location") content = buildLocationTag(msg.mediaData?.label || "");
             }
 
             if (!content.trim()) continue;
@@ -298,7 +316,7 @@ export function loadNativeTimeline(
                 }
                 // Music not found — reformat for prompt
                 if (msg.mediaType === "music_not_found") {
-                    const mTitle = msg.mediaData?.musicTitle || "未知歌曲";
+                    const mTitle = msg.mediaData?.musicTitle || DEFAULT_MUSIC_TITLE;
                     entries.push({
                         id: msg.id,
                         sourceApp: "chat",
@@ -322,28 +340,26 @@ export function loadNativeTimeline(
             let content = stripStateAndInnerForPrompt(msg.content || "");
 
             // Action notifications: always override content to bracket format (stored content is natural language for UI)
-            if (msg.mediaType === "accept_red_packet") content = "[领取红包]";
-            else if (msg.mediaType === "decline_red_packet") content = "[拒收红包]";
-            else if (msg.mediaType === "accept_transfer") content = "[领取转账]";
-            else if (msg.mediaType === "decline_transfer") content = "[拒收转账]";
-            else if (msg.mediaType === "accept_payment_request") content = "[接受代付]";
-            else if (msg.mediaType === "decline_payment_request") content = "[拒绝代付]";
-            else if (msg.mediaType === "poke") content = `[我拍了拍${msg.mediaData?.pokeTarget || ""}]`;
+            if (msg.mediaType === "accept_red_packet") content = TAG_CLAIM_RED_PACKET;
+            else if (msg.mediaType === "decline_red_packet") content = TAG_DECLINE_RED_PACKET;
+            else if (msg.mediaType === "accept_transfer") content = TAG_CLAIM_TRANSFER;
+            else if (msg.mediaType === "decline_transfer") content = TAG_DECLINE_TRANSFER;
+            else if (msg.mediaType === "accept_payment_request") content = TAG_ACCEPT_PAYMENT_REQUEST;
+            else if (msg.mediaType === "decline_payment_request") content = TAG_DECLINE_PAYMENT_REQUEST;
+            else if (msg.mediaType === "poke") content = buildPokeSelfTag(msg.mediaData?.pokeTarget || "");
             // Represent rich media as text when content is empty
             else if (!content && msg.mediaType) {
-                if (msg.mediaType === "sticker") content = `[表情包:${msg.mediaData?.label || "贴纸"}]`;
-                else if (msg.mediaType === "audio") content = `[语音条:${msg.mediaData?.label || "语音消息"}]`;
+                if (msg.mediaType === "sticker") content = buildStickerTag(msg.mediaData?.label || DEFAULT_STICKER_NAME);
+                else if (msg.mediaType === "audio") content = buildVoiceNoteTag(msg.mediaData?.label || DEFAULT_VOICE_NOTE_TEXT);
                 else if (msg.mediaType === "image") content = formatPhotoDirectiveForPrompt(msg);
-                else if (msg.mediaType === "red_packet") content = `[红包:${msg.mediaData?.amount ?? 0}:${msg.mediaData?.label || "恭喜发财"}]`;
-                else if (msg.mediaType === "transfer") content = `[转账:${msg.mediaData?.amount ?? 0}:${msg.mediaData?.label || "转账"}]`;
+                else if (msg.mediaType === "red_packet") content = buildRedPacketTag(msg.mediaData?.amount ?? 0, msg.mediaData?.label || DEFAULT_RED_PACKET_BLESSING);
+                else if (msg.mediaType === "transfer") content = buildTransferTag(msg.mediaData?.amount ?? 0, msg.mediaData?.label || DEFAULT_TRANSFER_NOTE);
                 else if (msg.mediaType === "contact_card") {
-                    content = `[名片:${msg.mediaData?.contactCardName || msg.mediaData?.label || "联系人"}]`;
+                    content = buildContactCardTag(msg.mediaData?.contactCardName || msg.mediaData?.label || DEFAULT_CONTACT_NAME);
                 }
                 else if (msg.mediaType === "gift") {
-                    const giftName = msg.mediaData?.giftName || msg.mediaData?.label || "礼物";
-                    content = msg.mediaData?.recipientName
-                        ? `[礼物:${giftName}:${msg.mediaData.recipientName}]`
-                        : `[礼物:${giftName}]`;
+                    const giftName = msg.mediaData?.giftName || msg.mediaData?.label || DEFAULT_GIFT_NAME;
+                    content = buildGiftTag(giftName, msg.mediaData?.recipientName);
                 }
                 else if (msg.mediaType === "payment_request") content = formatShoppingPaymentRequestHistory({
                     amount: msg.mediaData?.amount,
@@ -357,9 +373,9 @@ export function loadNativeTimeline(
                     const body = msg.mediaData?.appCardBody || msg.mediaData?.appCardSummary || msg.content;
                     content = body ? `[${appName}卡片:${title}]${body}` : `[${appName}卡片:${title}]`;
                 }
-                else if (msg.mediaType === "voice_call" || msg.mediaType === "video_call") content = `[我发起了${msg.mediaType === "voice_call" ? "语音" : "视频"}通话]`;
-                else if (msg.mediaType === "location") content = `[位置:${msg.mediaData?.label || ""}]`;
-                else if (msg.mediaType === "music_share") content = `[音乐分享:${msg.mediaData?.musicTitle || ""}]`;
+                else if (msg.mediaType === "voice_call" || msg.mediaType === "video_call") content = buildCallInitiateNoTargetTag(msg.mediaType === "voice_call" ? "voice" : "video");
+                else if (msg.mediaType === "location") content = buildLocationTag(msg.mediaData?.label || "");
+                else if (msg.mediaType === "music_share") content = buildMusicShareTag(msg.mediaData?.musicTitle || "");
                 else if (msg.mediaType === "xiaohongshu_note_share") content = formatXiaohongshuShareForPrompt({
                     author: msg.mediaData?.xiaohongshuAuthor,
                     title: msg.mediaData?.xiaohongshuTitle,

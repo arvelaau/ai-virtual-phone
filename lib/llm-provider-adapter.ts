@@ -342,6 +342,52 @@ function stringifyEnumValues(value: unknown): unknown {
     return next;
 }
 
+/**
+ * Keywords the native Gemini function-calling schema has no field for.
+ *
+ * Gemini's schema is a small subset of OpenAPI, and an unknown keyword is a hard
+ * 400 rather than something it ignores:
+ *   Invalid JSON payload received. Unknown name "additionalProperties"
+ *   at 'tools[0].function_declarations[1].parameters': Cannot find field.
+ * Our tool schemas are authored for OpenAI-style function calling, where
+ * `additionalProperties: false` is idiomatic, so they must be trimmed on this path.
+ * The OpenAI-compatible path deliberately keeps them — see buildOpenAICompatibleRequest.
+ */
+const GEMINI_UNSUPPORTED_SCHEMA_KEYS = new Set(["additionalProperties", "$schema"]);
+
+/** Native-Gemini-only tool schema sanitizer. Do not reuse on the OpenAI-compatible path. */
+function toGeminiFunctionParameters(value: unknown): Record<string, unknown> {
+    return stringifyToolSchemaEnums(dropUnsupportedGeminiSchemaKeys(value));
+}
+
+function dropUnsupportedGeminiSchemaKeys(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(dropUnsupportedGeminiSchemaKeys);
+    if (!value || typeof value !== "object") return value;
+
+    const record = value as Record<string, unknown>;
+    const next: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(record)) {
+        if (GEMINI_UNSUPPORTED_SCHEMA_KEYS.has(key)) continue;
+        // Inside `properties` the keys are caller-defined parameter NAMES, not schema
+        // keywords, so a parameter genuinely called "additionalProperties" must survive.
+        next[key] = key === "properties"
+            ? mapGeminiSchemaProperties(item)
+            : dropUnsupportedGeminiSchemaKeys(item);
+    }
+    return next;
+}
+
+function mapGeminiSchemaProperties(value: unknown): unknown {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return dropUnsupportedGeminiSchemaKeys(value);
+    }
+    const next: Record<string, unknown> = {};
+    for (const [name, schema] of Object.entries(value as Record<string, unknown>)) {
+        next[name] = dropUnsupportedGeminiSchemaKeys(schema);
+    }
+    return next;
+}
+
 function textFromContent(content: string | LLMContentPart[]): string {
     if (typeof content === "string") return content;
     return content.map((part) => part.type === "text" ? part.text : "[vision content omitted]").join("\n");
@@ -646,7 +692,7 @@ function buildGeminiRequest(
             functionDeclarations: options.tools.map((tool) => ({
                 name: tool.name,
                 description: tool.description,
-                parameters: stringifyToolSchemaEnums(tool.parameters),
+                parameters: toGeminiFunctionParameters(tool.parameters),
             })),
         }];
     }

@@ -30,21 +30,21 @@ export function RelationLinkDialog({
         <div className="wt-paper-kicker">RED STRING</div>
         <div className="wt-relation-row">
           <strong>{fromName}</strong>
-          <span className="wt-relation-dash">是</span>
+          <span className="wt-relation-dash">is</span>
           <strong>{toName}</strong>
-          <span className="wt-relation-dash">的…</span>
+          <span className="wt-relation-dash">'s...</span>
         </div>
         <input
           className="wt-paper-input"
           value={label}
           onChange={e => setLabel(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter") submit(); }}
-          placeholder="如：哥哥 / 宿敌 / 上司"
+          placeholder="e.g. brother / rival / boss"
         />
         <div className="wt-paper-actions">
-          <button type="button" className="wt-btn" onClick={onCancel}>取消</button>
+          <button type="button" className="wt-btn" onClick={onCancel}>Cancel</button>
           <span className="wt-paper-spacer" />
-          <button type="button" className="wt-btn wt-btn-primary" disabled={!label.trim()} onClick={submit}>牵线</button>
+          <button type="button" className="wt-btn wt-btn-primary" disabled={!label.trim()} onClick={submit}>Link</button>
         </div>
       </div>
     </div>
@@ -69,23 +69,23 @@ export function RelationPairSheet({
         <div className="wt-paper-tape" aria-hidden />
         <div className="wt-paper-kicker">RELATIONS</div>
         {relations.length === 0 ? (
-          <p className="wt-paper-hint">这两人之间已经没有关系线了。</p>
+          <p className="wt-paper-hint">There are no more relations between these two.</p>
         ) : (
           <ul className="wt-relation-list">
             {relations.map(relation => (
               <li key={relation.id} className="wt-relation-item">
                 <span className="wt-relation-text">
-                  {nameById.get(relation.fromCharacterId) ?? "?"}
-                  是{nameById.get(relation.toCharacterId) ?? "?"}的
-                  「{relation.label}」
+                  {nameById.get(relation.fromCharacterId) ?? "?"} is{" "}
+                  {nameById.get(relation.toCharacterId) ?? "?"}'s{" "}
+                  "{relation.label}"
                 </span>
                 <button
                   type="button"
                   className="wt-btn wt-btn-danger wt-btn-small"
                   onClick={() => onDelete(relation.id)}
-                  aria-label="删除这条关系"
+                  aria-label="Delete this relation"
                 >
-                  剪断
+                  Cut
                 </button>
               </li>
             ))}
@@ -93,7 +93,7 @@ export function RelationPairSheet({
         )}
         <div className="wt-paper-actions">
           <span className="wt-paper-spacer" />
-          <button type="button" className="wt-btn wt-btn-primary" onClick={onClose}>完成</button>
+          <button type="button" className="wt-btn wt-btn-primary" onClick={onClose}>Done</button>
         </div>
       </div>
     </div>

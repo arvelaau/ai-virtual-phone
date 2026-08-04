@@ -257,7 +257,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
     const stage = skeleton.mainQuest.stages[save.mainQuestStage];
     if (stage) {
       if (stage.locationHint === nodeName || stage.locationHint.includes(nodeName) || nodeName.includes(stage.locationHint)) {
-        interactions.push({ type: "quest", label: `主线：${skeleton.mainQuest.title}`, questId: skeleton.mainQuest.id, available: true, icon: "📋" });
+        interactions.push({ type: "quest", label: `Main Quest: ${skeleton.mainQuest.title}`, questId: skeleton.mainQuest.id, available: true, icon: "📋" });
       }
     }
 
@@ -267,7 +267,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
     for (const sq of skeleton.sideQuests) {
       if (allCompleted.includes(sq.id)) continue;
       if (allActive.includes(sq.id) || regionId === sq.triggerRegion) {
-        interactions.push({ type: "sidequest", label: `支线：${sq.title}`, questId: sq.id, available: true, icon: "📋" });
+        interactions.push({ type: "sidequest", label: `Side Quest: ${sq.title}`, questId: sq.id, available: true, icon: "📋" });
       }
     }
 
@@ -279,18 +279,18 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
       return false;
     });
     for (const npc of nodeNpcs) {
-      interactions.push({ type: "talk", label: `和${npc.name}交谈`, available: true, icon: "💬" });
+      interactions.push({ type: "talk", label: `Talk to ${npc.name}`, available: true, icon: "💬" });
     }
 
     const searchCount = save.searchedNodes[nodeId] || 0;
     if (searchCount < 3) {
-      interactions.push({ type: "search", label: "搜索周围", available: true, icon: "🔍" });
+      interactions.push({ type: "search", label: "Search surroundings", available: true, icon: "🔍" });
     }
 
     if (node.type === "l1") {
-      interactions.push({ type: "rest", label: "休息", available: true, icon: "🏕" });
+      interactions.push({ type: "rest", label: "Rest", available: true, icon: "🏕" });
     } else {
-      interactions.push({ type: "rest", label: "扎营", available: true, icon: "⛺" });
+      interactions.push({ type: "rest", label: "Make Camp", available: true, icon: "⛺" });
     }
 
     return interactions;
@@ -315,7 +315,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
       initialPushed.current = true;
       pushMessages({
         id: mkId(), type: "location",
-        text: `你正在 ${currentNode.name}`,
+        text: `You are at ${currentNode.name}`,
       });
     }
   }, [currentNode, pushMessages]);
@@ -358,7 +358,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
     // Push location message to stream
     pushMessages({
       id: mkId(), type: "location",
-      text: `你来到了 ${target.name}`,
+      text: `You arrive at ${target.name}`,
     });
   }, [save, nodeMap, allNodes, persistSave, pushMessages]);
 
@@ -366,7 +366,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
   const handleRest = useCallback(() => {
     const isCity = save.currentNodeType === "l1";
     const recoveredHp = isCity ? save.maxHp : Math.min(save.maxHp, save.hp + 30);
-    const restText = isCity ? "在城中休息了一晚，恢复了全部生命值。" : "在野外扎营过夜，恢复了少许生命值。";
+    const restText = isCity ? "Rested for the night in the city, fully restoring HP." : "Camped out in the wild overnight, restoring a small amount of HP.";
     const newSave: GameSave = {
       ...save,
       hp: recoveredHp,
@@ -404,7 +404,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
         ? resolveBinding(bindings, save.agents[0].characterId, "adventure")
         : resolveBinding(bindings, undefined, "adventure");
       const apiConfig = (dmSlot?.apiConfigId ? apiConfigs.find(c => c.id === dmSlot.apiConfigId) : null) || apiConfigs.find(c => c.apiKey) || apiConfigs[0];
-      if (!apiConfig?.apiKey) throw new Error("未找到有效的API配置，请先在设置中配置API");
+      if (!apiConfig?.apiKey) throw new Error("No valid API configuration found. Please configure an API in Settings first.");
 
       const companionIds = save.agents
         .filter(a => a.currentNodeId === save.currentNodeId)
@@ -502,12 +502,12 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
         setInEvent(false);
         setActiveEvent(null);
         setActiveEventMeta(null);
-        pushMessages({ id: mkId(), type: "system", text: "—— 事件结束 ——" });
+        pushMessages({ id: mkId(), type: "system", text: "—— Event Ended ——" });
       }
       setLastFailedEvent(null); // success — clear any previous failure
     } catch (e) {
       console.warn("[MapView] Event trigger error:", e);
-      pushMessages({ id: mkId(), type: "system", text: `事件触发失败：${e instanceof Error ? e.message : String(e)}` });
+      pushMessages({ id: mkId(), type: "system", text: `Event trigger failed: ${e instanceof Error ? e.message : String(e)}` });
       setLastFailedEvent({ type: eventType, brief, meta });
       setActiveEvent(null);
       setActiveEventMeta(null);
@@ -553,7 +553,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
         ? resolveBinding(bindings, save.agents[0].characterId, "adventure")
         : resolveBinding(bindings, undefined, "adventure");
       const apiConfig = (dmSlot?.apiConfigId ? apiConfigs.find(c => c.id === dmSlot.apiConfigId) : null) || apiConfigs.find(c => c.apiKey) || apiConfigs[0];
-      if (!apiConfig?.apiKey) throw new Error("未找到有效的API配置");
+      if (!apiConfig?.apiKey) throw new Error("No valid API configuration found");
 
       // ── Phase 3: Companions declare — detect already-replied from stream ──
       const companionIds = save.agents.map(a => a.characterId);
@@ -578,8 +578,8 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
             const decl = await companionDeclare(cid, apiConfig, streamRef.current, save.agents.length > 1 ? userIdentity : undefined, save.agents.find(a => a.characterId === cid)?.affinity);
 
             if (decl.failed) {
-              pushMessages({ id: mkId(), type: "system", text: `${decl.speaker} 回复失败` });
-              throw new Error(`${decl.speaker}回复失败，请重试`);
+              pushMessages({ id: mkId(), type: "system", text: `${decl.speaker} reply failed` });
+              throw new Error(`${decl.speaker} reply failed, please retry`);
             }
 
             // Mark as completed and persist immediately
@@ -706,8 +706,8 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
       if (ev.npcsInvolved?.length) updatedDirector.keyNpcsMet = [...new Set([...updatedDirector.keyNpcsMet, ...ev.npcsInvolved])];
 
       // Gained/lost system messages
-      if (ev.gained?.length) pushMessages({ id: mkId(), type: "system", text: `获得：${ev.gained.join("、")}` });
-      if (lostItems.length) pushMessages({ id: mkId(), type: "system", text: `失去：${lostItems.join("、")}` });
+      if (ev.gained?.length) pushMessages({ id: mkId(), type: "system", text: `Gained: ${ev.gained.join(", ")}` });
+      if (lostItems.length) pushMessages({ id: mkId(), type: "system", text: `Lost: ${lostItems.join(", ")}` });
 
       const newJournal = [...saveRef.current.journal];
       if (ev.journalEntry) {
@@ -759,7 +759,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
           newNodeId = targetNode.id;
           newNodeType = targetNode.type;
           discoverNode(targetNode.id);
-          pushMessages({ id: mkId(), type: "location", text: `你来到了 ${targetNode.name}` });
+          pushMessages({ id: mkId(), type: "location", text: `You arrive at ${targetNode.name}` });
           // All agents follow
           for (const a of updatedAgents) {
             const ch = characters.find(c => c.id === a.characterId);
@@ -776,7 +776,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
               newNodeId = targetNode.id;
               newNodeType = targetNode.type;
               discoverNode(targetNode.id);
-              pushMessages({ id: mkId(), type: "location", text: `你来到了 ${targetNode.name}` });
+              pushMessages({ id: mkId(), type: "location", text: `You arrive at ${targetNode.name}` });
             }
           } else {
             // Agent
@@ -804,7 +804,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
 
       // ── Death check: HP=0 → show death dialog ──
       if (newHp <= 0) {
-        pushMessages({ id: mkId(), type: "system", text: "你倒下了..." });
+        pushMessages({ id: mkId(), type: "system", text: "You have fallen..." });
         setShowDeathDialog(true);
         setInEvent(false);
         setCurrentChoices(null);
@@ -819,7 +819,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
 
       // ── Ending check: DM decides ending ──
       if ((continuation as { ending?: boolean }).ending) {
-        pushMessages({ id: mkId(), type: "system", text: "—— 主线完成 ——" });
+        pushMessages({ id: mkId(), type: "system", text: "—— Main Quest Complete ——" });
         pushSceneToStream(continuation);
         persistSave({ ...newSave, completed: true });
         setInEvent(false);
@@ -840,7 +840,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
           const endSummaryApi = resolveAuxiliaryApiConfig("memorySummaryApiConfigId") || apiConfig;
           generateAdventureSummary(newSave, skeleton.world.name, endSummaryApi).catch(() => undefined);
         } catch (e) {
-          pushMessages({ id: mkId(), type: "system", text: `结局生成失败：${e instanceof Error ? e.message : String(e)}` });
+          pushMessages({ id: mkId(), type: "system", text: `Ending generation failed: ${e instanceof Error ? e.message : String(e)}` });
         }
         return;
       }
@@ -864,7 +864,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
           setTimeout(() => inputRef.current?.focus(), 200);
         } else {
           // Event finished — run growth roll
-          setLastFailedAction(null);          pushMessages({ id: mkId(), type: "system", text: "—— 事件结束 ——" });
+          setLastFailedAction(null);          pushMessages({ id: mkId(), type: "system", text: "—— Event Ended ——" });
           const grownSave = runGrowthRollRef.current(newSave);
           if (grownSave !== newSave) persistSave(grownSave);
           setCurrentChoices(null);
@@ -875,7 +875,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
         }
       } else {
         // Event finished — run growth roll
-        pushMessages({ id: mkId(), type: "system", text: "—— 事件结束 ——" });
+        pushMessages({ id: mkId(), type: "system", text: "—— Event Ended ——" });
         const grownSave = runGrowthRoll(newSave);
         if (grownSave !== newSave) persistSave(grownSave);
         setCurrentChoices(null);
@@ -886,7 +886,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
       }
     } catch (e) {
       console.warn("[MapView] Event action error:", e);
-      pushMessages({ id: mkId(), type: "system", text: `发生错误：${e instanceof Error ? e.message : String(e)}` });
+      pushMessages({ id: mkId(), type: "system", text: `An error occurred: ${e instanceof Error ? e.message : String(e)}` });
       setLastFailedAction(actionText);
     } finally {
       setEventContinueLoading(false);
@@ -928,12 +928,12 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
     if (growthMessages.length > 0) {
       pushMessages({
         id: mkId(), type: "system",
-        text: `📈 属性成长：${growthMessages.join("、")}`,
+        text: `📈 Stat Growth: ${growthMessages.join(", ")}`,
       });
     } else if (checked.length > 0) {
       pushMessages({
         id: mkId(), type: "system",
-        text: `属性成长 roll 失败，本次无成长`,
+        text: `Stat growth roll failed — no growth this time`,
       });
     }
 
@@ -944,7 +944,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
   // ── Handle event exit — send as player action so DM knows ──
   const handleEventExit = useCallback(async () => {
     const playerName = userIdentity?.name || "你";
-    const exitMsg: StreamMessage = { id: mkId(), type: "narration", text: `${playerName}：决定离开，不再继续当前事件。` };
+    const exitMsg: StreamMessage = { id: mkId(), type: "narration", text: `${playerName}: Decided to leave, no longer continuing the current event.` };
     pushMessages(exitMsg);
     streamRef.current = [...streamRef.current, exitMsg];
     setCurrentChoices(null);
@@ -962,7 +962,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
         if (companionIds.length > 0) {
           setEventContinueLoading(true);
           setLoadingPhase("companions");
-          const exitReactionInstruction = "{{user}}刚才决定离开当前事件，不再继续。请以你的身份回应{{user}}的离开：你会说什么、有什么反应、接下来是否跟随/挽留/沉默旁观。";
+          const exitReactionInstruction = "{{user}} just decided to leave the current event and is not continuing. Respond in character to {{user}}'s departure: what will you say, how do you react, and will you follow / try to stop them / silently watch.";
           const decls = await Promise.all(
             companionIds.map(cid => companionDeclare(
               cid,
@@ -985,7 +985,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
     } catch { /* ignore errors on exit */ }
 
     // Exit event
-    pushMessages({ id: mkId(), type: "system", text: "—— 事件结束 ——" });
+    pushMessages({ id: mkId(), type: "system", text: "—— Event Ended ——" });
     setInEvent(false);
     setActiveEvent(null);
     setActiveEventMeta(null);
@@ -1049,7 +1049,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
       chosen = candidates.find(c =>
         specifiedWho === "你" ? c.isPlayer : c.name === specifiedWho
       ) || candidates[0];
-      const pickerMsg: StreamMessage = { id: mkId(), type: "system", text: `🎲 ${chosen.name} 掷骰` };
+      const pickerMsg: StreamMessage = { id: mkId(), type: "system", text: `🎲 ${chosen.name} rolls the dice` };
       pushMessages(pickerMsg);
       streamRef.current = [...streamRef.current, pickerMsg];
     } else if (candidates.length === 1) {
@@ -1069,7 +1069,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
         setTimeout(() => {
           clearInterval(interval);
           setPickerOverlay(prev => prev ? { ...prev, current: chosen.name, settled: true } : null);
-          const rpMsg: StreamMessage = { id: mkId(), type: "system", text: `🎲 本轮由 ${chosen.name} 掷骰` };
+          const rpMsg: StreamMessage = { id: mkId(), type: "system", text: `🎲 This round: ${chosen.name} rolls` };
           pushMessages(rpMsg);
           streamRef.current = [...streamRef.current, rpMsg];
           setTimeout(() => { setPickerOverlay(null); resolve(); }, 1000);
@@ -1080,12 +1080,12 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
     // Roll
     const result = await rollFor(chosen.name, chosen.statValue, chosen.isPlayer);
     const success = result.level !== "fail" && result.level !== "fumble";
-    const levelLabel = result.level === "crit" ? "大成功！" : result.level === "hard" ? "困难成功" : result.level === "success" ? "成功" : result.level === "fumble" ? "大失败！" : "失败";
+    const levelLabel = result.level === "crit" ? "Critical Success!" : result.level === "hard" ? "Hard Success" : result.level === "success" ? "Success" : result.level === "fumble" ? "Critical Failure!" : "Failure";
     const rollMsg: StreamMessage = { id: mkId(), type: "roll", speaker: `${chosen.name} · ${choice.label}（${label} ${chosen.statValue}）`, text: `D100 = ${result.roll} → ${levelLabel}`, emotion: success ? "success" : "fail" };
     pushMessages(rollMsg);
     // Manually sync ref so companionDeclare sees the roll result (pushMessages is async setState)
     streamRef.current = [...streamRef.current, rollMsg];
-    rollResults.push(`${chosen.name}掷骰：D100=${result.roll}（${label}${chosen.statValue}）→${levelLabel}`);
+    rollResults.push(`${chosen.name} rolls: D100=${result.roll} (${label} ${chosen.statValue}) → ${levelLabel}`);
 
     // Proceed — skip display since roll messages already shown
     handlePlayerAction(choice.label, true);
@@ -1131,10 +1131,10 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
   const handleToggleFreeMode = useCallback(() => {
     if (freeMode) {
       setFreeMode(false);
-      pushMessages({ id: mkId(), type: "system", text: "—— 自由交流结束 ——" });
+      pushMessages({ id: mkId(), type: "system", text: "—— Free Chat Ended ——" });
     } else {
       setFreeMode(true);
-      pushMessages({ id: mkId(), type: "system", text: "—— 自由交流模式 ——" });
+      pushMessages({ id: mkId(), type: "system", text: "—— Free Chat Mode ——" });
     }
     setShowEventActionDrawer(false);
   }, [freeMode, pushMessages]);
@@ -1149,7 +1149,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
       const bindings = loadBindingConfig();
       const slot = resolveBinding(bindings, characterId, "adventure");
       const apiConfig = (slot?.apiConfigId ? apiConfigs.find(c => c.id === slot.apiConfigId) : null) || apiConfigs.find(c => c.apiKey) || apiConfigs[0];
-      if (!apiConfig?.apiKey) throw new Error("未找到API配置");
+      if (!apiConfig?.apiKey) throw new Error("No API configuration found");
 
       const decl = await companionDeclare(characterId, apiConfig, streamRef.current, save.agents.length > 1 ? userIdentity : undefined, save.agents.find(a => a.characterId === characterId)?.affinity);
 
@@ -1160,7 +1160,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
         pushMessages({ id: mkId(), type: "narration", text: `${decl.speaker}：${decl.action}` });
       }
     } catch (e) {
-      pushMessages({ id: mkId(), type: "system", text: `回复失败：${e instanceof Error ? e.message : String(e)}` });
+      pushMessages({ id: mkId(), type: "system", text: `Reply failed: ${e instanceof Error ? e.message : String(e)}` });
     } finally {
       setFreeModeReplying(false);
     }
@@ -1171,7 +1171,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
     if (!inEvent || eventContinueLoading) return;
     setEventContinueLoading(true);
     setFreeMode(false);
-    pushMessages({ id: mkId(), type: "system", text: "—— DM 裁决中 ——" });
+    pushMessages({ id: mkId(), type: "system", text: "—— DM Resolving ——" });
 
     try {
       const apiConfigs = loadApiConfigs();
@@ -1180,7 +1180,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
         ? resolveBinding(bindings, save.agents[0].characterId, "adventure")
         : resolveBinding(bindings, undefined, "adventure");
       const apiConfig = (dmSlot?.apiConfigId ? apiConfigs.find(c => c.id === dmSlot.apiConfigId) : null) || apiConfigs.find(c => c.apiKey) || apiConfigs[0];
-      if (!apiConfig?.apiKey) throw new Error("未找到有效的API配置");
+      if (!apiConfig?.apiKey) throw new Error("No valid API configuration found");
 
       const playerName = userIdentity?.name || "你";
 
@@ -1191,7 +1191,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
       const playerDecl: Declaration = {
         speaker: playerName,
         speech: lastPlayerMsg?.text || "",
-        action: lastPlayerMsg?.text || "（基于之前的讨论行动）",
+        action: lastPlayerMsg?.text || "(Acting based on prior discussion)",
       };
 
       const companionDecls: Declaration[] = [];
@@ -1243,7 +1243,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
           setCurrentChoices(continuation.choices);
           setLastFailedAction(null);          setTimeout(() => inputRef.current?.focus(), 200);
         } else {
-          setLastFailedAction(null);          pushMessages({ id: mkId(), type: "system", text: "—— 事件结束 ——" });
+          setLastFailedAction(null);          pushMessages({ id: mkId(), type: "system", text: "—— Event Ended ——" });
           setCurrentChoices(null);
           setInEvent(false);
           setActiveEvent(null);
@@ -1251,7 +1251,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
           setAccumulatedEvent(null);
         }
       } else {
-        pushMessages({ id: mkId(), type: "system", text: "—— 事件结束 ——" });
+        pushMessages({ id: mkId(), type: "system", text: "—— Event Ended ——" });
         setCurrentChoices(null);
         setInEvent(false);
         setActiveEvent(null);
@@ -1263,7 +1263,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
       persistSave({ ...save, timestamp: new Date().toISOString() });
 
     } catch (e) {
-      pushMessages({ id: mkId(), type: "system", text: `裁决失败：${e instanceof Error ? e.message : String(e)}` });
+      pushMessages({ id: mkId(), type: "system", text: `Resolution failed: ${e instanceof Error ? e.message : String(e)}` });
     } finally {
       setEventContinueLoading(false);
       setLoadingPhase("");
@@ -1278,25 +1278,25 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
     }
     if (ia.type === "quest") {
       const stage = skeleton.mainQuest.stages[save.mainQuestStage];
-      if (stage) triggerEvent("main_quest", `${skeleton.mainQuest.title}：${stage.brief}`);
+      if (stage) triggerEvent("main_quest", `${skeleton.mainQuest.title}: ${stage.brief}`);
       return;
     }
     if (ia.type === "sidequest") {
       const sq = skeleton.sideQuests.find(s => s.id === ia.questId);
-      if (sq) triggerEvent("side_quest", `${sq.title}：${sq.synopsis}`, { questId: sq.id });
+      if (sq) triggerEvent("side_quest", `${sq.title}: ${sq.synopsis}`, { questId: sq.id });
       return;
     }
     if (ia.type === "talk") {
-      const npcName = ia.label.replace("和", "").replace("交谈", "");
+      const npcName = ia.label.replace(/^Talk to /, "");
       const npc = skeleton.npcs.find(n => ia.label.includes(n.name));
-      triggerEvent("talk", `和${npc?.name || npcName}交谈`, { npcName: npc?.name, npcPersonality: npc?.personality });
+      triggerEvent("talk", `Talk to ${npc?.name || npcName}`, { npcName: npc?.name, npcPersonality: npc?.personality });
       return;
     }
     if (ia.type === "search") {
       const newSearched = { ...save.searchedNodes, [save.currentNodeId]: (save.searchedNodes[save.currentNodeId] || 0) + 1 };
       const newSave = { ...save, searchedNodes: newSearched };
       persistSave(newSave);
-      triggerEvent("search", `在${currentNode?.name}搜索周围`);
+      triggerEvent("search", `Search around ${currentNode?.name}`);
       return;
     }
   }, [save, skeleton, currentNode, handleRest, triggerEvent, persistSave]);
@@ -1389,7 +1389,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
 
         <div style={{ display: "flex", alignItems: "center" }}>
           <button
-            aria-label="更多冒险操作"
+            aria-label="More adventure actions"
             aria-expanded={showTopActionMenu}
             onClick={() => {
               const next = !showTopActionMenu;
@@ -1447,7 +1447,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
               }}
             >
               <Palette size={16} color="var(--c-adv-accent)" />
-              <span>主题设置</span>
+              <span>Theme Settings</span>
             </button>
             <button
               onClick={() => {
@@ -1464,7 +1464,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
               }}
             >
               <Save size={16} color="var(--c-adv-accent)" />
-              <span>存档管理</span>
+              <span>Save Management</span>
             </button>
             <button
               onClick={() => {
@@ -1482,7 +1482,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
               }}
             >
               <BookOpen size={16} color="var(--c-adv-accent)" />
-              <span>冒险日志</span>
+              <span>Adventure Log</span>
             </button>
             <button
               onClick={() => {
@@ -1500,7 +1500,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
               }}
             >
               <Bug size={16} color="var(--c-adv-accent)" />
-              <span>调试记录</span>
+              <span>Debug Log</span>
             </button>
           </div>
         </>
@@ -1519,7 +1519,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
             fontFamily: "monospace", letterSpacing: "0.1em",
             textAlign: "center",
           }}>
-            🌍 世界动态 {showWorldEvents ? "▲" : "▼"}
+            🌍 World Events {showWorldEvents ? "▲" : "▼"}
           </button>
           {showWorldEvents && (
             <div style={{ padding: "0 4px 8px", maxHeight: 120, overflowY: "auto" }}>
@@ -1548,7 +1548,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
           bilingualTranslationEnabled={bilingualTranslationEnabled}
           defaultTranslationExpanded={defaultTranslationExpanded}
           loading={eventLoading || eventContinueLoading}
-          loadingText={eventLoading ? "DM 正在书写命运..." : loadingPhase === "companions" ? "同伴思考中..." : loadingPhase === "dm" ? "DM 裁决中..." : undefined}
+          loadingText={eventLoading ? "DM is writing fate..." : loadingPhase === "companions" ? "Companions thinking..." : loadingPhase === "dm" ? "DM resolving..." : undefined}
         />
       </div>
 
@@ -1563,7 +1563,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
           flexShrink: 0,
         }}>
           <div style={{ fontSize: "calc(12px*var(--app-text-scale,1))", color: "var(--c-adv-accent-dim)", letterSpacing: "0.15em", fontFamily: "monospace" }}>
-            — 冒险已完结 —
+            — Adventure Complete —
           </div>
         </div>
       ) : (
@@ -1599,7 +1599,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
               fontSize: "calc(12px*var(--app-text-scale,1))", cursor: "pointer", fontFamily: "inherit",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
             }}>
-              <span style={{ fontSize: "calc(14px*var(--app-text-scale,1))" }}>🔄</span> 重新生成（原操作）
+              <span style={{ fontSize: "calc(14px*var(--app-text-scale,1))" }}>🔄</span> Regenerate (original action)
             </button>
           )}
           {inEvent && !freeMode && currentChoices && currentChoices.length > 0 && (
@@ -1611,8 +1611,8 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                     className="map-choice-btn"
                     onClick={() => {
                       if (missingItem) {
-                        pushMessages({ id: mkId(), type: "system", text: `缺少物品「${choice.requires}」，无法执行该行动` });
-                        handlePlayerAction(`${choice.label}（缺少${choice.requires}，失败）`);
+                        pushMessages({ id: mkId(), type: "system", text: `Missing item "${choice.requires}" — cannot perform this action` });
+                        handlePlayerAction(`${choice.label} (missing ${choice.requires}, failed)`);
                         return;
                       }
                       handleChoiceClick(choice);
@@ -1690,7 +1690,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
               fontSize: "calc(12px*var(--app-text-scale,1))", cursor: "pointer", fontFamily: "inherit",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
             }}>
-              <span style={{ fontSize: "calc(14px*var(--app-text-scale,1))" }}>🔄</span> 重新生成
+              <span style={{ fontSize: "calc(14px*var(--app-text-scale,1))" }}>🔄</span> Regenerate
             </button>
           )}
 
@@ -1714,11 +1714,11 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                     fontSize: "calc(12px*var(--app-text-scale,1))", cursor: "pointer", fontFamily: "inherit",
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                   }}>
-                    <span style={{ fontSize: "calc(14px*var(--app-text-scale,1))" }}>🔄</span> 继续生成
+                    <span style={{ fontSize: "calc(14px*var(--app-text-scale,1))" }}>🔄</span> Continue Generating
                   </button>
                 ) : (
                   <button onClick={() => {
-                    pushMessages({ id: mkId(), type: "system", text: "—— 连接中断，已恢复探索 ——" });
+                    pushMessages({ id: mkId(), type: "system", text: "—— Connection interrupted, exploration resumed ——" });
                     setInEvent(false);
                     setCurrentChoices(null);
                     setActiveEvent(null);
@@ -1732,7 +1732,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                     fontSize: "calc(11px*var(--app-text-scale,1))", cursor: "pointer", fontFamily: "inherit",
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
                   }}>
-                    ⚠ 生成中断了，点击恢复探索
+                    ⚠ Generation interrupted, tap to resume exploration
                   </button>
                 )}
               </div>
@@ -1745,7 +1745,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
               fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: 4,
               textAlign: "center",
             }}>
-              {freeMode ? "自由交流中 — 输入后点击角色头像发送" : inEvent ? "事件进行中" : ""}
+              {freeMode ? "Free chat mode — type, then tap a character's avatar to send" : inEvent ? "Event in progress" : ""}
             </div>
           )}
 
@@ -1762,7 +1762,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                   onKeyDown={e => {
                     if (e.key === "Enter" && !freeMode) handleFreeInput();
                   }}
-                  placeholder="说..."
+                  placeholder="Say..."
                   disabled={eventContinueLoading || eventLoading || freeModeReplying}
                   style={{
                     flex: 1, minWidth: 0, padding: "7px 10px", borderRadius: 8,
@@ -1783,7 +1783,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                   onKeyDown={e => {
                     if (e.key === "Enter" && !freeMode) handleFreeInput();
                   }}
-                  placeholder="做..."
+                  placeholder="Do..."
                   disabled={eventContinueLoading || eventLoading || freeModeReplying}
                   style={{
                     flex: 1, minWidth: 0, padding: "7px 10px", borderRadius: 8,
@@ -1798,7 +1798,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
 
             <button
               type="button"
-              aria-label="发送行动"
+              aria-label="Send action"
               onClick={submitFreeInput}
               disabled={(!freeText.trim() && !freeAction.trim()) || eventContinueLoading || eventLoading || freeModeReplying}
               style={{
@@ -1850,7 +1850,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                 </div>
                 {freeModeReplying && (
                   <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(100,180,255,0.5)", textAlign: "center", fontFamily: "monospace" }}>
-                    思考中...
+                    Thinking...
                   </div>
                 )}
               </div>
@@ -1877,7 +1877,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
             display: "flex", flexDirection: "column", alignItems: "center", gap: 20,
           }}>
             <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", letterSpacing: "0.2em", fontFamily: "monospace" }}>
-              谁来掷骰子？
+              Who rolls the dice?
             </div>
             <div style={{
               fontSize: "calc(28px*var(--app-text-scale,1))", fontWeight: 700, color: pickerOverlay.settled ? "var(--c-adv-accent)" : "var(--c-adv-text)",
@@ -1900,7 +1900,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
             </div>
             {pickerOverlay.settled && (
               <div style={{ fontSize: "calc(12px*var(--app-text-scale,1))", color: "var(--c-adv-accent-dim)", letterSpacing: "0.15em" }}>
-                🎲 就是你了！
+                🎲 It's you!
               </div>
             )}
           </div>
@@ -1964,7 +1964,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
               background: "var(--c-adv-input-bg)", padding: "6px 16px", borderRadius: 20,
               border: "1px solid var(--c-adv-input-border)",
             }}>
-              <span style={{ color: "var(--c-adv-accent)" }}>{diceOverlay.label}</span> 判定 · 属性 <span style={{ color: "var(--c-adv-accent)" }}>{diceOverlay.statValue}</span>
+              <span style={{ color: "var(--c-adv-accent)" }}>{diceOverlay.label}</span> Check · Stat <span style={{ color: "var(--c-adv-accent)" }}>{diceOverlay.statValue}</span>
             </div>
 
             {/* 3D Dice Cube */}
@@ -2002,7 +2002,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
               {/* Player: manual roll button */}
               {diceOverlay.isPlayer && diceWaitingClick && (
                 <button className="roll-btn" onClick={() => { if (diceResolveRef.current) diceResolveRef.current({ roll: 0, level: "" }); }}>
-                  🎲 掷骰子
+                  🎲 Roll the dice
                 </button>
               )}
 
@@ -2012,7 +2012,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                   fontSize: "calc(12px*var(--app-text-scale,1))", color: "var(--c-adv-accent-dim)", fontFamily: "monospace",
                   letterSpacing: "0.1em", textAlign: "center", padding: "10px 0",
                 }}>
-                  {diceOverlay.name} 投掷中...
+                  {diceOverlay.name} rolling...
                 </div>
               )}
 
@@ -2024,7 +2024,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                   background: "var(--c-adv-input-bg)", borderRadius: 100,
                   border: "1px solid var(--c-adv-input-border)", width: "100%",
                 }}>
-                  命运判定中...
+                  Fate being decided...
                 </div>
               )}
             </div>
@@ -2047,10 +2047,10 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
           boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
           padding: 14, maxHeight: "60vh", overflowY: "auto",
         }}>
-          <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginBottom: 10, letterSpacing: "0.1em" }}>主题设置</div>
+          <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginBottom: 10, letterSpacing: "0.1em" }}>Theme Settings</div>
 
           {/* Color scheme */}
-          <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginBottom: 6 }}>配色</div>
+          <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginBottom: 6 }}>Color Scheme</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4, marginBottom: 12 }}>
             {ADVENTURE_THEMES.map((s, i) => (
               <button key={i} onClick={() => { const t = { ...worldTheme, colorScheme: i }; setWorldTheme(t); saveWorldTheme(world.id, t); }}
@@ -2068,14 +2068,14 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
           </div>
 
           {/* Custom font */}
-          <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginBottom: 6 }}>字体 {worldTheme.customFontName && <span style={{ color: "var(--c-adv-accent-dim)" }}>· {worldTheme.customFontName}</span>}</div>
+          <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginBottom: 6 }}>Font {worldTheme.customFontName && <span style={{ color: "var(--c-adv-accent-dim)" }}>· {worldTheme.customFontName}</span>}</div>
           <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
             <label style={{
               flex: 1, padding: "6px 0", borderRadius: 6, textAlign: "center",
               border: "1px solid var(--c-adv-input-border)", background: "var(--c-adv-input-bg)",
               color: "var(--c-adv-text-dim)", fontSize: "calc(10px*var(--app-text-scale,1))", cursor: "pointer",
             }}>
-              上传字体
+              Upload Font
               <input type="file" accept=".ttf,.otf,.woff,.woff2" hidden onChange={e => {
                 const file = e.target.files?.[0];
                 if (!file) return;
@@ -2087,18 +2087,18 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
             {worldTheme.customFont && (
               <button onClick={() => { const t = { ...worldTheme, customFont: undefined, customFontName: undefined }; setWorldTheme(t); saveWorldTheme(world.id, t); }}
                 style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid rgba(255,100,80,0.2)", background: "transparent", color: "rgba(255,100,80,0.6)", fontSize: "calc(10px*var(--app-text-scale,1))", cursor: "pointer" }}>
-                清除
+                Clear
               </button>
             )}
           </div>
 
           {/* Font scale */}
-          <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginBottom: 4 }}>文字大小 <span style={{ color: "var(--c-adv-accent-dim)" }}>{Math.round((worldTheme.fontScale || 1) * 100)}%</span></div>
+          <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginBottom: 4 }}>Text Size <span style={{ color: "var(--c-adv-accent-dim)" }}>{Math.round((worldTheme.fontScale || 1) * 100)}%</span></div>
           <input type="range" className="adv-slider" min="0.7" max="1.5" step="any" value={worldTheme.fontScale || 1}
             onChange={e => { const t = { ...worldTheme, fontScale: parseFloat(e.target.value) }; setWorldTheme(t); saveWorldTheme(world.id, t); }} />
 
           {/* Line height scale */}
-          <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginBottom: 4 }}>行间距 <span style={{ color: "var(--c-adv-accent-dim)" }}>{Math.round((worldTheme.lineHeightScale || 1) * 100)}%</span></div>
+          <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginBottom: 4 }}>Line Spacing <span style={{ color: "var(--c-adv-accent-dim)" }}>{Math.round((worldTheme.lineHeightScale || 1) * 100)}%</span></div>
           <input type="range" className="adv-slider" min="0.8" max="2.0" step="any" value={worldTheme.lineHeightScale || 1}
             onChange={e => { const t = { ...worldTheme, lineHeightScale: parseFloat(e.target.value) }; setWorldTheme(t); saveWorldTheme(world.id, t); }} />
 
@@ -2121,14 +2121,14 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
             cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            裁决
+            Resolve
           </button>
         )}
         {/* Event action drawer handle */}
         {showEventActionHandle && (
           <button
             type="button"
-            aria-label="打开事件操作"
+            aria-label="Open event actions"
             aria-expanded={showEventActionDrawer}
             onClick={() => setShowEventActionDrawer(prev => !prev)}
             style={{
@@ -2162,7 +2162,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
             />
             <div
               role="dialog"
-              aria-label="事件操作"
+              aria-label="Event actions"
               style={{
                 position: "absolute",
                 right: 0,
@@ -2205,10 +2205,10 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                   <MessageCircle size={17} color={freeMode ? "rgba(100,180,255,0.9)" : "var(--c-adv-accent)"} style={{ marginTop: 1, flexShrink: 0 }} />
                   <span style={{ minWidth: 0 }}>
                     <span style={{ display: "block", fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 700, lineHeight: 1.25 }}>
-                      {freeMode ? "结束自由交流" : "自由交流"}
+                      {freeMode ? "End Free Chat" : "Free Chat"}
                     </span>
                     <span style={{ display: "block", marginTop: 4, fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", lineHeight: 1.45 }}>
-                      {freeMode ? "回到正常事件行动与 DM 裁决流程。" : "先和同伴对话，暂不推进 DM 裁决。"}
+                      {freeMode ? "Return to normal event actions and DM resolution." : "Talk with companions first, without advancing DM resolution yet."}
                     </span>
                   </span>
                 </button>
@@ -2237,9 +2237,9 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                 >
                   <LogOut size={17} color="rgba(255,90,70,0.62)" style={{ marginTop: 1, flexShrink: 0 }} />
                   <span style={{ minWidth: 0 }}>
-                    <span style={{ display: "block", fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 700, lineHeight: 1.25 }}>退出事件</span>
+                    <span style={{ display: "block", fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 700, lineHeight: 1.25 }}>Exit Event</span>
                     <span style={{ display: "block", marginTop: 4, fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", lineHeight: 1.45 }}>
-                      离开当前事件，回到探索状态。
+                      Leave the current event and return to exploration.
                     </span>
                   </span>
                 </button>
@@ -2250,7 +2250,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
         {/* Tool drawer handle */}
         <button
           type="button"
-          aria-label="打开冒险工具栏"
+          aria-label="Open adventure toolbar"
           onClick={() => {
             setShowEventActionDrawer(false);
             setShowToolPanel(true);
@@ -2335,7 +2335,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                     fontSize: "calc(11px*var(--app-text-scale,1))", cursor: "pointer", fontFamily: "inherit",
                     letterSpacing: "0.05em",
                   }}>
-                  {tab === "map" ? "🗺 地图" : tab === "bag" ? `📊 状态` : `💬 同伴`}
+                  {tab === "map" ? "🗺 Map" : tab === "bag" ? `📊 Status` : `💬 Companions`}
                 </button>
               ))}
               <button onClick={() => setShowToolPanel(false)} style={{
@@ -2355,7 +2355,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                   visitedNodes={save.visitedNodes}
                   agentPositions={save.agents.map(a => ({ nodeId: a.currentNodeId, name: charName(a.characterId), avatar: characters.find(c => c.id === a.characterId)?.avatar || undefined }))}
                   playerAvatar={userIdentity?.avatarUrl}
-                  playerName={userIdentity?.name || "我"}
+                  playerName={userIdentity?.name || "Me"}
                   onNodeClick={(id) => {
                     if (!inEvent && !eventLoading) {
                       setSelectedNodeId(id === selectedNodeId ? null : id);
@@ -2403,7 +2403,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                                 color: "var(--c-adv-accent)",
                                 fontSize: "calc(11px*var(--app-text-scale,1))", cursor: "pointer", fontFamily: "inherit",
                               }}>
-                              前往
+                              Go
                             </button>
                           )}
                           <button onClick={() => setSelectedNodeId(null)} style={{
@@ -2433,7 +2433,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                           </div>
                         )}
                         {!npc && !quest && !encounter && (
-                          <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)" }}>暂无特殊内容</div>
+                          <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)" }}>Nothing special here</div>
                         )}
                       </div>
                     </div>
@@ -2444,7 +2444,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
               /* Bag tab */
               <div style={{ flex: 1, overflow: "auto", padding: 12 }}>
                 {/* Player stats */}
-                <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginBottom: 8, fontFamily: "monospace", letterSpacing: "0.1em" }}>属性</div>
+                <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginBottom: 8, fontFamily: "monospace", letterSpacing: "0.1em" }}>Stats</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
                   {ALL_STATS.map(k => (
                     <div key={k} style={{
@@ -2459,10 +2459,10 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                 </div>
 
                 {/* Items */}
-                <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginBottom: 8, fontFamily: "monospace", letterSpacing: "0.1em" }}>物品栏</div>
+                <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginBottom: 8, fontFamily: "monospace", letterSpacing: "0.1em" }}>Inventory</div>
                 {save.director.keyItems.length === 0 ? (
                   <div style={{ fontSize: "calc(12px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", textAlign: "center", padding: "20px 0" }}>
-                    空空如也~
+                    Empty~
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -2479,9 +2479,9 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                 )}
 
                 {/* Pacing control */}
-                <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginTop: 14, marginBottom: 8, fontFamily: "monospace", letterSpacing: "0.1em" }}>剧情节奏</div>
+                <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginTop: 14, marginBottom: 8, fontFamily: "monospace", letterSpacing: "0.1em" }}>Story Pace</div>
                 <div style={{ display: "flex", gap: 4 }}>
-                  {([["relaxed", "悠闲"], ["normal", "适中"], ["fast", "紧凑"]] as const).map(([val, label]) => (
+                  {([["relaxed", "Relaxed"], ["normal", "Balanced"], ["fast", "Fast"]] as const).map(([val, label]) => (
                     <button key={val} onClick={() => persistSave({ ...save, pacing: val })}
                       style={{
                         flex: 1, padding: "6px 0", borderRadius: 6, fontSize: "calc(11px*var(--app-text-scale,1))", fontFamily: "inherit",
@@ -2496,30 +2496,30 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                 </div>
 
                 {/* Manual summary button (for this world) */}
-                <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginTop: 14, marginBottom: 8, fontFamily: "monospace", letterSpacing: "0.1em" }}>冒险总结</div>
+                <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginTop: 14, marginBottom: 8, fontFamily: "monospace", letterSpacing: "0.1em" }}>Adventure Summary</div>
                 <button onClick={async () => {
                   const apiConfig = resolveAuxiliaryApiConfig("memorySummaryApiConfigId") || loadApiConfigs().find(c => c.apiKey);
                   if (!apiConfig?.apiKey) return;
-                  pushMessages({ id: mkId(), type: "system", text: "正在总结冒险经历..." });
+                  pushMessages({ id: mkId(), type: "system", text: "Summarizing adventure..." });
                   try {
                     await generateAdventureSummary(save, skeleton.world.name, apiConfig);
-                    pushMessages({ id: mkId(), type: "system", text: "冒险总结已更新" });
+                    pushMessages({ id: mkId(), type: "system", text: "Adventure summary updated" });
                   } catch (e) {
-                    pushMessages({ id: mkId(), type: "system", text: `总结失败：${e instanceof Error ? e.message : String(e)}` });
+                    pushMessages({ id: mkId(), type: "system", text: `Summary failed: ${e instanceof Error ? e.message : String(e)}` });
                   }
                 }} style={{
                   width: "100%", padding: "7px 0", borderRadius: 6, marginBottom: 8,
                   border: "1px solid var(--c-adv-accent-dim)", background: "var(--c-adv-choice-bg)",
                   color: "var(--c-adv-accent-dim)", fontSize: "calc(11px*var(--app-text-scale,1))", cursor: "pointer", fontFamily: "inherit",
                 }}>
-                  立即总结本次冒险
+                  Summarize This Adventure Now
                 </button>
 
                 {/* Game info */}
                 <div style={{ marginTop: 14, fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", fontFamily: "monospace" }}>
                   <div>HP {save.hp}/{save.maxHp} · {formatGameTime(save.gameDay, save.gameTime)}</div>
                   <div style={{ marginTop: 2 }}>{currentNode?.name}</div>
-                  <div style={{ marginTop: 2 }}>主线 第{Math.min(save.mainQuestStage + 1, skeleton.mainQuest.stages.length)}/{skeleton.mainQuest.stages.length}阶段</div>
+                  <div style={{ marginTop: 2 }}>Main Quest Stage {Math.min(save.mainQuestStage + 1, skeleton.mainQuest.stages.length)}/{skeleton.mainQuest.stages.length}</div>
                 </div>
               </div>
             ) : (
@@ -2527,11 +2527,11 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
               <div style={{ flex: 1, overflow: "auto", padding: 12 }}>
                 {save.agents.length === 0 ? (
                   <div style={{ fontSize: "calc(12px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", textAlign: "center", padding: "40px 0" }}>
-                    没有同伴
+                    No companions
                   </div>
                 ) : save.agents.map(a => {
                   const name = charName(a.characterId);
-                  const nodeName = allNodes.find(n => n.id === a.currentNodeId)?.name || "未知";
+                  const nodeName = allNodes.find(n => n.id === a.currentNodeId)?.name || "Unknown";
                   return (
                     <div key={a.characterId} style={{
                       padding: "8px 10px", borderRadius: 8, marginBottom: 5,
@@ -2597,10 +2597,10 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
         };
 
         const debugFilterTabs = [
-          { label: "当前轮", val: "current" },
+          { label: "Current Round", val: "current" },
           { label: "DM", val: "dm" },
-          { label: "角色", val: "char" },
-          { label: "全部", val: "all" },
+          { label: "Character", val: "char" },
+          { label: "All", val: "all" },
         ] as const;
 
         const tabBtn = (label: string, val: "current" | "dm" | "char" | "all") => {
@@ -2628,7 +2628,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
             >
               <span style={{ fontSize: "calc(12px*var(--app-text-scale,1))", fontWeight: 700, lineHeight: 1.2 }}>{label}</span>
               <span style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: active ? "var(--c-adv-accent)" : "var(--c-adv-text-muted)", lineHeight: 1.2 }}>
-                {filterCounts[val]} 条
+                {filterCounts[val]} entries
               </span>
             </button>
           );
@@ -2638,7 +2638,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="调试记录"
+            aria-label="Debug Log"
             style={{
               position: "absolute",
               inset: 0,
@@ -2668,9 +2668,9 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
               <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid var(--c-adv-input-border)", background: "var(--c-adv-debug-header-bg)", flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: "calc(18px*var(--app-text-scale,1))", fontWeight: 800, color: "var(--c-adv-text)", lineHeight: 1.2 }}>调试记录</div>
+                    <div style={{ fontSize: "calc(18px*var(--app-text-scale,1))", fontWeight: 800, color: "var(--c-adv-text)", lineHeight: 1.2 }}>Debug Log</div>
                     <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginTop: 5, lineHeight: 1.4 }}>
-                      {debugLog.length > 0 ? `${debugLog.length} 条交互记录` : "触发事件后会显示 LLM 交互记录"}
+                      {debugLog.length > 0 ? `${debugLog.length} interaction logs` : "LLM interaction logs will appear here after triggering an event"}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
@@ -2692,11 +2692,11 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                         fontFamily: "inherit",
                       }}
                     >
-                      清空
+                      Clear
                     </button>
                     <button
                       type="button"
-                      aria-label="关闭调试记录"
+                      aria-label="Close debug log"
                       onClick={() => setShowDebug(false)}
                       style={{
                         width: 44,
@@ -2722,7 +2722,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
               <div style={{ flex: 1, overflow: "auto", padding: "14px 14px 18px" }}>
                 {filteredLog.length === 0 ? (
                   <div style={{ color: "var(--c-adv-text-muted)", fontSize: "calc(13px*var(--app-text-scale,1))", textAlign: "center", padding: "64px 18px" }}>
-                    {debugLog.length === 0 ? "当前页面暂无 LLM 交互记录；触发事件或继续行动后会显示。" : "此分类暂无记录"}
+                    {debugLog.length === 0 ? "No LLM interaction logs yet; they'll appear after triggering an event or continuing an action." : "No logs in this category"}
                   </div>
                 ) : filteredLog.map((log, i) => {
                   const char = isChar(log.type);
@@ -2843,7 +2843,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
             {/* Tap hint */}
             {!showFireworks && endingStep <= endingData.paragraphs.length && (
               <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.15)", marginTop: 12, letterSpacing: "0.2em", textAlign: "center" }}>
-                点击继续
+                Tap to continue
               </div>
             )}
 
@@ -2859,7 +2859,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                 color: "#f4dca8", fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 600,
                 letterSpacing: "0.2em", cursor: "pointer", fontFamily: "inherit",
               }}>
-                完结
+                Finish
               </button>
             )}
           </div>
@@ -3070,9 +3070,9 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
         <div style={{ position: "absolute", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <div style={{ background: "rgba(15,12,18,0.98)", borderRadius: 16, border: "1px solid rgba(200,60,60,0.2)", padding: 24, maxWidth: 280, width: "100%", textAlign: "center" }}>
             <div style={{ fontSize: "calc(32px*var(--app-text-scale,1))", marginBottom: 12 }}>💀</div>
-            <div style={{ fontSize: "calc(16px*var(--app-text-scale,1))", fontWeight: 600, color: "#e0dcd5", marginBottom: 6 }}>你倒下了</div>
+            <div style={{ fontSize: "calc(16px*var(--app-text-scale,1))", fontWeight: 600, color: "#e0dcd5", marginBottom: 6 }}>You Have Fallen</div>
             <div style={{ fontSize: "calc(12px*var(--app-text-scale,1))", color: "rgba(255,255,255,0.35)", marginBottom: 20, lineHeight: 1.5 }}>
-              {save.checkpoint ? "黑暗笼罩了你的意识..." : "没有存档点，冒险到此为止了..."}
+              {save.checkpoint ? "Darkness engulfs your consciousness..." : "No save point — your adventure ends here..."}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {save.checkpoint && (
@@ -3080,7 +3080,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                   try {
                     const cp = JSON.parse(save.checkpoint!) as GameSave;
                     // Restore UI state from checkpoint
-                    const restoredStream = [...(cp.streamLog || []), { id: mkId(), type: "system" as const, text: "—— 回到存档点 ——" }];
+                    const restoredStream = [...(cp.streamLog || []), { id: mkId(), type: "system" as const, text: "—— Returned to Save Point ——" }];
                     setStreamMessages(restoredStream);
                     setInEvent(cp.pendingEvent?.inEvent || false);
                     setCurrentChoices(cp.pendingEvent?.choices || null);
@@ -3100,7 +3100,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                     saveGame(restored);
                     onSaveUpdate(restored);
                   } catch {
-                    pushMessages({ id: mkId(), type: "system", text: "存档点损坏" });
+                    pushMessages({ id: mkId(), type: "system", text: "Save point corrupted" });
                   }
                   setShowDeathDialog(false);
                 }} style={{
@@ -3108,7 +3108,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                   background: "rgba(200,160,100,0.15)", color: "#e8d0a0",
                   fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                 }}>
-                  回到存档点
+                  Return to Save Point
                 </button>
               )}
               <button onClick={() => {
@@ -3119,7 +3119,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                 background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.4)",
                 fontSize: "calc(13px*var(--app-text-scale,1))", cursor: "pointer", fontFamily: "inherit",
               }}>
-                放弃冒险
+                Abandon Adventure
               </button>
             </div>
           </div>
@@ -3132,16 +3132,16 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
           onClick={() => setShowSaveConfirm(false)}>
           <div style={{ background: "var(--c-adv-panel-bg)", borderRadius: 12, border: `1px solid var(--c-adv-input-border)`, padding: 20, maxWidth: 280, width: "100%" }}
             onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 600, marginBottom: 6, textAlign: "center", color: "var(--c-adv-text)" }}>保存存档点</div>
+            <div style={{ fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 600, marginBottom: 6, textAlign: "center", color: "var(--c-adv-text)" }}>Save Checkpoint</div>
             <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginBottom: 4, textAlign: "center" }}>
               {currentNode?.name} · HP {save.hp}/{save.maxHp}
             </div>
             <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginBottom: 14, textAlign: "center" }}>
-              {formatGameTime(save.gameDay, save.gameTime)} · {save.director.keyItems.length}件物品
+              {formatGameTime(save.gameDay, save.gameTime)} · {save.director.keyItems.length} items
             </div>
             {save.checkpoint && (
               <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "rgba(255,160,80,0.6)", marginBottom: 12, textAlign: "center", padding: "6px 0", borderRadius: 6, background: "rgba(255,160,80,0.06)" }}>
-                已有存档点，保存将覆盖
+                A save point already exists — saving will overwrite it
               </div>
             )}
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -3151,7 +3151,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                   border: `1px solid var(--c-adv-input-border)`, background: "transparent",
                   color: "var(--c-adv-text-dim)", fontSize: "calc(13px*var(--app-text-scale,1))", cursor: "pointer", fontFamily: "inherit",
                 }}>
-                  取消
+                  Cancel
                 </button>
                 <button onClick={() => {
                   // Inject current refs so checkpoint captures live state (save prop may be stale)
@@ -3171,14 +3171,14 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                   };
                   const cp = JSON.stringify(cpData);
                   persistSave({ ...save, checkpoint: cp });
-                  pushMessages({ id: mkId(), type: "system", text: "存档点已保存" });
+                  pushMessages({ id: mkId(), type: "system", text: "Save point saved" });
                   setShowSaveConfirm(false);
                 }} style={{
                   flex: 1, padding: "10px 0", borderRadius: 8,
                   border: "none", background: "var(--c-adv-accent-dim)",
                   color: "var(--c-adv-accent)", fontSize: "calc(13px*var(--app-text-scale,1))", cursor: "pointer", fontFamily: "inherit",
                 }}>
-                  保存
+                  Save
                 </button>
               </div>
               {save.checkpoint && (
@@ -3205,7 +3205,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                     saveGame(restored);
                     onSaveUpdate(restored);
                   } catch {
-                    pushMessages({ id: mkId(), type: "system", text: "存档点损坏" });
+                    pushMessages({ id: mkId(), type: "system", text: "Save point corrupted" });
                   }
                   setShowSaveConfirm(false);
                 }} style={{
@@ -3213,7 +3213,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                   border: "1px solid rgba(255,160,80,0.2)", background: "rgba(255,160,80,0.06)",
                   color: "rgba(255,160,80,0.7)", fontSize: "calc(12px*var(--app-text-scale,1))", cursor: "pointer", fontFamily: "inherit",
                 }}>
-                  回到存档点
+                  Return to Save Point
                 </button>
               )}
             </div>
@@ -3234,7 +3234,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
             <div style={{ textAlign: "center", marginBottom: 20 }}>
               <div style={{ fontSize: "calc(28px*var(--app-text-scale,1))", marginBottom: 8 }}>⚔️</div>
               <div style={{ fontSize: "calc(15px*var(--app-text-scale,1))", fontWeight: 600, color: "var(--c-adv-text)", marginBottom: 4 }}>
-                暂离冒险
+                Pause Adventure
               </div>
               <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", lineHeight: 1.5 }}>
                 {skeleton.world.name} · {formatGameTime(save.gameDay, save.gameTime)}
@@ -3248,7 +3248,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                 color: "var(--c-adv-accent)", fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 500,
                 cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.05em",
               }}>
-                保存并离开
+                Save and Leave
               </button>
               <button onClick={() => setShowArchiveConfirm(false)} style={{
                 width: "100%", padding: "11px 0", borderRadius: 10,
@@ -3256,7 +3256,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                 color: "var(--c-adv-text-dim)", fontSize: "calc(13px*var(--app-text-scale,1))",
                 cursor: "pointer", fontFamily: "inherit",
               }}>
-                继续冒险
+                Continue Adventure
               </button>
             </div>
           </div>
@@ -3277,7 +3277,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
             border: "1px solid var(--c-adv-input-border)", padding: 16,
           }} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: "calc(12px*var(--app-text-scale,1))", letterSpacing: "0.15em", color: "var(--c-adv-text-muted)", marginBottom: 12, fontFamily: "monospace" }}>
-              冒险日志
+              Adventure Log
             </div>
             {save.journal.slice().reverse().map(j => (
               <div key={j.id} style={{

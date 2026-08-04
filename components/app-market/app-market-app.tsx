@@ -99,10 +99,10 @@ const EMPTY_MANUAL_FILES: ManualUploadFiles = {
 };
 
 const DECLARATION_FILES = [
-  { file: "presets.json", label: "预设", icon: Layers },
-  { file: "regex.json", label: "正则", icon: Sparkles },
-  { file: "worldbooks.json", label: "世界书", icon: FileJson },
-  { file: "bindings.json", label: "默认绑定", icon: CheckCircle2 },
+  { file: "presets.json", label: "Presets", icon: Layers },
+  { file: "regex.json", label: "Regex", icon: Sparkles },
+  { file: "worldbooks.json", label: "World Book", icon: FileJson },
+  { file: "bindings.json", label: "Default Bindings", icon: CheckCircle2 },
 ] as const;
 
 function formatDate(value: string): string {
@@ -112,7 +112,7 @@ function formatDate(value: string): string {
 }
 
 function formatPackageSize(size: number): string {
-  if (!Number.isFinite(size) || size <= 0) return "未知大小";
+  if (!Number.isFinite(size) || size <= 0) return "Unknown size";
   if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
@@ -233,18 +233,18 @@ function existingOtherAssetPaths(app: InstalledCustomApp | null, manifest: Custo
 
 function fileSlotLabel(selected: File | null, existingPath: string, fallback: string, loading = false): string {
   if (selected) return selected.name;
-  if (existingPath) return `当前：${existingPath}`;
-  if (loading) return "正在读取线上文件…";
+  if (existingPath) return `Current: ${existingPath}`;
+  if (loading) return "Loading online file…";
   return fallback;
 }
 
 function assetSlotLabel(selected: File[], existingPaths: string[], fallback: string, loading = false): string {
-  if (selected.length > 0) return `${selected.length} 个文件`;
+  if (selected.length > 0) return `${selected.length} file(s)`;
   if (existingPaths.length > 0) {
-    const preview = existingPaths.slice(0, 2).join("、");
-    return existingPaths.length > 2 ? `当前：${existingPaths.length} 个资源 · ${preview}…` : `当前：${preview}`;
+    const preview = existingPaths.slice(0, 2).join(", ");
+    return existingPaths.length > 2 ? `Current: ${existingPaths.length} asset(s) · ${preview}…` : `Current: ${preview}`;
   }
-  if (loading) return "正在读取线上文件…";
+  if (loading) return "Loading online file…";
   return fallback;
 }
 
@@ -278,9 +278,9 @@ async function createPackageFileFromApp(app: InstalledCustomApp): Promise<File> 
 }
 
 function statusLabel(status: CustomAppMarketItem["reviewStatus"]): string {
-  if (status === "approved") return "已上架";
-  if (status === "rejected") return "未通过";
-  return "待上架";
+  if (status === "approved") return "Live";
+  if (status === "rejected") return "Rejected";
+  return "Pending";
 }
 
 function hasDeclaration(app: InstalledCustomApp | null, filename: string): boolean {
@@ -424,8 +424,8 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
 
   const refresh = () => setApps(loadInstalledCustomApps());
 
-  function showErrorDialog(message: unknown, title = "操作失败") {
-    const text = message instanceof Error ? message.message : String(message || "请稍后再试。");
+  function showErrorDialog(message: unknown, title = "Operation Failed") {
+    const text = message instanceof Error ? message.message : String(message || "Please try again later.");
     setErrorDialog({ title, message: text });
   }
 
@@ -497,9 +497,9 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
   async function copyCreatorGuide() {
     try {
       await navigator.clipboard.writeText(CUSTOM_APP_CREATOR_GUIDE_MD);
-      onNotice?.("制作说明已复制");
+      onNotice?.("Guide copied");
     } catch {
-      onNotice?.("复制失败，请手动选择文本复制");
+      onNotice?.("Copy failed, please select and copy the text manually");
     }
   }
 
@@ -562,7 +562,7 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
         })
         .catch(err => {
           if (manualLoadSeqRef.current !== loadSeq) return;
-          showErrorDialog(err instanceof Error ? `读取线上包失败：${err.message}` : `读取线上包失败：${String(err)}`);
+          showErrorDialog(err instanceof Error ? `Failed to read online package: ${err.message}` : `Failed to read online package: ${String(err)}`);
         })
         .finally(() => {
           if (manualLoadSeqRef.current === loadSeq) setManualExistingLoading(false);
@@ -617,7 +617,7 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
         setSelectedInstalledApp(current => (current && current.id === installed.id ? installed : current));
       }
     } catch (err) {
-      showErrorDialog(err, "换包失败");
+      showErrorDialog(err, "Failed to replace package");
     } finally {
       setBusy(false);
     }
@@ -627,13 +627,13 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
     setBusy(true);
     try {
       const baseApp = manualExistingApp ?? (marketEditTarget ? await loadCustomAppMarketPackageApp(marketEditTarget) : null);
-      if (!manualFiles.entry && !baseApp) throw new Error("请选择入口 HTML 文件。");
+      if (!manualFiles.entry && !baseApp) throw new Error("Please select the entry HTML file.");
       const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
       let manifestRecord: Record<string, unknown> = baseApp ? { ...baseApp.manifest } : {};
       if (manualFiles.manifest) {
         const parsed = JSON.parse(await manualFiles.manifest.text()) as unknown;
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("manifest.json 必须是 JSON 对象。");
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("manifest.json must be a JSON object.");
         manifestRecord = { ...manifestRecord, ...parsed as Record<string, unknown> };
       }
       const fallbackEntryPath = normalizePackagePath(baseApp?.manifest.entry || "index.html", "index.html");
@@ -691,7 +691,7 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
       }
 
       const name = String(manifestRecord.name ?? baseApp?.name ?? "").trim() || appNameFromEntryPath(entryPath);
-      if (!name) throw new Error("manifest.json 需要 name 字段。");
+      if (!name) throw new Error("manifest.json requires a name field.");
       const version = String(manifestRecord.version ?? baseApp?.version ?? "").trim() || "1.0.0";
       const permissions = Array.isArray(manifestRecord.permissions)
         ? manifestRecord.permissions as CustomAppPermission[]
@@ -736,7 +736,7 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
       return true;
     } catch (err) {
       setSourceFile(null);
-      showErrorDialog(err, "导入失败");
+      showErrorDialog(err, "Import Failed");
       return false;
     } finally {
       setBusy(false);
@@ -753,8 +753,8 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
       onInstallToDesktop(installed);
       refresh();
       if (!options.silent) {
-        const head = wasInstalled ? `已更新「${installed.name}」（换包成功，原有数据保留）` : `已安装「${installed.name}」`;
-        onNotice?.(registrationText ? `${head}，${registrationText}` : head);
+        const head = wasInstalled ? `Updated "${installed.name}" (package replaced, existing data kept)` : `Installed "${installed.name}"`;
+        onNotice?.(registrationText ? `${head}, ${registrationText}` : head);
       }
       return installed;
     } catch (err) {
@@ -813,10 +813,10 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
       await refreshMarket();
       setTab(marketEditTarget ? "create" : "discover");
       onNotice?.(published.reviewStatus === "approved"
-        ? marketEditTarget ? `已更新「${published.name}」` : `已发布「${published.name}」`
-        : marketEditTarget ? `已提交「${published.name}」更新，等待上架` : `已提交「${published.name}」，等待上架`);
+        ? marketEditTarget ? `Updated "${published.name}"` : `Published "${published.name}"`
+        : marketEditTarget ? `Submitted an update for "${published.name}", awaiting review` : `Submitted "${published.name}", awaiting review`);
     } catch (err) {
-      showErrorDialog(err, marketEditTarget ? "提交更新失败" : "发布失败");
+      showErrorDialog(err, marketEditTarget ? "Failed to Submit Update" : "Publish Failed");
     } finally {
       setPublishing(false);
     }
@@ -830,9 +830,9 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
       setConfirmMarketDelete(null);
       setSelectedMarketApp(current => current?.id === item.id ? null : current);
       await refreshMarket();
-      onNotice?.(`已删除「${item.name}」的市场发布`);
+      onNotice?.(`Deleted the marketplace listing for "${item.name}"`);
     } catch (err) {
-      showErrorDialog(err, "删除失败");
+      showErrorDialog(err, "Delete Failed");
     } finally {
       setPublishing(false);
     }
@@ -878,8 +878,8 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
       setSelectedInstalledApp(result.installed);
       refresh();
       onNotice?.(result.previousVersion === result.installed.version
-        ? `已同步「${result.installed.name}」`
-        : `已更新「${result.installed.name}」到 v${result.installed.version}`);
+        ? `Synced "${result.installed.name}"`
+        : `Updated "${result.installed.name}" to v${result.installed.version}`);
     } catch (err) {
       setInstalledActionError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -906,10 +906,10 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
       setConfirmDelete(null);
       setSelectedInstalledApp(null);
       refresh();
-      const base = deleteData ? `已卸载「${app.name}」并删除数据` : `已卸载「${app.name}」`;
-      onNotice?.(removalText ? `${base}，${removalText}` : base);
+      const base = deleteData ? `Uninstalled "${app.name}" and deleted its data` : `Uninstalled "${app.name}"`;
+      onNotice?.(removalText ? `${base}, ${removalText}` : base);
     } catch (err) {
-      showErrorDialog(err, "卸载失败");
+      showErrorDialog(err, "Uninstall Failed");
     } finally {
       setBusy(false);
     }
@@ -919,7 +919,7 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
     return installedById.get(item.appId) ?? null;
   }
 
-  const titleHint = tab === "discover" ? "探索新的可能" : tab === "installed" ? "我的应用" : "创作与发布";
+  const titleHint = tab === "discover" ? "Explore new possibilities" : tab === "installed" ? "My Apps" : "Create & Publish";
   const manualFileCount = [
     manualFiles.manifest,
     manualFiles.entry,
@@ -946,11 +946,11 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
   return (
     <div className="app-market-app">
       <header className="app-market-header">
-        <button type="button" className="app-market-icon-btn" onClick={onClose} aria-label="返回桌面">
+        <button type="button" className="app-market-icon-btn" onClick={onClose} aria-label="Back to home screen">
           <ChevronLeft size={25} />
         </button>
         <div className="app-market-title">
-          <strong>应用市场</strong>
+          <strong>App Market</strong>
           <span>{titleHint}</span>
         </div>
         <button
@@ -958,7 +958,7 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
           className="app-market-icon-btn"
           onClick={refreshCurrentView}
           disabled={marketBusy}
-          aria-label={marketRefreshing ? "正在刷新应用市场" : "刷新应用市场"}
+          aria-label={marketRefreshing ? "Refreshing app market" : "Refresh app market"}
           aria-busy={marketRefreshing}
         >
           <RefreshCw size={20} className={marketRefreshing ? "am-spin" : undefined} />
@@ -966,15 +966,15 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
       </header>
 
       <div className="app-market-tabbar">
-        <div className="app-market-tabs" role="tablist" aria-label="应用市场视图">
+        <div className="app-market-tabs" role="tablist" aria-label="App market view">
           <button type="button" role="tab" aria-selected={tab === "discover"} className="app-market-tab" data-active={tab === "discover"} onClick={() => setTab("discover")}>
-            <span>发现</span>
+            <span>Discover</span>
           </button>
           <button type="button" role="tab" aria-selected={tab === "installed"} className="app-market-tab" data-active={tab === "installed"} onClick={() => setTab("installed")}>
-            <span>已安装</span>
+            <span>Installed</span>
           </button>
           <button type="button" role="tab" aria-selected={tab === "create"} className="app-market-tab" data-active={tab === "create"} onClick={() => setTab("create")}>
-            <span>创作</span>
+            <span>Create</span>
           </button>
         </div>
       </div>
@@ -1000,7 +1000,7 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
           <>
             <label className="app-market-search">
               <Search size={16} />
-              <input aria-label="搜索 APP" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索应用或作者" />
+              <input aria-label="Search apps" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search apps or authors" />
             </label>
 
             {marketError ? <div className="app-market-error" role="alert">{marketError}</div> : null}
@@ -1009,7 +1009,7 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
               {filteredMarketApps.length === 0 ? (
                 <div className="app-market-empty">
                   <Store size={26} />
-                  <p>{marketBusy ? "正在加载…" : query ? "暂时没有找到匹配的应用" : "还没有上架的应用，来发布第一个吧"}</p>
+                  <p>{marketBusy ? "Loading…" : query ? "No matching apps found" : "No apps published yet, publish the first one"}</p>
                 </div>
               ) : (
                 <div className="am-store-list">
@@ -1017,7 +1017,7 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
                     const installed = installedForMarketItem(item);
                     return (
                       <article className="am-list-row" key={item.id}>
-                        <button type="button" className="am-list-icon-btn" onClick={() => setSelectedMarketApp(item)} aria-label={`${item.name} 详情`}>
+                        <button type="button" className="am-list-icon-btn" onClick={() => setSelectedMarketApp(item)} aria-label={`${item.name} details`}>
                           <AppIcon iconDataUrl={item.iconDataUrl} seed={item.name} className="list" />
                         </button>
                         <div className="am-list-col">
@@ -1035,9 +1035,9 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
                               disabled={marketBusy}
                               onClick={() => installed ? onOpenCustomApp(installed.id) : void installMarketApp(item)}
                             >
-                              {installed ? "打开" : "获取"}
+                              {installed ? "Open" : "Get"}
                             </button>
-                            <small>{item.installCount} 次安装</small>
+                            <small>{item.installCount} installs</small>
                           </div>
                         </div>
                       </article>
@@ -1054,27 +1054,27 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
             {apps.length === 0 ? (
               <div className="app-market-empty">
                 <HardDrive size={26} />
-                <p>还没有安装应用，去发现页逛逛吧</p>
+                <p>No apps installed yet, check out the discover tab</p>
               </div>
             ) : (
               <section className="app-market-section">
                 <div className="am-store-list">
                   {apps.map(app => (
                     <article className="am-list-row" key={app.id}>
-                      <button type="button" className="am-list-icon-btn" onClick={() => onOpenCustomApp(app.id)} aria-label={`打开${app.name}`}>
+                      <button type="button" className="am-list-icon-btn" onClick={() => onOpenCustomApp(app.id)} aria-label={`Open ${app.name}`}>
                         <AppIcon iconDataUrl={app.iconDataUrl} seed={app.name} className="list" />
                       </button>
                       <div className="am-list-col">
                         <button type="button" className="am-list-text" onClick={() => onOpenCustomApp(app.id)}>
                           <span className="am-list-name-row">
                             <strong>{app.name}</strong>
-                            <span className="am-list-author">{app.author || "本地作者"} · v{app.version}</span>
+                            <span className="am-list-author">{app.author || "Local Author"} · v{app.version}</span>
                           </span>
                           {app.description ? <em>{app.description}</em> : null}
                         </button>
                         <div className="am-list-action">
-                          <button type="button" className="am-pill am-pill-get" onClick={() => onOpenCustomApp(app.id)}>打开</button>
-                          <button type="button" className="am-list-manage" onClick={() => setSelectedInstalledApp(app)} aria-label={`管理${app.name}`}>
+                          <button type="button" className="am-pill am-pill-get" onClick={() => onOpenCustomApp(app.id)}>Open</button>
+                          <button type="button" className="am-list-manage" onClick={() => setSelectedInstalledApp(app)} aria-label={`Manage ${app.name}`}>
                             <Info size={16} />
                           </button>
                         </div>
@@ -1092,27 +1092,27 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
             <div className="am-create-actions">
               <button type="button" className="am-create-action" onClick={openImporter} disabled={busy}>
                 <span className="am-create-action-icon"><CloudUpload size={23} /></span>
-                <strong>{busy ? "正在解析…" : "导入整包"}</strong>
+                <strong>{busy ? "Parsing…" : "Import Package"}</strong>
                 <em>.zip · .html</em>
               </button>
 
               <button type="button" className="am-create-action" onClick={() => openManualBuilder()} disabled={busy}>
                 <span className="am-create-action-icon"><PackageCheck size={23} /></span>
-                <strong>单文件逐项上传</strong>
-                <em>逐项选择文件</em>
+                <strong>Upload Files Individually</strong>
+                <em>Select files one by one</em>
               </button>
             </div>
 
             <button type="button" className="app-market-secondary am-guide-btn" onClick={() => setCreatorGuideOpen(true)}>
               <BookOpen size={17} />
-              <span>制作说明</span>
+              <span>Creator Guide</span>
             </button>
 
             {myMarketApps.length > 0 ? (
               <section className="app-market-section">
                 <div className="app-market-section-head">
-                  <h2>我的发布</h2>
-                  <span>{myMarketApps.length} 个</span>
+                  <h2>My Published Apps</h2>
+                  <span>{myMarketApps.length}</span>
                 </div>
                 <div className="am-store-list">
                   {myMarketApps.map(item => (
@@ -1130,17 +1130,17 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
                           {item.description ? <em>{item.description}</em> : null}
                         </div>
                         <div className="am-list-action am-publish-actions">
-                          <button type="button" className="am-action-chip" onClick={() => openManualBuilder(item)} aria-label={`编辑${item.name}`}>
+                          <button type="button" className="am-action-chip" onClick={() => openManualBuilder(item)} aria-label={`Edit ${item.name}`}>
                             <Pencil size={14} />
-                            <span>编辑</span>
+                            <span>Edit</span>
                           </button>
-                          <button type="button" className="am-action-chip" onClick={() => startMarketPackageUpdate(item)} aria-label={`替换${item.name}应用包`}>
+                          <button type="button" className="am-action-chip" onClick={() => startMarketPackageUpdate(item)} aria-label={`Replace ${item.name} package`}>
                             <Upload size={16} />
-                            <span>换包</span>
+                            <span>Replace Package</span>
                           </button>
-                          <button type="button" className="am-action-chip" onClick={() => setConfirmMarketDelete(item)} aria-label={`删除${item.name}`}>
+                          <button type="button" className="am-action-chip" onClick={() => setConfirmMarketDelete(item)} aria-label={`Delete ${item.name}`}>
                             <Trash2 size={16} />
-                            <span>删除</span>
+                            <span>Delete</span>
                           </button>
                         </div>
                       </div>
@@ -1151,15 +1151,15 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
             ) : (
               <div className="app-market-empty compact">
                 <PackageCheck size={26} />
-                <p>还没有发布过 APP。导入整包后可以选择本机测试或发布到市场。</p>
+                <p>No apps published yet. After importing a package, you can test it locally or publish it to the market.</p>
               </div>
             )}
 
             {localTestApps.length > 0 ? (
               <section className="app-market-section">
                 <div className="app-market-section-head">
-                  <h2>本地测试</h2>
-                  <span>{localTestApps.length} 个</span>
+                  <h2>Local Testing</h2>
+                  <span>{localTestApps.length}</span>
                 </div>
                 <div className="am-store-list">
                   {localTestApps.map(app => (
@@ -1176,17 +1176,17 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
                           {app.description ? <em>{app.description}</em> : null}
                         </div>
                         <div className="am-list-action am-publish-actions">
-                          <button type="button" className="am-action-chip" onClick={() => openLocalManualBuilder(app)} disabled={busy} aria-label={`编辑${app.name}`}>
+                          <button type="button" className="am-action-chip" onClick={() => openLocalManualBuilder(app)} disabled={busy} aria-label={`Edit ${app.name}`}>
                             <Pencil size={14} />
-                            <span>编辑</span>
+                            <span>Edit</span>
                           </button>
-                          <button type="button" className="am-action-chip" onClick={() => startLocalPackageUpdate(app)} disabled={busy} aria-label={`换包更新${app.name}`}>
+                          <button type="button" className="am-action-chip" onClick={() => startLocalPackageUpdate(app)} disabled={busy} aria-label={`Update ${app.name} with a new package`}>
                             <Upload size={16} />
-                            <span>换包</span>
+                            <span>Replace Package</span>
                           </button>
-                          <button type="button" className="am-action-chip" onClick={() => setConfirmDelete(app)} aria-label={`卸载${app.name}`}>
+                          <button type="button" className="am-action-chip" onClick={() => setConfirmDelete(app)} aria-label={`Uninstall ${app.name}`}>
                             <Trash2 size={16} />
-                            <span>卸载</span>
+                            <span>Uninstall</span>
                           </button>
                         </div>
                       </div>
@@ -1201,10 +1201,10 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
 
       {pendingApp ? (
         <div className="app-market-overlay app-market-drawer-overlay" role="presentation" onClick={closePendingSheet}>
-          <div className="app-market-sheet app-market-check-sheet" role="dialog" aria-modal="true" aria-label="发布前检查" onClick={event => event.stopPropagation()}>
+          <div className="app-market-sheet app-market-check-sheet" role="dialog" aria-modal="true" aria-label="Pre-publish check" onClick={event => event.stopPropagation()}>
             <div className="app-market-sheet-head">
-              <strong>{marketEditTarget ? "更新前检查" : "发布前检查"}</strong>
-              <button type="button" onClick={closePendingSheet} aria-label="关闭" disabled={publishing}>
+              <strong>{marketEditTarget ? "Pre-update Check" : "Pre-publish Check"}</strong>
+              <button type="button" onClick={closePendingSheet} aria-label="Close" disabled={publishing}>
                 <X size={20} />
               </button>
             </div>
@@ -1213,31 +1213,31 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
                 <AppIcon iconDataUrl={pendingApp.iconDataUrl} seed={pendingApp.name} className="large" />
                 <div>
                   <strong>{pendingApp.name}</strong>
-                  <p>{pendingApp.description || "本地自定义 APP"}</p>
-                  <span>v{publishVersion || pendingApp.version} · {pendingApp.author || "本地作者"}</span>
+                  <p>{pendingApp.description || "Local custom app"}</p>
+                  <span>v{publishVersion || pendingApp.version} · {pendingApp.author || "Local Author"}</span>
                 </div>
               </div>
 
               <div className="am-publish-fields">
                 <label className="am-form-field">
-                  <span>版本号</span>
+                  <span>Version</span>
                   <input value={publishVersion} onChange={event => setPublishVersion(event.target.value)} placeholder={pendingApp.version} spellCheck={false} />
                 </label>
                 <label className="am-form-field">
-                  <span>更新日志</span>
+                  <span>Changelog</span>
                   <textarea
                     value={publishChangelog}
                     onChange={event => setPublishChangelog(event.target.value)}
-                    placeholder={marketEditTarget ? "这次更新改了什么" : "首次发布说明，可选"}
+                    placeholder={marketEditTarget ? "What changed in this update" : "First release notes, optional"}
                     rows={3}
                   />
                 </label>
               </div>
 
               <div className="app-market-inspection-grid">
-                <div><strong>{pendingApp.permissions.length}</strong><span>权限</span></div>
-                <div><strong>{declarationCount(pendingApp)}</strong><span>声明文件</span></div>
-                <div><strong>{sourceFile ? formatPackageSize(sourceFile.size) : "未知"}</strong><span>包大小</span></div>
+                <div><strong>{pendingApp.permissions.length}</strong><span>Permissions</span></div>
+                <div><strong>{declarationCount(pendingApp)}</strong><span>Declaration Files</span></div>
+                <div><strong>{sourceFile ? formatPackageSize(sourceFile.size) : "Unknown"}</strong><span>Package Size</span></div>
               </div>
 
               <div className="app-market-declaration-strip">
@@ -1254,9 +1254,9 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
               </div>
 
               <div className="app-market-permissions">
-                <span>请求权限</span>
+                <span>Requested Permissions</span>
                 {pendingApp.permissions.length === 0 ? (
-                  <p>未声明特殊权限，仅作为页面运行。</p>
+                  <p>No special permissions declared, runs as a plain page.</p>
                 ) : (
                   <ul>
                     {pendingApp.permissions.map(permission => (
@@ -1266,17 +1266,17 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
                 )}
               </div>
 
-              {sourceFile ? <p className="app-market-upload-hint">文件：{sourceFile.name}</p> : null}
+              {sourceFile ? <p className="app-market-upload-hint">File: {sourceFile.name}</p> : null}
 
               <div className="app-market-sheet-actions three">
-                <button type="button" className="app-market-secondary" onClick={closePendingSheet} disabled={publishing}>取消</button>
+                <button type="button" className="app-market-secondary" onClick={closePendingSheet} disabled={publishing}>Cancel</button>
                 <button type="button" className="app-market-secondary" onClick={() => void confirmInstall()} disabled={publishing || busy}>
                   <HardDrive size={18} />
-                  <span>本机测试</span>
+                  <span>Local Test</span>
                 </button>
                 <button type="button" className="app-market-primary" onClick={() => void confirmPublish()} disabled={publishing}>
                   {publishing ? <LoaderCircle className="am-spin" size={18} /> : <CloudUpload size={18} />}
-                  <span>{publishing ? "提交中" : marketEditTarget ? "提交更新" : "发布市场"}</span>
+                  <span>{publishing ? "Submitting" : marketEditTarget ? "Submit Update" : "Publish to Market"}</span>
                 </button>
               </div>
             </div>
@@ -1286,10 +1286,10 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
 
       {selectedMarketApp ? (
         <div className="app-market-overlay app-market-drawer-overlay" role="presentation" onClick={() => setSelectedMarketApp(null)}>
-          <div className="app-market-sheet app-market-detail-sheet" role="dialog" aria-modal="true" aria-label="APP 详情" onClick={event => event.stopPropagation()}>
+          <div className="app-market-sheet app-market-detail-sheet" role="dialog" aria-modal="true" aria-label="App details" onClick={event => event.stopPropagation()}>
             <div className="app-market-sheet-head">
-              <strong>APP 详情</strong>
-              <button type="button" onClick={() => setSelectedMarketApp(null)} aria-label="关闭">
+              <strong>App Details</strong>
+              <button type="button" onClick={() => setSelectedMarketApp(null)} aria-label="Close">
                 <X size={20} />
               </button>
             </div>
@@ -1298,25 +1298,25 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
                 <AppIcon iconDataUrl={selectedMarketApp.iconDataUrl} seed={selectedMarketApp.name} className="large" />
                 <div>
                   <strong>{selectedMarketApp.name}</strong>
-                  <p>{selectedMarketApp.description || "这个 APP 暂未填写简介。"}</p>
+                  <p>{selectedMarketApp.description || "This app has no description yet."}</p>
                   <span>{selectedMarketApp.authorName} · v{selectedMarketApp.version}</span>
                 </div>
               </div>
               <div className="app-market-info-grid">
-                <div><strong>{selectedMarketApp.installCount}</strong><span>安装</span></div>
-                <div><strong>{formatPackageSize(selectedMarketApp.packageSize)}</strong><span>大小</span></div>
-                <div><strong>{selectedMarketApp.packageKind}</strong><span>格式</span></div>
+                <div><strong>{selectedMarketApp.installCount}</strong><span>Installs</span></div>
+                <div><strong>{formatPackageSize(selectedMarketApp.packageSize)}</strong><span>Size</span></div>
+                <div><strong>{selectedMarketApp.packageKind}</strong><span>Format</span></div>
               </div>
               {selectedMarketApp.changelog ? (
                 <div className="app-market-permissions">
-                  <span>更新日志</span>
+                  <span>Changelog</span>
                   <p>{selectedMarketApp.changelog}</p>
                 </div>
               ) : null}
               <div className="app-market-permissions">
-                <span>权限说明</span>
+                <span>Permissions</span>
                 {selectedMarketApp.permissions.length === 0 ? (
-                  <p>未声明特殊权限。</p>
+                  <p>No special permissions declared.</p>
                 ) : (
                   <ul>
                     {selectedMarketApp.permissions.map(permission => (
@@ -1336,23 +1336,23 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
                     ownerId: selectedMarketApp.authorId || "",
                     ownerName: selectedMarketApp.authorName || "",
                   })
-                    .then(() => onNotice?.("已举报，管理员会尽快处理"))
-                    .catch(err => onNotice?.(err instanceof Error ? err.message : "举报失败"));
+                    .then(() => onNotice?.("Reported, an admin will review it soon"))
+                    .catch(err => onNotice?.(err instanceof Error ? err.message : "Report failed"));
                 }}
               >
-                举报该 APP
+                Report this app
               </button>
               <div className="app-market-sheet-actions">
-                <button type="button" className="app-market-secondary" onClick={() => setSelectedMarketApp(null)}>关闭</button>
+                <button type="button" className="app-market-secondary" onClick={() => setSelectedMarketApp(null)}>Close</button>
                 {installedForMarketItem(selectedMarketApp) ? (
                   <button type="button" className="app-market-primary" onClick={() => onOpenCustomApp(installedForMarketItem(selectedMarketApp)!.id)}>
                     <ExternalLink size={18} />
-                    <span>打开</span>
+                    <span>Open</span>
                   </button>
                 ) : (
                   <button type="button" className="app-market-primary" disabled={marketBusy} onClick={() => void installMarketApp(selectedMarketApp)}>
                     <Download size={18} />
-                    <span>{marketBusy ? "安装中" : "安装"}</span>
+                    <span>{marketBusy ? "Installing" : "Install"}</span>
                   </button>
                 )}
               </div>
@@ -1363,10 +1363,10 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
 
       {selectedInstalledApp ? (
         <div className="app-market-overlay app-market-drawer-overlay" role="presentation" onClick={() => setSelectedInstalledApp(null)}>
-          <div className="app-market-sheet app-market-detail-sheet" role="dialog" aria-modal="true" aria-label="已安装 APP 详情" onClick={event => event.stopPropagation()}>
+          <div className="app-market-sheet app-market-detail-sheet" role="dialog" aria-modal="true" aria-label="Installed app details" onClick={event => event.stopPropagation()}>
             <div className="app-market-sheet-head">
-              <strong>已安装 APP</strong>
-              <button type="button" onClick={() => setSelectedInstalledApp(null)} aria-label="关闭">
+              <strong>Installed App</strong>
+              <button type="button" onClick={() => setSelectedInstalledApp(null)} aria-label="Close">
                 <X size={20} />
               </button>
             </div>
@@ -1375,8 +1375,8 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
                 <AppIcon iconDataUrl={selectedInstalledApp.iconDataUrl} seed={selectedInstalledApp.name} className="large" />
                 <div>
                   <strong>{selectedInstalledApp.name}</strong>
-                  <p>{selectedInstalledApp.description || "本地自定义 APP"}</p>
-                  <span>{selectedInstalledApp.author || "本地作者"} · v{selectedInstalledApp.version}</span>
+                  <p>{selectedInstalledApp.description || "Local custom app"}</p>
+                  <span>{selectedInstalledApp.author || "Local Author"} · v{selectedInstalledApp.version}</span>
                 </div>
               </div>
               <div className="app-market-declaration-strip">
@@ -1392,9 +1392,9 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
                 })}
               </div>
               <div className="app-market-permissions">
-                <span>已授权能力</span>
+                <span>Granted Permissions</span>
                 {selectedInstalledApp.permissions.length === 0 ? (
-                  <p>未声明特殊权限。</p>
+                  <p>No special permissions declared.</p>
                 ) : (
                   <ul>
                     {selectedInstalledApp.permissions.map(permission => (
@@ -1410,18 +1410,18 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
                   className="app-market-secondary"
                   onClick={() => void updateInstalledAppFromMarket(selectedInstalledApp)}
                   disabled={selectedInstalledUpdating}
-                  title={selectedInstalledMarketItem ? `市场版本 v${selectedInstalledMarketItem.version}` : "点击后会刷新市场并查找更新"}
+                  title={selectedInstalledMarketItem ? `Market version v${selectedInstalledMarketItem.version}` : "Click to refresh the market and check for updates"}
                 >
                   {selectedInstalledUpdating ? <LoaderCircle className="am-spin" size={18} /> : <RefreshCw size={18} />}
-                  <span>{selectedInstalledUpdating ? "更新中" : "更新"}</span>
+                  <span>{selectedInstalledUpdating ? "Updating" : "Update"}</span>
                 </button>
                 <button type="button" className="app-market-danger" onClick={() => setConfirmDelete(selectedInstalledApp)} disabled={selectedInstalledUpdating}>
                   <Trash2 size={18} />
-                  <span>卸载</span>
+                  <span>Uninstall</span>
                 </button>
                 <button type="button" className="app-market-primary" onClick={() => onOpenCustomApp(selectedInstalledApp.id)} disabled={selectedInstalledUpdating}>
                   <ExternalLink size={18} />
-                  <span>打开</span>
+                  <span>Open</span>
                 </button>
               </div>
             </div>
@@ -1431,38 +1431,38 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
 
       {manualBuilderOpen ? (
         <div className="app-market-overlay app-market-drawer-overlay" role="presentation" onClick={closeManualBuilder}>
-          <div className="app-market-sheet app-market-manual-sheet" role="dialog" aria-modal="true" aria-label="单文件逐项上传" onClick={event => event.stopPropagation()}>
+          <div className="app-market-sheet app-market-manual-sheet" role="dialog" aria-modal="true" aria-label="Upload files individually" onClick={event => event.stopPropagation()}>
             <div className="app-market-sheet-head">
-              <strong>{marketEditTarget ? `编辑「${marketEditTarget.name}」` : localEditTarget ? `编辑「${localEditTarget.name}」（本地）` : "单文件逐项上传"}</strong>
-              <button type="button" onClick={closeManualBuilder} aria-label="关闭" disabled={busy}>
+              <strong>{marketEditTarget ? `Edit "${marketEditTarget.name}"` : localEditTarget ? `Edit "${localEditTarget.name}" (Local)` : "Upload Files Individually"}</strong>
+              <button type="button" onClick={closeManualBuilder} aria-label="Close" disabled={busy}>
                 <X size={20} />
               </button>
             </div>
             <div className="app-market-sheet-body">
               {marketEditTarget ? (
-                <p className="app-market-upload-hint">{manualExistingLoading ? "正在读取当前线上包…" : "下方会显示当前线上包里的文件；只选择需要替换的文件，未选择的内容会沿用原文件。"}</p>
+                <p className="app-market-upload-hint">{manualExistingLoading ? "Loading the current online package…" : "The files in the current online package are shown below; only select files you want to replace, unselected files will keep the original."}</p>
               ) : localEditTarget ? (
-                <p className="app-market-upload-hint">下方是本机安装包里的文件；只选择需要替换的文件，未选择的沿用原文件。确认后选「本机测试」即可原地更新，数据保留。</p>
+                <p className="app-market-upload-hint">The files in the locally installed package are shown below; only select files you want to replace, unselected files will keep the original. After confirming, choose "Local Test" to update in place with data kept.</p>
               ) : (
-                <p className="app-market-upload-hint">基础信息从 manifest.json 读取；入口、图标、预设、正则、世界书、绑定和资源都用文件上传。</p>
+                <p className="app-market-upload-hint">Basic info is read from manifest.json; the entry, icon, presets, regex, world book, bindings, and assets are all uploaded as files.</p>
               )}
               {marketEditTarget ? (
                 <label className="am-form-field">
-                  <span>更新日志</span>
+                  <span>Changelog</span>
                   <textarea
                     value={publishChangelog}
                     onChange={event => setPublishChangelog(event.target.value)}
                     rows={2}
-                    placeholder="写给用户看的更新说明"
+                    placeholder="Update notes for users"
                   />
                 </label>
               ) : null}
               <div className="am-manual-file-stack" key={manualFileInputKey}>
                 <div className="am-file-section">
                   <div className="am-file-section-head">
-                    <strong>基础文件</strong>
+                    <strong>Basic Files</strong>
                     {manualFileCount > 0 ? (
-                      <button type="button" onClick={resetManualFiles} disabled={busy}>清空已选</button>
+                      <button type="button" onClick={resetManualFiles} disabled={busy}>Clear Selection</button>
                     ) : null}
                   </div>
                   <div className="am-file-grid">
@@ -1470,72 +1470,72 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
                       <FileJson size={18} />
                       <span>manifest.json</span>
                       <input type="file" accept=".json,application/json" onChange={event => updateManualFile("manifest", event.target.files)} />
-                      <em>{fileSlotLabel(manualFiles.manifest, marketEditTarget ? "manifest.json" : "", "建议必选", manualExistingLoading)}</em>
+                      <em>{fileSlotLabel(manualFiles.manifest, marketEditTarget ? "manifest.json" : "", "Recommended", manualExistingLoading)}</em>
                     </label>
                     <label className="am-file-pick" data-active={Boolean(manualFiles.entry || manualExistingEntryPath)}>
                       <FileCode2 size={18} />
-                      <span>入口 HTML</span>
+                      <span>Entry HTML</span>
                       <input type="file" accept=".html,.htm,text/html" onChange={event => updateManualFile("entry", event.target.files)} />
-                      <em>{fileSlotLabel(manualFiles.entry, manualExistingEntryPath, "选择 index.html", manualExistingLoading)}</em>
+                      <em>{fileSlotLabel(manualFiles.entry, manualExistingEntryPath, "Select index.html", manualExistingLoading)}</em>
                     </label>
                     <label className="am-file-pick" data-active={Boolean(manualFiles.icon || manualExistingIconPath)}>
                       <ImageIcon size={18} />
-                      <span>图标文件</span>
+                      <span>Icon File</span>
                       <input type="file" accept="image/*" onChange={event => updateManualFile("icon", event.target.files)} />
-                      <em>{fileSlotLabel(manualFiles.icon, manualExistingIconPath, "可选上传", manualExistingLoading)}</em>
+                      <em>{fileSlotLabel(manualFiles.icon, manualExistingIconPath, "Optional upload", manualExistingLoading)}</em>
                     </label>
                   </div>
                 </div>
                 <div className="am-file-section">
                   <div className="am-file-section-head">
-                    <strong>声明文件</strong>
-                    <span>按槽位上传，不需要手写</span>
+                    <strong>Declaration Files</strong>
+                    <span>Upload by slot, no need to write by hand</span>
                   </div>
                   <div className="am-file-grid">
                     <label className="am-file-pick" data-active={Boolean(manualFiles.presets || manualExistingPresetsPath)}>
                       <Layers size={18} />
                       <span>presets.json</span>
                       <input type="file" accept=".json,application/json" onChange={event => updateManualFile("presets", event.target.files)} />
-                      <em>{fileSlotLabel(manualFiles.presets, manualExistingPresetsPath, "预设条目", manualExistingLoading)}</em>
+                      <em>{fileSlotLabel(manualFiles.presets, manualExistingPresetsPath, "Preset entries", manualExistingLoading)}</em>
                     </label>
                     <label className="am-file-pick" data-active={Boolean(manualFiles.regex || manualExistingRegexPath)}>
                       <Sparkles size={18} />
                       <span>regex.json</span>
                       <input type="file" accept=".json,application/json" onChange={event => updateManualFile("regex", event.target.files)} />
-                      <em>{fileSlotLabel(manualFiles.regex, manualExistingRegexPath, "正则美化", manualExistingLoading)}</em>
+                      <em>{fileSlotLabel(manualFiles.regex, manualExistingRegexPath, "Regex cleanup", manualExistingLoading)}</em>
                     </label>
                     <label className="am-file-pick" data-active={Boolean(manualFiles.worldBooks || manualExistingWorldBooksPath)}>
                       <FileJson size={18} />
                       <span>worldbooks.json</span>
                       <input type="file" accept=".json,application/json" onChange={event => updateManualFile("worldBooks", event.target.files)} />
-                      <em>{fileSlotLabel(manualFiles.worldBooks, manualExistingWorldBooksPath, "世界书资料", manualExistingLoading)}</em>
+                      <em>{fileSlotLabel(manualFiles.worldBooks, manualExistingWorldBooksPath, "World book data", manualExistingLoading)}</em>
                     </label>
                     <label className="am-file-pick" data-active={Boolean(manualFiles.bindings || manualExistingBindingsPath)}>
                       <CheckCircle2 size={18} />
                       <span>bindings.json</span>
                       <input type="file" accept=".json,application/json" onChange={event => updateManualFile("bindings", event.target.files)} />
-                      <em>{fileSlotLabel(manualFiles.bindings, manualExistingBindingsPath, "默认绑定", manualExistingLoading)}</em>
+                      <em>{fileSlotLabel(manualFiles.bindings, manualExistingBindingsPath, "Default bindings", manualExistingLoading)}</em>
                     </label>
                   </div>
                 </div>
                 <div className="am-file-section">
                   <div className="am-file-section-head">
-                    <strong>其他资源</strong>
-                    <span>图片、脚本、样式、字体等</span>
+                    <strong>Other Assets</strong>
+                    <span>Images, scripts, styles, fonts, etc.</span>
                   </div>
                   <label className="am-file-pick am-file-pick-wide" data-active={manualFiles.assets.length > 0 || manualExistingAssetPaths.length > 0}>
                     <Upload size={18} />
-                    <span>资源文件</span>
+                    <span>Asset Files</span>
                     <input type="file" multiple accept=".json,.js,.css,.png,.jpg,.jpeg,.webp,.svg,.woff,.woff2,text/*,image/*,application/json" onChange={event => updateManualFile("assets", event.target.files)} />
-                    <em>{assetSlotLabel(manualFiles.assets, manualExistingAssetPaths, "可多选，不包含上面的专用槽位", manualExistingLoading)}</em>
+                    <em>{assetSlotLabel(manualFiles.assets, manualExistingAssetPaths, "Multiple allowed, excludes the dedicated slots above", manualExistingLoading)}</em>
                   </label>
                 </div>
               </div>
               <div className="app-market-sheet-actions">
-                <button type="button" className="app-market-secondary" onClick={closeManualBuilder} disabled={busy}>取消</button>
+                <button type="button" className="app-market-secondary" onClick={closeManualBuilder} disabled={busy}>Cancel</button>
                 <button type="button" className="app-market-primary" onClick={() => void buildManualPackage()} disabled={busy}>
                   {busy ? <LoaderCircle className="am-spin" size={18} /> : <PackageCheck size={18} />}
-                  <span>{busy ? "组包中" : marketEditTarget ? "保存并检查" : "生成并检查"}</span>
+                  <span>{busy ? "Packaging" : marketEditTarget ? "Save & Check" : "Generate & Check"}</span>
                 </button>
               </div>
             </div>
@@ -1545,26 +1545,26 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
 
       {confirmDelete ? (
         <div className="app-market-overlay" role="presentation" onClick={() => setConfirmDelete(null)}>
-          <div className="app-market-sheet" role="dialog" aria-modal="true" aria-label="卸载 APP" onClick={event => event.stopPropagation()}>
+          <div className="app-market-sheet" role="dialog" aria-modal="true" aria-label="Uninstall app" onClick={event => event.stopPropagation()}>
             <div className="app-market-sheet-head">
-              <strong>卸载「{confirmDelete.name}」？</strong>
-              <button type="button" onClick={() => setConfirmDelete(null)} aria-label="关闭">
+              <strong>Uninstall "{confirmDelete.name}"?</strong>
+              <button type="button" onClick={() => setConfirmDelete(null)} aria-label="Close">
                 <X size={20} />
               </button>
             </div>
             <div className="app-market-sheet-body">
               <p className="app-market-delete-copy">
-                将移除桌面图标、权限授权和运行文件。聊天历史里的 APP 卡片会保留。
+                This will remove the desktop icon, permission grants, and runtime files. App cards in chat history will be kept.
               </p>
               <div className="app-market-sheet-actions stacked">
                 <button type="button" className="app-market-secondary" onClick={() => void deleteApp(confirmDelete, false)} disabled={busy}>
-                  卸载并保留数据
+                  Uninstall and Keep Data
                 </button>
                 <button type="button" className="app-market-danger" onClick={() => void deleteApp(confirmDelete, true)} disabled={busy}>
-                  卸载并删除数据
+                  Uninstall and Delete Data
                 </button>
                 <button type="button" className="app-market-secondary" onClick={() => setConfirmDelete(null)}>
-                  取消
+                  Cancel
                 </button>
               </div>
             </div>
@@ -1577,14 +1577,14 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
           <div className="app-market-sheet app-market-confirm-sheet app-market-error-dialog" role="alertdialog" aria-modal="true" aria-label={errorDialog.title} onClick={event => event.stopPropagation()}>
             <div className="app-market-sheet-head">
               <strong>{errorDialog.title}</strong>
-              <button type="button" onClick={() => setErrorDialog(null)} aria-label="关闭">
+              <button type="button" onClick={() => setErrorDialog(null)} aria-label="Close">
                 <X size={20} />
               </button>
             </div>
             <div className="app-market-sheet-body">
               <p className="app-market-delete-copy">{errorDialog.message}</p>
               <div className="app-market-sheet-actions">
-                <button type="button" className="app-market-primary" onClick={() => setErrorDialog(null)}>知道了</button>
+                <button type="button" className="app-market-primary" onClick={() => setErrorDialog(null)}>Got It</button>
               </div>
             </div>
           </div>
@@ -1593,22 +1593,22 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
 
       {confirmMarketDelete ? (
         <div className="app-market-overlay app-market-center-overlay" role="presentation" onClick={() => setConfirmMarketDelete(null)}>
-          <div className="app-market-sheet app-market-confirm-sheet" role="dialog" aria-modal="true" aria-label="删除市场发布" onClick={event => event.stopPropagation()}>
+          <div className="app-market-sheet app-market-confirm-sheet" role="dialog" aria-modal="true" aria-label="Delete market listing" onClick={event => event.stopPropagation()}>
             <div className="app-market-sheet-head">
-              <strong>删除「{confirmMarketDelete.name}」的市场发布？</strong>
-              <button type="button" onClick={() => setConfirmMarketDelete(null)} aria-label="关闭" disabled={publishing}>
+              <strong>Delete the market listing for "{confirmMarketDelete.name}"?</strong>
+              <button type="button" onClick={() => setConfirmMarketDelete(null)} aria-label="Close" disabled={publishing}>
                 <X size={20} />
               </button>
             </div>
             <div className="app-market-sheet-body">
               <p className="app-market-delete-copy">
-                删除后它会从应用广场下架，已经安装到用户手机里的本地副本不会被自动移除。
+                After deletion it will be taken down from the app market; local copies already installed on users' phones will not be automatically removed.
               </p>
               <div className="app-market-sheet-actions">
-                <button type="button" className="app-market-secondary" onClick={() => setConfirmMarketDelete(null)} disabled={publishing}>取消</button>
+                <button type="button" className="app-market-secondary" onClick={() => setConfirmMarketDelete(null)} disabled={publishing}>Cancel</button>
                 <button type="button" className="app-market-danger" onClick={() => void deleteMarketItem(confirmMarketDelete)} disabled={publishing}>
                   <Trash2 size={18} />
-                  <span>{publishing ? "删除中" : "删除发布"}</span>
+                  <span>{publishing ? "Deleting" : "Delete Listing"}</span>
                 </button>
               </div>
             </div>
@@ -1618,16 +1618,16 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
 
       {creatorGuideOpen ? (
         <div className="app-market-overlay app-market-drawer-overlay" role="presentation" onClick={() => setCreatorGuideOpen(false)}>
-          <div className="app-market-sheet app-market-guide-sheet" role="dialog" aria-modal="true" aria-label="自定义 APP 制作说明" onClick={event => event.stopPropagation()}>
+          <div className="app-market-sheet app-market-guide-sheet" role="dialog" aria-modal="true" aria-label="Custom app creator guide" onClick={event => event.stopPropagation()}>
             <div className="app-market-sheet-head">
-              <strong>自定义 APP 制作说明</strong>
-              <button type="button" onClick={() => setCreatorGuideOpen(false)} aria-label="关闭">
+              <strong>Custom App Creator Guide</strong>
+              <button type="button" onClick={() => setCreatorGuideOpen(false)} aria-label="Close">
                 <X size={20} />
               </button>
             </div>
             <div className="app-market-sheet-body">
               <p className="app-market-guide-copy">
-                把这份说明和你的 APP 想法一起发给创作助手，让它按小手机当前 SDK 生成应用包文件。
+                Send this guide along with your app idea to a creation assistant, and it will generate the app package files according to the phone's current SDK.
               </p>
               <textarea
                 className="app-market-guide-text"
@@ -1635,13 +1635,13 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
                 rows={18}
                 readOnly
                 spellCheck={false}
-                aria-label="自定义 APP 制作说明全文"
+                aria-label="Full text of the custom app creator guide"
               />
               <div className="app-market-sheet-actions">
-                <button type="button" className="app-market-secondary" onClick={() => setCreatorGuideOpen(false)}>关闭</button>
+                <button type="button" className="app-market-secondary" onClick={() => setCreatorGuideOpen(false)}>Close</button>
                 <button type="button" className="app-market-primary" onClick={() => void copyCreatorGuide()}>
                   <Copy size={18} />
-                  <span>复制全文</span>
+                  <span>Copy Full Text</span>
                 </button>
               </div>
             </div>

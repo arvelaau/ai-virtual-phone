@@ -11,7 +11,7 @@ export function RegexList({ data }: RegexListProps) {
     const [expandedId, setExpandedId] = useState<string | null>(null);
 
     if (!data || !data.rules || data.rules.length === 0) {
-        return <div className="p-4 text-center" style={{ color: "var(--c-text)" }}>暂无正则脚本</div>;
+        return <div className="p-4 text-center" style={{ color: "var(--c-text)" }}>No regex scripts yet</div>;
     }
 
     return (
@@ -27,10 +27,10 @@ export function RegexList({ data }: RegexListProps) {
                     >
                         <div className="flex justify-between items-start gap-2">
                             <div className="font-medium line-clamp-1 break-all" style={{ color: "var(--c-text)" }}>
-                                {script.scriptName || "未命名脚本"}
+                                {script.scriptName || "Unnamed script"}
                             </div>
                             <span className="ui-badge shrink-0" data-variant={script.disabled ? "muted" : "success"}>
-                                {script.disabled ? "已禁用" : "启用"}
+                                {script.disabled ? "Disabled" : "Enabled"}
                             </span>
                         </div>
 

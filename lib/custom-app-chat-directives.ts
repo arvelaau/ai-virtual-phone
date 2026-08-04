@@ -12,7 +12,15 @@ export type RegisteredCustomAppChatPlusAction = CustomAppChatPlusAction & {
   appIconDataUrl?: string;
 };
 
+/**
+ * Directive labels reserved by the built-in rich-media protocol — a custom app
+ * may not register these, or it would shadow a built-in tag.
+ * Both the legacy Chinese tokens and the going-forward English ones are reserved.
+ * Keep in sync with the alias consts in lib/rich-message-parser.ts.
+ * See PROTOCOL-MIGRATION-PLAN.md.
+ */
 const BUILTIN_DIRECTIVE_LABELS = new Set([
+  // legacy Chinese
   "红包",
   "转账",
   "代付请求",
@@ -24,12 +32,33 @@ const BUILTIN_DIRECTIVE_LABELS = new Set([
   "音乐",
   "音乐分享",
   "引用",
+  "名片",
   "领取红包",
   "拒收红包",
   "领取转账",
   "拒收转账",
   "接受代付",
   "拒绝代付",
+  // going-forward English
+  "RedPacket",
+  "Transfer",
+  "PaymentRequest",
+  "Gift",
+  "Photo",
+  "Location",
+  "Sticker",
+  "VoiceNote",
+  "Music",
+  "MusicShare",
+  "Quote",
+  "ContactCard",
+  "ClaimRedPacket",
+  "DeclineRedPacket",
+  "AcceptTransfer",
+  "ClaimTransfer",
+  "DeclineTransfer",
+  "AcceptPaymentRequest",
+  "DeclinePaymentRequest",
 ]);
 
 function cleanText(value: unknown, maxLength: number): string {
@@ -193,10 +222,13 @@ export function formatCustomAppChatDirectivesForPrompt(options: { group?: boolea
   for (const directive of directives) {
     lines.push("");
     lines.push(`### ${directive.label}`);
-    const syntax = directive.syntax || `[${directive.label}:内容]`;
-    lines.push(`【格式】${options.group ? `[角色名]: ${syntax}` : syntax}`);
-    const description = directive.description || `触发「${directive.appName}」提供的${directive.label}功能。`;
-    lines.push(`【规则】${description}`);
+    // These markers are injected into the same prompt as lib/builtin-preset.ts's
+    // rich-media section, so they must use the SAME section labels and the same
+    // speaker-prefix placeholder — keep them in lockstep.
+    const syntax = directive.syntax || `[${directive.label}:content]`;
+    lines.push(`【Format】${options.group ? `[CharacterName]: ${syntax}` : syntax}`);
+    const description = directive.description || `Triggers the "${directive.label}" feature provided by "${directive.appName}".`;
+    lines.push(`【Rule】${description}`);
   }
   return lines.join("\n");
 }

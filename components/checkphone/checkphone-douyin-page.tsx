@@ -58,22 +58,22 @@ type CheckPhoneDouyinPageProps = {
 
 type DouyinTabId = "works" | "saved" | "liked";
 const DOUYIN_TABS: Array<{ id: DouyinTabId; label: string }> = [
-  { id: "works", label: "作品" },
-  { id: "saved", label: "收藏" },
-  { id: "liked", label: "喜欢" },
+  { id: "works", label: "Works" },
+  { id: "saved", label: "Saved" },
+  { id: "liked", label: "Liked" },
 ];
 
 const DOUYIN_PROFILE_SHORTCUTS = [
-  { label: "我的订单", icon: ShoppingCart },
-  { label: "我的预约", icon: Bell },
-  { label: "观看历史", icon: Clock3 },
-  { label: "创作者中心", icon: RotateCcw },
-  { label: "全部功能", icon: LayoutGrid },
+  { label: "My Orders", icon: ShoppingCart },
+  { label: "My Bookings", icon: Bell },
+  { label: "Watch History", icon: Clock3 },
+  { label: "Creator Center", icon: RotateCcw },
+  { label: "All Features", icon: LayoutGrid },
 ];
 
 function formatCount(count: number): string {
   if (count >= 10000)
-    return `${(count / 10000).toFixed(count >= 100000 ? 0 : 1).replace(/\.0$/, "")}万`;
+    return `${(count / 10000).toFixed(count >= 100000 ? 0 : 1).replace(/\.0$/, "")}w`;
   if (count >= 1000) return `${(count / 1000).toFixed(1).replace(/\.0$/, "")}k`;
   return String(count);
 }
@@ -392,7 +392,7 @@ export function CheckPhoneDouyinPage({
       while (left <= right) {
         const middle = Math.floor((left + right) / 2);
         const candidate = caption.slice(0, middle).trimEnd();
-        measureNode.textContent = `${candidate}...  展开`;
+        measureNode.textContent = `${candidate}...  Expand`;
         if (measureNode.scrollHeight <= maxHeight) {
           best = candidate;
           left = middle + 1;
@@ -660,7 +660,7 @@ export function CheckPhoneDouyinPage({
 
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
             <PhosphorShareFat size={30} weight="fill" color="#fff" />
-            <span style={{ fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 500 }}>分享</span>
+            <span style={{ fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 500 }}>Share</span>
           </div>
         </div>
 
@@ -742,7 +742,7 @@ export function CheckPhoneDouyinPage({
                       fontWeight: 650,
                     }}
                   >
-                    {captionExpanded ? "收起" : "展开"}
+                    {captionExpanded ? "Collapse" : "Expand"}
                   </button>
                 </>
               ) : null}
@@ -759,7 +759,7 @@ export function CheckPhoneDouyinPage({
                 width: "200px",
               }}
             >
-              {videoAuthor} 创作的原声
+              Original sound by {videoAuthor}
             </span>
           </div>
         </div>
@@ -801,8 +801,8 @@ export function CheckPhoneDouyinPage({
               <ChevronLeft size={22} strokeWidth={2.5} />
             </button>
             <div className="cp-douyin-header-stack">
-              <div className="cp-douyin-header-title">抖音</div>
-              <div className="cp-douyin-header-subtitle">作品、收藏与喜欢</div>
+              <div className="cp-douyin-header-title">Douyin</div>
+              <div className="cp-douyin-header-subtitle">Works, Saved &amp; Liked</div>
             </div>
             <div className="cp-appbar-actions">
               <button type="button" className="cp-float-refresh" onClick={handleRefresh} disabled={loading} aria-label="Refresh">
@@ -816,7 +816,7 @@ export function CheckPhoneDouyinPage({
 
           {loading && (
             <div className="cp-refresh-indicator cp-refresh-indicator--floating" aria-live="polite">
-              <span className="cp-refresh-indicator-text">正在刷新抖音</span>
+              <span className="cp-refresh-indicator-text">Refreshing Douyin</span>
               <span className="cp-refresh-indicator-dots" aria-hidden="true">
                 <i></i><i></i><i></i>
               </span>
@@ -824,11 +824,11 @@ export function CheckPhoneDouyinPage({
           )}
 
           <div className="cp-douyin-body">
-            {!loaded && <div className="cp-douyin-status">正在同步主页...</div>}
+            {!loaded && <div className="cp-douyin-status">Syncing profile...</div>}
             {loaded && !loading && (
               <div className="cp-douyin-status cp-empty-copy">
-                <p>暂无抖音内容</p>
-                <span className="cp-douyin-hint">点刷新同步主页作品收藏和喜欢</span>
+                <p>No Douyin content yet</p>
+                <span className="cp-douyin-hint">Tap refresh to sync profile works, saved &amp; liked</span>
               </div>
             )}
           </div>
@@ -1028,10 +1028,10 @@ export function CheckPhoneDouyinPage({
             >
               <div style={{ display: "flex", gap: "24px" }}>
                 {([
-                  ["获赞", payload.profile.likesTotal],
-                  ["互关", payload.profile.mutualFollowCount],
-                  ["关注", payload.profile.followingCount],
-                  ["粉丝", payload.profile.followerCount],
+                  ["Likes", payload.profile.likesTotal],
+                  ["Mutual", payload.profile.mutualFollowCount],
+                  ["Following", payload.profile.followingCount],
+                  ["Followers", payload.profile.followerCount],
                 ] satisfies Array<[string, number | undefined]>).map(([label, value]) =>
                   hasCount(value) ? (
                   <div
@@ -1061,7 +1061,7 @@ export function CheckPhoneDouyinPage({
                   fontWeight: 500,
                 }}
               >
-                编辑主页
+                Edit profile
               </button>
             </div>
 
@@ -1258,7 +1258,7 @@ export function CheckPhoneDouyinPage({
                   fontSize: "calc(14px*var(--app-text-scale,1))",
                 }}
               >
-                暂无内容
+                No content yet
               </div>
             )}
           </div>
@@ -1335,44 +1335,44 @@ export function CheckPhoneDouyinPage({
             {isOwnWorkDetail ? (
               <>
                 <button type="button" className="cp-douyin-video-owner-action cp-douyin-video-owner-action--views">
-                  <span>{hasCount(ownerViewCount) ? `${formatCount(ownerViewCount)}人浏览` : "浏览"}</span>
+                  <span>{hasCount(ownerViewCount) ? `${formatCount(ownerViewCount)} views` : "Views"}</span>
                   <ChevronLeft className="cp-douyin-video-owner-action-icon" size={13} strokeWidth={2.6} />
                 </button>
                 <button type="button" className="cp-douyin-video-owner-action cp-douyin-video-owner-action--analysis">
-                  <span>视频分析</span>
+                  <span>Video analytics</span>
                   <ChevronLeft className="cp-douyin-video-owner-action-icon" size={13} strokeWidth={2.6} />
                 </button>
                 <button type="button" className="cp-douyin-video-owner-action cp-douyin-video-owner-action--public">
-                  <span>公开</span>
+                  <span>Public</span>
                 </button>
               </>
             ) : (
               <>
               <button type="button" className="cp-douyin-video-comment-input" onClick={() => setCommentsOpen(true)}>
-                <span>期待你的评论</span>
+                <span>Add a comment</span>
                 <ImageIcon size={19} strokeWidth={2.4} />
                 <AtSign size={20} strokeWidth={2.4} />
                 <Smile size={20} strokeWidth={2.4} />
               </button>
               <button type="button" className="cp-douyin-video-share-daily">
-                转发到日常
+                Share to Everyday
               </button>
               </>
             )}
           </div>
 
           {commentsOpen && (
-            <div className="cp-douyin-comment-sheet" role="dialog" aria-modal="true" aria-label="评论">
+            <div className="cp-douyin-comment-sheet" role="dialog" aria-modal="true" aria-label="Comments">
               <div className="cp-douyin-comment-sheet-actions">
-                <button type="button" aria-label="全屏评论">
+                <button type="button" aria-label="Fullscreen comments">
                   <Maximize2 size={18} strokeWidth={2.2} />
                 </button>
-                <button type="button" aria-label="关闭评论" onClick={() => setCommentsOpen(false)}>
+                <button type="button" aria-label="Close comments" onClick={() => setCommentsOpen(false)}>
                   <X size={24} strokeWidth={2.2} />
                 </button>
               </div>
               <div className="cp-douyin-comment-sheet-title">
-                {formatCount(activeVideo.commentCount ?? activeVideo.comments.length)} 条评论
+                {formatCount(activeVideo.commentCount ?? activeVideo.comments.length)} comments
               </div>
               <div className="cp-douyin-comment-sheet-list">
                 {activeVideoComments.length > 0 ? (
@@ -1391,15 +1391,15 @@ export function CheckPhoneDouyinPage({
                       <div className="cp-douyin-sheet-comment-main">
                         <strong>
                           {commentAuthor}
-                          {replyTo ? <span>回复 {replyTo}</span> : null}
+                          {replyTo ? <span>Reply to {replyTo}</span> : null}
                         </strong>
                         <p><CheckPhoneBilingualText text={comment.text} tone="douyin" variant="inline" /></p>
                         <div>
                           <span>{formatVideoTime(comment.createdAt)}</span>
-                          <button type="button">回复</button>
+                          <button type="button">Reply</button>
                         </div>
                       </div>
-                      <button type="button" className="cp-douyin-sheet-like" aria-label="喜欢评论">
+                      <button type="button" className="cp-douyin-sheet-like" aria-label="Like comment">
                         <Heart size={22} strokeWidth={2.1} />
                         {index % 3 === 0 ? <span>{index + 2}</span> : null}
                       </button>
@@ -1407,12 +1407,12 @@ export function CheckPhoneDouyinPage({
                     );
                   })
                 ) : (
-                  <div className="cp-douyin-comment-empty">还没有评论</div>
+                  <div className="cp-douyin-comment-empty">No comments yet</div>
                 )}
               </div>
               <div className="cp-douyin-sheet-inputbar">
                 <button type="button">
-                  <span>期待你的评论</span>
+                  <span>Add a comment</span>
                   <ImageIcon size={19} strokeWidth={2.4} />
                   <AtSign size={20} strokeWidth={2.4} />
                   <Smile size={20} strokeWidth={2.4} />
@@ -1436,11 +1436,11 @@ export function CheckPhoneDouyinPage({
 
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空抖音内容？"
-          message="确认后会清空当前抖音缓存。之后重新刷新时，不会再带入旧抖音内容。"
+          title="Clear Douyin content?"
+          message="Confirming will clear the current Douyin cache. Refreshing again afterward will not bring back the old Douyin content."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Confirm clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

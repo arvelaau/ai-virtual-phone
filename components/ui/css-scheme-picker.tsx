@@ -85,14 +85,14 @@ export default function CSSSchemeBar({ target, onLoad, currentCSS, btnStyle, mod
       <button
         onClick={() => { setModal("save"); setSaveName(""); }}
         disabled={!currentCSS.trim()}
-        title="保存方案"
+        title="Save scheme"
         style={{ ...btn, opacity: currentCSS.trim() ? 1 : 0.4 }}
       >
         <Save size={15} />
       </button>
       <button
         onClick={() => { setSchemes(getSchemes(target)); setModal("load"); }}
-        title="加载方案"
+        title="Load scheme"
         style={btn}
       >
         <FolderOpen size={15} />
@@ -125,7 +125,7 @@ export default function CSSSchemeBar({ target, onLoad, currentCSS, btnStyle, mod
               borderBottom: `1px solid ${v.border}`,
             }}>
               <span style={{ fontSize: "calc(15px*var(--app-text-scale,1))", fontWeight: 600, color: v.text }}>
-                {modal === "save" ? "保存方案" : "加载方案"}
+                {modal === "save" ? "Save Scheme" : "Load Scheme"}
               </span>
               <button onClick={() => setModal(null)} style={{ background: "none", border: "none", color: v.textDim, cursor: "pointer" }}>
                 <X size={18} />
@@ -141,7 +141,7 @@ export default function CSSSchemeBar({ target, onLoad, currentCSS, btnStyle, mod
                     value={saveName}
                     onChange={e => setSaveName(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && handleSave()}
-                    placeholder="输入方案名称"
+                    placeholder="Enter scheme name"
                     style={{
                       flex: 1, minWidth: 0, height: 36, borderRadius: 8, paddingLeft: 10,
                       border: `1px solid ${v.inputBorder}`,
@@ -159,14 +159,14 @@ export default function CSSSchemeBar({ target, onLoad, currentCSS, btnStyle, mod
                       opacity: saveName.trim() ? 1 : 0.4,
                     }}
                   >
-                    保存
+                    Save
                   </button>
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 280, overflowY: "auto" }}>
                   {schemes.length === 0 ? (
                     <div style={{ textAlign: "center", color: v.textDim, fontSize: "calc(13px*var(--app-text-scale,1))", padding: "20px 0" }}>
-                      暂无保存的方案
+                      No saved schemes yet
                     </div>
                   ) : schemes.map(s => (
                     <div key={s.id} style={{ display: "flex", flexDirection: "column", flexShrink: 0, borderRadius: 10, border: `1px solid ${v.border}`, background: v.input, overflow: "hidden" }}>
@@ -183,8 +183,8 @@ export default function CSSSchemeBar({ target, onLoad, currentCSS, btnStyle, mod
                           {s.name}
                         </span>
                         <button
-                          aria-label={`删除方案 ${s.name}`}
-                          title="删除方案"
+                          aria-label={`Delete scheme ${s.name}`}
+                          title="Delete scheme"
                           onClick={e => { e.stopPropagation(); setConfirmingId(confirmingId === s.id ? null : s.id); }}
                           style={{
                             width: 36, height: 36, borderRadius: 8, border: "none",
@@ -202,13 +202,13 @@ export default function CSSSchemeBar({ target, onLoad, currentCSS, btnStyle, mod
                             onClick={e => { e.stopPropagation(); setConfirmingId(null); }}
                             style={{ flex: 1, minHeight: 36, padding: "8px 0", background: "transparent", border: "none", color: v.textDim, fontSize: "calc(12px*var(--app-text-scale,1))", cursor: "pointer", borderRight: `1px solid ${v.border}` }}
                           >
-                            取消
+                            Cancel
                           </button>
                           <button
                             onClick={e => { e.stopPropagation(); handleDelete(s.id); }}
                             style={{ flex: 1, minHeight: 36, padding: "8px 0", background: "transparent", border: "none", color: "var(--c-danger, #fa5151)", fontSize: "calc(12px*var(--app-text-scale,1))", fontWeight: 500, cursor: "pointer" }}
                           >
-                            确定删除
+                            Confirm Delete
                           </button>
                         </div>
                       )}

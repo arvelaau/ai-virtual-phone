@@ -120,7 +120,7 @@ export default function ReadingApp({ onClose }: Props) {
         pointerEvents: "none",
     } as CSSProperties;
 
-    if (!ready) return <div className="absolute inset-0 z-[100] flex items-center justify-center" style={{ background: "#fffced" }}><span className="ts-14" style={{ color: "#a39487" }}>加载中...</span></div>;
+    if (!ready) return <div className="absolute inset-0 z-[100] flex items-center justify-center" style={{ background: "#fffced" }}><span className="ts-14" style={{ color: "#a39487" }}>Loading...</span></div>;
 
     return (
         <div className="absolute inset-0" style={appearanceStyle}>

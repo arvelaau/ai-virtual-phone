@@ -87,10 +87,10 @@ type BlackMarketNotice = {
 };
 
 const MARKET_TABS: Array<{ id: BlackMarketTab; label: string }> = [
-  { id: "market", label: "市场" },
-  { id: "vault", label: "暗柜" },
-  { id: "ledger", label: "流水" },
-  { id: "studio", label: "发布" },
+  { id: "market", label: "Market" },
+  { id: "vault", label: "Vault" },
+  { id: "ledger", label: "Ledger" },
+  { id: "studio", label: "Studio" },
 ];
 
 const BLACK_MARKET_THEATER_FRAME_MIN_HEIGHT = 320;
@@ -98,10 +98,10 @@ const BLACK_MARKET_THEATER_FRAME_COLLAPSE_THRESHOLD = 900;
 const BLACK_MARKET_THEATER_FRAME_COLLAPSED_HEIGHT = 620;
 const BLACK_MARKET_REPLY_FRAME_MIN_HEIGHT = 90;
 const BLACK_MARKET_STUDIO_DRAFTS_KEY = "ai_phone_black_market_studio_drafts_v1";
-const BLACK_MARKET_STUDIO_TEST_USER_SAMPLE = "你刚才到底想隐瞒什么？";
-const BLACK_MARKET_STUDIO_TEST_ASSISTANT_SAMPLE = `*他猛地攥紧袖口，呼吸停了一拍。*
+const BLACK_MARKET_STUDIO_TEST_USER_SAMPLE = "What exactly are you trying to hide right now?";
+const BLACK_MARKET_STUDIO_TEST_ASSISTANT_SAMPLE = `*He suddenly clenches his cuff, his breath catching for a beat.*
 
-【秘密】我确实一直知道答案，只是我不想让你听见我亲口承认。
+【秘密】I did know the answer all along — I just didn't want you to hear me admit it out loud.
 
 \`\`\`html
 <style>
@@ -111,8 +111,8 @@ const BLACK_MARKET_STUDIO_TEST_ASSISTANT_SAMPLE = `*他猛地攥紧袖口，呼�
 </style>
 <div class="probe">
   <b>INTERACTION TEST</b>
-  <p>这是一段 ASSISTANT 回复中的 html 画布。</p>
-  <button data-action="继续追问这个秘密">继续追问</button>
+  <p>This is an html canvas inside an ASSISTANT reply.</p>
+  <button data-action="Keep pressing about this secret">Keep pressing</button>
 </div>
 \`\`\``;
 
@@ -458,7 +458,7 @@ function BlackMarketTheaterHtmlFrame({
           className="cp-black-market-frame-toggle"
           onClick={() => setCollapsed(value => !value)}
         >
-          {collapsed ? "展开完整开场" : "收起开场"}
+          {collapsed ? "Expand full opening" : "Collapse opening"}
         </button>
       ) : null}
     </div>
@@ -556,7 +556,7 @@ function BlackMarketSceneMessageContent({
           return (
             <BlackMarketReplyHtmlFrame
               key={`${messageId}-html-${index}`}
-              title={`小剧场回复画布 ${index + 1}`}
+              title={`Scene reply canvas ${index + 1}`}
               html={expandBlackMarketMacros(segment.content, characterName, userName)}
               allowExternalControl={allowExternalControl}
             />
@@ -578,7 +578,7 @@ function resolveOwnedTemplateIds(state: BlackMarketState): Set<string> {
   return new Set(state.ownedTheaters.map(item => item.remoteTemplateId));
 }
 
-function createStarterOpeningHtml(title = "自定义夜间档案", codeName = "CUSTOM_THEATER"): string {
+function createStarterOpeningHtml(title = "Custom Night Archive", codeName = "CUSTOM_THEATER"): string {
   return String.raw`<!doctype html>
 <html>
 <head>
@@ -599,9 +599,9 @@ function createStarterOpeningHtml(title = "自定义夜间档案", codeName = "C
   <main class="card">
     <div class="label">${codeName} // OPENING CANVAS</div>
     <h1>${title}</h1>
-    <p>在这里写 {{user}} 点击“启封档案”后看到的开场剧情、按钮、动画和交互。
-可以使用 {{char}} 和 {{user}} 宏；真正启封时会替换为当前角色和绑定用户人设名。</p>
-    <button onclick="Theater.startScene({custom:true})">启封剧情</button>
+    <p>Write the opening story, buttons, animations, and interactions {{user}} sees after clicking "Unseal Archive" here.
+You can use the {{char}} and {{user}} macros; they'll be replaced with the current character and the bound user persona name when actually unsealed.</p>
+    <button onclick="Theater.startScene({custom:true})">Unseal Story</button>
   </main>
   <script>
     window.Theater = window.Theater || {
@@ -616,29 +616,29 @@ function createStarterOpeningHtml(title = "自定义夜间档案", codeName = "C
 }
 
 function createDefaultDraft(): TheaterDraft {
-  const defaultIntro = "写一段抓人的档案介绍：事件起源、开场局面、{{user}} 为什么会被卷进去。";
+  const defaultIntro = "Write a gripping archive intro: how the incident started, the opening situation, and why {{user}} gets pulled into it.";
   return {
-    title: "未命名夜间档案",
+    title: "Untitled Night Archive",
     codeName: "CUSTOM_THEATER",
     subtitle: "",
     synopsis: defaultIntro,
     storyText: defaultIntro,
-    tagsText: "剧情,互动,自定义",
+    tagsText: "story,interactive,custom",
     price: "120",
-    authorName: "匿名卖家",
+    authorName: "Anonymous Seller",
     openingHtml: createStarterOpeningHtml(),
     allowExternalControl: false,
     aiInstruction: [
-      "【当前剧情背景】{{user}} 刚刚启封了一份自定义夜间档案，{{char}} 被卷入这段剧情。请根据开场剧情继续演绎。",
-      "【状态强制锁定】在本次夜间通道中，你必须遵守作者设定的剧情规则，不要跳出角色，不要解释系统。",
-      "【行为演绎】结合你原本的人设、与玩家的关系、当前事件压力，给出有动作、有情绪、有推进的回应。",
-      "【下一步行动】回应玩家刚刚说的话，并把剧情往下一步推动。",
+      "[Current Story Context] {{user}} just unsealed a custom night archive, and {{char}} has been drawn into this story. Continue the scene based on the opening.",
+      "[State Lock] Within this night channel, you must follow the story rules set by the author — do not break character, do not explain the system.",
+      "[Behavior] Combine your original persona, your relationship with the player, and the pressure of the current event to give a response with action, emotion, and forward momentum.",
+      "[Next Action] Respond to what the player just said, and push the story forward to the next beat.",
     ].join("\n"),
-    outputContract: "动作描写用 *动作* 包裹。重要心理活动可使用【失控】或【秘密】标记，便于自定义样式渲染。需要完整交互回复时，可以输出 ```html 代码块```，该代码块会作为独立回复画布渲染。",
+    outputContract: "Wrap action descriptions in *asterisks*. Important psychological beats can be marked with 【失控】 or 【秘密】 for custom style rendering. When a full interactive reply is needed, you can output a ```html code block```, which will render as an independent reply canvas.",
     renderRulesText: JSON.stringify([
       {
         id: "stage",
-        name: "舞台动作",
+        name: "Stage Action",
         pattern: "\\*([^*]{1,160})\\*",
         flags: "g",
         className: "bm-stage-action",
@@ -646,7 +646,7 @@ function createDefaultDraft(): TheaterDraft {
       },
       {
         id: "secret",
-        name: "秘密揭露",
+        name: "Secret Reveal",
         pattern: "【秘密】\\s*([\\s\\S]*?)(?=\\n?【(?:失控|秘密|反应)】|$)",
         flags: "g",
         className: "bm-secret-line",
@@ -657,7 +657,7 @@ function createDefaultDraft(): TheaterDraft {
       ".bm-stage-action{color:#6b7280;font-style:italic;}",
       ".bm-secret-line{margin:8px 0;padding:10px 12px;background:#111827;color:#f9fafb;font-size: calc(13px*var(--app-text-scale,1));line-height:1.55;}",
     ].join("\n"),
-    memorySummaryPrompt: "请总结本次夜间通道中发生的关键事件、角色暴露出的态度变化、玩家做出的重要选择，写成 1 条短期记忆。",
+    memorySummaryPrompt: "Summarize the key events of this night channel session, the shifts in the character's attitude, and the important choices the player made, into a single short-term memory entry.",
   };
 }
 
@@ -697,7 +697,7 @@ function normalizeStudioDraftRecord(value: unknown): BlackMarketStudioDraft | nu
   const now = new Date().toISOString();
   return {
     id,
-    title: String(record.title ?? draft.title ?? "未命名草稿").trim() || "未命名草稿",
+    title: String(record.title ?? draft.title ?? "Untitled Draft").trim() || "Untitled Draft",
     draft,
     sourceTemplateId: String(record.sourceTemplateId ?? "").trim() || undefined,
     sourceTemplateTitle: String(record.sourceTemplateTitle ?? "").trim() || undefined,
@@ -750,16 +750,16 @@ function createDraftFromTemplate(template: BlackMarketTheaterTemplate): TheaterD
 
 function parseDraftRenderRules(source: string): BlackMarketRenderRule[] {
   const parsed = JSON.parse(source) as unknown;
-  if (!Array.isArray(parsed)) throw new Error("渲染规则必须是 JSON 数组。");
+  if (!Array.isArray(parsed)) throw new Error("Render rules must be a JSON array.");
   return parsed.map((item, index) => {
-    if (!item || typeof item !== "object") throw new Error(`第 ${index + 1} 条渲染规则格式错误。`);
+    if (!item || typeof item !== "object") throw new Error(`Render rule ${index + 1} has an invalid format.`);
     const record = item as Record<string, unknown>;
     const id = String(record.id ?? "").trim();
     const pattern = String(record.pattern ?? "").trim();
-    if (!id || !pattern) throw new Error(`第 ${index + 1} 条渲染规则缺少 id 或 pattern。`);
+    if (!id || !pattern) throw new Error(`Render rule ${index + 1} is missing an id or pattern.`);
     return {
       id,
-      name: String(record.name ?? "渲染规则").trim().slice(0, 80),
+      name: String(record.name ?? "Render Rule").trim().slice(0, 80),
       pattern,
       flags: String(record.flags ?? "g").trim().slice(0, 12) || "g",
       className: String(record.className ?? "bm-render-rule").trim().slice(0, 120) || "bm-render-rule",
@@ -771,7 +771,7 @@ function parseDraftRenderRules(source: string): BlackMarketRenderRule[] {
 function createDraftPreviewTemplate(draft: TheaterDraft, renderRules: BlackMarketRenderRule[]): BlackMarketTheaterTemplate {
   return {
     id: "draft_preview",
-    title: draft.title || "测试夜间档案",
+    title: draft.title || "Test Night Archive",
     codeName: draft.codeName || "DRAFT_PREVIEW",
     fileNumber: "AUTO",
     subtitle: draft.subtitle,
@@ -782,7 +782,7 @@ function createDraftPreviewTemplate(draft: TheaterDraft, renderRules: BlackMarke
     glyph: "◆",
     price: Number(draft.price) || 0,
     authorId: "draft_preview",
-    authorName: draft.authorName || "匿名卖家",
+    authorName: draft.authorName || "Anonymous Seller",
     source: "local",
     version: 1,
     durationTurns: 8,
@@ -953,12 +953,12 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
         syncBlackMarketWallet(wallet);
         const added = copyPurchasedTheatersToVault(purchasedTheaters);
         if (added > 0) {
-          setNotice({ id: Date.now(), tone: "info", text: `已恢复 ${added} 份已购夜间档案` });
+          setNotice({ id: Date.now(), tone: "info", text: `Restored ${added} previously purchased night archives` });
         }
       })
       .catch(err => {
         if (!active) return;
-        const message = err instanceof Error ? err.message : "黑市钱包同步失败";
+        const message = err instanceof Error ? err.message : "Black market wallet sync failed";
         setNotice({ id: Date.now(), tone: "error", text: message });
       })
       .finally(() => {
@@ -1001,7 +1001,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
       if (record.source !== "black-market-theater") return;
       if (record.type === "resize") return;
       if (record.type === "startScene") {
-        setNotice({ id: Date.now(), tone: "info", text: activeScene ? "开场画布已就绪，请输入你的行动。" : "请先选择角色并进入小剧场。" });
+        setNotice({ id: Date.now(), tone: "info", text: activeScene ? "The opening canvas is ready — enter your action." : "Please select a character and enter the scene first." });
       }
       if (record.type === "sendUserAction") {
         const text = String(record.text ?? "").trim();
@@ -1010,7 +1010,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
             void handleSceneSubmit(text);
           } else {
             setSceneInput(text);
-            setNotice({ id: Date.now(), tone: "info", text: "已读取画布行动，请先选择角色进入小剧场。" });
+            setNotice({ id: Date.now(), tone: "info", text: "Canvas action captured — please select a character to enter the scene first." });
           }
         }
       }
@@ -1071,20 +1071,20 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
     const template = catalog.find(item => item.id === templateId);
     if (template && template.source === "community" && !isFullBlackMarketTheater(template)) {
       void ensureFullTheaterTemplate(template).catch(err => {
-        showNotice("error", err instanceof Error ? err.message : "夜间档案详情加载失败");
+        showNotice("error", err instanceof Error ? err.message : "Failed to load night archive details");
       });
     }
   }
 
   function resolveSceneUserName(character?: Character | null): string {
-    if (!character) return "用户";
+    if (!character) return "User";
     return resolveUserIdentity(character.id, "shopping")?.name?.trim()
       || resolveUserIdentity(character.id, "chat")?.name?.trim()
-      || "用户";
+      || "User";
   }
 
   function expandForNeutralPreview(text: string): string {
-    return expandBlackMarketMacros(text, "角色", "用户");
+    return expandBlackMarketMacros(text, "Character", "User");
   }
 
   function isOwnPublishedTemplate(template: BlackMarketTheaterTemplate): boolean {
@@ -1123,37 +1123,37 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
     if (action === "return") {
       return {
         code: "RETURN_TO_MARKET",
-        title: "返回黑市？",
-        body: "将关闭当前小剧场窗口，未结束的小剧场会话会保留，之后可从暗柜继续。",
-        hint: "不会写入短期记忆，也不会删除当前进度。",
-        confirmLabel: "确认返回",
+        title: "Return to the market?",
+        body: "This closes the current scene window. Any unfinished scene session is kept and can be resumed later from the vault.",
+        hint: "This will not write to short-term memory, and will not delete your current progress.",
+        confirmLabel: "Confirm Return",
       };
     }
     if (action === "archive") {
       return {
         code: "SAVE_FOR_LATER",
-        title: "稍后继续？",
-        body: "将暂存当前小剧场并返回黑市，之后可从暗柜重新进入继续。",
-        hint: "当前对话记录会保留在本地小剧场会话中。",
-        confirmLabel: "确认暂存",
+        title: "Continue later?",
+        body: "This stashes the current scene and returns to the market. You can resume it later from the vault.",
+        hint: "The current conversation log will be kept in the local scene session.",
+        confirmLabel: "Confirm Save",
       };
     }
     if (action === "restart") {
       return {
         code: "RESTART_SCENE",
-        title: "重新开始？",
-        body: "这会丢弃当前未结束的小剧场会话，并重新载入开场。",
-        hint: "已经写入短期记忆的总结不会被删除；当前未总结的剧情会被清空。",
-        confirmLabel: "确认重开",
+        title: "Start over?",
+        body: "This discards the current unfinished scene session and reloads the opening.",
+        hint: "Summaries already written to short-term memory won't be deleted; any story not yet summarized will be cleared.",
+        confirmLabel: "Confirm Restart",
         danger: true,
       };
     }
     return {
       code: "WRITE_MEMORY",
-      title: "结束并写入记忆？",
-      body: "将根据当前小剧场记录生成总结，并写入该角色的短期记忆。",
-      hint: "写入后该小剧场会标记为已结束。",
-      confirmLabel: "确认写入",
+      title: "End and write to memory?",
+      body: "This will generate a summary from the current scene log and write it to that character's short-term memory.",
+      hint: "Once written, this scene will be marked as ended.",
+      confirmLabel: "Confirm Write",
     };
   }
 
@@ -1184,7 +1184,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
   }
 
   function expandForScene(text: string): string {
-    const characterName = activeScene?.characterName || launchCharacter?.name || "角色";
+    const characterName = activeScene?.characterName || launchCharacter?.name || "Character";
     const userName = activeScene?.userName || resolveSceneUserName(launchCharacter);
     return expandBlackMarketMacros(text, characterName, userName);
   }
@@ -1192,12 +1192,12 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
   function activateSceneFromLauncher(): void {
     if (!launchOwnedTheater) return;
     if (!launchCharacter) {
-      showNotice("error", "请先选择一个角色。");
+      showNotice("error", "Please select a character first.");
       return;
     }
     if (resumableLaunchScene) {
       setActiveScene(resumableLaunchScene);
-      showNotice("info", "已继续未结束的小剧场");
+      showNotice("info", "Resumed the unfinished scene");
       return;
     }
     const result = startBlackMarketSceneSession({
@@ -1208,17 +1208,17 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
     });
     setState(result.state);
     if (!result.ok || !result.session) {
-      showNotice("error", result.error || "启封失败");
+      showNotice("error", result.error || "Unseal failed");
       return;
     }
     setActiveScene(result.session);
-    showNotice("success", "小剧场已启封");
+    showNotice("success", "Scene unsealed");
   }
 
   function startSceneFromLauncher(): void {
     if (!launchOwnedTheater) return;
     if (!launchCharacter) {
-      showNotice("error", "请先选择一个角色。");
+      showNotice("error", "Please select a character first.");
       return;
     }
     if (requiresExternalCanvasPermission(launchOwnedTheater) && !externalCanvasAllowed) {
@@ -1236,16 +1236,16 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
 
   function cancelExternalCanvasRequest(): void {
     setExternalCanvasRequest(null);
-    showNotice("info", "已取消高级自由画布启封");
+    showNotice("info", "Advanced canvas unseal cancelled");
   }
 
   async function copySceneMessage(content: string): Promise<void> {
     try {
       if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
       await navigator.clipboard.writeText(content);
-      showNotice("success", "已复制");
+      showNotice("success", "Copied");
     } catch {
-      showNotice("error", "复制失败");
+      showNotice("error", "Copy failed");
     }
   }
 
@@ -1253,7 +1253,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
     if (!activeScene || activeScene.status !== "active" || message.role !== "user" || sceneBusy) return;
     setEditingSceneMessageId(message.id);
     setSceneInput(message.content);
-    showNotice("info", "编辑后发送，将重写这条后面的剧情。");
+    showNotice("info", "Send after editing to rewrite the story from this point on.");
   }
 
   async function requestSceneReply(submittedSessionId: string, content: string): Promise<void> {
@@ -1263,7 +1263,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
       const result = await generateBlackMarketSceneReply(submittedSessionId, content);
       setActiveScene(result.session);
     } catch (err) {
-      showNotice("error", err instanceof Error ? err.message : "剧情生成失败");
+      showNotice("error", err instanceof Error ? err.message : "Story generation failed");
       const restored = getBlackMarketSceneSession(submittedSessionId);
       if (restored) setActiveScene(restored);
     } finally {
@@ -1281,7 +1281,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
       const target = activeScene.messages.find(message => message.id === editingId && message.role === "user");
       if (!target) {
         setEditingSceneMessageId(null);
-        showNotice("error", "找不到要编辑的行动。");
+        showNotice("error", "Couldn't find the action to edit.");
         return;
       }
       const updated = updateBlackMarketSceneMessageAndTrimAfter(submittedSessionId, editingId, content);
@@ -1303,7 +1303,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
     if (targetIndex < 0) return;
     const previousUser = [...activeScene.messages.slice(0, targetIndex)].reverse().find(item => item.role === "user");
     if (!previousUser) {
-      showNotice("error", "找不到可用于重试的行动。");
+      showNotice("error", "Couldn't find an action to retry from.");
       return;
     }
     const trimmed = trimBlackMarketSceneMessagesFrom(activeScene.id, message.id);
@@ -1328,9 +1328,9 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
     try {
       const result = await summarizeAndRecordBlackMarketScene(activeScene.id);
       setActiveScene(result.session);
-      showNotice("success", "小剧场总结已写入短期记忆");
+      showNotice("success", "Scene summary written to short-term memory");
     } catch (err) {
-      showNotice("error", err instanceof Error ? err.message : "记忆总结失败");
+      showNotice("error", err instanceof Error ? err.message : "Memory summarization failed");
     } finally {
       setSceneBusy(null);
     }
@@ -1351,23 +1351,23 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
     setSceneBusy(null);
     if (!result.ok || !result.session) {
       setActiveScene(null);
-      showNotice("error", result.error || "重新开始失败");
+      showNotice("error", result.error || "Restart failed");
       return;
     }
     setActiveScene(result.session);
-    showNotice("success", "已重新开始，小剧场记录已丢弃");
+    showNotice("success", "Restarted — the scene log was discarded");
   }
 
   function handleDeleteOwned(item: BlackMarketOwnedTheater): void {
     const result = deleteBlackMarketOwnedTheater(item.localId);
     setState(result.state);
     if (!result.ok) {
-      showNotice("error", result.error || "删除失败");
+      showNotice("error", result.error || "Delete failed");
       return;
     }
     if (launchOwnedId === item.localId) closeSceneLayer();
     setDeleteTarget(null);
-    showNotice("success", "已从暗柜删除");
+    showNotice("success", "Removed from vault");
   }
 
   function handleDeleteTheaterRecord(entry: BlackMarketTheaterProjectionEntry): void {
@@ -1375,10 +1375,10 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
     setRecordMenuId(null);
     setTheaterRecords(loadAllBlackMarketTheaterProjectionEntries());
     if (!result.ok) {
-      showNotice("error", result.error || "删除失败");
+      showNotice("error", result.error || "Delete failed");
       return;
     }
-    showNotice("success", "已删除该条小剧场记忆");
+    showNotice("success", "Scene memory entry deleted");
   }
 
   function closeDeleteConfirm(): void {
@@ -1404,9 +1404,9 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
     try {
       const theaters = await fetchBlackMarketTheaters();
       setCommunityTheaters(theaters);
-      if (showResult) showNotice("success", theaters.length > 0 ? `同步 ${theaters.length} 份夜间档案` : "共享市场暂时为空");
+      if (showResult) showNotice("success", theaters.length > 0 ? `Synced ${theaters.length} night archives` : "The shared market is currently empty");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "共享市场暂时不可用";
+      const message = err instanceof Error ? err.message : "The shared market is temporarily unavailable";
       setCommunityError(message);
       if (showResult) showNotice("error", message);
     } finally {
@@ -1420,22 +1420,22 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
     try {
       const wallet = await checkInBlackMarketCloud();
       setState(syncBlackMarketWallet(wallet));
-      showNotice("success", `签到成功，+${BLACK_MARKET_DAILY_CHECKIN_CREDITS} SC`);
+      showNotice("success", `Check-in successful, +${BLACK_MARKET_DAILY_CHECKIN_CREDITS} SC`);
     } catch (err) {
-      showNotice("info", err instanceof Error ? err.message : "今天已经签到过了。");
+      showNotice("info", err instanceof Error ? err.message : "You've already checked in today.");
     } finally {
       setWalletBusy(null);
     }
   }
 
   function handleOperatorTalk(): void {
-    showNotice("info", "创作中介交互开发中");
+    showNotice("info", "Creator broker interaction coming soon");
   }
 
   async function handlePurchase(template: BlackMarketTheaterTemplate): Promise<void> {
     if (walletBusy) return;
     if (state.ownedTheaters.some(item => item.remoteTemplateId === template.id)) {
-      showNotice("info", "已经收入暗柜。");
+      showNotice("info", "Already in your vault.");
       return;
     }
     setWalletBusy("purchase");
@@ -1447,12 +1447,12 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
       if (template.source !== "community") {
         const localResult = copyBlackMarketTheaterToVault(fullTemplate);
         if (!localResult.ok) {
-          showNotice("error", localResult.error ?? "领取失败");
+          showNotice("error", localResult.error ?? "Claim failed");
           return;
         }
         setState(localResult.state);
         setSelectedTab("vault");
-        showNotice("success", "已免费收入暗柜");
+        showNotice("success", "Added to vault for free");
         return;
       }
       const result = await purchaseBlackMarketTheaterCloud(template.id);
@@ -1466,10 +1466,10 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
         setCommunityTheaters(current => current.map(item => item.id === template.id ? { ...item, purchaseCount: item.purchaseCount + 1 } : item));
       }
       setSelectedTab("vault");
-      showNotice("success", "已复制进暗柜");
+      showNotice("success", "Copied into vault");
       return;
     } catch (err) {
-      const message = err instanceof Error ? err.message : "购买失败";
+      const message = err instanceof Error ? err.message : "Purchase failed";
       if (message.includes("已经收入暗柜")) {
         let restored = 0;
         try {
@@ -1487,7 +1487,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
         }
         if (copied.ok || restored > 0) {
           setSelectedTab("vault");
-          showNotice("info", "已从购买记录恢复到暗柜。");
+          showNotice("info", "Restored to vault from purchase history.");
           return;
         }
       }
@@ -1507,17 +1507,17 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
     try {
       fullTemplate = await ensureFullTheaterTemplate(template);
     } catch (err) {
-      showNotice("error", err instanceof Error ? err.message : "夜间档案详情加载失败");
+      showNotice("error", err instanceof Error ? err.message : "Failed to load night archive details");
       return;
     }
     const result = copyBlackMarketTheaterToVault(fullTemplate);
     setState(result.state);
     if (result.ok && result.ownedTheater) {
-      showNotice("success", "已复制进暗柜");
+      showNotice("success", "Copied into vault");
       openSceneLauncher(result.ownedTheater);
       return;
     }
-    showNotice("error", result.error ?? "启封失败");
+    showNotice("error", result.error ?? "Unseal failed");
   }
 
   async function handleTemplatePrimaryAction(template: BlackMarketTheaterTemplate): Promise<void> {
@@ -1567,7 +1567,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
     try {
       fullTemplate = await ensureFullTheaterTemplate(template);
     } catch (err) {
-      showNotice("error", err instanceof Error ? err.message : "夜间档案详情加载失败");
+      showNotice("error", err instanceof Error ? err.message : "Failed to load night archive details");
       return;
     }
     setEditingTemplateId(fullTemplate.id);
@@ -1588,7 +1588,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
   function handleSaveStudioDraft(): void {
     const now = new Date().toISOString();
     const id = editingDraftId || createStudioDraftId();
-    const title = draft.title.trim() || "未命名草稿";
+    const title = draft.title.trim() || "Untitled Draft";
     const existingDraft = editingDraftId ? studioDrafts.find(item => item.id === editingDraftId) : null;
     const sourceTemplateId = editingTemplate?.id || existingDraft?.sourceTemplateId;
     const sourceTemplateTitle = editingTemplate?.title || existingDraft?.sourceTemplateTitle;
@@ -1611,7 +1611,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
       setEditingTemplateId(null);
       setEditingDraftId(id);
     }
-    showNotice("success", "草稿已保存");
+    showNotice("success", "Draft saved");
   }
 
   function handleDeleteStudioDraft(id: string): void {
@@ -1619,7 +1619,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
     if (editingDraftId === id) {
       setEditingDraftId(null);
     }
-    showNotice("info", "草稿已删除");
+    showNotice("info", "Draft deleted");
   }
 
   function getEditingDraftPublishSource(): BlackMarketPublishChoice | null {
@@ -1628,7 +1628,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
     if (!editingDraftId || !currentDraft || !sourceTemplateId) return null;
     return {
       sourceTemplateId,
-      sourceTemplateTitle: currentDraft.sourceTemplateTitle?.trim() || currentDraft.title || "原发布档案",
+      sourceTemplateTitle: currentDraft.sourceTemplateTitle?.trim() || currentDraft.title || "Original published archive",
     };
   }
 
@@ -1636,9 +1636,9 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
     const title = draft.title.trim();
     const openingHtml = draft.openingHtml.trim();
     const aiInstruction = draft.aiInstruction.trim();
-    if (!title) throw new Error("商品标题不能为空。");
-    if (!openingHtml) throw new Error("开场画布不能为空。");
-    if (!aiInstruction) throw new Error("剧情指令不能为空。");
+    if (!title) throw new Error("Item title cannot be empty.");
+    if (!openingHtml) throw new Error("Opening canvas cannot be empty.");
+    if (!aiInstruction) throw new Error("Story instructions cannot be empty.");
     const now = new Date().toISOString();
     return {
       id: existing?.id || `bm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
@@ -1653,7 +1653,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
       glyph: "◆",
       price: Math.min(500, Math.max(0, Math.round(Number(draft.price) || 0))),
       authorId: existing?.authorId || account.id,
-      authorName: draft.authorName.trim() || account.displayName || "匿名卖家",
+      authorName: draft.authorName.trim() || account.displayName || "Anonymous Seller",
       source: "community",
       version: existing ? existing.version + 1 : 1,
       durationTurns: 8,
@@ -1678,7 +1678,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
         ? communityTheaters.find(item => item.id === publishChoice.sourceTemplateId) ?? null
         : null;
       if (mode === "overwrite-source" && !sourceTemplate) {
-        throw new Error("找不到原发布档案，请先刷新共享市场，或改为发布成新档案。");
+        throw new Error("Couldn't find the original published archive. Refresh the shared market, or publish it as a new archive instead.");
       }
       const existingTemplate = mode === "new" ? null : editingTemplate ?? sourceTemplate;
       const template = buildDraftTemplate(existingTemplate);
@@ -1706,12 +1706,12 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
         "success",
         existingTemplate
           ? snapshotSync?.updatedCount
-            ? `夜间档案已同步修改，并更新 ${snapshotSync.updatedCount} 份暗柜副本`
-            : "夜间档案已同步修改"
-          : "夜间档案已送入黑市",
+            ? `Night archive changes synced, and ${snapshotSync.updatedCount} vault copies updated`
+            : "Night archive changes synced"
+          : "Night archive sent to the black market",
       );
     } catch (err) {
-      showNotice("error", err instanceof Error ? err.message : "发布失败");
+      showNotice("error", err instanceof Error ? err.message : "Publish failed");
     } finally {
       setPublishing(false);
     }
@@ -1742,9 +1742,9 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
       if (selectedTemplateId === template.id) setSelectedTemplateId(null);
       if (editingTemplateId === template.id) resetDraft();
       setDeleteTarget(null);
-      showNotice("success", "已从共享市场删除");
+      showNotice("success", "Removed from the shared market");
     } catch (err) {
-      showNotice("error", err instanceof Error ? err.message : "删除失败");
+      showNotice("error", err instanceof Error ? err.message : "Delete failed");
     } finally {
       setDeletingTemplateId(null);
     }
@@ -1761,7 +1761,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
         <div className="cp-black-market-card-title">
           <div>
             <strong>{template.title}</strong>
-            <em>SELLER · {template.authorName.trim() || "匿名卖家"}</em>
+            <em>SELLER · {template.authorName.trim() || "Anonymous Seller"}</em>
           </div>
         </div>
         <div className="cp-black-market-card-divider" />
@@ -1800,7 +1800,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
         <div className="cp-black-market-owned-meta">
           <span>{getBlackMarketFileNumber(template)}</span>
           <span>{formatBlackMarketDate(item.purchasedAt)}</span>
-          <span>{item.useCount > 0 ? `已启封 ${item.useCount} 次` : "未启封"}</span>
+          <span>{item.useCount > 0 ? `Unsealed ${item.useCount} times` : "Not yet unsealed"}</span>
         </div>
         <div className="cp-black-market-owned-actions">
           <button type="button" onClick={() => openTemplateInfo(template.id)}>INFO</button>
@@ -1818,7 +1818,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
       <article key={entry.id} className="cp-black-market-record-card">
         <div className="cp-black-market-record-main">
           <span>THEATER MEMORY</span>
-          <strong>{entry.theaterTitle || "未命名小剧场"}</strong>
+          <strong>{entry.theaterTitle || "Untitled Scene"}</strong>
           <p>{entry.content}</p>
           <div className="cp-black-market-record-meta">
             <span>{character?.name || entry.characterId}</span>
@@ -1828,7 +1828,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
         <div className="cp-black-market-record-menu">
           <button
             type="button"
-            aria-label={`${entry.theaterTitle || "小剧场"} 记录操作`}
+            aria-label={`${entry.theaterTitle || "Scene"} record actions`}
             onClick={() => setRecordMenuId(menuOpen ? null : entry.id)}
           >
             <MoreHorizontal size={16} />
@@ -1857,7 +1857,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
       <div className="cp-black-market-scanlines" />
 
       <header className="cp-black-market-header">
-        <button type="button" aria-label="返回购物" onClick={onClose}>
+        <button type="button" aria-label="Back to shopping" onClick={onClose}>
           <ChevronLeft size={22} strokeWidth={2.5} />
         </button>
         <div>
@@ -1866,7 +1866,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
         </div>
         <button
           type="button"
-          aria-label="刷新黑市剧场"
+          aria-label="Refresh black market theaters"
           onClick={() => void loadCommunityTheaters(true)}
           disabled={communityLoading}
         >
@@ -1875,7 +1875,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
       </header>
 
       <main className="cp-black-market-scroll">
-        <section className="cp-black-market-statusbar" aria-label="黑市连接状态">
+        <section className="cp-black-market-statusbar" aria-label="Black market connection status">
           <span className="cp-black-market-led" />
           <span className="is-green">CONNECTED</span>
           <span>·</span>
@@ -1888,7 +1888,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
         <div className="cp-black-market-warning">△ THIS SESSION IS BEING MONITORED △</div>
 
         <section className="cp-black-market-title-block">
-          <div className="cp-black-market-title-prefix">v2.4.1 // STYGIAN · 夜间通道 · SANDBOX</div>
+          <div className="cp-black-market-title-prefix">v2.4.1 // STYGIAN · NIGHT CHANNEL · SANDBOX</div>
           <h1 className="cp-black-market-brand" data-text="BLACK MARKET">BLACK MARKET</h1>
           <div className="cp-black-market-title-sub">── // ACCESS GRANTED · WELCOME BACK ──────</div>
         </section>
@@ -1905,11 +1905,11 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
           </div>
           <div className="cp-black-market-operator-info">
             <div className="cp-black-market-operator-label">OPERATOR_03</div>
-            <div className="cp-black-market-operator-status">{communityLoading ? "正在校准共享信号." : communityError ? "信号不稳." : "等你说出第一个念头."}</div>
+            <div className="cp-black-market-operator-status">{communityLoading ? "Calibrating shared signal." : communityError ? "Signal unstable." : "Say your first thought."}</div>
             <div className="cp-black-market-operator-meta">
-              <span>· 职能&nbsp;&nbsp;<b>创作中介</b></span>
-              <span>· 信任&nbsp;&nbsp;<b>★★☆☆☆</b></span>
-              <span>· 真实来源&nbsp;&nbsp;<i>████████</i></span>
+              <span>· Role&nbsp;&nbsp;<b>Creator Broker</b></span>
+              <span>· Trust&nbsp;&nbsp;<b>★★☆☆☆</b></span>
+              <span>· True Source&nbsp;&nbsp;<i>████████</i></span>
             </div>
             <div className="cp-black-market-operator-actions">
               <button type="button" className="cp-black-market-talk-btn" onClick={handleOperatorTalk}>
@@ -1934,7 +1934,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
           </button>
         </section>
 
-        <nav className="cp-black-market-tabs" aria-label="黑市导航">
+        <nav className="cp-black-market-tabs" aria-label="Black market navigation">
           {MARKET_TABS.map(tab => (
             <button
               key={tab.id}
@@ -1962,21 +1962,21 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
           <section className="cp-black-market-list">
             <div className="cp-black-market-section-head">
               <Archive size={16} />
-              <span>本地暗柜</span>
+              <span>Local Vault</span>
               <b>{state.ownedTheaters.length}</b>
             </div>
             {state.ownedTheaters.length === 0 ? (
-              <div className="cp-black-market-empty">暗柜里还没有可启封的夜间档案。</div>
+              <div className="cp-black-market-empty">The vault has no night archives to unseal yet.</div>
             ) : state.ownedTheaters.map(renderOwnedCard)}
             <div className="cp-black-market-section-head cp-black-market-record-head">
               <FileText size={16} />
-              <span>最近记录</span>
+              <span>Recent Records</span>
               <b>{theaterRecords.length}</b>
             </div>
             {theaterRecords.length === 0 ? (
-              <div className="cp-black-market-empty cp-black-market-record-empty">没有小剧场回传记录</div>
+              <div className="cp-black-market-empty cp-black-market-record-empty">No scene playback records</div>
             ) : (
-              <div className="cp-black-market-record-list" aria-label="小剧场回传记录">
+              <div className="cp-black-market-record-list" aria-label="Scene playback records">
                 {theaterRecords.slice(0, 20).map(renderTheaterRecord)}
               </div>
             )}
@@ -1987,7 +1987,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
           <section className="cp-black-market-list">
             <div className="cp-black-market-section-head">
               <FileText size={16} />
-              <span>暗影信用点流水</span>
+              <span>Shadow Credits Ledger</span>
               <b>{state.wallet.transactions.length}</b>
             </div>
             {state.wallet.transactions.map(transaction => (
@@ -2009,11 +2009,11 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
           <section className="cp-black-market-studio">
             <div className="cp-black-market-section-head">
               <PenLine size={16} />
-              <span>夜间档案工坊</span>
+              <span>Night Archive Workshop</span>
               <b>{publishedTheaters.length} PUBLISHED · {studioDrafts.length} DRAFTS</b>
             </div>
 
-            <div className="cp-black-market-studio-tabs" role="tablist" aria-label="发布管理">
+            <div className="cp-black-market-studio-tabs" role="tablist" aria-label="Publishing management">
               <button
                 type="button"
                 role="tab"
@@ -2021,7 +2021,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                 className={studioMode === "published" ? "is-active" : ""}
                 onClick={() => setStudioMode("published")}
               >
-                已发布
+                Published
               </button>
               <button
                 type="button"
@@ -2030,7 +2030,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                 className={studioMode === "create" ? "is-active" : ""}
                 onClick={() => setStudioMode("create")}
               >
-                创建发布
+                Create & Publish
               </button>
               <button
                 type="button"
@@ -2039,16 +2039,16 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                 className={studioMode === "drafts" ? "is-active" : ""}
                 onClick={() => setStudioMode("drafts")}
               >
-                草稿箱
+                Drafts
               </button>
             </div>
 
             {studioMode === "published" ? (
               <div className="cp-black-market-studio-panel">
-                <h3>我的共享档案</h3>
-                <p className="cp-black-market-studio-hint">这里显示本机发布到云端共享市场的夜间档案。修改或删除只影响共享市场，已经被购买的本地副本不会变化。</p>
+                <h3>My Shared Archives</h3>
+                <p className="cp-black-market-studio-hint">This shows the night archives this device has published to the cloud shared market. Editing or deleting only affects the shared market — local copies already purchased are unaffected.</p>
                 {publishedTheaters.length === 0 ? (
-                  <div className="cp-black-market-empty">还没有发布过夜间档案。</div>
+                  <div className="cp-black-market-empty">You haven't published any night archives yet.</div>
                 ) : (
                   <div className="cp-black-market-published-list">
                     {publishedTheaters.map(template => (
@@ -2087,18 +2087,18 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
 
             {studioMode === "drafts" ? (
               <div className="cp-black-market-studio-panel">
-                <h3>草稿箱</h3>
-                <p className="cp-black-market-studio-hint">草稿只保存在当前设备，不会进入共享市场。</p>
+                <h3>Drafts</h3>
+                <p className="cp-black-market-studio-hint">Drafts are only saved on this device and won't enter the shared market.</p>
                 {studioDrafts.length === 0 ? (
-                  <div className="cp-black-market-empty">还没有保存过草稿。</div>
+                  <div className="cp-black-market-empty">You haven't saved any drafts yet.</div>
                 ) : (
                   <div className="cp-black-market-published-list">
                     {studioDrafts.map(item => (
                       <article key={item.id} className="cp-black-market-published-card">
                         <div>
-                          <span>{item.sourceTemplateId ? "来源草稿" : "草稿"}</span>
+                          <span>{item.sourceTemplateId ? "Source Draft" : "Draft"}</span>
                           <strong>{item.title}</strong>
-                          <p>{item.sourceTemplateId ? `来源：${item.sourceTemplateTitle || "已发布档案"}` : item.draft.subtitle || item.draft.synopsis || item.draft.storyText}</p>
+                          <p>{item.sourceTemplateId ? `Source: ${item.sourceTemplateTitle || "Published archive"}` : item.draft.subtitle || item.draft.synopsis || item.draft.storyText}</p>
                           <time>{formatBlackMarketDate(item.updatedAt)}</time>
                         </div>
                         <div className="cp-black-market-published-actions">
@@ -2122,59 +2122,59 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
               <>
                 {editingTemplate ? (
                   <div className="cp-black-market-editing-banner">
-                    <span>修改中</span>
+                    <span>Editing</span>
                     <strong>{editingTemplate.title}</strong>
-                    <button type="button" onClick={resetDraft}>取消修改</button>
+                    <button type="button" onClick={resetDraft}>Cancel Edit</button>
                   </div>
                 ) : null}
                 {editingDraftId && !editingTemplate ? (
                   <div className="cp-black-market-editing-banner">
-                    <span>{editingStudioDraft?.sourceTemplateId ? "来源草稿" : "草稿中"}</span>
-                    <strong>{editingStudioDraft?.title || "未命名草稿"}</strong>
-                    <button type="button" onClick={resetDraft}>退出草稿</button>
+                    <span>{editingStudioDraft?.sourceTemplateId ? "Source Draft" : "Editing Draft"}</span>
+                    <strong>{editingStudioDraft?.title || "Untitled Draft"}</strong>
+                    <button type="button" onClick={resetDraft}>Exit Draft</button>
                   </div>
                 ) : null}
 
                 <div className="cp-black-market-studio-panel">
-                  <h3>商品档案</h3>
-                  <p className="cp-black-market-studio-hint">只需要填写用户会看到的标题和介绍；内部编号会自动处理，发布昵称可每次单独设置。</p>
+                  <h3>Archive Details</h3>
+                  <p className="cp-black-market-studio-hint">Just fill in the title and description users will see; the internal file number is handled automatically, and the publisher nickname can be set separately each time.</p>
                   <label>
-                    档案名字
+                    Archive Name
                     <input value={draft.title} onFocus={() => clearDraftSampleOnFocus("title")} onChange={event => updateDraft("title", event.target.value)} />
                   </label>
                   <label>
-                    发布昵称
+                    Publisher Nickname
                     <input
                       value={draft.authorName}
                       maxLength={40}
-                      placeholder="例如 匿名卖家 / 夜间档案员"
+                      placeholder="e.g. Anonymous Seller / Night Archive Curator"
                       onFocus={() => clearDraftSampleOnFocus("authorName")}
                       onChange={event => updateDraft("authorName", event.target.value)}
                     />
                   </label>
-                  <div className="cp-black-market-nickname-actions" aria-label="发布昵称快捷操作">
-                    <button type="button" onClick={() => updateDraft("authorName", account.displayName || "匿名卖家")}>使用账号名</button>
-                    <button type="button" onClick={() => updateDraft("authorName", "匿名卖家")}>匿名卖家</button>
+                  <div className="cp-black-market-nickname-actions" aria-label="Publisher nickname shortcuts">
+                    <button type="button" onClick={() => updateDraft("authorName", account.displayName || "Anonymous Seller")}>Use Account Name</button>
+                    <button type="button" onClick={() => updateDraft("authorName", "Anonymous Seller")}>Anonymous Seller</button>
                   </div>
                   <label>
-                    档案介绍
+                    Archive Description
                     <textarea value={draft.storyText || draft.synopsis} onFocus={clearDraftDescriptionOnFocus} onChange={event => updateDraftDescription(event.target.value)} rows={5} />
                   </label>
                   <div className="cp-black-market-studio-row">
                     <label>
-                      列表标签
+                      Listing Tags
                       <input value={draft.tagsText} onFocus={() => clearDraftSampleOnFocus("tagsText")} onChange={event => updateDraft("tagsText", event.target.value)} />
                     </label>
                     <label>
-                      价格
+                      Price
                       <input inputMode="numeric" value={draft.price} onFocus={() => clearDraftSampleOnFocus("price")} onChange={event => updateDraft("price", event.target.value)} />
                     </label>
                   </div>
                 </div>
 
                 <div className="cp-black-market-studio-panel">
-                  <h3>开场画布</h3>
-                  <p className="cp-black-market-studio-hint">可用宏：{"{{char}}"} = 启封角色名，{"{{user}}"} = 该角色绑定的用户人设名。运行时会自动替换。</p>
+                  <h3>Opening Canvas</h3>
+                  <p className="cp-black-market-studio-hint">Available macros: {"{{char}}"} = the unsealing character's name, {"{{user}}"} = the user persona name bound to that character. Replaced automatically at runtime.</p>
                   <label className="cp-black-market-studio-check">
                     <input
                       type="checkbox"
@@ -2182,56 +2182,56 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                       onChange={event => updateDraft("allowExternalControl", event.target.checked)}
                     />
                     <span>
-                      <strong>启用高级自由画布</strong>
-                      <em>允许小剧场代码与外层页面同源通信，用于固定音乐栏、侧边栏、全局浮层等效果。接收方每次启封前都会看到风险确认。</em>
+                      <strong>Enable Advanced Free Canvas</strong>
+                      <em>Allows the scene code to communicate same-origin with the outer page, for effects like a fixed music bar, sidebar, or global overlay. Recipients see a risk confirmation every time before unsealing.</em>
                     </span>
                   </label>
                   <textarea value={draft.openingHtml} onFocus={() => clearDraftSampleOnFocus("openingHtml")} onChange={event => updateDraft("openingHtml", event.target.value)} rows={12} spellCheck={false} />
                 </div>
 
                 <div className="cp-black-market-studio-panel">
-                  <h3>剧情指令</h3>
-                  <p className="cp-black-market-studio-hint">剧情指令、输出契约、记忆总结提示词同样支持 {"{{char}}"} 和 {"{{user}}"}。</p>
+                  <h3>Story Instructions</h3>
+                  <p className="cp-black-market-studio-hint">Story instructions, the output contract, and the memory summary prompt also support {"{{char}}"} and {"{{user}}"}.</p>
                   <textarea value={draft.aiInstruction} onFocus={() => clearDraftSampleOnFocus("aiInstruction")} onChange={event => updateDraft("aiInstruction", event.target.value)} rows={10} />
                   <label>
-                    输出契约
+                    Output Contract
                     <textarea value={draft.outputContract} onFocus={() => clearDraftSampleOnFocus("outputContract")} onChange={event => updateDraft("outputContract", event.target.value)} rows={4} />
                   </label>
-                  <p className="cp-black-market-studio-hint">AI 回复支持普通正则渲染，也支持输出 ```html 代码块``` 作为独立回复画布。画布内可用 Theater.sendUserAction(&quot;文本&quot;) 或 data-action 按钮把选择回填到小剧场。</p>
+                  <p className="cp-black-market-studio-hint">AI replies support regular regex rendering, and can also output a ```html code block``` as an independent reply canvas. Inside the canvas, you can use Theater.sendUserAction(&quot;text&quot;) or data-action buttons to feed a choice back into the scene.</p>
                   <details className="cp-black-market-studio-advanced">
-                    <summary>高级渲染设置</summary>
+                    <summary>Advanced Render Settings</summary>
                     <label>
-                      正则规则 JSON
+                      Regex Rules (JSON)
                       <textarea value={draft.renderRulesText} onFocus={() => clearDraftSampleOnFocus("renderRulesText")} onChange={event => updateDraft("renderRulesText", event.target.value)} rows={8} spellCheck={false} />
                     </label>
                     <label>
-                      渲染 CSS
+                      Render CSS
                       <textarea value={draft.renderCss} onFocus={() => clearDraftSampleOnFocus("renderCss")} onChange={event => updateDraft("renderCss", event.target.value)} rows={5} spellCheck={false} />
                     </label>
                     <label>
-                      记忆总结提示词
+                      Memory Summary Prompt
                       <textarea value={draft.memorySummaryPrompt} onFocus={() => clearDraftSampleOnFocus("memorySummaryPrompt")} onChange={event => updateDraft("memorySummaryPrompt", event.target.value)} rows={4} />
                     </label>
                   </details>
                 </div>
 
                 <div className="cp-black-market-studio-panel">
-                  <h3>测试运行</h3>
+                  <h3>Test Run</h3>
                   <BlackMarketTheaterHtmlFrame
                     key={previewNonce}
-                    title="自定义夜间档案测试画布"
+                    title="Custom night archive test canvas"
                     html={expandForNeutralPreview(draft.openingHtml)}
                     allowExternalControl={draft.allowExternalControl}
                   />
                   <div className="cp-black-market-studio-test">
                     <div className="cp-black-market-studio-test-head">
-                      <h3>输出契约测试</h3>
+                      <h3>Output Contract Test</h3>
                       <span>LOCAL_RENDER_ONLY</span>
                     </div>
-                    <p className="cp-black-market-studio-hint">这里不请求 API。手动输入 USER 和 ASSISTANT 文本后，会按当前正则规则 JSON、渲染 CSS 和 ```html 代码块``` 逻辑即时渲染。</p>
+                    <p className="cp-black-market-studio-hint">This doesn't call the API. After manually entering USER and ASSISTANT text, it renders instantly using the current regex rules JSON, render CSS, and ```html code block``` logic.</p>
                     <div className="cp-black-market-studio-test-grid">
                       <label>
-                        USER 测试消息
+                        USER Test Message
                         <textarea
                           value={studioTestUserMessage}
                           onChange={event => setStudioTestUserMessage(event.target.value)}
@@ -2243,7 +2243,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                         />
                       </label>
                       <label>
-                        ASSISTANT 测试消息
+                        ASSISTANT Test Message
                         <textarea
                           value={studioTestAssistantMessage}
                           onChange={event => setStudioTestAssistantMessage(event.target.value)}
@@ -2256,15 +2256,15 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                       </label>
                     </div>
                     {draft.renderCss ? <style>{sanitizeRenderCss(draft.renderCss)}</style> : null}
-                    <div className="cp-black-market-scene-log cp-black-market-studio-render-preview" aria-label="输出契约渲染预览">
+                    <div className="cp-black-market-scene-log cp-black-market-studio-render-preview" aria-label="Output contract render preview">
                       {studioTestUserMessage.trim() ? (
                         <article className="cp-black-market-scene-message is-user">
                           <span>USER</span>
                           <BlackMarketSceneMessageContent
                             content={studioTestUserMessage}
                             template={draftPreviewTemplate}
-                            characterName="角色"
-                            userName="用户"
+                            characterName="Character"
+                            userName="User"
                             messageId="studio-test-user"
                           />
                         </article>
@@ -2275,33 +2275,33 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                           <BlackMarketSceneMessageContent
                             content={studioTestAssistantMessage}
                             template={draftPreviewTemplate}
-                            characterName="角色"
-                            userName="用户"
+                            characterName="Character"
+                            userName="User"
                             messageId="studio-test-assistant"
                           />
                         </article>
                       ) : null}
                       {!studioTestUserMessage.trim() && !studioTestAssistantMessage.trim() ? (
-                        <p className="cp-black-market-scene-empty">输入测试消息后，这里会显示输出契约的最终渲染效果。</p>
+                        <p className="cp-black-market-scene-empty">Enter a test message to see the final rendering of the output contract here.</p>
                       ) : null}
                     </div>
                   </div>
                   <div className="cp-black-market-studio-actions">
                     <button type="button" onClick={resetDraft}>
                       <Plus size={14} />
-                      新建
+                      New
                     </button>
                     <button type="button" onClick={handleSaveStudioDraft}>
                       <FileText size={14} />
-                      存草稿
+                      Save Draft
                     </button>
                     <button type="button" onClick={() => setPreviewNonce(value => value + 1)}>
                       <Play size={14} />
-                      刷新预览
+                      Refresh Preview
                     </button>
                     <button type="button" className="is-primary" disabled={publishing} onClick={() => void handlePublishDraft()}>
                       <Send size={14} />
-                      {publishing ? "同步中" : editingTemplate ? "保存修改" : editingStudioDraft?.sourceTemplateId ? "选择发布方式" : "发布共享"}
+                      {publishing ? "Syncing" : editingTemplate ? "Save Changes" : editingStudioDraft?.sourceTemplateId ? "Choose Publish Method" : "Publish"}
                     </button>
                   </div>
                 </div>
@@ -2319,22 +2319,22 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
 
       {publishChoice ? (
         <div className="cp-black-market-modal cp-black-market-confirm-modal" role="presentation" onClick={closePublishChoice}>
-          <section className="cp-black-market-modal-card cp-black-market-confirm-card" role="dialog" aria-modal="true" aria-label="选择发布方式" onClick={event => event.stopPropagation()}>
+          <section className="cp-black-market-modal-card cp-black-market-confirm-card" role="dialog" aria-modal="true" aria-label="Choose publish method" onClick={event => event.stopPropagation()}>
             <div className="cp-black-market-modal-head">
               <div>
-                <span>发布方式</span>
-                <strong>这个草稿来自已发布档案</strong>
+                <span>Publish Method</span>
+                <strong>This draft comes from a published archive</strong>
               </div>
-              <button type="button" onClick={closePublishChoice}>关闭</button>
+              <button type="button" onClick={closePublishChoice}>Close</button>
             </div>
             <div className="cp-black-market-confirm-body">
               <div className="cp-black-market-confirm-code">{publishChoice.sourceTemplateTitle}</div>
-              <p>请选择把这份草稿覆盖到原档案，还是作为一份新的夜间档案发布。</p>
-              <span>{publishChoiceSourceTemplate ? "覆盖会更新原档案；发布为新档案会保留原档案不动。" : "当前列表里找不到原档案，只能发布为新档案；刷新共享市场后可再尝试覆盖。"}</span>
+              <p>Choose whether to overwrite the original archive with this draft, or publish it as a new night archive.</p>
+              <span>{publishChoiceSourceTemplate ? "Overwriting updates the original archive; publishing as new keeps the original archive unchanged." : "The original archive can't be found in the current list, so it can only be published as a new archive; refresh the shared market to try overwriting again."}</span>
             </div>
             <div className="cp-black-market-modal-actions cp-black-market-confirm-actions">
               <button type="button" disabled={publishing} onClick={() => void publishCurrentDraft("new")}>
-                发布为新档案
+                Publish as New Archive
               </button>
               <button
                 type="button"
@@ -2342,7 +2342,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                 disabled={publishing || !publishChoiceSourceTemplate}
                 onClick={() => void publishCurrentDraft("overwrite-source")}
               >
-                覆盖原档案
+                Overwrite Original Archive
               </button>
             </div>
           </section>
@@ -2357,7 +2357,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                 <span>SCENE ACTION</span>
                 <strong>{sceneConfirmMeta.title}</strong>
               </div>
-              <button type="button" onClick={cancelSceneConfirm}>关闭</button>
+              <button type="button" onClick={cancelSceneConfirm}>Close</button>
             </div>
             <div className="cp-black-market-confirm-body">
               <div className="cp-black-market-confirm-code">{sceneConfirmMeta.code}</div>
@@ -2365,7 +2365,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
               <span>{sceneConfirmMeta.hint}</span>
             </div>
             <div className="cp-black-market-modal-actions cp-black-market-confirm-actions">
-              <button type="button" onClick={cancelSceneConfirm}>取消</button>
+              <button type="button" onClick={cancelSceneConfirm}>Cancel</button>
               <button
                 type="button"
                 className={sceneConfirmMeta.danger ? "is-danger" : "is-primary"}
@@ -2380,27 +2380,27 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
 
       {deleteTarget ? (
         <div className="cp-black-market-modal cp-black-market-confirm-modal" role="presentation" onClick={closeDeleteConfirm}>
-          <section className="cp-black-market-modal-card cp-black-market-confirm-card" role="dialog" aria-modal="true" aria-label="删除确认" onClick={event => event.stopPropagation()}>
+          <section className="cp-black-market-modal-card cp-black-market-confirm-card" role="dialog" aria-modal="true" aria-label="Confirm delete" onClick={event => event.stopPropagation()}>
             <div className="cp-black-market-modal-head">
               <div>
                 <span>{deleteTarget.kind === "owned" ? "DELETE VAULT ITEM" : "DELETE MARKET FILE"}</span>
-                <strong>{pendingDeleteTitle || "未知档案"}</strong>
+                <strong>{pendingDeleteTitle || "Unknown archive"}</strong>
               </div>
-              <button type="button" disabled={pendingDeleteBusy} onClick={closeDeleteConfirm}>关闭</button>
+              <button type="button" disabled={pendingDeleteBusy} onClick={closeDeleteConfirm}>Close</button>
             </div>
             <div className="cp-black-market-confirm-body">
               <div className="cp-black-market-confirm-code">CONFIRM_PURGE</div>
               <p>
                 {deleteTarget.kind === "owned"
-                  ? "这会从本地暗柜删除该道具，并丢弃关联的未完成小剧场会话。已经写入短期记忆的剧情总结可在暗柜的最近记录里单独删除。"
-                  : "这会从共享市场删除该发布档案。已经被购买到本地暗柜的副本不会受影响。"}
+                  ? "This deletes the item from your local vault and discards any linked unfinished scene session. Story summaries already written to short-term memory can be deleted separately from the vault's recent records."
+                  : "This deletes the published archive from the shared market. Copies already purchased into local vaults are unaffected."}
               </p>
-              <span>此操作不会退还暗影信用点。</span>
+              <span>This action does not refund Shadow Credits.</span>
             </div>
             <div className="cp-black-market-modal-actions cp-black-market-confirm-actions">
-              <button type="button" disabled={pendingDeleteBusy} onClick={closeDeleteConfirm}>取消</button>
+              <button type="button" disabled={pendingDeleteBusy} onClick={closeDeleteConfirm}>Cancel</button>
               <button type="button" className="is-danger" disabled={pendingDeleteBusy} onClick={confirmDeleteTarget}>
-                {pendingDeleteBusy ? "DELETING" : "确认删除"}
+                {pendingDeleteBusy ? "DELETING" : "Confirm Delete"}
               </button>
             </div>
           </section>
@@ -2409,23 +2409,23 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
 
       {externalCanvasRequest && launchOwnedTheater ? (
         <div className="cp-black-market-modal cp-black-market-confirm-modal" role="presentation" onClick={cancelExternalCanvasRequest}>
-          <section className="cp-black-market-modal-card cp-black-market-confirm-card cp-black-market-external-card" role="dialog" aria-modal="true" aria-label="高级自由画布确认" onClick={event => event.stopPropagation()}>
+          <section className="cp-black-market-modal-card cp-black-market-confirm-card cp-black-market-external-card" role="dialog" aria-modal="true" aria-label="Confirm advanced free canvas" onClick={event => event.stopPropagation()}>
             <div className="cp-black-market-modal-head">
               <div>
                 <span>ADVANCED CANVAS</span>
                 <strong>{launchOwnedTheater.templateSnapshot.title}</strong>
               </div>
-              <button type="button" onClick={cancelExternalCanvasRequest}>关闭</button>
+              <button type="button" onClick={cancelExternalCanvasRequest}>Close</button>
             </div>
             <div className="cp-black-market-confirm-body">
               <div className="cp-black-market-confirm-code">EXTERNAL_CONTROL_REQUEST</div>
-              <p>该小剧场使用高级自由画布，可能控制当前页面显示、播放音频、访问本地页面数据。请仅启封可信作者的作品。是否允许？</p>
-              <span>本次授权只对当前打开的小剧场生效；关闭后再次打开仍会重新询问。</span>
+              <p>This scene uses an advanced free canvas, which may control the current page display, play audio, or access local page data. Only unseal works from authors you trust. Allow it?</p>
+              <span>This authorization only applies to the currently open scene; you'll be asked again the next time you open it.</span>
             </div>
             <div className="cp-black-market-modal-actions cp-black-market-confirm-actions">
-              <button type="button" onClick={cancelExternalCanvasRequest}>取消</button>
+              <button type="button" onClick={cancelExternalCanvasRequest}>Cancel</button>
               <button type="button" className="is-primary" onClick={confirmExternalCanvasRequest}>
-                允许并启封
+                Allow & Unseal
               </button>
             </div>
           </section>
@@ -2434,25 +2434,25 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
 
       {selectedTemplate ? (
         <div className="cp-black-market-modal" role="presentation" onClick={closeTemplatePreview}>
-          <section className="cp-black-market-modal-card" role="dialog" aria-modal="true" aria-label="夜间档案预览" onClick={event => event.stopPropagation()}>
+          <section className="cp-black-market-modal-card" role="dialog" aria-modal="true" aria-label="Night archive preview" onClick={event => event.stopPropagation()}>
             <div className="cp-black-market-modal-head">
               <div>
-                <span>{selectedTemplateMode === "opening" ? "开场画布" : "夜间档案"}</span>
+                <span>{selectedTemplateMode === "opening" ? "Opening Canvas" : "Night Archive"}</span>
                 <strong>{selectedTemplate.title}</strong>
               </div>
-              <button type="button" onClick={closeTemplatePreview}>关闭</button>
+              <button type="button" onClick={closeTemplatePreview}>Close</button>
             </div>
             {selectedTemplateMode === "opening" ? (
               <BlackMarketTheaterHtmlFrame
-                title={`${selectedTemplate.title} 开场画布`}
+                title={`${selectedTemplate.title} opening canvas`}
                 html={expandForNeutralPreview(selectedTemplate.openingHtml)}
               />
             ) : (
               <>
-                <section className="cp-black-market-info-flat" aria-label="夜间档案信息">
+                <section className="cp-black-market-info-flat" aria-label="Night archive info">
                   <div className="cp-black-market-info-meta">
                     <span>{getBlackMarketFileNumber(selectedTemplate)}</span>
-                    <span>{selectedTemplate.tags.slice(0, 3).join(" / ") || "未分类"}</span>
+                    <span>{selectedTemplate.tags.slice(0, 3).join(" / ") || "Uncategorized"}</span>
                   </div>
                   <p className="cp-black-market-file-intro">{expandForNeutralPreview(selectedTemplate.storyText || selectedTemplate.synopsis)}</p>
                   <div className="cp-black-market-file-actions">
@@ -2462,24 +2462,24 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                       onClick={() => selectedOwnedTheater ? openSceneLauncher(selectedOwnedTheater) : void handleTemplatePrimaryAction(selectedTemplate)}
                       disabled={!selectedOwnedTheater && !isOwnPublishedTemplate(selectedTemplate) && walletBusy === "purchase"}
                     >
-                      {selectedOwnedTheater || isOwnPublishedTemplate(selectedTemplate) ? "启封档案" : selectedTemplate.source === "community" ? `购买 · ${formatShadowCredits(selectedTemplate.price)}` : "免费领取"}
+                      {selectedOwnedTheater || isOwnPublishedTemplate(selectedTemplate) ? "Unseal Archive" : selectedTemplate.source === "community" ? `Buy · ${formatShadowCredits(selectedTemplate.price)}` : "Claim Free"}
                     </button>
-                    <button type="button" onClick={closeTemplatePreview}>先观察</button>
+                    <button type="button" onClick={closeTemplatePreview}>Take a Look First</button>
                   </div>
-                  <div className="cp-black-market-file-hint">{selectedOwnedTheater || isOwnPublishedTemplate(selectedTemplate) ? "启封后会进入独立小剧场，不写入普通聊天。" : selectedTemplate.source === "community" ? "购买后会复制到暗柜，再选择角色启封。" : "免费领取后会复制到暗柜，再选择角色启封。"}</div>
+                  <div className="cp-black-market-file-hint">{selectedOwnedTheater || isOwnPublishedTemplate(selectedTemplate) ? "Unsealing enters an independent scene and won't be written to normal chat." : selectedTemplate.source === "community" ? "After purchase it will be copied to your vault, then choose a character to unseal." : "After claiming for free it will be copied to your vault, then choose a character to unseal."}</div>
                 </section>
               </>
             )}
             {selectedTemplateMode === "opening" ? (
               <div className="cp-black-market-modal-actions">
-                <button type="button" onClick={() => setSelectedTemplateMode("info")}>返回档案</button>
+                <button type="button" onClick={() => setSelectedTemplateMode("info")}>Back to Archive</button>
                 <button
                   type="button"
                   className="is-primary"
                   disabled={(ownedTemplateIds.has(selectedTemplate.id) && !isOwnPublishedTemplate(selectedTemplate)) || walletBusy === "purchase"}
                   onClick={() => void handleTemplatePrimaryAction(selectedTemplate)}
                 >
-                  {isOwnPublishedTemplate(selectedTemplate) ? "启封档案" : ownedTemplateIds.has(selectedTemplate.id) ? "已拥有" : selectedTemplate.source === "community" ? `购买 · ${formatShadowCredits(selectedTemplate.price)}` : "免费领取"}
+                  {isOwnPublishedTemplate(selectedTemplate) ? "Unseal Archive" : ownedTemplateIds.has(selectedTemplate.id) ? "Owned" : selectedTemplate.source === "community" ? `Buy · ${formatShadowCredits(selectedTemplate.price)}` : "Claim Free"}
                 </button>
               </div>
             ) : null}
@@ -2489,7 +2489,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
 
       {launchOwnedTheater ? (
         <div className={`cp-black-market-modal${activeScene ? " cp-black-market-scene-modal" : ""}`} role="presentation" onClick={closeSceneLayer}>
-          <section className={`cp-black-market-modal-card cp-black-market-scene-card${activeScene ? " cp-black-market-scene-session-card" : ""}`} role="dialog" aria-modal="true" aria-label="启封小剧场" onClick={event => event.stopPropagation()}>
+          <section className={`cp-black-market-modal-card cp-black-market-scene-card${activeScene ? " cp-black-market-scene-session-card" : ""}`} role="dialog" aria-modal="true" aria-label="Unseal scene" onClick={event => event.stopPropagation()}>
             {!activeScene ? (
               <>
                 <div className="cp-black-market-modal-head">
@@ -2497,12 +2497,12 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                     <span>SELECT TARGET</span>
                     <strong>{launchOwnedTheater.templateSnapshot.title}</strong>
                   </div>
-                  <button type="button" onClick={closeSceneLayer}>关闭</button>
+                  <button type="button" onClick={closeSceneLayer}>Close</button>
                 </div>
-                <p className="cp-black-market-modal-copy">选择一个角色进入独立小剧场。剧情过程不会写入普通聊天，结束后可选择总结进短期记忆。</p>
+                <p className="cp-black-market-modal-copy">Choose a character to enter an independent scene. The story won't be written to normal chat, and you can choose to summarize it into short-term memory when it ends.</p>
                 <div className="cp-black-market-character-grid">
                   {characters.length === 0 ? (
-                    <div className="cp-black-market-empty">暂无可用角色。</div>
+                    <div className="cp-black-market-empty">No characters available yet.</div>
                   ) : characters.map(char => {
                     const canResume = launchActiveCharacterIds.has(char.id);
                     return (
@@ -2514,15 +2514,15 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                       >
                         <span>{char.avatar ? <img src={char.avatar} alt="" /> : char.name.slice(0, 1)}</span>
                         <strong>{char.name}</strong>
-                        <em>{resolveSceneUserName(char)}{canResume ? " · 可继续" : " · 新开"}</em>
+                        <em>{resolveSceneUserName(char)}{canResume ? " · Resumable" : " · New"}</em>
                       </button>
                     );
                   })}
                 </div>
                 <div className="cp-black-market-modal-actions">
-                  <button type="button" onClick={closeSceneLayer}>取消</button>
+                  <button type="button" onClick={closeSceneLayer}>Cancel</button>
                   <button type="button" className="is-primary" disabled={!launchCharacter} onClick={startSceneFromLauncher}>
-                    {resumableLaunchScene ? "继续小剧场" : "进入开场"}
+                    {resumableLaunchScene ? "Resume Scene" : "Enter Opening"}
                   </button>
                 </div>
               </>
@@ -2531,19 +2531,19 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                 {launchOwnedTheater.templateSnapshot.renderCss ? (
                   <style>{sanitizeRenderCss(launchOwnedTheater.templateSnapshot.renderCss)}</style>
                 ) : null}
-                <div className="cp-black-market-scene-toolbar" aria-label="小剧场操作">
+                <div className="cp-black-market-scene-toolbar" aria-label="Scene actions">
                   <div className="cp-black-market-scene-toolbar-group">
-                    <button type="button" aria-label="返回黑市" onClick={() => requestSceneConfirm("return")}>
+                    <button type="button" aria-label="Return to market" onClick={() => requestSceneConfirm("return")}>
                       <ChevronLeft size={20} strokeWidth={2.5} />
                     </button>
-                    <button type="button" aria-label="稍后继续" onClick={() => requestSceneConfirm("archive")}>
+                    <button type="button" aria-label="Save for later" onClick={() => requestSceneConfirm("archive")}>
                       <Archive size={18} strokeWidth={2.35} />
                     </button>
                   </div>
                   <div className="cp-black-market-scene-toolbar-group">
                     <button
                       type="button"
-                      aria-label="重新开始小剧场"
+                      aria-label="Restart scene"
                       disabled={activeScene.status === "ended" || sceneBusy !== null}
                       onClick={() => requestSceneConfirm("restart")}
                     >
@@ -2551,7 +2551,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                     </button>
                     <button
                       type="button"
-                      aria-label="结束并写入记忆"
+                      aria-label="End and write to memory"
                       disabled={activeScene.status === "ended" || sceneBusy !== null || activeScene.messages.length === 0}
                       onClick={() => requestSceneConfirm("summary")}
                     >
@@ -2565,14 +2565,14 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                   ) : null}
                   <BlackMarketTheaterHtmlFrame
                     key={activeScene.id}
-                    title={`${launchOwnedTheater.templateSnapshot.title} 开场画布`}
+                    title={`${launchOwnedTheater.templateSnapshot.title} opening canvas`}
                     html={expandForScene(launchOwnedTheater.templateSnapshot.openingHtml)}
                     allowExternalControl={externalCanvasAllowed && launchOwnedTheater.templateSnapshot.allowExternalControl}
                     collapsible
                   />
                   <div className="cp-black-market-scene-log">
                     {activeScene.messages.length === 0 ? (
-                      <p className="cp-black-market-scene-empty">开场已载入。输入第一句话或行动，让角色接住这段剧情。</p>
+                      <p className="cp-black-market-scene-empty">The opening has loaded. Type your first line or action to let the character pick up the story.</p>
                     ) : activeScene.messages.map(message => {
                       const isLastMessage = activeScene.messages[activeScene.messages.length - 1]?.id === message.id;
                       const canMutateScene = activeScene.status === "active" && sceneBusy === null;
@@ -2582,12 +2582,12 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                         <article key={message.id} className={`cp-black-market-scene-message is-${message.role}`}>
                           <div className="cp-black-market-scene-message-head">
                             <span>{message.role === "assistant" ? activeScene.characterName : activeScene.userName}</span>
-                            <span className="cp-black-market-scene-message-actions" aria-label="消息操作">
+                            <span className="cp-black-market-scene-message-actions" aria-label="Message actions">
                               <button
                                 type="button"
                                 onClick={() => void copySceneMessage(message.content)}
-                                aria-label="复制原文"
-                                title="复制"
+                                aria-label="Copy original text"
+                                title="Copy"
                               >
                                 <Copy size={12} />
                               </button>
@@ -2596,8 +2596,8 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                                   type="button"
                                   onClick={() => beginEditSceneUserMessage(message)}
                                   disabled={!canMutateScene}
-                                  aria-label="编辑并重回"
-                                  title="编辑"
+                                  aria-label="Edit and resend"
+                                  title="Edit"
                                 >
                                   <Pencil size={12} />
                                 </button>
@@ -2606,8 +2606,8 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                                 <button
                                   type="button"
                                   onClick={() => void retrySceneFromAssistantMessage(message)}
-                                  aria-label="重试以下"
-                                  title="重试以下"
+                                  aria-label="Retry from here"
+                                  title="Retry from here"
                                 >
                                   <RotateCcw size={12} />
                                 </button>
@@ -2616,8 +2616,8 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                                 <button
                                   type="button"
                                   onClick={() => void retrySceneFromUserMessage(message)}
-                                  aria-label="重新生成"
-                                  title="重新生成"
+                                  aria-label="Regenerate"
+                                  title="Regenerate"
                                 >
                                   <RotateCcw size={12} />
                                 </button>
@@ -2639,7 +2639,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                       <article className="cp-black-market-scene-message is-assistant is-thinking" aria-live="polite">
                         <span>{activeScene.characterName}</span>
                         <div className="cp-black-market-thinking-text">
-                          正在思考中
+                          Thinking
                           <i aria-hidden="true" />
                           <i aria-hidden="true" />
                           <i aria-hidden="true" />
@@ -2658,7 +2658,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                   <div className="cp-black-market-scene-input-wrap">
                     {editingSceneMessageId ? (
                       <div className="cp-black-market-scene-editing">
-                        <span>正在编辑历史行动</span>
+                        <span>Editing a past action</span>
                         <button
                           type="button"
                           onClick={() => {
@@ -2666,7 +2666,7 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                             setSceneInput("");
                           }}
                         >
-                          取消
+                          Cancel
                         </button>
                       </div>
                     ) : null}
@@ -2675,11 +2675,11 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                         value={sceneInput}
                         onChange={event => setSceneInput(event.target.value)}
                         rows={3}
-                        placeholder={editingSceneMessageId ? "修改后发送，将重写后续剧情..." : "输入你的行动、台词或选择..."}
+                        placeholder={editingSceneMessageId ? "Send after editing to rewrite what follows..." : "Type your action, line, or choice..."}
                         disabled={sceneBusy !== null}
                       />
                       <button type="button" className="is-primary" disabled={!sceneInput.trim() || sceneBusy !== null} onClick={() => void handleSceneSubmit()}>
-                        {sceneBusy === "reply" ? "生成中" : editingSceneMessageId ? "重写" : "发送"}
+                        {sceneBusy === "reply" ? "Generating" : editingSceneMessageId ? "Rewrite" : "Send"}
                       </button>
                     </div>
                   </div>

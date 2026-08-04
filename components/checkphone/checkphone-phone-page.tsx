@@ -27,19 +27,19 @@ type CheckPhonePhonePageProps = {
 type PhoneTabId = "recents" | "contacts" | "voicemail";
 
 const PHONE_TABS: Array<{ id: PhoneTabId; label: string; icon: typeof PhoneCall }> = [
-  { id: "recents", label: "最近", icon: PhoneCall },
-  { id: "contacts", label: "联系人", icon: UserRound },
-  { id: "voicemail", label: "语音信箱", icon: Voicemail },
+  { id: "recents", label: "Recents", icon: PhoneCall },
+  { id: "contacts", label: "Contacts", icon: UserRound },
+  { id: "voicemail", label: "Voicemail", icon: Voicemail },
 ];
 
 function getDirectionLabel(direction: CheckPhoneCallDirection): string {
   switch (direction) {
     case "incoming":
-      return "来电";
+      return "Incoming";
     case "outgoing":
-      return "去电";
+      return "Outgoing";
     case "missed":
-      return "未接";
+      return "Missed";
     default:
       return "";
   }
@@ -220,11 +220,11 @@ export function CheckPhonePhonePage({ character, onBack }: CheckPhonePhonePagePr
     return map;
   }, [payload]);
 
-  const subtitle = selectedTab === "recents" 
-    ? "最近联络与未接来电" 
-    : selectedTab === "contacts" 
-      ? "通讯录与特工档案" 
-      : "语音留言归档";
+  const subtitle = selectedTab === "recents"
+    ? "Recent contacts and missed calls"
+    : selectedTab === "contacts"
+      ? "Contact list and agent profiles"
+      : "Voicemail archive";
 
   const backAction = onBack;
 
@@ -272,7 +272,7 @@ export function CheckPhonePhonePage({ character, onBack }: CheckPhonePhonePagePr
 
       {loading && (
         <div className="cp-refresh-indicator cp-refresh-indicator--floating" aria-live="polite">
-          <span className="cp-refresh-indicator-text">正在刷新电话</span>
+          <span className="cp-refresh-indicator-text">Refreshing phone</span>
           <span className="cp-refresh-indicator-dots" aria-hidden="true">
             <i></i><i></i><i></i>
           </span>
@@ -284,14 +284,14 @@ export function CheckPhonePhonePage({ character, onBack }: CheckPhonePhonePagePr
 
         {loaded && !payload && !loading && (
           <div className="cp-phone-status cp-empty-copy">
-            <p>暂无电话内容</p>
-            <span className="cp-phone-hint">点刷新同步最近通话联系人和语音留言</span>
+            <p>No phone content yet</p>
+            <span className="cp-phone-hint">Tap refresh to sync recent calls, contacts, and voicemail</span>
           </div>
         )}
 
         {error ? (
           <CheckPhoneDebugErrorCard
-            title="暂时无法解析电话内容。"
+            title="Unable to parse phone content right now."
             error={error}
             debugParseMode={debugParseMode}
             debugParseError={debugParseError}
@@ -309,7 +309,7 @@ export function CheckPhonePhonePage({ character, onBack }: CheckPhonePhonePagePr
                 <input
                   className="cp-app-searchbar-input"
                   type="text"
-                  placeholder="搜索联系人或电话号码"
+                  placeholder="Search contacts or phone numbers"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -419,7 +419,7 @@ export function CheckPhonePhonePage({ character, onBack }: CheckPhonePhonePagePr
                         </div>
                         <div className="cp-phone-call-mid">
                           <span className="cp-cyber-deco">V-MAIL //</span>
-                          <span>留存</span>
+                          <span>Saved</span>
                           <em>{item.durationLabel}</em>
                         </div>
                         <p><span className="cp-cyber-deco">SCRIPT:</span> {buildVoicemailPreview(item.transcript)}</p>
@@ -442,7 +442,7 @@ export function CheckPhonePhonePage({ character, onBack }: CheckPhonePhonePagePr
           </>
         )}
 
-        <nav className="cp-phone-tabbar" aria-label="电话导航">
+        <nav className="cp-phone-tabbar" aria-label="Phone Navigation">
           {PHONE_TABS.map((tab) => {
             const Icon = tab.icon;
             const active = selectedTab === tab.id;
@@ -467,11 +467,11 @@ export function CheckPhonePhonePage({ character, onBack }: CheckPhonePhonePagePr
       </div>
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空电话内容？"
-          message="确认后会清空当前电话缓存。之后重新刷新时，不会再带入旧电话内容。"
+          title="Clear phone content?"
+          message="Once confirmed, the current phone cache will be cleared. Future refreshes will no longer bring back the old phone content."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Confirm Clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

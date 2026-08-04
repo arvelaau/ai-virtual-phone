@@ -1,5 +1,6 @@
 // lib/mascot-engine.ts
-// 小卷 LLM 引擎：双协议（原生工具 + 文本协议），agent 循环由 UI 层驱动。
+// Mascot (小卷) LLM engine: dual protocol (native tools + text protocol). The agent
+// loop is driven by the UI layer.
 
 import { resolveAuxiliaryApiConfig } from "./settings-storage";
 import { getMascotPersonaPrompt } from "./mascot-settings";
@@ -12,7 +13,7 @@ import {
     findPackageByLabel,
     MASCOT_TOOL_PACKAGES,
 } from "./mascot-tools";
-import { parseToolFetches, parseToolCalls, findToolCallEnd, type ToolCall, type ToolFetch } from "./tool-executor";
+import { parseToolFetches, parseToolCalls, findToolCallEnd, TOOL_RESULT_HEADER, TOOL_RESULT_HEADERS, type ToolCall, type ToolFetch } from "./tool-executor";
 import {
     nativeToolProtocolForConfig,
     buildProviderRequest,
@@ -23,15 +24,16 @@ import {
     type LlmRequestPayload,
     type LlmToolCall,
 } from "./llm-provider-adapter";
+import { ACTION_DIRECTIVE_NAMES, FETCH_DIRECTIVE_NAMES } from "./text-tool-protocol";
 import { sendLLMToolStreamRequest, type LLMToolRequestResult } from "./chat-engine";
 
 function requireMascotApiConfig() {
     const apiConfig = resolveAuxiliaryApiConfig("mascotApiConfigId");
-    if (!apiConfig) throw new Error("请先在设置 → 绑定配置 → 全局配置中设置 API，或在辅助 API 中设置小卷助手 API");
+    if (!apiConfig) throw new Error("Set an API under Settings -> Binding Manager -> Global config, or configure the mascot assistant API under Auxiliary APIs.");
     return apiConfig;
 }
 
-// ── 类型 ─────────────────────────────────────────────
+// -- Types ---------------------------------------------------
 
 export type MascotMsg = {
     role: "user" | "mascot" | "tool";
@@ -39,39 +41,45 @@ export type MascotMsg = {
     createdAt?: string;
     hidden?: boolean;
     displayText?: string;
-    /** 用户附带的图片，base64 data URL 数组（仅原生协议会真正发给 LLM，文本协议会忽略） */
+    /** Images attached by the user, as base64 data URLs. Only the native protocol
+     *  actually sends them to the LLM; the text protocol ignores them. */
     images?: string[];
-    // 当 role=mascot 且使用原生协议时，存 LLM 返回的 toolCalls（用于下一轮请求重建上下文）
+    // When role=mascot on the native protocol, holds the toolCalls the LLM returned
+    // (used to rebuild context for the next request)
     toolCalls?: LlmToolCall[];
-    // 当 role=mascot 时，存 LLM 返回的 reasoning 文本（Gemini 多轮工具调用需要把这段 thought 也回传，否则上下文会被丢）
+    // When role=mascot, holds the reasoning text the LLM returned. Gemini multi-turn
+    // tool calling requires this thought to be sent back, or the context is dropped.
     reasoning?: string;
-    // OpenRouter Gemini 工具调用需要把 reasoning_details 原样回传
+    // OpenRouter Gemini tool calling requires reasoning_details to be echoed verbatim
     openRouterReasoningDetails?: unknown[];
-    // 当 role=tool 时，存 tool result 元信息
+    // When role=tool, holds the tool-result metadata
     toolCallId?: string;
-    /** 协议层用的工具名：原生协议下是稳定英文 native name（必须和 functionCall.name 一致才能正确回传）*/
+    /** Protocol-level tool name. On the native protocol this is the stable English
+     *  native name, which MUST match functionCall.name for the echo-back to work. */
     toolName?: string;
-    /** UI 展示用的工具名（中文，如"读取CSS"）。无值时回退到 toolName */
+    /** Tool name for display in the UI (still Chinese, e.g. "读取CSS" — see the
+     *  separate tool-name track). Falls back to toolName when unset. */
     toolDisplayName?: string;
     toolSuccess?: boolean;
 };
 
 export type MascotToolResponse = {
-    /** 显示给用户的回复（剥离工具标签后） */
+    /** The reply shown to the user, with tool tags stripped */
     reply: string[];
-    /** 原始 assistant 文本（含工具标签，用于下一轮历史） */
+    /** Raw assistant text, tool tags included, for the next turn's history */
     rawAssistant: string;
-    /** 文本协议：要展开的套件名（label） */
+    /** Text protocol: the label of the tool package to expand */
     toolFetches: ToolFetch[];
-    /** 要执行的工具调用 */
+    /** Tool calls to execute */
     toolCalls: ToolCall[];
-    /** 原生协议下，原始的 LlmToolCall（包含 id，用于回传） */
+    /** On the native protocol, the raw LlmToolCall (includes the id, for echo-back) */
     nativeToolCalls?: LlmToolCall[];
-    /** LLM 返回的 reasoning 文本（Gemini 多轮工具调用需要把这段也存到历史） */
+    /** Reasoning text from the LLM (Gemini multi-turn tool calling needs this stored
+     *  in history too) */
     reasoning?: string;
-    /** OpenRouter provider-private reasoning state，用于多轮工具调用回传 */
+    /** OpenRouter provider-private reasoning state, echoed back across tool turns */
     openRouterReasoningDetails?: unknown[];
-    /** 当前使用的协议 */
+    /** The protocol currently in use */
     protocol: "native" | "text";
 };
 
@@ -84,11 +92,20 @@ export type MascotChatStreamCallbacks = {
 
 const MAX_TOOL_CONTEXT_IMAGES = 4;
 
-// ── 消息构造 ──────────────────────────────────────────
+// Both protocols call sendLLMToolStreamRequest with a null preset, so the assembler's
+// global `output_language_rule` never reaches the mascot. Its persona prompt
+// (mascot-prompts.ts) is also still Chinese, which would otherwise steer every reply
+// — so the rule has to be restated locally and placed AFTER the persona.
+const MASCOT_OUTPUT_LANGUAGE_RULE = [
+  "Always reply in English, regardless of the language of your persona description, the page context, or any tool result.",
+  "Those are information about who you are and what is on screen — never a reference for which language to write in.",
+].join("\n");
+
+// -- Message construction ------------------------------------
 
 type TextHistoryMessage = { role: string; content: string; images?: string[] };
 
-/** 历史里是否含图片 */
+/** Whether the history contains any images */
 function historyHasImages(history: MascotMsg[]): boolean {
     return history.some((m) => m.images && m.images.length > 0);
 }
@@ -111,9 +128,10 @@ function collectToolImageRefs(messages: MascotMsg[]): string[] {
     return limitedImageRefs(refs);
 }
 
-/** 将小卷的历史消息转为 LLM 请求消息（文本协议）。
- * tool 消息以 user 形式回传，连续的 tool 消息会合并成一个 <action_result> 集合，
- * 末尾附加引导文本（和 chat-engine 的 formatToolResults 风格一致） */
+/** Converts the mascot history into LLM request messages (text protocol).
+ *  Tool messages are echoed back as user messages; consecutive tool messages are
+ *  merged into a single <action_result> set with a trailing instruction, matching
+ *  the shape of chat-engine's formatToolResults. */
 function historyToTextMessages(history: MascotMsg[]): TextHistoryMessage[] {
     const recent = history.slice(-40);
     const out: TextHistoryMessage[] = [];
@@ -123,15 +141,15 @@ function historyToTextMessages(history: MascotMsg[]): TextHistoryMessage[] {
         if (toolBuffer.length === 0) return;
         const images = collectToolImageRefs(toolBuffer);
         const items = toolBuffer.map((m) => {
-            const name = m.toolName || "未知";
+            const name = m.toolName || "unknown";
             if (m.toolSuccess === false) {
-                return `<action_result name="${name}" error="${(m.text || "未知错误").replace(/"/g, "&quot;")}"></action_result>`;
+                return `<action_result name="${name}" error="${(m.text || "Unknown error").replace(/"/g, "&quot;")}"></action_result>`;
             }
             return `<action_result name="${name}">${m.text}</action_result>`;
         }).join("\n");
         out.push({
             role: "user",
-            content: `以下是系统处理结果：\n${items}\n请基于以上结果继续回复用户，不要重复你之前说过的内容，不要再次执行相同的动作。`,
+            content: `${TOOL_RESULT_HEADER}\n${items}\nBased on these results, continue replying to the user. Do not repeat what you have already said, and do not run the same action again.`,
             images: images.length > 0 ? images : undefined,
         });
         toolBuffer = [];
@@ -165,7 +183,7 @@ function historyToTextRequestMessages(history: MascotMsg[]): LlmRequestMessage[]
     }));
 }
 
-/** 把 media-store:// ref 加载成 data URL（image_url part 用） */
+/** Loads a media-store:// ref into a data URL, for use as an image_url part */
 async function refToDataUrl(ref: string): Promise<string | null> {
     try {
         const { loadMediaBlob } = await import("./media-cache-storage");
@@ -183,7 +201,7 @@ async function refToDataUrl(ref: string): Promise<string | null> {
 async function resolveImageRefs(refs: string[]): Promise<string[]> {
     const out: string[] = [];
     for (const ref of refs) {
-        // 兼容已经是 data URL 的情况（防御性）
+        // Defensive: tolerate refs that are already data URLs
         if (ref.startsWith("data:")) { out.push(ref); continue; }
         const url = await refToDataUrl(ref);
         if (url) out.push(url);
@@ -191,13 +209,15 @@ async function resolveImageRefs(refs: string[]): Promise<string[]> {
     return out;
 }
 
-/** 文本协议带图版：把 historyToTextMessages 的字符串结果转成 LlmRequestMessage[]，
- * 对应位置的 user 消息如果有图片，会把 content 升级成 multipart text+image_url 数组 */
+/** Text protocol, image-capable: turns historyToTextMessages' string output into
+ *  LlmRequestMessage[]. Where the corresponding user message carries images, its
+ *  content is upgraded to a multipart text + image_url array. */
 async function historyToTextMessagesMultipart(history: MascotMsg[]): Promise<LlmRequestMessage[]> {
     const textMessages = historyToTextMessages(history);
-    // 找出对应的原始 user 消息里有图片的 → 升级 content 为 multipart
-    // 注意：historyToTextMessages 会合并连续 tool 消息为单条 user，所以索引不一一对应；
-    // 这里用顺序匹配 — 取最近 40 条非 tool 的 user 消息的 images
+    // Find the original user messages that carry images -> upgrade content to multipart
+    // Note: historyToTextMessages merges consecutive tool messages into a single user
+    // message, so indices do not line up one-to-one. Match in order instead, taking the
+    // images from the most recent 40 non-tool user messages.
     const recent = history.slice(-40);
     const userImagesQueue: string[][] = [];
     for (const m of recent) {
@@ -210,11 +230,12 @@ async function historyToTextMessagesMultipart(history: MascotMsg[]): Promise<Llm
             out.push({ role: m.role as "system" | "assistant", content: m.content } as LlmRequestMessage);
             continue;
         }
-        const isToolResultSynth = m.content.startsWith("以下是系统处理结果：");
+        // Dual recognition: saved history still holds the legacy Chinese header.
+        const isToolResultSynth = TOOL_RESULT_HEADERS.some((h) => m.content.startsWith(h));
         if (isToolResultSynth) {
             if (m.images && m.images.length > 0) {
                 out.push(await buildImageContextMessage(
-                    `${m.content}\n\n系统记录：上面的工具结果包含图片预览，请结合图片判断后续是否需要继续处理。`,
+                    `${m.content}\n\nSystem note: the tool results above include an image preview. Use the image to judge whether any further processing is needed.`,
                     m.images,
                 ));
             } else {
@@ -233,13 +254,15 @@ async function historyToTextMessagesMultipart(history: MascotMsg[]): Promise<Llm
     return out;
 }
 
-/** 将小卷的历史消息转为 LlmRequestMessage（原生协议，含 tool call/result 还原） */
+/** Converts the mascot history into LlmRequestMessages (native protocol, restoring
+ *  tool calls and tool results) */
 async function historyToNativeMessages(history: MascotMsg[]): Promise<LlmRequestMessage[]> {
     const out: LlmRequestMessage[] = [];
     const recent = history.slice(-40);
     for (const m of recent) {
         if (m.role === "user") {
-            // 用户消息：含图片时构造多模态 content 数组（text + image_url parts）
+            // User message: when images are present, build a multimodal content array
+            // (text + image_url parts)
             if (m.images && m.images.length > 0) {
                 const dataUrls = await resolveImageRefs(m.images);
                 const parts: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string; detail?: "low" | "high" | "auto" } }> = [];
@@ -258,12 +281,12 @@ async function historyToNativeMessages(history: MascotMsg[]): Promise<LlmRequest
             });
             if (m.images && m.images.length > 0) {
                 out.push(await buildImageContextMessage(
-                    `系统记录：这是工具「${m.toolDisplayName || m.toolName || "工具"}」刚才返回的图片。请结合图片判断后续是否需要继续裁切、去底、转换、上传或写 CSS。`,
+                    `System note: this is the image just returned by the tool "${m.toolDisplayName || m.toolName || "tool"}". Use it to judge whether further cropping, background removal, conversion, upload or CSS writing is needed.`,
                     m.images,
                 ));
             }
         } else {
-            // mascot 消息
+            // mascot message
             const msg: LlmRequestMessage = m.toolCalls && m.toolCalls.length > 0
                 ? { role: "assistant", content: m.text, toolCalls: m.toolCalls, reasoning: m.reasoning, openRouterReasoningDetails: m.openRouterReasoningDetails }
                 : { role: "assistant", content: m.text, reasoning: m.reasoning, openRouterReasoningDetails: m.openRouterReasoningDetails };
@@ -287,7 +310,7 @@ function parseSseEvents(buffer: string): { events: string[]; rest: string } {
 }
 
 function findMascotProtocolStart(text: string, fromIndex: number): number {
-    const toolPattern = /\[[^\[\]]{0,160}?(?:获取指令|获取工具|执行动作|工具调用)/g;
+    const toolPattern = new RegExp(`\[[^\[\]]{0,160}?(?:${FETCH_DIRECTIVE_NAMES}|${ACTION_DIRECTIVE_NAMES})`, "g");
     toolPattern.lastIndex = fromIndex;
     const toolMatch = toolPattern.exec(text);
 
@@ -318,12 +341,14 @@ function getMascotProtocolEnd(text: string, startIndex: number): number | null {
 
 function peekMascotProtocolToolName(text: string, startIndex: number): string | null {
     const slice = text.slice(startIndex);
-    const match = /^\[[""\u201C]?([^""\u201D\]]*?)[""\u201D]?\s*(获取指令|获取工具|执行动作|工具调用)\s*[:：]\s*([^(（\]\n]+)/.exec(slice);
+    const match = new RegExp(
+        `^\[[""\u201C]?([^""\u201D\]]*?)[""\u201D]?\s*(${FETCH_DIRECTIVE_NAMES}|${ACTION_DIRECTIVE_NAMES})\s*[:：]\s*([^(（\]\n]+)`,
+    ).exec(slice);
     if (!match) return null;
     const kind = match[2];
     const name = match[3].trim();
     if (!name) return null;
-    return kind === "获取指令" || kind === "获取工具" ? `展开${name}` : name;
+    return FETCH_DIRECTIVE_NAMES.split("|").includes(kind) ? `Expand ${name}` : name;
 }
 
 function createMascotTextDisplayFilter(
@@ -425,7 +450,7 @@ async function streamMascotProviderRequest(
             signal: llmAbort.signal,
         });
         if (!response.ok) throw new Error(`API Stream ${response.status}: ${await response.text()}`);
-        if (!response.body) throw new Error("流式响应没有 body。");
+        if (!response.body) throw new Error("The streaming response has no body.");
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -482,7 +507,7 @@ function buildMascotTextResponse(raw: string): Pick<MascotToolResponse, "reply" 
     const toolFetches = parseToolFetches(raw);
     const { cleanText, toolCalls } = parseToolCalls(raw);
     let displayText = cleanText;
-    displayText = displayText.replace(/\[获取指令:[^\]]+\]/g, "").trim();
+    displayText = displayText.replace(new RegExp(`\[(?:${FETCH_DIRECTIVE_NAMES}):[^\]]+\]`, "g"), "").trim();
     displayText = displayText.replace(/<(?:think|thinking)>[\s\S]*?<\/(?:think|thinking)>/gi, "").trim();
     const reply = displayText ? displayText.split(/\n{2,}/).map((s) => s.trim()).filter(Boolean) : [];
     return {
@@ -513,7 +538,7 @@ function mapMascotNativeCalls(
     return { toolFetches, toolCalls };
 }
 
-// ── 文本协议：发送请求 ────────────────────────────────
+// -- Text protocol: send request -----------------------------
 
 async function callMascotText(
     context: MascotPageContext,
@@ -522,17 +547,20 @@ async function callMascotText(
 ): Promise<MascotToolResponse> {
     const apiConfig = requireMascotApiConfig();
 
-    // 构造系统提示词。
-    // 套件详细说明（usageGuide）不在这里注入：当 LLM 调用 [获取指令:套件名] 时
-    // 由 agent loop 作为 tool 消息加入到 history，自然驻留在上下文里。
+    // Build the system prompt.
+    // Package detail (usageGuide) is deliberately NOT injected here: when the LLM calls
+    // [FetchTool:<package>] the agent loop appends it to history as a tool message, so it
+    // ends up resident in context anyway.
     const systemPrompt = [
         getMascotPersonaPrompt(),
-        `当前页面：${context.label}（${context.mode}）`,
+        `Current page: ${context.label} (${context.mode})`,
         buildMascotToolsListPrompt(),
+        MASCOT_OUTPUT_LANGUAGE_RULE,
     ].join("\n\n");
 
-    // 仅在该 API 配置开启"图像识别"时才构造 multipart 图片消息；
-    // 关闭时走纯文本（适配器另有总闸兜底，双保险）。
+    // Only build multipart image messages when this API config has image recognition
+    // enabled; otherwise fall back to plain text. (The adapter has its own master switch
+    // as a second line of defence.)
     const hasImages = apiConfig.enableImageRecognition === true && historyHasImages(history);
     const messages: LlmRequestMessage[] = [
         { role: "system", content: systemPrompt },
@@ -578,7 +606,7 @@ async function callMascotText(
     }
 
     if (!raw) {
-        throw new Error("LLM 返回了空内容");
+        throw new Error("The LLM returned empty content.");
     }
 
     const parsedText = buildMascotTextResponse(raw);
@@ -586,7 +614,7 @@ async function callMascotText(
     return parsedText;
 }
 
-// ── 原生协议：发送请求 ────────────────────────────────
+// -- Native protocol: send request ---------------------------
 
 async function callMascotNative(
     context: MascotPageContext,
@@ -601,9 +629,10 @@ async function callMascotNative(
 
     const systemPrompt = [
         getMascotPersonaPrompt(),
-        `当前页面：${context.label}（${context.mode}）`,
-        "你有工具可调。每个套件需要先展开才能看到详细动作；导航工具直接可用。同时最多展开 2 个套件。",
-        "重要：调用工具时，回复文本里**不要复述**工具参数的内容（比如不要把 persona 完整文本再写一遍）。回复文本只用一两句话简短说明你在做什么即可，详细内容通过工具参数传递。",
+        `Current page: ${context.label} (${context.mode})`,
+        "You have tools available. Each package must be expanded before you can see its detailed actions; the navigation tool is usable directly. Expand at most 2 packages at a time.",
+        "Important: when calling a tool, do **not** restate the tool arguments in your reply text (for example, do not write the full persona text out again). Keep the reply to one or two short sentences saying what you are doing; the detail travels in the tool arguments.",
+        MASCOT_OUTPUT_LANGUAGE_RULE,
     ].join("\n\n");
 
     const messages: LlmRequestMessage[] = [
@@ -620,7 +649,7 @@ async function callMascotNative(
                 messages,
                 tools,
                 [],
-                { characterName: "小卷", userName: "用户" },
+                { characterName: "小卷", userName: "User" },
                 { appId: "mascot", signal: options?.signal },
                 {
                     async onDelta(delta) {
@@ -632,7 +661,7 @@ async function callMascotNative(
                     async onToolCallStart(info) {
                         const mappedName = nameMap.get(info.name) || info.name;
                         const shownName = mappedName.startsWith("_loader:")
-                            ? `展开${MASCOT_TOOL_PACKAGES.find((pkg) => pkg.id === mappedName.slice("_loader:".length))?.label || "工具集"}`
+                            ? `Expand ${MASCOT_TOOL_PACKAGES.find((pkg) => pkg.id === mappedName.slice("_loader:".length))?.label || "tool set"}`
                             : mappedName;
                         await options?.callbacks?.onToolCallStart?.({
                             id: info.id,
@@ -689,14 +718,14 @@ async function callMascotNative(
     }
 }
 
-// ── 主入口 ────────────────────────────────────────────
+// -- Main entry point ----------------------------------------
 
 /**
- * 小卷一次 LLM 调用，agent 循环由 UI 层驱动。
- * 根据 API 配置自动选择原生工具协议或文本协议。
+ * One mascot LLM call; the agent loop is driven by the UI layer.
+ * Picks the native tool protocol or the text protocol automatically from the API config.
  *
- * 所有上下文（用户消息、assistant 回复、tool 结果）都通过 history 传递，
- * 调用方负责把每一轮的事件按顺序追加到 history。
+ * All context (user messages, assistant replies, tool results) travels through
+ * history; the caller is responsible for appending each turn's events in order.
  */
 export async function mascotChatWithTools(
     context: MascotPageContext,

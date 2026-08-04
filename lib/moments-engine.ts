@@ -1,5 +1,5 @@
 // lib/moments-engine.ts
-// AI generation engine + background service for Moments (朋友圈).
+// AI generation engine + background service for Moments.
 // Handles: AI posting (scheduled), AI commenting, AI liking, memory integration.
 // Prompts are assembled through the shared assemblePromptPayload() pipeline,
 // ensuring full character settings, world books, long-term memory, and user persona.
@@ -43,6 +43,7 @@ import { assemblePromptPayload, type LLMMessage, type AssemblerInput } from "./l
 import type { RegexConfig } from "./settings-types";
 import { prepareShortTermContext } from "./short-term-assembler";
 import { parseActionTags, dispatchActions } from "./action-parser";
+import { stripReasoningTags } from "./block-tags";
 import { buildCalendarScheduleMarker } from "./calendar-storage";
 import { getWeekStartIso } from "./calendar-utils";
 import { getCustomStickerNames, getCustomStickerExample } from "./custom-sticker-storage";
@@ -112,7 +113,8 @@ function pollScheduledPosts() {
     if (isGenerating) return;
     const now = Date.now();
     const contacts = loadChatContacts();
-    // 用户关掉自动发帖的角色：跳过调度（评论/点赞/手动立即发帖不受此开关影响）
+    // Character has auto-posting switched off: skip scheduling. Comments, likes and a
+    // manual "post now" are unaffected by this toggle.
     const disabledIds = new Set(loadMomentsConfig().autoPostDisabledCharacterIds);
     for (const contact of contacts) {
         if (disabledIds.has(contact.characterId)) continue;
@@ -149,7 +151,7 @@ async function processImmediatePostQueue() {
     // Notify UI globally
     if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("moments-immediate-post-done"));
-        window.dispatchEvent(new CustomEvent("global-notice", { detail: "朋友圈发帖完成" }));
+        window.dispatchEvent(new CustomEvent("global-notice", { detail: "Moments post published" }));
     }
 }
 
@@ -306,7 +308,7 @@ async function triggerAIPost(characterId: string): Promise<void> {
         // Append trigger instruction
         llmMessages.push({
             role: "user",
-            content: "请发一条朋友圈。",
+            content: "Post something to Moments.",
             _debugMeta: { marker: "moments_trigger" },
         });
 
@@ -331,7 +333,8 @@ async function triggerAIPost(characterId: string): Promise<void> {
         const parsed = parseMomentPostResponse(postText);
         if (!parsed) return;
 
-        // 内容去重：生图前先判重，命中直接丢弃（防止同一内容经多路径重复入库）
+        // Deduplicate BEFORE generating the image: a hit is discarded outright, so the same
+        // content reaching this point by several paths cannot be stored twice.
         if (findRecentDuplicateMomentPost({
             authorType: "character",
             authorId: characterId,
@@ -355,7 +358,7 @@ async function triggerAIPost(characterId: string): Promise<void> {
             photoDescription: parsed.photoDescription,
             photoUseReferenceImage: parsed.photoUseReferenceImage === true,
             photoGenerationStatus: parsed.photoDescription ? (photoUrl ? "generated" : "failed") : undefined,
-            photoGenerationError: parsed.photoDescription && !photoUrl ? "生图配置未启用或生成失败" : undefined,
+            photoGenerationError: parsed.photoDescription && !photoUrl ? "Image generation is not configured, or the request failed." : undefined,
             photoUrl,
             visibility,
         });
@@ -425,6 +428,52 @@ async function buildNPCReactionMessages(
     };
 }
 
+// ── Moments protocol tags ──
+//
+// Dual recognition: the English form is what the preset teaches now, the Chinese form is
+// what it taught before and what any older or user-customised preset still teaches.
+// Moments owns these parsers outright — it does NOT go through lib/rich-message-parser.ts
+// (see parseMomentPostResponse), so nothing else covers these tags.
+//
+// None of the tags is persisted: every match becomes plain `content` on a MomentComment or
+// MomentPost before storage, so the Chinese half is robustness against a model still
+// thinking in Chinese rather than a stored-data compatibility requirement.
+const T_NPC_LIKES = "NPC点赞|NPCLikes";
+const T_NPC_COMMENTS = "NPC评论|NPCComments";
+const T_REPLY = "回复|Reply";
+const T_COMMENT = "评论|Comment";
+
+/** `[NPCLikes]…[/NPCLikes]`, legacy `[NPC点赞]…[/NPC点赞]`. */
+const NPC_LIKES_BLOCK_RE = new RegExp(`\\[(?:${T_NPC_LIKES})\\]\\s*([\\s\\S]*?)\\s*\\[\\/(?:${T_NPC_LIKES})\\]`);
+/** `[NPCComments]…[/NPCComments]`, legacy `[NPC评论]…[/NPC评论]`. */
+const NPC_COMMENTS_BLOCK_RE = new RegExp(`\\[(?:${T_NPC_COMMENTS})\\]\\s*([\\s\\S]*?)\\s*\\[\\/(?:${T_NPC_COMMENTS})\\]`);
+
+/**
+ * A comment line that replies to someone: `Name replying to Target: content`,
+ * legacy `昵称 回复 被回复者：内容`. The connector list must stay in sync with
+ * formatMomentCommentLine(), which builds the snapshot the model copies its format from.
+ */
+const REPLY_CONNECTOR = "回复|replying to|replies to|in reply to";
+const COMMENT_REPLY_LINE_RE = new RegExp(`^(.+?)\\s+(?:${REPLY_CONNECTOR})\\s+(.+?)\\s*[:：]\\s*(.+)$`, "i");
+
+/** Inline `[Reply Name]` inside a comment line, legacy `[回复 昵称]`. */
+const INLINE_REPLY_RE = new RegExp(`\\[(?:${T_REPLY})\\s+(.+?)\\]\\s*`, "i");
+/** Leading `[Reply Name] content` on a whole response. */
+const LEADING_REPLY_RE = new RegExp(`^\\[(?:${T_REPLY})\\s*(.+?)\\]\\s*(.+)`, "is");
+/** Every `[Reply X] content` pair in a multi-reply response. */
+function replyPairRegex(): RegExp {
+    return new RegExp(`\\[(?:${T_REPLY})\\s+(.+?)\\]\\s*(.+?)(?=\\[\\/(?:${T_REPLY})|\\[(?:${T_REPLY})|$)`, "gis");
+}
+/**
+ * A closing reply tag. Deliberately tolerant of the stray full-width/half-width brackets
+ * models tack on (`[/回复）]`, `[/Reply)]`) — that tolerance predates the migration.
+ */
+const REPLY_CLOSER_RE = new RegExp(`\\[\\/(?:${T_REPLY})[）)\\]]*\\]?`, "gi");
+/** `[Comment]…[/Comment]` wrapper, legacy `[评论]…[/评论]`. */
+const COMMENT_WRAPPER_RE = new RegExp(`\\[(?:${T_COMMENT})\\]|\\[\\/(?:${T_COMMENT})\\]`, "gi");
+/** `[NoReply]`, legacy `[不回复]` — "this character has nothing to say here". */
+const NO_REPLY_RE = /\[\s*(?:不回复|no[\s_-]*reply)\s*\]/i;
+
 async function callLLM(
     config: ApiConfig,
     preset: PresetConfig | null,
@@ -435,7 +484,7 @@ async function callLLM(
     userName?: string,
 ): Promise<string | null> {
     try {
-        return await sendLLMRequest(
+        const raw = await sendLLMRequest(
             config,
             preset,
             messages,
@@ -443,6 +492,11 @@ async function callLLM(
             { characterName, userName },
             { appId: "moments", appTags },
         );
+        // Every moments generation funnels through here, so this is the one place that
+        // has to drop literal <think>…</think> a model wrote into its content. Moments
+        // never goes through parseAIResponse (that is the chat display path), so nothing
+        // else would remove it and the reasoning ends up saved inside the post text.
+        return stripReasoningTags(raw);
     } catch (err) {
         console.warn(`[Moments] LLM call failed for ${characterName}:`, err);
         return null;
@@ -509,7 +563,7 @@ async function generateNPCReactionsViaLLM(
     };
 
     // Parse NPC likes
-    const likeMatch = responseText.match(/\[NPC点赞\]\s*([\s\S]*?)\s*\[\/NPC点赞\]/);
+    const likeMatch = responseText.match(NPC_LIKES_BLOCK_RE);
     if (likeMatch) {
         const likeNames = likeMatch[1].split(/[,，]/).map(n => n.trim()).filter(Boolean);
         const posts = loadMomentPosts();
@@ -528,8 +582,9 @@ async function generateNPCReactionsViaLLM(
         }
     }
 
-    // Parse NPC comments (supports "昵称: 内容" and "昵称 回复 被回复者: 内容")
-    const commentMatch = responseText.match(/\[NPC评论\]\s*([\s\S]*?)\s*\[\/NPC评论\]/);
+    // Parse NPC comments (supports "Name: content" and "Name replying to Target: content",
+    // plus the legacy Chinese equivalents)
+    const commentMatch = responseText.match(NPC_COMMENTS_BLOCK_RE);
     const commentBlock = commentMatch ? commentMatch[1] : "";
 
     const npcCommentsCreated: MomentComment[] = [];
@@ -616,8 +671,8 @@ async function generateNPCReactionsViaLLM(
         let npcCommentBatchOffset = 0;
         const nextNpcCommentCreatedAt = () => new Date(npcCommentBatchStart + npcCommentBatchOffset++).toISOString();
         for (const line of lines) {
-            // Try "昵称 回复 被回复者: 内容" format first
-            const replyMatch = line.match(/^(.+?)\s+回复\s+(.+?)\s*[:：]\s*(.+)$/);
+            // Try the "Name replying to Target: content" format first
+            const replyMatch = line.match(COMMENT_REPLY_LINE_RE);
             if (replyMatch) {
                 const name = replyMatch[1].trim();
                 const replyToName = replyMatch[2].trim();
@@ -643,7 +698,8 @@ async function generateNPCReactionsViaLLM(
                 continue;
             }
 
-            // Standard "昵称: 内容" format
+            // Standard "Name: content" format. Both colon widths, since the model may
+            // still be following a Chinese-taught preset.
             const colonIdx = line.indexOf(":");
             const colonIdx2 = line.indexOf("：");
             const idx = colonIdx >= 0 && colonIdx2 >= 0
@@ -658,15 +714,15 @@ async function generateNPCReactionsViaLLM(
             const { actor, displayName } = resolveGeneratedMomentActor(name, "npc");
             if (!isGeneratedActorAllowed(actor)) continue;
 
-            // Check for inline [回复 xxx] tag
+            // Check for an inline [Reply xxx] tag
             let inlineReplyName: string | undefined;
-            const inlineMatch = content.match(/\[回复\s+(.+?)\]\s*/);
+            const inlineMatch = content.match(INLINE_REPLY_RE);
             if (inlineMatch) {
                 inlineReplyName = inlineMatch[1].trim();
-                content = content.replace(inlineMatch[0], "").replace(/\[\/回复[）)\]]*\]?/g, "").trim();
+                content = content.replace(inlineMatch[0], "").replace(REPLY_CLOSER_RE, "").trim();
             }
 
-            // Build reply fields if [回复 xxx] was found
+            // Build reply fields if [Reply xxx] was found
             const replyFields: Record<string, unknown> = {};
             if (inlineReplyName) {
                 const replyTarget = resolveNpcReplyTarget(inlineReplyName);
@@ -765,7 +821,7 @@ async function generateAIComment(post: MomentPost, character: Character): Promis
     }
 
     const cleaned = commentText
-        .replace(/\[评论\]|\[\/评论\]/g, "")
+        .replace(COMMENT_WRAPPER_RE, "")
         .replace(/^["\s]+|["\s]+$/g, "")
         .trim();
 
@@ -775,11 +831,11 @@ async function generateAIComment(post: MomentPost, character: Character): Promis
     const chars = loadCharacters();
     const existingComments = getVisibleMomentCommentsForCharacter(post, character.id, loadMomentComments(post.id));
 
-    // Check if the AI wants to reply to a specific commenter: [回复 昵称] 内容
-    const replyMatch = /^\[回复\s*(.+?)\]\s*(.+)/s.exec(cleaned);
+    // Check if the AI wants to reply to a specific commenter: [Reply Name] content
+    const replyMatch = LEADING_REPLY_RE.exec(cleaned);
     if (replyMatch) {
         const replyToName = replyMatch[1].trim();
-        const replyContent = replyMatch[2].replace(/\[\/回复[）)\]]*\]?/g, "").trim();
+        const replyContent = replyMatch[2].replace(REPLY_CLOSER_RE, "").trim();
         if (replyContent) {
             let replyToAuthorType: "user" | "character" | "npc" = "npc";
             let replyToAuthorId = replyToName;
@@ -863,8 +919,8 @@ async function generateTargetedNPCReply(
     llmMessages.push(await buildMomentSnapshotMessage(post, character.id, apiConfig, "moments_npc_reply_data", {
         triggeringCommentIds: [triggeringComment.id],
         prefixLines: [
-            `当前扮演的NPC：${targetNpcName}`,
-            "以下是这条朋友圈当前在界面上的完整样子。你只需要判断这个NPC是否要回复“本次新互动”里直接回复自己的那条内容。",
+            `NPC you are playing right now: ${targetNpcName}`,
+            "Below is exactly how this Moments post currently looks on screen. All you have to decide is whether this NPC replies to the item under \"New interactions this round\" that is addressed to them.",
             "",
         ],
     }));
@@ -890,7 +946,7 @@ async function generateTargetedNPCReply(
         .replace(/^["\s]+|["\s]+$/g, "")
         .trim();
 
-    if (!cleaned || cleaned.includes("[不回复]")) return false;
+    if (!cleaned || NO_REPLY_RE.test(cleaned)) return false;
 
     const userName = getUserName(character.id);
     addMomentComment({
@@ -967,19 +1023,19 @@ async function triggerCharacterReply(
     }
 
     // Parse response
-    if (replyText.includes("[不回复]")) {
+    if (NO_REPLY_RE.test(replyText)) {
         return false;
     }
 
-    // Match [回复 "原文"] 内容 or [回复 昵称] 内容
-    const replyPattern = /\[回复\s+(.+?)\]\s*(.+?)(?=\[\/回复|\[回复|$)/g;
+    // Match [Reply "quoted text"] content or [Reply Name] content
+    const replyPattern = replyPairRegex();
     let match: RegExpExecArray | null;
     let repliedAny = false;
     let repliedToUser = false;
 
     while ((match = replyPattern.exec(replyText)) !== null) {
         const replyToName = match[1].trim();
-        const content = match[2].replace(/\[\/回复[）)\]]*\]?/g, "").trim();
+        const content = match[2].replace(REPLY_CLOSER_RE, "").trim();
         if (!content) continue;
 
         // Resolve replyTo fields
@@ -1149,20 +1205,25 @@ export function parseMomentPostResponse(rawText: string): {
     photoDescription?: string;
     photoUseReferenceImage?: boolean;
 } | null {
-    const blockMatch = rawText.match(/\[朋友圈\]\s*([\s\S]*?)\s*\[\/朋友圈\]/);
+    // Moments has its OWN photo/block parser, independent of
+    // lib/rich-message-parser.ts — both must accept the legacy Chinese tags and
+    // the English ones. See PROTOCOL-MIGRATION-PLAN.md.
+    const blockMatch = rawText.match(/\[(?:朋友圈|Moments)\]\s*([\s\S]*?)\s*\[\/(?:朋友圈|Moments)\]/);
     const text = blockMatch ? blockMatch[1] : rawText;
 
-    const explicitPhotoMatch = text.match(/\[照片[:：]\s*(使用参考图|不使用参考图)\s*[:：]\s*([\s\S]*?)\]/);
-    const legacyPhotoMatch = explicitPhotoMatch ? null : text.match(/\[照片[:：]\s*([\s\S]*?)\]/);
+    const explicitPhotoMatch = text.match(/\[(?:照片|Photo)[:：]\s*(使用参考图|不使用参考图|WithRef|NoRef)\s*[:：]\s*([\s\S]*?)\]/);
+    const legacyPhotoMatch = explicitPhotoMatch ? null : text.match(/\[(?:照片|Photo)[:：]\s*([\s\S]*?)\]/);
     const photoDescription = explicitPhotoMatch
         ? explicitPhotoMatch[2].trim()
         : legacyPhotoMatch ? legacyPhotoMatch[1].trim() : undefined;
-    const photoUseReferenceImage = explicitPhotoMatch ? explicitPhotoMatch[1] === "使用参考图" : false;
+    const photoUseReferenceImage = explicitPhotoMatch
+        ? (explicitPhotoMatch[1] === "使用参考图" || explicitPhotoMatch[1].toLowerCase() === "withref")
+        : false;
 
     const content = text
-        .replace(/\[照片[:：]\s*(?:使用参考图|不使用参考图)\s*[:：]\s*[\s\S]*?\]/g, "")
-        .replace(/\[照片[:：]\s*[\s\S]*?\]/g, "")
-        .replace(/\[朋友圈\]|\[\/朋友圈\]/g, "")
+        .replace(/\[(?:照片|Photo)[:：]\s*(?:使用参考图|不使用参考图|WithRef|NoRef)\s*[:：]\s*[\s\S]*?\]/g, "")
+        .replace(/\[(?:照片|Photo)[:：]\s*[\s\S]*?\]/g, "")
+        .replace(/\[(?:朋友圈|Moments)\]|\[\/(?:朋友圈|Moments)\]/g, "")
         .trim();
 
     if (!content) return null;
@@ -1199,11 +1260,15 @@ export async function generateMomentPhotoUrl(
 }
 
 function getUserName(characterId?: string): string {
+    // "User" rather than a literal translation of the old 我: this name is written into the
+    // snapshot AND compared against what the model writes back (resolveNpcReplyTarget,
+    // normalizeIdentityName). llm-prompt-assembler.ts defaults {{user}} to "User", so a
+    // model with no configured identity name will reach for that word, not "Me".
     try {
         const identity = resolveUserIdentity(characterId, "chat");
-        return identity?.name || "我";
+        return identity?.name || "User";
     } catch {
-        return "我";
+        return "User";
     }
 }
 
@@ -1222,8 +1287,8 @@ function resolveMomentAuthorName(
     authorName?: string,
 ): string {
     if (authorType === "user") return userName;
-    if (authorType === "npc") return authorName || "某人";
-    return chars.find(c => c.id === authorId)?.name ?? "某人";
+    if (authorType === "npc") return authorName || "someone";
+    return chars.find(c => c.id === authorId)?.name ?? "someone";
 }
 
 function formatMomentCommentLine(
@@ -1232,8 +1297,10 @@ function formatMomentCommentLine(
     chars: Character[],
 ): string {
     const authorName = resolveMomentAuthorName(comment.authorType, comment.authorId, userName, chars, comment.authorName);
+    // This is the line format the model copies when it writes an [NPCComments] block, so
+    // the connector here and REPLY_CONNECTOR in COMMENT_REPLY_LINE_RE must stay in step.
     if (!comment.replyToAuthorId) {
-        return `${authorName}：${comment.content}`;
+        return `${authorName}: ${comment.content}`;
     }
     const replyTargetName = comment.replyToAuthorType
         ? resolveMomentAuthorName(
@@ -1243,8 +1310,8 @@ function formatMomentCommentLine(
             chars,
             comment.replyToAuthorName,
         )
-        : (comment.replyToAuthorName || "某人");
-    return `${authorName} 回复 ${replyTargetName}：${comment.content}`;
+        : (comment.replyToAuthorName || "someone");
+    return `${authorName} replying to ${replyTargetName}: ${comment.content}`;
 }
 
 function buildMomentUiSnapshot(
@@ -1259,7 +1326,7 @@ function buildMomentUiSnapshot(
     const chars = loadCharacters();
     const authorName = post.authorType === "user"
         ? userName
-        : (chars.find(c => c.id === post.authorId)?.name ?? "某人");
+        : (chars.find(c => c.id === post.authorId)?.name ?? "someone");
     const allComments = loadMomentComments(post.id);
     const comments = characterId
         ? getVisibleMomentCommentsForCharacter(post, characterId, allComments)
@@ -1274,12 +1341,12 @@ function buildMomentUiSnapshot(
         });
 
     const parts: string[] = [];
-    parts.push(options?.snapshotTitle || "<朋友圈界面快照>");
-    parts.push(`发帖人：${authorName}`);
-    parts.push(`正文：${post.content}`);
-    if (post.location) parts.push(`地点：${post.location}`);
-    if (post.photoUrl) parts.push("配图：见附图");
-    else if (post.photoDescription) parts.push(`配图：${post.photoDescription}`);
+    parts.push(options?.snapshotTitle || "<moments_ui_snapshot>");
+    parts.push(`Author: ${authorName}`);
+    parts.push(`Text: ${post.content}`);
+    if (post.location) parts.push(`Location: ${post.location}`);
+    if (post.photoUrl) parts.push("Photo: see the attached image");
+    else if (post.photoDescription) parts.push(`Photo: ${post.photoDescription}`);
     const likes = characterId
         ? getVisibleMomentLikesForCharacter(post, characterId, post.likes)
         : post.likes;
@@ -1287,13 +1354,13 @@ function buildMomentUiSnapshot(
         const likeNames = likes.map((like) =>
             resolveMomentAuthorName(like.authorType, like.authorId, userName, chars, like.authorName)
         );
-        parts.push(`点赞：${likeNames.join("，")}`);
+        parts.push(`Likes: ${likeNames.join(", ")}`);
     }
 
     parts.push("");
-    parts.push("评论区：");
+    parts.push("Comments:");
     if (commentThreads.length === 0) {
-        parts.push("- 暂无评论");
+        parts.push("- (no comments yet)");
     } else {
         for (const { root, replies } of commentThreads) {
             const rootLabel = commentIndexMap.get(root.id) || root.id;
@@ -1310,7 +1377,7 @@ function buildMomentUiSnapshot(
         const triggeringComments = comments.filter(comment => triggeringSet.has(comment.id));
         if (triggeringComments.length > 0) {
             parts.push("");
-            parts.push("本次新互动：");
+            parts.push("New interactions this round:");
             for (const comment of triggeringComments) {
                 const label = commentIndexMap.get(comment.id) || comment.id;
                 parts.push(`- [${label}] ${formatMomentCommentLine(comment, userName, chars)}`);
@@ -1318,7 +1385,7 @@ function buildMomentUiSnapshot(
         }
     }
 
-    parts.push("</朋友圈界面快照>");
+    parts.push("</moments_ui_snapshot>");
     return parts.join("\n");
 }
 
@@ -1419,7 +1486,7 @@ async function executeReactionTask(task: PendingReaction) {
             const character = chars.find(c => c.id === task.characterId);
             if (!character) return;
             await generateNPCReactionsViaLLM(post, character);
-            if (isUserPost) sendBrowserNotification("朋友圈", { body: "有新的NPC互动" });
+            if (isUserPost) sendBrowserNotification("Moments", { body: "New NPC activity on your post" });
             break;
         }
         case "ai_comment": {
@@ -1432,9 +1499,9 @@ async function executeReactionTask(task: PendingReaction) {
             }
             const didComment = await generateAIComment(post, character);
             if (isUserPost && didComment) {
-                sendBrowserNotification("朋友圈", { body: `${character.name} 评论了你的动态` });
+                sendBrowserNotification("Moments", { body: `${character.name} commented on your post` });
             } else if (isUserPost && didLike) {
-                sendBrowserNotification("朋友圈", { body: `${character.name} 赞了你的朋友圈` });
+                sendBrowserNotification("Moments", { body: `${character.name} liked your post` });
             }
             break;
         }
@@ -1447,7 +1514,7 @@ async function executeReactionTask(task: PendingReaction) {
             if (visibleTriggeringComments.length === 0) return;
             const replyChar = chars.find(c => c.id === task.characterId);
             const didReply = await triggerCharacterReply(post, task.characterId, visibleTriggeringComments);
-            if (didReply) sendBrowserNotification("朋友圈", { body: `${replyChar?.name || "角色"} 回复了你的评论` });
+            if (didReply) sendBrowserNotification("Moments", { body: `${replyChar?.name || "A character"} replied to your comment` });
             break;
         }
         case "npc_reply": {
@@ -1459,7 +1526,7 @@ async function executeReactionTask(task: PendingReaction) {
                 : undefined;
             if (!triggeringComment) return;
             const didReply = await generateTargetedNPCReply(post, ownerChar, triggeringComment, task.targetNpcName);
-            if (didReply) sendBrowserNotification("朋友圈", { body: `${task.targetNpcName} 回复了你的评论` });
+            if (didReply) sendBrowserNotification("Moments", { body: `${task.targetNpcName} replied to your comment` });
             break;
         }
     }
@@ -1490,15 +1557,15 @@ export async function previewMomentsPostPrompt(characterId: string): Promise<Mom
     // Append trigger instruction
     llmMessages.push({
         role: "user",
-        content: "请发一条朋友圈。",
+        content: "Post something to Moments.",
         _debugMeta: { marker: "moments_trigger" },
     });
 
     return {
         messages: apiConfig ? previewMessagesForApi(apiConfig, preset, llmMessages) : llmMessages,
         characterName: character.name,
-        model: apiConfig?.defaultModel ?? "(未绑定)",
-        presetName: preset?.name ?? "(无预设)",
+        model: apiConfig?.defaultModel ?? "(not bound)",
+        presetName: preset?.name ?? "(no preset)",
     };
 }
 
@@ -1524,8 +1591,8 @@ export async function previewMomentsCommentPrompt(characterId: string, postId: s
     return {
         messages: apiConfig ? previewMessagesForApi(apiConfig, preset, llmMessages) : llmMessages,
         characterName: character.name,
-        model: apiConfig?.defaultModel ?? "(未绑定)",
-        presetName: preset?.name ?? "(无预设)",
+        model: apiConfig?.defaultModel ?? "(not bound)",
+        presetName: preset?.name ?? "(no preset)",
     };
 }
 
@@ -1547,8 +1614,8 @@ export async function previewMomentsNPCPrompt(characterId: string, postId: strin
     return {
         messages: result.apiConfig ? previewMessagesForApi(result.apiConfig, result.preset, result.messages) : result.messages,
         characterName: character.name,
-        model: result.apiConfig?.defaultModel ?? "(未绑定)",
-        presetName: result.preset?.name ?? "(无预设)",
+        model: result.apiConfig?.defaultModel ?? "(not bound)",
+        presetName: result.preset?.name ?? "(no preset)",
     };
 }
 
@@ -1579,7 +1646,7 @@ export async function previewMomentsReplyPrompt(characterId: string, postId: str
     return {
         messages: apiConfig ? previewMessagesForApi(apiConfig, preset, llmMessages) : llmMessages,
         characterName: character.name,
-        model: apiConfig?.defaultModel ?? "(未绑定)",
-        presetName: preset?.name ?? "(无预设)",
+        model: apiConfig?.defaultModel ?? "(not bound)",
+        presetName: preset?.name ?? "(no preset)",
     };
 }

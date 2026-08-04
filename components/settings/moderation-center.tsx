@@ -12,11 +12,11 @@ import { fetchCustomAppMarketAdminItems, reviewCustomAppMarketItem } from "@/lib
 import type { CustomAppMarketItem } from "@/lib/custom-app-market-types";
 
 const TYPE_LABELS: Record<string, string> = {
-  market_app: "市场APP",
-  game: "游戏",
-  game_comment: "游戏评论",
-  online_doc: "联机云内容",
-  online_room: "联机房间",
+  market_app: "Market App",
+  game: "Game",
+  game_comment: "Game Comment",
+  online_doc: "Online Cloud Content",
+  online_room: "Online Room",
 };
 
 type Tab = "reports" | "review" | "users";
@@ -39,7 +39,7 @@ export function ModerationCenter({ onNotice }: { onNotice?: (msg: string) => voi
     try {
       setReports(await fetchReports(status));
     } catch (err) {
-      notice(err instanceof Error ? err.message : "举报列表加载失败");
+      notice(err instanceof Error ? err.message : "Failed to load report list");
     } finally {
       setReportsLoading(false);
     }
@@ -56,7 +56,7 @@ export function ModerationCenter({ onNotice }: { onNotice?: (msg: string) => voi
       notice(successText);
       await loadReports(reportStatus);
     } catch (err) {
-      notice(err instanceof Error ? err.message : "操作失败");
+      notice(err instanceof Error ? err.message : "Action failed");
     } finally {
       setBusyIds(current => {
         const next = { ...current };
@@ -76,7 +76,7 @@ export function ModerationCenter({ onNotice }: { onNotice?: (msg: string) => voi
     try {
       setReviewItems(await fetchCustomAppMarketAdminItems({ adminKey: "", view: "pending" }));
     } catch (err) {
-      notice(err instanceof Error ? err.message : "审核列表加载失败（未开启先审后发时通常为空）");
+      notice(err instanceof Error ? err.message : "Failed to load review list (usually empty if pre-review isn't enabled)");
       setReviewItems([]);
     } finally {
       setReviewLoading(false);
@@ -91,10 +91,10 @@ export function ModerationCenter({ onNotice }: { onNotice?: (msg: string) => voi
     setReviewBusyIds(current => ({ ...current, [item.id]: true }));
     try {
       await reviewCustomAppMarketItem({ adminKey: "", id: item.id, action });
-      notice(action === "approve" ? `已通过「${item.name}」` : `已驳回「${item.name}」`);
+      notice(action === "approve" ? `Approved "${item.name}"` : `Rejected "${item.name}"`);
       await loadReviewItems();
     } catch (err) {
-      notice(err instanceof Error ? err.message : "审核操作失败");
+      notice(err instanceof Error ? err.message : "Review action failed");
     } finally {
       setReviewBusyIds(current => {
         const next = { ...current };
@@ -119,7 +119,7 @@ export function ModerationCenter({ onNotice }: { onNotice?: (msg: string) => voi
       setFoundUser((data.user as FoundUser | null) ?? null);
       setUserSearched(true);
     } catch (err) {
-      notice(err instanceof Error ? err.message : "查询失败");
+      notice(err instanceof Error ? err.message : "Search failed");
     } finally {
       setUserBusy(false);
     }
@@ -130,10 +130,10 @@ export function ModerationCenter({ onNotice }: { onNotice?: (msg: string) => voi
     try {
       const banning = user.status !== "disabled";
       await moderationApi({ action: banning ? "banUser" : "unbanUser", userId: user.id });
-      notice(banning ? `已封禁 @${user.username}（无法再登录）` : `已解封 @${user.username}`);
+      notice(banning ? `Banned @${user.username} (can no longer log in)` : `Unbanned @${user.username}`);
       setFoundUser({ ...user, status: banning ? "disabled" : "active" });
     } catch (err) {
-      notice(err instanceof Error ? err.message : "操作失败");
+      notice(err instanceof Error ? err.message : "Action failed");
     } finally {
       setUserBusy(false);
     }
@@ -170,9 +170,9 @@ export function ModerationCenter({ onNotice }: { onNotice?: (msg: string) => voi
   return (
     <div style={{ padding: "4px 2px 24px" }}>
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        <button type="button" style={segStyle(tab === "reports")} onClick={() => setTab("reports")}>举报队列</button>
-        <button type="button" style={segStyle(tab === "review")} onClick={() => setTab("review")}>应用审核</button>
-        <button type="button" style={segStyle(tab === "users")} onClick={() => setTab("users")}>用户管理</button>
+        <button type="button" style={segStyle(tab === "reports")} onClick={() => setTab("reports")}>Report Queue</button>
+        <button type="button" style={segStyle(tab === "review")} onClick={() => setTab("review")}>App Review</button>
+        <button type="button" style={segStyle(tab === "users")} onClick={() => setTab("users")}>User Management</button>
       </div>
 
       {tab === "reports" ? (
@@ -180,35 +180,35 @@ export function ModerationCenter({ onNotice }: { onNotice?: (msg: string) => voi
           <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 12 }}>
             {(["pending", "resolved", "dismissed"] as const).map(status => (
               <button key={status} type="button" style={segStyle(reportStatus === status)} onClick={() => setReportStatus(status)}>
-                {status === "pending" ? "待处理" : status === "resolved" ? "已处理" : "已驳回"}
+                {status === "pending" ? "Pending" : status === "resolved" ? "Resolved" : "Dismissed"}
               </button>
             ))}
             <button type="button" style={{ ...btnStyle, marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 4 }} onClick={() => void loadReports(reportStatus)}>
-              <RefreshCw size={12} />刷新
+              <RefreshCw size={12} />Refresh
             </button>
           </div>
-          {reportsLoading ? <p style={subStyle}><Loader2 size={13} className="animate-spin" style={{ verticalAlign: -2 }} /> 加载中…</p> : null}
-          {!reportsLoading && reports.length === 0 ? <p style={subStyle}>没有{reportStatus === "pending" ? "待处理的" : ""}举报。</p> : null}
+          {reportsLoading ? <p style={subStyle}><Loader2 size={13} className="animate-spin" style={{ verticalAlign: -2 }} /> Loading…</p> : null}
+          {!reportsLoading && reports.length === 0 ? <p style={subStyle}>No {reportStatus === "pending" ? "pending " : ""}reports.</p> : null}
           {reports.map(report => (
             <div key={report.id} style={cardStyle}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                <strong style={{ fontSize: 12.5 }}>[{TYPE_LABELS[report.contentType] ?? report.contentType}] {report.contentOwnerName || "未知作者"}</strong>
+                <strong style={{ fontSize: 12.5 }}>[{TYPE_LABELS[report.contentType] ?? report.contentType}] {report.contentOwnerName || "Unknown author"}</strong>
                 <span style={subStyle}>{new Date(report.createdAt).toLocaleString()}</span>
               </div>
-              <div style={{ margin: "4px 0", wordBreak: "break-all" }}>{report.contentPreview || "（无内容摘要）"}</div>
-              <div style={subStyle}>举报人：{report.reporterName}{report.reason ? ` · 理由：${report.reason}` : ""}</div>
+              <div style={{ margin: "4px 0", wordBreak: "break-all" }}>{report.contentPreview || "(No content preview)"}</div>
+              <div style={subStyle}>Reporter: {report.reporterName}{report.reason ? ` · Reason: ${report.reason}` : ""}</div>
               {report.status === "pending" ? (
                 <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                  <button type="button" style={dangerBtn} disabled={busyIds[report.id]} onClick={() => setConfirmAction({ kind: "takedown", report })}>下架内容</button>
+                  <button type="button" style={dangerBtn} disabled={busyIds[report.id]} onClick={() => setConfirmAction({ kind: "takedown", report })}>Take Down</button>
                   {report.contentOwnerId ? (
-                    <button type="button" style={dangerBtn} disabled={busyIds[report.id]} onClick={() => setConfirmAction({ kind: "ban", report })}>封禁作者</button>
+                    <button type="button" style={dangerBtn} disabled={busyIds[report.id]} onClick={() => setConfirmAction({ kind: "ban", report })}>Ban Author</button>
                   ) : null}
                   <button
                     type="button"
                     style={btnStyle}
                     disabled={busyIds[report.id]}
-                    onClick={() => void runReportAction(report, { action: "dismiss", reportId: report.id }, "已驳回举报")}
-                  >驳回</button>
+                    onClick={() => void runReportAction(report, { action: "dismiss", reportId: report.id }, "Report dismissed")}
+                  >Dismiss</button>
                 </div>
               ) : (
                 <div style={{ ...subStyle, marginTop: 6 }}>
@@ -223,22 +223,22 @@ export function ModerationCenter({ onNotice }: { onNotice?: (msg: string) => voi
       {tab === "review" ? (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <span style={subStyle}>待审核的市场 APP（需环境变量 APP_MARKET_REVIEW_ENABLED=true 开启先审后发）</span>
-            <button type="button" style={{ ...btnStyle, display: "inline-flex", alignItems: "center", gap: 4 }} onClick={() => void loadReviewItems()}><RefreshCw size={12} />刷新</button>
+            <span style={subStyle}>Market apps pending review (requires env var APP_MARKET_REVIEW_ENABLED=true to enable pre-review)</span>
+            <button type="button" style={{ ...btnStyle, display: "inline-flex", alignItems: "center", gap: 4 }} onClick={() => void loadReviewItems()}><RefreshCw size={12} />Refresh</button>
           </div>
-          {reviewLoading ? <p style={subStyle}><Loader2 size={13} className="animate-spin" style={{ verticalAlign: -2 }} /> 加载中…</p> : null}
-          {!reviewLoading && reviewItems.length === 0 ? <p style={subStyle}>没有待审核的 APP。</p> : null}
+          {reviewLoading ? <p style={subStyle}><Loader2 size={13} className="animate-spin" style={{ verticalAlign: -2 }} /> Loading…</p> : null}
+          {!reviewLoading && reviewItems.length === 0 ? <p style={subStyle}>No apps pending review.</p> : null}
           {reviewItems.map(item => (
             <div key={item.id} style={cardStyle}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                 <strong>{item.name} <span style={subStyle}>v{item.version}</span></strong>
                 <span style={subStyle}>{item.authorName}</span>
               </div>
-              <div style={{ margin: "4px 0" }}>{item.description || "（无简介）"}</div>
-              <div style={subStyle}>权限：{item.permissions.length > 0 ? item.permissions.join(", ") : "无"}</div>
+              <div style={{ margin: "4px 0" }}>{item.description || "(No description)"}</div>
+              <div style={subStyle}>Permissions: {item.permissions.length > 0 ? item.permissions.join(", ") : "None"}</div>
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button type="button" style={btnStyle} disabled={reviewBusyIds[item.id]} onClick={() => void reviewApp(item, "approve")}>通过</button>
-                <button type="button" style={dangerBtn} disabled={reviewBusyIds[item.id]} onClick={() => void reviewApp(item, "reject")}>驳回</button>
+                <button type="button" style={btnStyle} disabled={reviewBusyIds[item.id]} onClick={() => void reviewApp(item, "approve")}>Approve</button>
+                <button type="button" style={dangerBtn} disabled={reviewBusyIds[item.id]} onClick={() => void reviewApp(item, "reject")}>Reject</button>
               </div>
             </div>
           ))}
@@ -252,45 +252,45 @@ export function ModerationCenter({ onNotice }: { onNotice?: (msg: string) => voi
               value={userQuery}
               onChange={event => setUserQuery(event.target.value)}
               onKeyDown={event => { if (event.key === "Enter") void searchUser(); }}
-              placeholder="输入用户名精确查找"
+              placeholder="Enter an exact username to search"
               style={{ flex: 1, minWidth: 0, border: "1px solid var(--border-soft, rgba(0,0,0,.1))", borderRadius: 12, padding: "8px 12px", fontSize: 13, background: "var(--surface-inset, rgba(0,0,0,.03))", color: "inherit", outline: "none" }}
             />
             <button type="button" style={{ ...btnStyle, display: "inline-flex", alignItems: "center", gap: 4 }} disabled={userBusy} onClick={() => void searchUser()}>
-              <Search size={13} />查找
+              <Search size={13} />Search
             </button>
           </div>
-          {userSearched && !foundUser ? <p style={subStyle}>没有找到该用户名。</p> : null}
+          {userSearched && !foundUser ? <p style={subStyle}>No user found with that username.</p> : null}
           {foundUser ? (
             <div style={cardStyle}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                 <div>
                   <strong>{foundUser.displayName || foundUser.username}</strong>
-                  <div style={subStyle}>@{foundUser.username} · {foundUser.status === "disabled" ? "已封禁" : "正常"}</div>
+                  <div style={subStyle}>@{foundUser.username} · {foundUser.status === "disabled" ? "Banned" : "Active"}</div>
                 </div>
                 <button type="button" style={foundUser.status === "disabled" ? btnStyle : dangerBtn} disabled={userBusy} onClick={() => void toggleBan(foundUser)}>
-                  {foundUser.status === "disabled" ? "解封" : "封禁"}
+                  {foundUser.status === "disabled" ? "Unban" : "Ban"}
                 </button>
               </div>
             </div>
           ) : null}
-          <p style={{ ...subStyle, marginTop: 8 }}>封禁后该账号无法登录，发布与联机随之失效；解封即恢复。管理员账号不可被封禁。</p>
+          <p style={{ ...subStyle, marginTop: 8 }}>Once banned, the account cannot log in and its posts and online activity are disabled; unbanning restores it. Admin accounts cannot be banned.</p>
         </div>
       ) : null}
 
       {confirmAction ? (
         <ConfirmDialog
-          title={confirmAction.kind === "takedown" ? "下架内容" : "封禁作者"}
+          title={confirmAction.kind === "takedown" ? "Take Down Content" : "Ban Author"}
           message={confirmAction.kind === "takedown"
-            ? `确认下架该${TYPE_LABELS[confirmAction.report.contentType] ?? "内容"}？此操作会对所有用户生效。`
-            : `确认封禁作者「${confirmAction.report.contentOwnerName || confirmAction.report.contentOwnerId}」？该账号将无法登录。`}
+            ? `Take down this ${TYPE_LABELS[confirmAction.report.contentType] ?? "content"}? This will apply to all users.`
+            : `Ban the author "${confirmAction.report.contentOwnerName || confirmAction.report.contentOwnerId}"? This account will no longer be able to log in.`}
           variant="danger"
           onConfirm={() => {
             const target = confirmAction;
             setConfirmAction(null);
             if (target.kind === "takedown") {
-              void runReportAction(target.report, { action: "takedown", reportId: target.report.id }, "已下架并结案");
+              void runReportAction(target.report, { action: "takedown", reportId: target.report.id }, "Taken down and resolved");
             } else {
-              void runReportAction(target.report, { action: "banUser", userId: target.report.contentOwnerId }, `已封禁 ${target.report.contentOwnerName || "该作者"}`);
+              void runReportAction(target.report, { action: "banUser", userId: target.report.contentOwnerId }, `Banned ${target.report.contentOwnerName || "the author"}`);
             }
           }}
           onCancel={() => setConfirmAction(null)}

@@ -56,7 +56,7 @@ function isLikelyImageFile(file: File): boolean {
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error("图片读取失败"));
+    reader.onerror = () => reject(new Error("Failed to read image"));
     reader.onload = () => resolve(String(reader.result || ""));
     reader.readAsDataURL(blob);
   });
@@ -93,7 +93,7 @@ function clampNumber(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
-/** 从既有 display/slice 反推一个统一缩放比（百分比），作为滑块初值。 */
+/** Derive a unified scale ratio (percentage) from the existing display/slice values, used as the slider's initial value. */
 function initialScalePct(v: NineSliceValues): number {
   const ratios = [
     v.displayTop / v.sliceTop,
@@ -106,7 +106,7 @@ function initialScalePct(v: NineSliceValues): number {
   return clampNumber(avg * 100, 1, 100);
 }
 
-/** 把初值的 display 归一化成统一缩放，避免一打开就显示成四边不同倍率的变形效果。 */
+/** Normalize the initial display values to a unified scale, so the dialog doesn't open showing a distorted, unevenly-scaled preview. */
 function normalizeInitial(v: NineSliceValues): NineSliceValues {
   const pctValue = initialScalePct(v);
   const apply = (slice: number) => clampNumber((slice * pctValue) / 100, 1, 140);
@@ -143,10 +143,10 @@ function NineSliceCalibrationDialog({
   const height = Math.max(1, Math.round(request.height || 1));
   const [values, setValues] = useState<NineSliceValues>(() => normalizeInitial(request.initial));
   const [imageUrl, setImageUrl] = useState("");
-  const [sampleText, setSampleText] = useState("一行文字");
+  const [sampleText, setSampleText] = useState("Sample text");
   const [step, setStep] = useState<NineSliceStep>(1);
   const editableTextRef = useRef<HTMLSpanElement | null>(null);
-  // 统一缩放比：display = slice × scale（四边同一倍率，装饰不变形）。
+  // Unified scale ratio: display = slice x scale (same ratio on all four sides, so decorations don't distort).
   const [scalePct, setScalePct] = useState(() => initialScalePct(request.initial));
 
   const pct = (value: number, total: number) =>
@@ -168,7 +168,7 @@ function NineSliceCalibrationDialog({
   const setValue = (key: NineSliceSliderKey, raw: number) => {
     setValues((prev) => {
       const next = { ...prev };
-      // 调整裁切线时，按统一缩放比同步该边的装饰显示宽度。
+      // When adjusting a slice line, sync that side's decoration display width using the unified scale ratio.
       if (key === "sliceTop") {
         next.sliceTop = clampNumber(raw, 1, height - prev.sliceBottom - 1);
         next.displayTop = displayFor(next.sliceTop);
@@ -203,7 +203,7 @@ function NineSliceCalibrationDialog({
   };
 
   const cancel = () => {
-    detail.reject(new Error("用户取消了九宫格校准。"));
+    detail.reject(new Error("User cancelled the nine-slice calibration."));
     onClose();
   };
 
@@ -273,16 +273,16 @@ function NineSliceCalibrationDialog({
     </div>
   );
 
-  // 底图按缩放真实放大缩小（1 源像素 = scale 屏幕像素），预览额外等比放大，便于看清和操作。
+  // The base image scales up/down for real (1 source pixel = scale screen pixels); the preview is further zoomed proportionally for clarity and easier handling.
   const baseImgWidth = Math.max(1, Math.round((width * scalePct) / 100));
   const previewZoom = 3.4;
   const previewImgWidth = Math.max(1, Math.round(baseImgWidth * previewZoom));
-  const stepTitle = step === 1 ? "整体缩放" : step === 2 ? "裁剪四角" : "文字留白";
+  const stepTitle = step === 1 ? "Overall scale" : step === 2 ? "Crop corners" : "Text padding";
   const stepHint = step === 1
-    ? "只看一个字和底图的比例。先把整张气泡缩到和聊天字号匹配。"
+    ? "Just compare a single character to the base image. First shrink the whole bubble to match the chat font size."
     : step === 2
-      ? "把圆角、尾巴、云朵等装饰放到虚线外侧；中间拉伸区尽量保持无装饰。"
-      : "这里看最终效果。文字留白可以进入裁剪保护区，只要别压到装饰即可。";
+      ? "Place rounded corners, tails, clouds, and other decorations outside the dashed lines; keep the middle stretch area free of decoration."
+      : "This shows the final result. Text padding can extend into the crop-protected area, as long as it doesn't overlap the decoration.";
   const previousStep = () => {
     if (step === 1) {
       cancel();
@@ -310,7 +310,7 @@ function NineSliceCalibrationDialog({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="mascot-nine-img" src={imageUrl} alt="" draggable={false} />
           {step === 1 ? (
-            <span className="mascot-nine-scale-word">字</span>
+            <span className="mascot-nine-scale-word">A</span>
           ) : (
             <>
               <span
@@ -322,7 +322,7 @@ function NineSliceCalibrationDialog({
                   right: `${pct(values.sliceRight, width)}%`,
                 }}
               >
-                <span className="mascot-nine-region-label">中间无装饰</span>
+                <span className="mascot-nine-region-label">No decoration in the middle</span>
               </span>
               <span className="mascot-nine-line mascot-nine-line-h" style={{ top: `${pct(values.sliceTop, height)}%` }} />
               <span className="mascot-nine-line mascot-nine-line-h" style={{ top: `${100 - pct(values.sliceBottom, height)}%` }} />
@@ -332,7 +332,7 @@ function NineSliceCalibrationDialog({
           )}
         </div>
       ) : (
-        <div className="mascot-nine-loading">加载图片…</div>
+        <div className="mascot-nine-loading">Loading image…</div>
       )}
     </div>
   );
@@ -347,22 +347,22 @@ function NineSliceCalibrationDialog({
             suppressContentEditableWarning
             spellCheck={false}
             role="textbox"
-            aria-label="气泡预览文字"
+            aria-label="Bubble preview text"
             onInput={(event) => setSampleText(event.currentTarget.textContent || "")}
             onFocus={(event) => {
-              if (event.currentTarget.textContent === "一行文字") {
+              if (event.currentTarget.textContent === "Sample text") {
                 event.currentTarget.textContent = "";
                 setSampleText("");
               }
             }}
             onBlur={(event) => {
               if (!event.currentTarget.textContent?.trim()) {
-                event.currentTarget.textContent = "一行文字";
-                setSampleText("一行文字");
+                event.currentTarget.textContent = "Sample text";
+                setSampleText("Sample text");
               }
             }}
           >
-            {sampleText || "一行文字"}
+            {sampleText || "Sample text"}
           </span>
           <span className="mascot-nine-safe" style={safeStyle} />
         </div>
@@ -375,16 +375,16 @@ function NineSliceCalibrationDialog({
       <div className="mascot-nine-dialog">
         <div className="mascot-nine-head">
           <div>
-            <div className="mascot-nine-title">校准九宫格气泡</div>
+            <div className="mascot-nine-title">Calibrate Nine-Slice Bubble</div>
             <div className="mascot-nine-sub">{request.label} · {width}×{height}</div>
           </div>
-          <button type="button" onClick={cancel} className="mascot-nine-close" aria-label="关闭">×</button>
+          <button type="button" onClick={cancel} className="mascot-nine-close" aria-label="Close">×</button>
         </div>
 
-        <div className="mascot-nine-progress" aria-label="校准步骤">
-          <button type="button" className={`mascot-nine-chip ${step === 1 ? "is-active" : ""}`} onClick={() => setStep(1)}>1 缩放</button>
-          <button type="button" className={`mascot-nine-chip ${step === 2 ? "is-active" : ""}`} onClick={() => setStep(2)}>2 裁剪</button>
-          <button type="button" className={`mascot-nine-chip ${step === 3 ? "is-active" : ""}`} onClick={() => setStep(3)}>3 留白</button>
+        <div className="mascot-nine-progress" aria-label="Calibration steps">
+          <button type="button" className={`mascot-nine-chip ${step === 1 ? "is-active" : ""}`} onClick={() => setStep(1)}>1 Scale</button>
+          <button type="button" className={`mascot-nine-chip ${step === 2 ? "is-active" : ""}`} onClick={() => setStep(2)}>2 Crop</button>
+          <button type="button" className={`mascot-nine-chip ${step === 3 ? "is-active" : ""}`} onClick={() => setStep(3)}>3 Padding</button>
         </div>
 
         <div className="mascot-nine-step">
@@ -405,10 +405,10 @@ function NineSliceCalibrationDialog({
           <>
             {sourcePreview}
             <div className="mascot-nine-sliders">
-              {slider("上", "sliceTop", height - values.sliceBottom - 1, 1)}
-              {slider("下", "sliceBottom", height - values.sliceTop - 1, 1)}
-              {slider("左", "sliceLeft", width - values.sliceRight - 1, 1)}
-              {slider("右", "sliceRight", width - values.sliceLeft - 1, 1)}
+              {slider("Top", "sliceTop", height - values.sliceBottom - 1, 1)}
+              {slider("Bottom", "sliceBottom", height - values.sliceTop - 1, 1)}
+              {slider("Left", "sliceLeft", width - values.sliceRight - 1, 1)}
+              {slider("Right", "sliceRight", width - values.sliceLeft - 1, 1)}
             </div>
           </>
         ) : null}
@@ -417,17 +417,17 @@ function NineSliceCalibrationDialog({
           <>
             {finalPreview}
             <div className="mascot-nine-sliders">
-              {slider("上", "paddingTop", 240)}
-              {slider("下", "paddingBottom", 240)}
-              {slider("左", "paddingLeft", 240)}
-              {slider("右", "paddingRight", 240)}
+              {slider("Top", "paddingTop", 240)}
+              {slider("Bottom", "paddingBottom", 240)}
+              {slider("Left", "paddingLeft", 240)}
+              {slider("Right", "paddingRight", 240)}
             </div>
           </>
         ) : null}
 
         <div className="mascot-nine-actions">
-          <button type="button" className="mascot-nine-btn" onClick={previousStep}>{step === 1 ? "取消" : "上一步"}</button>
-          <button type="button" className="mascot-nine-btn mascot-nine-btn-primary" onClick={nextStep}>{step === 3 ? "确认校准" : "下一步"}</button>
+          <button type="button" className="mascot-nine-btn" onClick={previousStep}>{step === 1 ? "Cancel" : "Back"}</button>
+          <button type="button" className="mascot-nine-btn mascot-nine-btn-primary" onClick={nextStep}>{step === 3 ? "Confirm Calibration" : "Next"}</button>
         </div>
       </div>
     </div>
@@ -551,14 +551,14 @@ export function MascotFloat() {
   const [chatInput, setChatInput] = useState("");
   const mascotChat = useSyncExternalStore(subscribeMascotChat, getMascotChatSnapshot, getMascotChatSnapshot);
   const mascotSettings = useSyncExternalStore(subscribeMascotSettings, getMascotSettingsSnapshot, getMascotSettingsSnapshot);
-  const mascotDisplayName = mascotSettings.nickname || "AI助手";
+  const mascotDisplayName = mascotSettings.nickname || "AI Assistant";
   const mascotMessages = mascotChat.messages;
   const isThinking = mascotChat.isThinking;
   const [mascotAvatarUrl, setMascotAvatarUrl] = useState(mascotSettings.avatarImage || "/mascot.png");
   const [moduleDrawerOpen, setModuleDrawerOpen] = useState(false);
-  // 待发送图片（media-store:// 引用列表）
+  // Pending images to send (list of media-store:// refs)
   const [pendingImages, setPendingImages] = useState<string[]>([]);
-  // ref → blob object URL 缓存，渲染预览用
+  // ref → blob object URL cache, used for rendering previews
   const [imagePreviewCache, setImagePreviewCache] = useState<Record<string, string>>({});
   const [nineSliceCalibration, setNineSliceCalibration] = useState<NineSliceCalibrationEventDetail | null>(null);
   const [activeMascotMessageIndex, setActiveMascotMessageIndex] = useState<number | null>(null);
@@ -581,7 +581,7 @@ export function MascotFloat() {
     return () => { cancelled = true; };
   }, [mascotSettings.avatarImage]);
 
-  /** 把 File 准备成小卷可读图片：最长边 1280；PNG/WebP 保留透明通道，JPEG 才转 JPEG。 */
+  /** Prepare a File as a lightweight, readable image: longest side 1280; PNG/WebP keep their alpha channel, only converted to JPEG when the source is JPEG. */
   const compressImageToBlob = useCallback(async (file: File): Promise<Blob> => {
     const lowerName = file.name.toLowerCase();
     const sourceMime = file.type.toLowerCase()
@@ -590,10 +590,10 @@ export function MascotFloat() {
 
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onerror = () => reject(new Error("读取失败"));
+      reader.onerror = () => reject(new Error("Failed to read"));
       reader.onload = () => {
         const img = new Image();
-        img.onerror = () => reject(new Error("解码失败"));
+        img.onerror = () => reject(new Error("Failed to decode"));
         img.onload = () => {
           const maxSide = 1280;
           let { width, height } = img;
@@ -606,13 +606,13 @@ export function MascotFloat() {
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext("2d");
-          if (!ctx) { reject(new Error("canvas 不可用")); return; }
+          if (!ctx) { reject(new Error("Canvas unavailable")); return; }
           ctx.drawImage(img, 0, 0, width, height);
           const outputMime = sourceMime === "image/png" || sourceMime === "image/webp" ? sourceMime : "image/jpeg";
           const quality = outputMime === "image/webp" ? 0.9 : outputMime === "image/jpeg" ? 0.82 : undefined;
           canvas.toBlob((blob) => {
             if (blob) resolve(blob);
-            else reject(new Error("canvas 转 blob 失败"));
+            else reject(new Error("Canvas to blob conversion failed"));
           }, outputMime, quality);
         };
         img.src = reader.result as string;
@@ -628,20 +628,20 @@ export function MascotFloat() {
     const previews: Record<string, string> = {};
     for (const file of pickedFiles) {
       if (!isLikelyImageFile(file)) {
-        console.warn("[Mascot] 文件 MIME 不像图片，仍按图片尝试处理:", file.type || "(empty)", file.name);
+        console.warn("[Mascot] File MIME doesn't look like an image, still attempting to process it as one:", file.type || "(empty)", file.name);
       }
       try {
         let blob: Blob = file;
         try {
           blob = await compressImageToBlob(file);
         } catch (e) {
-          console.warn("[Mascot] 图片压缩失败，使用原图:", e);
+          console.warn("[Mascot] Image compression failed, using original:", e);
         }
         const ref = await blobToDataUrl(blob);
         refs.push(ref);
         previews[ref] = ref;
       } catch (e) {
-        console.warn("[Mascot] 图片处理失败:", e);
+        console.warn("[Mascot] Image processing failed:", e);
       }
     }
     if (refs.length > 0) {
@@ -650,7 +650,7 @@ export function MascotFloat() {
     }
   }, [compressImageToBlob]);
 
-  // 缺失的预览懒加载：发现没缓存的 ref → 加载 blob → 生成 object URL
+  // Lazy-load missing previews: find refs without a cache entry → load blob → generate object URL
   useEffect(() => {
     const allRefs = new Set<string>();
     for (const m of mascotMessages) {
@@ -687,7 +687,7 @@ export function MascotFloat() {
       if (!detail?.request || typeof detail.resolve !== "function" || typeof detail.reject !== "function") return;
       detail.handled = true;
       setNineSliceCalibration((current) => {
-        if (current) current.reject(new Error("新的九宫格校准请求已打开，上一轮已取消。"));
+        if (current) current.reject(new Error("A new nine-slice calibration request was opened; the previous one was cancelled."));
         return detail;
       });
       if (!isMascotPanelOpen()) toggleMascotPanel();
@@ -700,12 +700,12 @@ export function MascotFloat() {
 
   // Selected module from grid (shows teleport button before navigating)
   const MODULES = [
-    { id: "characters", icon: "🎭", label: "角色卡" },
-    { id: "worldbook", icon: "📖", label: "世界书" },
-    { id: "regex", icon: "✨", label: "正则" },
-    { id: "presets", icon: "🎨", label: "预设" },
+    { id: "characters", icon: "🎭", label: "Character Cards" },
+    { id: "worldbook", icon: "📖", label: "Worldbook" },
+    { id: "regex", icon: "✨", label: "Regex" },
+    { id: "presets", icon: "🎨", label: "Presets" },
     { id: "css", icon: "🖌️", label: "CSS" },
-    { id: "new_session", icon: "🔄", label: "新会话" },
+    { id: "new_session", icon: "🔄", label: "New Session" },
   ] as const;
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
 
@@ -743,22 +743,22 @@ export function MascotFloat() {
 
   const handleClearMascotToolHistory = useCallback(() => {
     if (isThinking) {
-      window.dispatchEvent(new CustomEvent("global-notice", { detail: `${mascotDisplayName}正在执行，完成后再清理。` }));
+      window.dispatchEvent(new CustomEvent("global-notice", { detail: `${mascotDisplayName} is currently working; try clearing again once it's done.` }));
       return;
     }
     if (!hasMascotToolHistory) {
-      window.dispatchEvent(new CustomEvent("global-notice", { detail: "没有可清理的工具调用历史。" }));
+      window.dispatchEvent(new CustomEvent("global-notice", { detail: "There's no tool call history to clear." }));
       return;
     }
-    const confirmed = window.confirm(`将移除${mascotDisplayName}会话中的工具调用记录、工具结果记录，并清除消息里的原生工具调用元数据。普通对话内容不会删除。`);
+    const confirmed = window.confirm(`This will remove tool call records and tool result records from ${mascotDisplayName}'s conversation, and clear the native tool call metadata on messages. Regular conversation content will not be deleted.`);
     if (!confirmed) return;
 
     const result = clearMascotToolHistoryMessages(mascotMessages);
     setMascotMessages(result.messages);
     window.dispatchEvent(new CustomEvent("global-notice", {
       detail: result.deletedMessages + result.cleanedMessages > 0
-        ? `已清理 ${result.deletedMessages} 条工具记录，整理 ${result.cleanedMessages} 条消息。`
-        : "没有可清理的工具调用历史。",
+        ? `Cleared ${result.deletedMessages} tool records, tidied up ${result.cleanedMessages} messages.`
+        : "There's no tool call history to clear.",
     }));
   }, [hasMascotToolHistory, isThinking, mascotDisplayName, mascotMessages]);
 
@@ -818,14 +818,14 @@ export function MascotFloat() {
   const handleCopyMascotMessage = useCallback((rawIndex: number) => {
     const msg = mascotMessages[rawIndex];
     if (!msg) return;
-    const text = getMascotMessageText(msg).trim() || (msg.images?.length ? "[图片]" : "");
+    const text = getMascotMessageText(msg).trim() || (msg.images?.length ? "[Image]" : "");
     if (text) copyTextToClipboard(text);
     closeMascotMessageMenu();
   }, [closeMascotMessageMenu, mascotMessages]);
 
   const handleDeleteMascotMessage = useCallback((rawIndex: number) => {
     if (isThinking) {
-      window.dispatchEvent(new CustomEvent("global-notice", { detail: `${mascotDisplayName}正在回复，完成后再删除消息。` }));
+      window.dispatchEvent(new CustomEvent("global-notice", { detail: `${mascotDisplayName} is replying; try deleting the message again once it's done.` }));
       closeMascotMessageMenu();
       return;
     }
@@ -840,8 +840,8 @@ export function MascotFloat() {
     if (activeMascotMessageIndex !== rawIndex) return null;
     return (
       <div className="mascot-msg-context-menu" onPointerDown={(event) => event.stopPropagation()}>
-        <button type="button" onClick={() => handleCopyMascotMessage(rawIndex)}>复制</button>
-        <button type="button" data-danger="true" onClick={() => handleDeleteMascotMessage(rawIndex)}>删除</button>
+        <button type="button" onClick={() => handleCopyMascotMessage(rawIndex)}>Copy</button>
+        <button type="button" data-danger="true" onClick={() => handleDeleteMascotMessage(rawIndex)}>Delete</button>
       </div>
     );
   };
@@ -900,24 +900,24 @@ export function MascotFloat() {
 
   // Scroll only the mascot chat container; scrollIntoView can move the mobile viewport.
   useEffect(() => { scrollMascotChatToBottom("smooth"); }, [mascotMessages, scrollMascotChatToBottom]);
-  // 面板打开时立刻跳到底部（不平滑），保证用户每次打开看到的都是最新消息
+  // Jump to the bottom immediately (no smooth scroll) when the panel opens, so the user always sees the latest message
   useEffect(() => {
     if (!panelOpen) return;
-    // 等下一帧 DOM 渲染完
+    // Wait for the next frame's DOM render to finish
     requestAnimationFrame(() => {
       scrollMascotChatToBottom("auto");
     });
   }, [panelOpen, scrollMascotChatToBottom]);
 
-  // 渲染单条消息（聊天气泡 / 工具步骤卡片）
+  // Render a single message (chat bubble / tool step card)
   const renderMascotMsg = ({ msg, rawIndex }: { msg: MascotMsg; rawIndex: number }) => {
-    // 工具消息：渲染为紧凑步骤卡片
+    // Tool message: render as a compact step card
     if (msg.role === "tool") {
-      // toolSuccess 没设置 → 还在运行
+      // toolSuccess unset → still running
       const running = msg.toolSuccess === undefined;
       const success = msg.toolSuccess === true;
-      const label = msg.displayText || msg.text || msg.toolDisplayName || msg.toolName || "工具";
-      const shownName = msg.toolDisplayName || msg.toolName || "工具";
+      const label = msg.displayText || msg.text || msg.toolDisplayName || msg.toolName || "Tool";
+      const shownName = msg.toolDisplayName || msg.toolName || "Tool";
       return (
         <article
           key={`${rawIndex}-${msg.createdAt || ""}`}
@@ -960,7 +960,7 @@ export function MascotFloat() {
         </article>
       );
     }
-    // 跳过纯占位的 mascot 消息（如 "（调用工具中...）"），它们只是过渡，没有实际内容
+    // Skip pure placeholder mascot messages (e.g. "（调用工具中...）"), they're just transitional and have no real content
     if (isHiddenMascotPlaceholder(msg)) {
       return null;
     }
@@ -1578,7 +1578,7 @@ export function MascotFloat() {
           font-size: calc(10px*var(--app-text-scale,1));
         }
         .mascot-pending-image-item::before {
-          content: "图片";
+          content: "Image";
         }
         .mascot-pending-image-item img {
           position: absolute;
@@ -1879,7 +1879,7 @@ export function MascotFloat() {
           font-size: calc(12px*var(--app-text-scale,1));
           line-height: 1.5;
           white-space: pre-wrap;
-          /* 长 URL / 错误堆栈这类不可断字串能强制换行，不再溢出气泡 */
+          /* Force-wraps unbreakable strings like long URLs / error stack traces so they no longer overflow the bubble */
           overflow-wrap: anywhere;
           word-break: break-word;
           min-width: 0;
@@ -2081,7 +2081,7 @@ export function MascotFloat() {
                   type="button"
                   className="mascot-drawer-handle"
                   onClick={() => setModuleDrawerOpen((v) => !v)}
-                  aria-label={moduleDrawerOpen ? "收起" : "展开"}
+                  aria-label={moduleDrawerOpen ? "Collapse" : "Expand"}
                 >
                   <span className="mascot-drawer-handle-bar" />
                 </button>
@@ -2095,7 +2095,7 @@ export function MascotFloat() {
                           data-selected={selectedModule === m.id ? "true" : undefined}
                           onClick={() => {
                             if (m.id === "new_session") {
-                              if (window.confirm("确定要开始新会话吗？当前 AI助手聊天记录会被清空。")) {
+                              if (window.confirm("Are you sure you want to start a new session? The current AI Assistant chat history will be cleared.")) {
                                 resetMascotConversation();
                               }
                               setSelectedModule(null);
@@ -2111,7 +2111,7 @@ export function MascotFloat() {
                     {selectedModule && (
                       <div style={{ textAlign: "center", marginBottom: 10 }}>
                         <button className="mascot-teleport-btn" onClick={handleTeleport}>
-                          ✦ 传送到{MODULES.find((m) => m.id === selectedModule)?.label} →
+                          ✦ Teleport to {MODULES.find((m) => m.id === selectedModule)?.label} →
                         </button>
                       </div>
                     )}
@@ -2121,7 +2121,7 @@ export function MascotFloat() {
                       onClick={handleClearMascotToolHistory}
                       disabled={isThinking || !hasMascotToolHistory}
                     >
-                      清理原生tool调用历史——防报错
+                      Clear native tool call history — prevents errors
                     </button>
                   </>
                 )}
@@ -2135,7 +2135,7 @@ export function MascotFloat() {
                 if (activeMascotMessageIndex !== null) closeMascotMessageMenu();
               }}
             >
-              {/* 模块抽屉 — 任何页面都显示，作为统一的顶部把手 */}
+              {/* Module drawer — shown on every page as a unified top handle */}
               {moduleDrawer}
               {isDesktop ? (
                 <>
@@ -2147,7 +2147,7 @@ export function MascotFloat() {
                         <div className="mascot-msg" data-role="mascot">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img className="mascot-msg-avatar" src={mascotAvatarUrl} alt="" />
-                          <div className="mascot-msg-bubble mascot-thinking">思考中<span className="mascot-dot"></span><span className="mascot-dot"></span><span className="mascot-dot"></span></div>
+                          <div className="mascot-msg-bubble mascot-thinking">Thinking<span className="mascot-dot"></span><span className="mascot-dot"></span><span className="mascot-dot"></span></div>
                         </div>
                       )}
                     </div>
@@ -2161,7 +2161,7 @@ export function MascotFloat() {
                                 /* eslint-disable-next-line @next/next/no-img-element */
                                 <img src={previewUrl} alt="" />
                               )}
-                              <button type="button" onClick={() => setPendingImages((arr) => arr.filter((_, i) => i !== idx))} aria-label="删除">✕</button>
+                              <button type="button" onClick={() => setPendingImages((arr) => arr.filter((_, i) => i !== idx))} aria-label="Delete">✕</button>
                             </div>
                           );
                         })}
@@ -2171,7 +2171,7 @@ export function MascotFloat() {
 	                      <label
 	                        className="mascot-chat-attach"
 	                        aria-disabled={isThinking || pendingImages.length >= 4}
-	                        title={pendingImages.length >= 4 ? "最多 4 张图" : "添加图片"}
+	                        title={pendingImages.length >= 4 ? "Up to 4 images" : "Add image"}
 	                        onClick={(e) => {
 	                          if (isThinking || pendingImages.length >= 4) { e.preventDefault(); return; }
 	                        }}
@@ -2191,7 +2191,7 @@ export function MascotFloat() {
 	                      </label>
                       <input
                         className="mascot-chat-input"
-                        placeholder={`跟${mascotDisplayName}聊聊...`}
+                        placeholder={`Chat with ${mascotDisplayName}...`}
                         value={chatInput}
                         onChange={(e) => setChatInput(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") handleSend(); }}
@@ -2204,30 +2204,30 @@ export function MascotFloat() {
                     </div>
                   </div>
                   <div className="mascot-return-hint">
-                    长按悬浮球可收回桌面
+                    Long-press the floating ball to return it to the desktop
                   </div>
                 </>
               ) : (
                 <>
                   {/* Non-desktop: context header + chat */}
                   <div className="mascot-ctx-header">
-                    <button className="mascot-ctx-home" onClick={() => mascotNavigate("desktop")} title="回到桌面">🏠</button>
-                    <span>📍 {context.label}{context.mode === "editing" ? " (编辑中)" : ""}</span>
+                    <button className="mascot-ctx-home" onClick={() => mascotNavigate("desktop")} title="Back to desktop">🏠</button>
+                    <span>📍 {context.label}{context.mode === "editing" ? " (editing)" : ""}</span>
                   </div>
 
                   {/* Worldbook editing: show confirmation before entering chat */}
                   {context.page === "worldbook" && context.mode === "editing" && !wbConfirmed ? (
                     <div className="mascot-confirm">
-                      <div className="mascot-confirm-label">当前世界书</div>
-                      <div className="mascot-confirm-value">{context.fields.worldbookName || "未知"}</div>
-                      <div className="mascot-confirm-label">绑定角色</div>
-                      <div className="mascot-confirm-chars">{context.fields.boundCharacters || "未绑定"}</div>
+                      <div className="mascot-confirm-label">Current worldbook</div>
+                      <div className="mascot-confirm-value">{context.fields.worldbookName || "Unknown"}</div>
+                      <div className="mascot-confirm-label">Bound character</div>
+                      <div className="mascot-confirm-chars">{context.fields.boundCharacters || "Not bound"}</div>
                       <div className="mascot-confirm-btns">
                         <button className="mascot-confirm-btn" onClick={() => {
                           window.dispatchEvent(new CustomEvent("settings-navigate", { detail: { page: "binding" } }));
                           closeMascotPanel();
                         }}>
-                          修改绑定 →
+                          Edit binding →
                         </button>
                         <button className="mascot-confirm-btn" data-primary="true" onClick={() => {
                           // If on binding page (came from worldbook), navigate back first
@@ -2235,7 +2235,7 @@ export function MascotFloat() {
                           window.dispatchEvent(new CustomEvent("worldbook-refresh-context"));
                           setWbConfirmed(true);
                         }}>
-                          确认
+                          Confirm
                         </button>
                       </div>
                     </div>
@@ -2247,7 +2247,7 @@ export function MascotFloat() {
                           <div className="mascot-msg" data-role="mascot">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img className="mascot-msg-avatar" src={mascotAvatarUrl} alt="" />
-                            <div className="mascot-msg-bubble mascot-thinking">思考中<span className="mascot-dot"></span><span className="mascot-dot"></span><span className="mascot-dot"></span></div>
+                            <div className="mascot-msg-bubble mascot-thinking">Thinking<span className="mascot-dot"></span><span className="mascot-dot"></span><span className="mascot-dot"></span></div>
                           </div>
                         )}
                       </div>
@@ -2263,7 +2263,7 @@ export function MascotFloat() {
 	                                ) : (
 	                                  <div className="mascot-msg-image-loading" />
 	                                )}
-	                                <button type="button" onClick={() => setPendingImages((arr) => arr.filter((_, i) => i !== idx))} aria-label="删除">✕</button>
+	                                <button type="button" onClick={() => setPendingImages((arr) => arr.filter((_, i) => i !== idx))} aria-label="Delete">✕</button>
 	                              </div>
 	                            );
 	                          })}
@@ -2273,7 +2273,7 @@ export function MascotFloat() {
 	                        <label
 	                          className="mascot-chat-attach"
 	                          aria-disabled={isThinking || pendingImages.length >= 4}
-	                          title={pendingImages.length >= 4 ? "最多 4 张图" : "添加图片"}
+	                          title={pendingImages.length >= 4 ? "Up to 4 images" : "Add image"}
 	                          onClick={(e) => {
 	                            if (isThinking || pendingImages.length >= 4) { e.preventDefault(); return; }
 	                          }}
@@ -2293,7 +2293,7 @@ export function MascotFloat() {
 	                        </label>
                         <input
                           className="mascot-chat-input"
-                          placeholder={context.mode === "editing" ? `告诉${mascotDisplayName}你想改什么...` : `跟${mascotDisplayName}聊聊...`}
+                          placeholder={context.mode === "editing" ? `Tell ${mascotDisplayName} what you'd like to change...` : `Chat with ${mascotDisplayName}...`}
                           value={chatInput}
                           onChange={(e) => setChatInput(e.target.value)}
                           onKeyDown={(e) => { if (e.key === "Enter") handleSend(); }}

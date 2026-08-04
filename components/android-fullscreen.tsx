@@ -3,11 +3,13 @@
 import { useEffect } from "react";
 
 /**
- * 安卓全屏兜底：点击屏幕进入全屏模式（iOS 不支持此 API，会自动忽略）。
+ * Android fullscreen fallback: tap the screen to enter fullscreen mode (iOS doesn't
+ * support this API and will silently ignore it).
  *
- * world-builder（筑境）通过 window.open 开在独立窗口，不在 main-app 的 React 树内，
- * 因此拿不到 main-app 里那段「点击进全屏」的监听，会一直露出浏览器地址栏。
- * 这个组件把同一套逻辑复刻到 world-builder 窗口，挂上即可。
+ * world-builder opens in a separate window via window.open and isn't inside main-app's
+ * React tree, so it can't pick up main-app's "tap to enter fullscreen" listener, which
+ * means the browser address bar stays visible. This component replicates the same logic
+ * for the world-builder window — just mount it.
  */
 export function AndroidFullscreen() {
   useEffect(() => {
@@ -21,7 +23,7 @@ export function AndroidFullscreen() {
       if (document.fullscreenElement) return;
       doc.requestFullscreen?.().catch(() => { });
     }
-    // 每次点击都尝试进入全屏（退出后可重新进入）
+    // Try to enter fullscreen on every click (can re-enter after exiting)
     document.addEventListener("click", tryFullscreen);
     return () => {
       document.removeEventListener("click", tryFullscreen);

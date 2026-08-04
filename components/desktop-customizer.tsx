@@ -70,7 +70,7 @@ function ColorField({ label, colorKey, draft, onChange }: { label: string, color
         type="range" min="0" max="1" step="any" value={alpha}
         onChange={e => onChange(colorKey, buildColor(hex, Number(e.target.value)))}
         className="w-full h-1.5 mt-2 customizer-slider bg-gray-200 rounded-full outline-none"
-        title="透明度"
+        title="Opacity"
       />
     </div>
   )
@@ -175,7 +175,7 @@ export function DesktopCustomizer({ draft, onDraftChange, onApply, onClose }: De
       `}</style>
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
         <span className="ts-16 font-medium text-[var(--c-text-title)] flex items-center gap-2">
-          <Palette size={18} /> 个性化装扮
+          <Palette size={18} /> Personalization
         </span>
         <button onClick={onClose} className="p-1.5 bg-gray-100 rounded-full text-gray-500 hover:bg-gray-200 transition-colors">
           <X size={18} />
@@ -184,9 +184,9 @@ export function DesktopCustomizer({ draft, onDraftChange, onApply, onClose }: De
 
       <div className="px-6 py-3 flex gap-2 w-full">
         {[
-          { id: "icons", label: "图标设定" },
-          { id: "widgets", label: "组件设定" },
-          { id: "global", label: "效果调节" }
+          { id: "icons", label: "Icons" },
+          { id: "widgets", label: "Widgets" },
+          { id: "global", label: "Effects" }
         ].map(tab => (
           <button 
             key={tab.id}
@@ -201,40 +201,40 @@ export function DesktopCustomizer({ draft, onDraftChange, onApply, onClose }: De
       <div className="px-6 pt-2 h-[280px] overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
         {activeTab === "icons" && (
           <div className="space-y-6">
-            <SegmentControl 
+            <SegmentControl
               options={[
-                { label: "扁平纯色", value: "flat" },
-                { label: "毛玻璃态", value: "glass" }
+                { label: "Flat", value: "flat" },
+                { label: "Glass", value: "glass" }
               ]}
               value={iconEffect}
               onChange={v => handleUpdate("--desktop-icon-effect", v)}
             />
 
             <div className="grid grid-cols-2 gap-x-4 gap-y-6 justify-items-center bg-gray-50/50 p-5 rounded-2xl shadow-inner border border-gray-100/50">
-              <ColorField label="图标底色" colorKey="--c-desktop-icon-box" draft={draft} onChange={handleUpdate} />
-              <ColorField label="图标主色" colorKey="--c-desktop-icon" draft={draft} onChange={handleUpdate} />
-              <ColorField label="标题字色" colorKey="--c-home-label" draft={draft} onChange={handleUpdate} />
+              <ColorField label="Icon Background" colorKey="--c-desktop-icon-box" draft={draft} onChange={handleUpdate} />
+              <ColorField label="Icon Color" colorKey="--c-desktop-icon" draft={draft} onChange={handleUpdate} />
+              <ColorField label="Title Color" colorKey="--c-home-label" draft={draft} onChange={handleUpdate} />
             </div>
           </div>
         )}
 
         {activeTab === "widgets" && (
           <div className="space-y-6">
-            <SegmentControl 
+            <SegmentControl
               options={[
-                { label: "扁平纯色", value: "flat" },
-                { label: "毛玻璃态", value: "glass" }
+                { label: "Flat", value: "flat" },
+                { label: "Glass", value: "glass" }
               ]}
               value={widgetEffect}
               onChange={v => handleUpdate("--desktop-widget-effect", v)}
             />
 
             <div className="grid grid-cols-2 gap-x-4 gap-y-6 justify-items-center bg-gray-50/50 p-5 rounded-2xl shadow-inner border border-gray-100/50">
-              <ColorField label="面板底色" colorKey="--c-home-card" draft={draft} onChange={handleUpdate} />
-              <ColorField label="面板辅助色" colorKey="--c-home-border" draft={draft} onChange={handleUpdate} />
-              <ColorField label="文字主色" colorKey="--c-home-text" draft={draft} onChange={handleUpdate} />
-              <ColorField label="文字辅色" colorKey="--c-home-sub" draft={draft} onChange={handleUpdate} />
-              <ColorField label="强调色" colorKey="--c-home-pink" draft={draft} onChange={handleUpdate} />
+              <ColorField label="Panel Background" colorKey="--c-home-card" draft={draft} onChange={handleUpdate} />
+              <ColorField label="Panel Accent" colorKey="--c-home-border" draft={draft} onChange={handleUpdate} />
+              <ColorField label="Text Primary" colorKey="--c-home-text" draft={draft} onChange={handleUpdate} />
+              <ColorField label="Text Secondary" colorKey="--c-home-sub" draft={draft} onChange={handleUpdate} />
+              <ColorField label="Accent Color" colorKey="--c-home-pink" draft={draft} onChange={handleUpdate} />
             </div>
           </div>
         )}
@@ -244,11 +244,11 @@ export function DesktopCustomizer({ draft, onDraftChange, onApply, onClose }: De
             
             <div className="space-y-5 bg-gray-50/50 p-5 rounded-2xl shadow-inner border border-gray-100/50 text-gray-800">
               
-              {/* 描边与阴影在一排 */}
+              {/* Outline and shadow on the same row */}
               <div className="flex items-center gap-4 border-b border-gray-200/50 pb-4">
                 <div className="flex items-center justify-between flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-[calc(14px*var(--app-text-scale,1))] font-medium">描边</span>
+                    <span className="text-[calc(14px*var(--app-text-scale,1))] font-medium">Outline</span>
                     {draft.enableGlobalBorder && (
                       <div 
                         className="relative w-5 h-5 rounded-full overflow-hidden border-2 border-white shadow-sm shrink-0"
@@ -276,7 +276,7 @@ export function DesktopCustomizer({ draft, onDraftChange, onApply, onClose }: De
               <div className="space-y-4">
                 <div className="space-y-2">
                   <div className="flex justify-between text-[calc(13px*var(--app-text-scale,1))] font-medium">
-                    <span>阴影强度</span>
+                    <span>Shadow Intensity</span>
                     <span>{Math.round(Number(shadowOpacity) * 100)}%</span>
                   </div>
                   <input
@@ -289,7 +289,7 @@ export function DesktopCustomizer({ draft, onDraftChange, onApply, onClose }: De
 
                 <div className="space-y-2">
                   <div className="flex justify-between text-[calc(13px*var(--app-text-scale,1))] font-medium">
-                    <span>外轮廓宽度</span>
+                    <span>Outline Width</span>
                     <span>{Number(outlineWidth).toFixed(2)}</span>
                   </div>
                   <input
@@ -302,7 +302,7 @@ export function DesktopCustomizer({ draft, onDraftChange, onApply, onClose }: De
 
                 <div className="space-y-2">
                   <div className="flex justify-between text-[calc(13px*var(--app-text-scale,1))] font-medium">
-                    <span>外轮廓透明度</span>
+                    <span>Outline Opacity</span>
                     <span>{Math.round(Number(outlineOpacity) * 100)}%</span>
                   </div>
                   <input

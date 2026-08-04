@@ -39,13 +39,13 @@ type MusicInnerFloat = {
 };
 
 const MUSIC_TABS: Array<{ id: MusicTabId; label: string; icon: typeof House }> = [
-  { id: "home", label: "首页", icon: House },
-  { id: "recent", label: "最近播放", icon: Music2 },
-  { id: "playlists", label: "歌单", icon: Disc3 },
-  { id: "profile", label: "我的", icon: UserRound },
+  { id: "home", label: "Home", icon: House },
+  { id: "recent", label: "Recently Played", icon: Music2 },
+  { id: "playlists", label: "Playlists", icon: Disc3 },
+  { id: "profile", label: "Me", icon: UserRound },
 ];
 
-const MUSIC_HEADER_SUBTITLE = "播放记录、收藏歌曲与歌单概览";
+const MUSIC_HEADER_SUBTITLE = "Playback history, liked songs and playlist overview";
 const MUSIC_INNER_FLOAT_LAYOUTS = [
   { left: 44, top: 28 },
   { left: 55, top: 39 },
@@ -199,7 +199,7 @@ function MusicTrackRow({
       type="button"
       className={`cp-music-track-row ${active ? "is-active" : ""}`}
       onClick={onReveal}
-      aria-label={`显示《${track.title}》的内心`}
+      aria-label={`Show inner thoughts for "${track.title}"`}
     >
       <MusicCover icon={track.coverIcon} tone={track.tone} />
       <div className="cp-music-track-meta">
@@ -249,7 +249,7 @@ function MusicPlaylistCard({
           <span className={`cp-music-playlist-save${playlist.saved ? " is-saved" : ""}`} aria-hidden="true">
             <Bookmark size={13} strokeWidth={2.2} />
           </span>
-          <b className="cp-music-playlist-count">{trackCount} 首</b>
+          <b className="cp-music-playlist-count">{trackCount} tracks</b>
         </div>
       </div>
       <div className="cp-music-playlist-body">
@@ -396,7 +396,7 @@ export function CheckPhoneMusicPage({ character, onBack }: CheckPhoneMusicPagePr
           <ChevronLeft size={22} strokeWidth={2.5} />
         </button>
         <div className="cp-music-header-stack">
-          <div className="cp-music-header-title">{payload?.headerTitle || "音乐"}</div>
+          <div className="cp-music-header-title">{payload?.headerTitle || "Music"}</div>
           <div className="cp-music-header-subtitle">{subtitle}</div>
         </div>
         <div className="cp-appbar-actions">
@@ -417,7 +417,7 @@ export function CheckPhoneMusicPage({ character, onBack }: CheckPhoneMusicPagePr
 
       {loading && (
         <div className="cp-refresh-indicator cp-refresh-indicator--floating" aria-live="polite">
-          <span className="cp-refresh-indicator-text">正在刷新音乐</span>
+          <span className="cp-refresh-indicator-text">Refreshing music</span>
           <span className="cp-refresh-indicator-dots" aria-hidden="true">
             <i></i><i></i><i></i>
           </span>
@@ -429,8 +429,8 @@ export function CheckPhoneMusicPage({ character, onBack }: CheckPhoneMusicPagePr
 
         {loaded && !payload && !loading && (
           <div className="cp-music-status cp-empty-copy">
-            <p>暂无音乐内容</p>
-            <span className="cp-music-hint">点刷新同步最近播放歌单和个人听歌页</span>
+            <p>No music yet</p>
+            <span className="cp-music-hint">Tap refresh to sync recently played, playlists and your profile</span>
           </div>
         )}
 
@@ -452,7 +452,7 @@ export function CheckPhoneMusicPage({ character, onBack }: CheckPhoneMusicPagePr
                       type="button"
                       className="cp-music-now-card"
                       onClick={() => revealMusicInner(nowPlayingTrack.note, nowPlayingTrack.tone)}
-                      aria-label={`显示《${nowPlayingTrack.title}》的内心`}
+                      aria-label={`Show inner thoughts for "${nowPlayingTrack.title}"`}
                     >
                       <div className="cp-music-now-visual" aria-hidden="true">
                         <span className="cp-music-now-glow" />
@@ -476,7 +476,7 @@ export function CheckPhoneMusicPage({ character, onBack }: CheckPhoneMusicPagePr
                   )}
                   <section className="cp-music-section">
                     <div className="cp-music-section-head">
-                      <h3>最近播放</h3>
+                      <h3>Recently Played</h3>
                       <span>{payload.recentTracks.length}</span>
                     </div>
                     <div className="cp-music-track-list">
@@ -492,7 +492,7 @@ export function CheckPhoneMusicPage({ character, onBack }: CheckPhoneMusicPagePr
                   </section>
                   <section className="cp-music-section">
                     <div className="cp-music-section-head">
-                      <h3>精选歌单</h3>
+                      <h3>Featured Playlists</h3>
                       <span>{payload.playlists.length}</span>
                     </div>
                     <div className="cp-music-playlist-grid">
@@ -514,7 +514,7 @@ export function CheckPhoneMusicPage({ character, onBack }: CheckPhoneMusicPagePr
               {selectedTab === "recent" && (
                 <section className="cp-music-section">
                   <div className="cp-music-section-head">
-                    <h3>最近播放</h3>
+                    <h3>Recently Played</h3>
                     <span>{payload.recentTracks.length}</span>
                   </div>
                   <div className="cp-music-track-list">
@@ -533,7 +533,7 @@ export function CheckPhoneMusicPage({ character, onBack }: CheckPhoneMusicPagePr
               {selectedTab === "playlists" && (
                 <section className="cp-music-section">
                   <div className="cp-music-section-head">
-                    <h3>歌单</h3>
+                    <h3>Playlists</h3>
                     <span>{payload.playlists.length}</span>
                   </div>
                   <div className="cp-music-playlist-grid cp-music-playlist-grid--stacked">
@@ -561,15 +561,15 @@ export function CheckPhoneMusicPage({ character, onBack }: CheckPhoneMusicPagePr
                     <p><CheckPhoneBilingualText text={payload.profile.listeningMood} tone="music" /></p>
                     <div className="cp-music-profile-stats">
                       <span>
-                        本月听了 <strong>{profileMonthly.value}</strong>{profileMonthly.suffix}
+                        Listened <strong>{profileMonthly.value}</strong>{profileMonthly.suffix} this month
                         <i aria-hidden="true">·</i>
-                        最近偏爱：<strong>{profileTopArtistName}</strong>
+                        Top Artist: <strong>{profileTopArtistName}</strong>
                       </span>
                     </div>
                   </div>
                   <section className="cp-music-section">
                     <div className="cp-music-section-head">
-                      <h3>我喜欢的</h3>
+                      <h3>Liked</h3>
                       <span>{payload.likedTracks.length}</span>
                     </div>
                     <div className="cp-music-track-list">
@@ -586,7 +586,7 @@ export function CheckPhoneMusicPage({ character, onBack }: CheckPhoneMusicPagePr
               )}
             </div>
 
-            <nav className="cp-music-tabbar" aria-label="音乐导航">
+            <nav className="cp-music-tabbar" aria-label="Music navigation">
               <span
                 className="cp-music-tab-glow"
                 style={{ transform: `translateX(calc(${activeTabIndex * 100}% + ${activeTabIndex * 4}px))` }}
@@ -619,7 +619,7 @@ export function CheckPhoneMusicPage({ character, onBack }: CheckPhoneMusicPagePr
                 <div className="cp-music-playlist-hero-meta">
                   <div className="cp-music-detail-kicker"><CheckPhoneBilingualText text={activePlaylist.subtitle} tone="music" /></div>
                   <h3><CheckPhoneBilingualText text={activePlaylist.title} tone="music" /></h3>
-                  <span>{activePlaylist.trackIds.length} 首 · {activePlaylist.saved ? "已收藏" : "精选歌单"}</span>
+                  <span>{activePlaylist.trackIds.length} tracks · {activePlaylist.saved ? "Saved" : "Featured Playlist"}</span>
                 </div>
               </div>
               <div className="cp-music-track-list">
@@ -655,7 +655,7 @@ export function CheckPhoneMusicPage({ character, onBack }: CheckPhoneMusicPagePr
                 zIndex: item.zIndex,
               } as CSSProperties}
               onClick={() => dismissMusicInner(item.id)}
-              aria-label="关闭内心文字"
+              aria-label="Close inner thoughts"
             >
               <CheckPhoneBilingualText text={item.text} tone="light" />
             </button>
@@ -665,11 +665,11 @@ export function CheckPhoneMusicPage({ character, onBack }: CheckPhoneMusicPagePr
 
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空音乐内容？"
-          message="确认后会清空当前音乐缓存。之后重新刷新时，不会再带入旧音乐内容。"
+          title="Clear music?"
+          message="This clears the current music cache. Refreshing again won't bring back the old music."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Confirm Clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

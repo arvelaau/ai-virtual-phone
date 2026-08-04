@@ -26,7 +26,7 @@ interface Props {
 }
 
 export default function ModelPalette({ userModels, onPlace }: Props) {
-  const [category, setCategory] = useState<string>("全部");
+  const [category, setCategory] = useState<string>("All");
   const [thumbs, setThumbs] = useState<Map<string, string>>(new Map());
 
   // 仅为灯光/基础块这类无 .glb 的预设动态生成缩略图（程序生成的小球小方块，不走网络）；
@@ -61,14 +61,14 @@ export default function ModelPalette({ userModels, onPlace }: Props) {
   // 收集所有分类
   const allCategories = [...new Set(allModels.map((m) => m.category))];
 
-  const filtered = category === "全部"
+  const filtered = category === "All"
     ? allModels
     : allModels.filter((m) => m.category === category);
 
   return (
     <div className="wb-palette">
       <div className="wb-categories">
-        {["全部", ...allCategories].map((c) => (
+        {["All", ...allCategories].map((c) => (
           <button
             key={c}
             className={category === c ? "active" : ""}

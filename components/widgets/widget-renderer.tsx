@@ -83,7 +83,7 @@ function WidgetContent({
      const templates = loadDIYTemplates();
      const t = templates.find(temp => temp.id === type);
      if (t) return <DIYWidgetRenderer widget={widget} preview={preview} template={t} onConfigChange={onConfigChange} />;
-     return <div className="text-gray-400 text-xs p-2 text-center h-full flex items-center">找不到此 DIY 组件</div>;
+     return <div className="text-gray-400 text-xs p-2 text-center h-full flex items-center">DIY component not found</div>;
   }
 
   const props = { config, widgetId, onConfigChange, preview };
@@ -169,7 +169,7 @@ function CameraFrameWidget({ config, widgetId, onConfigChange, preview }: any) {
     <div 
       className="wg-camera-frame" 
       onClick={preview ? undefined : () => triggerUpload()}
-      title="点击上传取景框底图"
+      title="Click to upload frame background"
     >
       {input}
       <div 
@@ -195,7 +195,7 @@ function ColorPickerFrameWidget({ config, widgetId, onConfigChange, preview }: a
     <div 
       className="wg-color-picker-frame" 
       onClick={preview ? undefined : () => triggerUpload()}
-      title="点击上传底图"
+      title="Click to upload background"
     >
       {input}
       <div className="wg-cp-wrapper">
@@ -220,7 +220,7 @@ function FreestyleFrame18Widget({ config, widgetId, onConfigChange, preview }: a
   return (
     <div 
       className="wg-frame18" 
-      title="老橙子装饰素材"
+      title="Decorative material"
     >
       <div className="wg-f18-wrapper">
         <img 
@@ -244,7 +244,7 @@ function FreestyleFrame4Widget({ config, widgetId, onConfigChange, preview }: an
     <div 
       className="wg-frame4" 
       onClick={preview ? undefined : () => triggerUpload()}
-      title="点击上传底图"
+      title="Click to upload background"
     >
       {input}
       <div className="wg-f4-wrapper">
@@ -273,7 +273,7 @@ function FreestyleFrame31Widget({ config, widgetId, onConfigChange, preview }: a
     <div 
       className="wg-frame31" 
       onClick={preview ? undefined : () => triggerUpload()}
-      title="点击上传底图"
+      title="Click to upload background"
     >
       {input}
       <div className="wg-f31-wrapper">
@@ -302,7 +302,7 @@ function FreestyleFrame33Widget({ config, widgetId, onConfigChange, preview }: a
     <div 
       className="wg-frame33" 
       onClick={preview ? undefined : () => triggerUpload()}
-      title="点击上传底图"
+      title="Click to upload background"
     >
       {input}
       <div className="wg-f33-wrapper">
@@ -332,7 +332,7 @@ function FreestyleFrame36Widget(_props: {
   return (
     <div 
       className="wg-frame36" 
-      title="老橙子装饰素材36"
+      title="Decorative material 36"
     >
       <div className="wg-f36-wrapper">
         <img 
@@ -356,7 +356,7 @@ function FreestyleFrame49Widget({ config, widgetId, onConfigChange, preview }: a
     <div 
       className="wg-frame49" 
       onClick={preview ? undefined : () => triggerUpload()}
-      title="点击上传底图"
+      title="Click to upload background"
     >
       {input}
       <div className="wg-f49-wrapper">
@@ -385,7 +385,7 @@ function FreestyleFrame54Widget({ config, widgetId, onConfigChange, preview }: a
     <div 
       className="wg-frame54" 
       onClick={preview ? undefined : () => triggerUpload()}
-      title="点击配置右侧头像"
+      title="Click to configure right avatar"
     >
       {input}
       <div className="wg-f54-wrapper">
@@ -445,25 +445,25 @@ function FreestyleFrame72Widget({ config, widgetId, onConfigChange, preview }: a
           className="wg-f72-slot wg-f72-s1" 
           style={img1 ? { backgroundImage: `url(${img1})` } : {}}
           onClick={preview ? undefined : () => up1.triggerUpload()}
-          title="点击上传左上图"
+          title="Click to upload top-left image"
         />
         <div 
           className="wg-f72-slot wg-f72-s2" 
           style={img2 ? { backgroundImage: `url(${img2})` } : {}}
           onClick={preview ? undefined : () => up2.triggerUpload()}
-          title="点击上传右上图"
+          title="Click to upload top-right image"
         />
         <div 
           className="wg-f72-slot wg-f72-s3" 
           style={img3 ? { backgroundImage: `url(${img3})` } : {}}
           onClick={preview ? undefined : () => up3.triggerUpload()}
-          title="点击上传左下图"
+          title="Click to upload bottom-left image"
         />
         <div 
           className="wg-f72-slot wg-f72-s4" 
           style={img4 ? { backgroundImage: `url(${img4})` } : {}}
           onClick={preview ? undefined : () => up4.triggerUpload()}
-          title="点击马上右下图"
+          title="Click to upload bottom-right image"
         />
         
         <img 
@@ -487,7 +487,7 @@ function FreestyleFrame88Widget({ config, widgetId, onConfigChange, preview }: a
     <div 
       className="wg-frame88" 
       onClick={preview ? undefined : () => triggerUpload()}
-      title="点击上传专辑封面"
+      title="Click to upload album cover"
     >
       {input}
       <div className="wg-f88-wrapper">
@@ -530,25 +530,25 @@ function FreestyleFrame90Widget({ config, widgetId, onConfigChange, preview }: a
           className="wg-f90-slot wg-f90-s1" 
           style={img1 ? { backgroundImage: `url(${img1})` } : {}}
           onClick={preview ? undefined : () => up1.triggerUpload()}
-          title="点击上传图1"
+          title="Click to upload image 1"
         />
         <div 
           className="wg-f90-slot wg-f90-s2" 
           style={img2 ? { backgroundImage: `url(${img2})` } : {}}
           onClick={preview ? undefined : () => up2.triggerUpload()}
-          title="点击上传图2"
+          title="Click to upload image 2"
         />
         <div 
           className="wg-f90-slot wg-f90-s3" 
           style={img3 ? { backgroundImage: `url(${img3})` } : {}}
           onClick={preview ? undefined : () => up3.triggerUpload()}
-          title="点击上传图3"
+          title="Click to upload image 3"
         />
         <div 
           className="wg-f90-slot wg-f90-s4" 
           style={img4 ? { backgroundImage: `url(${img4})` } : {}}
           onClick={preview ? undefined : () => up4.triggerUpload()}
-          title="点击上传图4"
+          title="Click to upload image 4"
         />
         
         <img 
@@ -618,7 +618,7 @@ function MySpaceWidget({ config, widgetId, onConfigChange, preview }: any) {
            role={preview ? undefined : "button"}
            tabIndex={preview ? undefined : 0}
         >
-          {avatarUrl ? <img src={avatarUrl} alt="" className="wg-ms-avatar-img"/> : <div className="wg-ms-avatar-mock"><span className="wg-upload-hint">点击换图</span></div>}
+          {avatarUrl ? <img src={avatarUrl} alt="" className="wg-ms-avatar-img"/> : <div className="wg-ms-avatar-mock"><span className="wg-upload-hint">Click to change image</span></div>}
         </div>
         <div className="wg-ms-name" onClick={handleNameClick} role={preview ? undefined : "button"} tabIndex={preview ? undefined : 0}>
           @{username}
@@ -633,11 +633,11 @@ function MySpaceWidget({ config, widgetId, onConfigChange, preview }: any) {
 
       {showEdit && !preview && createPortal(
         <ContentDialog
-          title="修改空间昵称"
+          title="Edit Space Nickname"
           onConfirm={handleSave}
           onCancel={() => setShowEdit(false)}
         >
-          <label style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)", marginBottom: 4, display: "block" }}>输入新昵称</label>
+          <label style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)", marginBottom: 4, display: "block" }}>Enter new nickname</label>
           <input
             className="ui-input"
             value={editText}
@@ -686,7 +686,7 @@ function SocialPostWidget({ config, widgetId, onConfigChange, preview }: any) {
       
       <div className="wg-sp-header">
         <div className="wg-sp-avatar" onClick={preview ? undefined : triggerAvatar} role={preview ? undefined : "button"} tabIndex={preview ? undefined : 0}>
-          {avatarUrl ? <img src={avatarUrl} alt=""/> : <div className="wg-sp-avatar-mock"><span className="wg-upload-hint" style={{fontSize: "calc(8px*var(--app-text-scale,1))"}}>换图</span></div>}
+          {avatarUrl ? <img src={avatarUrl} alt=""/> : <div className="wg-sp-avatar-mock"><span className="wg-upload-hint" style={{fontSize: "calc(8px*var(--app-text-scale,1))"}}>Change</span></div>}
         </div>
         <div className="wg-sp-user-info" onClick={handleNameClick} role={preview ? undefined : "button"} tabIndex={preview ? undefined : 0}>
           <div className="wg-sp-username">{username}</div>
@@ -700,7 +700,7 @@ function SocialPostWidget({ config, widgetId, onConfigChange, preview }: any) {
       </div>
       
       <div className="wg-sp-post-image" onClick={preview ? undefined : triggerPost} role={preview ? undefined : "button"} tabIndex={preview ? undefined : 0}>
-        {postImageUrl ? <img src={postImageUrl} alt=""/> : <div className="wg-sp-post-mock"><span className="wg-upload-hint">点击换图</span></div>}
+        {postImageUrl ? <img src={postImageUrl} alt=""/> : <div className="wg-sp-post-mock"><span className="wg-upload-hint">Click to change image</span></div>}
       </div>
       
       <div className="wg-sp-likes">
@@ -727,11 +727,11 @@ function SocialPostWidget({ config, widgetId, onConfigChange, preview }: any) {
 
       {showEdit && !preview && createPortal(
         <ContentDialog
-          title="修改发帖人昵称"
+          title="Edit Poster's Nickname"
           onConfirm={handleSave}
           onCancel={() => setShowEdit(false)}
         >
-          <label style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)", marginBottom: 4, display: "block" }}>输入新昵称</label>
+          <label style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)", marginBottom: 4, display: "block" }}>Enter new nickname</label>
           <input
             className="ui-input"
             value={editText}
@@ -808,7 +808,7 @@ function useImageUpload(
 }
 
 /* ══════════════════════════════════════════
-   1. Anniversary — 恋爱纪念日 (2x2)
+   1. Anniversary — Love Anniversary (2x2)
    ══════════════════════════════════════════ */
 function formatTime(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -834,8 +834,8 @@ function MusicWidget({
 
   const customTitle = typeof config?.placeholderTitle === "string" ? config.placeholderTitle : "";
   const customArtist = typeof config?.placeholderArtist === "string" ? config.placeholderArtist : "";
-  const placeholderTitle = customTitle || "\u6682\u65E0\u64AD\u653E";
-  const placeholderArtist = customArtist || "\u70B9\u51FB\u64AD\u653E\u97F3\u4E50";
+  const placeholderTitle = customTitle || "Not playing";
+  const placeholderArtist = customArtist || "Tap to play music";
 
   const [showEdit, setShowEdit] = useState(false);
   const [editTitle, setEditTitle] = useState(customTitle);
@@ -907,24 +907,24 @@ function MusicWidget({
       </div>
       {showEdit && createPortal(
         <ContentDialog
-          title={"\u7F16\u8F91\u663E\u793A\u6587\u5B57"}
+          title={"Edit display text"}
           onConfirm={handleSave}
           onCancel={() => setShowEdit(false)}
         >
-          <label style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)", marginBottom: 4, display: "block" }}>{"\u6807\u9898"}</label>
+          <label style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)", marginBottom: 4, display: "block" }}>{"Title"}</label>
           <input
             className="ui-input"
             value={editTitle}
             onChange={(e) => setEditTitle(e.target.value)}
-            placeholder={"\u6682\u65E0\u64AD\u653E"}
+            placeholder={"Not playing"}
             style={{ width: "100%", marginBottom: 12 }}
           />
-          <label style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)", marginBottom: 4, display: "block" }}>{"\u526F\u6807\u9898"}</label>
+          <label style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)", marginBottom: 4, display: "block" }}>{"Subtitle"}</label>
           <input
             className="ui-input"
             value={editArtist}
             onChange={(e) => setEditArtist(e.target.value)}
-            placeholder={"\u70B9\u51FB\u64AD\u653E\u97F3\u4E50"}
+            placeholder={"Tap to play music"}
             style={{ width: "100%" }}
           />
         </ContentDialog>,
@@ -935,7 +935,7 @@ function MusicWidget({
 }
 
 /* ══════════════════════════════════════════
-   3. Calendar — 日历 (2x2)
+   3. Calendar — Calendar (2x2)
    ══════════════════════════════════════════ */
 function CalendarWidget() {
   const now = new Date();
@@ -951,11 +951,11 @@ function CalendarWidget() {
     <div className="wg-calendar">
       <div className="wg-calendar-header">
         <div className="wg-calendar-header-glass">
-          <span className="wg-calendar-ym">{year}{"\u5E74"}{monthNum}{"\u6708"}</span>
+          <span className="wg-calendar-ym">{monthNum}{"/"}{year}</span>
         </div>
       </div>
       <div className="wg-calendar-grid">
-        {["\u65E5", "\u4E00", "\u4E8C", "\u4E09", "\u56DB", "\u4E94", "\u516D"].map((d) => (
+        {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
           <span key={d} className="wg-cal-head">{d}</span>
         ))}
         {Array.from({ length: firstDay }, (_, i) => (
@@ -976,7 +976,7 @@ function CalendarWidget() {
 }
 
 /* ══════════════════════════════════════════
-   4. Clock + Date — 时钟+日期 (2x2)
+   4. Clock + Date — Clock + Date (2x2)
    ══════════════════════════════════════════ */
 function ClockWidget() {
   const [time, setTime] = useState(() => new Date());
@@ -990,13 +990,13 @@ function ClockWidget() {
   const m = String(time.getMinutes()).padStart(2, "0");
   const month = time.getMonth() + 1;
   const day = time.getDate();
-  const weekdaysCn = ["\u65E5", "\u4E00", "\u4E8C", "\u4E09", "\u56DB", "\u4E94", "\u516D"];
-  const weekday = "\u5468" + weekdaysCn[time.getDay()];
+  const weekdaysCn = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const weekday = weekdaysCn[time.getDay()];
 
   return (
     <div className="wg-clock">
       <div className="wg-clock-top">
-        <span className="wg-clock-date">{month}{"月"}{day}{"日"}</span>
+        <span className="wg-clock-date">{month}{"/"}{day}</span>
         <span className="wg-clock-weekday">{weekday}</span>
       </div>
       <div className="wg-clock-time-row">
@@ -1014,7 +1014,7 @@ function ClockWidget() {
 }
 
 /* ══════════════════════════════════════════
-   5.5. Large Time — 极简大屏数字时钟 (4x2)
+   5.5. Large Time — Minimalist Large Digital Clock (4x2)
    ══════════════════════════════════════════ */
 function LargeTimeWidget() {
   const [time, setTime] = useState(() => new Date());
@@ -1028,13 +1028,13 @@ function LargeTimeWidget() {
   const m = String(time.getMinutes()).padStart(2, "0");
   const month = time.getMonth() + 1;
   const day = time.getDate();
-  const weekdaysCn = ["日", "一", "二", "三", "四", "五", "六"];
-  const weekday = "周" + weekdaysCn[time.getDay()];
+  const weekdaysCn = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const weekday = weekdaysCn[time.getDay()];
 
   return (
     <div className="wg-large-time">
       <div className="wg-lt-date">
-        {month}月{day}日 {weekday}
+        {month}/{day} {weekday}
       </div>
       <div className="wg-lt-time">
         {h}:{m}
@@ -1044,7 +1044,7 @@ function LargeTimeWidget() {
 }
 
 /* ══════════════════════════════════════════
-   5. Photo Frame — 照片相框 (2x2)
+   5. Photo Frame — Photo Frame (2x2)
    ══════════════════════════════════════════ */
 function PhotoWidget({
   config,
@@ -1067,7 +1067,7 @@ function PhotoWidget({
       {imageDataUrl ? (
         <img src={imageDataUrl} alt="" className="wg-photo-img" />
       ) : (
-        <div className="wg-photo-placeholder"><span className="wg-upload-hint">点击换图</span></div>
+        <div className="wg-photo-placeholder"><span className="wg-upload-hint">Click to change image</span></div>
       )}
       <div className="wg-photo-deco">
         <svg viewBox="0 0 20 20" width="14" height="14">
@@ -1081,15 +1081,15 @@ function PhotoWidget({
 }
 
 /* ══════════════════════════════════════════
-   Love Note — 情话便签 (2x2)
+   Love Note — Love Note (2x2)
    ══════════════════════════════════════════ */
 const LOVE_NOTES_DEFAULT = [
-  "\u4F60\u662F\u6211\u6700\u7F8E\u7684\u76F8\u9047",
-  "\u6BCF\u5929\u90FD\u60F3\u548C\u4F60\u5728\u4E00\u8D77",
-  "\u4F60\u7684\u7B11\u5BB9\u662F\u6211\u7684\u5168\u4E16\u754C",
-  "\u60F3\u548C\u4F60\u8D70\u904D\u6BCF\u4E00\u4E2A\u89D2\u843D",
-  "\u6709\u4F60\u7684\u65E5\u5B50\u90FD\u662F\u6674\u5929",
-  "\u4F60\u662F\u6211\u5199\u4E0D\u5B8C\u7684\u6E29\u67D4",
+  "You are the most beautiful thing that ever happened to me",
+  "I want to be with you every day",
+  "Your smile is my whole world",
+  "I want to explore every corner with you",
+  "Every day with you is a sunny day",
+  "You are the tenderness I can never finish writing",
 ];
 
 function LoveNoteWidget({
@@ -1145,11 +1145,11 @@ function LoveNoteWidget({
       </div>
       {showEdit && createPortal(
         <ContentDialog
-          title={"\u7F16\u8F91\u60C5\u8BDD"}
+          title={"Edit Love Note"}
           onConfirm={handleSave}
           onCancel={() => setShowEdit(false)}
         >
-          <label style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)", marginBottom: 4, display: "block" }}>{"\u60C5\u8BDD\u5185\u5BB9"}</label>
+          <label style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)", marginBottom: 4, display: "block" }}>{"Love note content"}</label>
           <input
             className="ui-input"
             value={editText}
@@ -1165,22 +1165,22 @@ function LoveNoteWidget({
 }
 
 /* ══════════════════════════════════════════
-   Interview Magazine — 在场摘录 (2x4)
+   Interview Magazine — Presence Excerpt (2x4)
    ══════════════════════════════════════════ */
 const INTERVIEW_MAGAZINE_LINES = [
-  { title: "夜谈", meta: "ON RECORD" },
-  { title: "侧写", meta: "PROFILE" },
-  { title: "问答", meta: "Q & A" },
-  { title: "成刊", meta: "IN PRESS" },
-  { title: "在场", meta: "PRESENCE" },
+  { title: "Night Talk", meta: "ON RECORD" },
+  { title: "Profile", meta: "PROFILE" },
+  { title: "Q & A", meta: "Q & A" },
+  { title: "In Press", meta: "IN PRESS" },
+  { title: "Presence", meta: "PRESENCE" },
 ];
 
 const INTERVIEW_MAGAZINE_QUOTES = [
-  "每个人都值得被认真采访一次",
-  "把沉默留给版心，把答案交给夜晚",
-  "问题抵达之前，人物已经在场",
-  "一句回答，也可以成为封面",
-  "所有细节都等着被照亮",
+  "Everyone deserves to be interviewed seriously, at least once",
+  "Leave silence to the page, give answers to the night",
+  "Before the question arrives, the subject is already present",
+  "A single answer can become the cover",
+  "Every detail waits to be illuminated",
 ];
 
 function InterviewMagazineWidget({
@@ -1210,15 +1210,15 @@ function InterviewMagazineWidget({
       {input}
       <div className="wg-interview-magazine-photo" onClick={preview ? undefined : (e) => { e.stopPropagation(); triggerUpload(); }} role={preview ? undefined : "button"} tabIndex={preview ? undefined : 0}>
         <img src={displayImageUrl} alt="" className="wg-interview-magazine-photo-img" />
-        {!imageDataUrl && <span className="wg-interview-magazine-photo-hint">点击换图</span>}
+        {!imageDataUrl && <span className="wg-interview-magazine-photo-hint">Click to change image</span>}
       </div>
       <div className="wg-interview-magazine-right" onClick={() => setFlipped((f) => !f)} role="button" tabIndex={0}>
         <div className={`wg-interview-magazine-card${flipped ? " wg-interview-magazine-flipped" : ""}`}>
           <div className="wg-interview-magazine-front">
             <span className="wg-interview-magazine-front-date">{month}.{day}</span>
-            <span className="wg-interview-magazine-front-title">在场</span>
+            <span className="wg-interview-magazine-front-title">Presence</span>
             <span className="wg-interview-magazine-front-eng">presence</span>
-            <span className="wg-interview-magazine-front-hint">- 轻触翻页 -</span>
+            <span className="wg-interview-magazine-front-hint">- Tap to flip -</span>
           </div>
           <div className="wg-interview-magazine-back">
             <span className="wg-interview-magazine-level">{line.title}</span>
@@ -1236,7 +1236,7 @@ function InterviewMagazineWidget({
 }
 
 /* ══════════════════════════════════════════
-   11. Kaomoji Status Bar — 颜文字状态栏 (1x4)
+   11. Kaomoji Status Bar — Kaomoji Status Bar (1x4)
    ══════════════════════════════════════════ */
 const KAOMOJI_SETS = [
   "Ω · ♡\uFE0E · ᶘ ᵒᴥᵒᶅ · ˖ ✧",
@@ -1314,11 +1314,11 @@ function KaomojiWidget({
       </div>
       {showEdit && createPortal(
         <ContentDialog
-          title={"\u7F16\u8F91\u72B6\u6001\u6587\u5B57"}
+          title={"Edit status text"}
           onConfirm={handleSave}
           onCancel={() => setShowEdit(false)}
         >
-          <label style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)", marginBottom: 4, display: "block" }}>{"\u72B6\u6001\u6587\u5B57"}</label>
+          <label style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)", marginBottom: 4, display: "block" }}>{"Status text"}</label>
           <input
             className="ui-input"
             value={editGreeting}
@@ -1334,7 +1334,7 @@ function KaomojiWidget({
 }
 
 /* ══════════════════════════════════════════
-   12. Time & Date — 时间日期 (3x4)
+   12. Time & Date — Time & Date (3x4)
    ══════════════════════════════════════════ */
 function MascotWidget() {
   const elRef = useRef<HTMLDivElement>(null);
@@ -1488,9 +1488,9 @@ function MascotWidget() {
       <div className="wg-mascot" data-active={isFloating ? "true" : undefined}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="wg-mascot-img" src={mascotAvatarUrl} alt={mascotSettings.nickname || "AI助手"} />
+        <img className="wg-mascot-img" src={mascotAvatarUrl} alt={mascotSettings.nickname || "AI Assistant"} />
         <div className="wg-mascot-bubble">
-          <span>{isFloating ? "✦ 在线中~" : "✦ 点击召唤我哦~ ♡"}</span>
+          <span>{isFloating ? "✦ Online~" : "✦ Tap to summon me~ ♡"}</span>
         </div>
         <div className="wg-mascot-sparkle" style={{ top: "18%", left: "12%", animationDelay: "0s" }} />
         <div className="wg-mascot-sparkle" style={{ top: "40%", right: "10%", animationDelay: "0.7s" }} />
@@ -1514,7 +1514,7 @@ function KawaiiMusicPlayerWidget({ config, widgetId, onConfigChange, preview }: 
       {input}
       <div className="kwmp-header">
         <div className="kwmp-album-art" onClick={preview ? undefined : triggerUpload} role={preview ? undefined : "button"} tabIndex={preview ? undefined : 0}>
-          {albumUrl ? <img src={albumUrl} alt="" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:"inherit"}} /> : <span className="wg-upload-hint" style={{fontSize: "calc(8px*var(--app-text-scale,1))"}}>换图</span>}
+          {albumUrl ? <img src={albumUrl} alt="" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:"inherit"}} /> : <span className="wg-upload-hint" style={{fontSize: "calc(8px*var(--app-text-scale,1))"}}>Change</span>}
         </div>
         <div className="kwmp-info">
           <div className="kwmp-info-top">
@@ -1705,12 +1705,12 @@ function CoupleChatWidget({ config, widgetId, onConfigChange, preview }: any) {
           className="wg-chat-avatar" 
           onClick={preview ? undefined : triggerLeft}
           style={leftAvatar ? { backgroundImage: `url(${leftAvatar})` } : {}}
-          title="点击更换左侧头像"
+          title="Click to change left avatar"
         >
           {!leftAvatar && <span className="wg-chat-avatar-ph">AI</span>}
         </div>
         <div className="wg-chat-bubble wg-bubble-text">
-          <div className="wg-bubble-content">我也很想你～明天见哦！</div>
+          <div className="wg-bubble-content">Miss you too~ See you tomorrow!</div>
         </div>
       </div>
       
@@ -1736,7 +1736,7 @@ function CoupleChatWidget({ config, widgetId, onConfigChange, preview }: any) {
           className="wg-chat-avatar" 
           onClick={preview ? undefined : triggerRight}
           style={rightAvatar ? { backgroundImage: `url(${rightAvatar})` } : {}}
-          title="点击更换右侧头像"
+          title="Click to change right avatar"
         >
           {!rightAvatar && <span className="wg-chat-avatar-ph">ME</span>}
         </div>
@@ -1776,11 +1776,11 @@ function MoodPillWidget({ config, widgetId, onConfigChange, preview }: any) {
       </div>
       {showEdit && createPortal(
         <ContentDialog
-          title="编辑悬浮气泡"
+          title="Edit floating bubble"
           onConfirm={handleSave}
           onCancel={() => setShowEdit(false)}
         >
-          <label style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-home-text)", marginBottom: 4, display: "block" }}>气泡文字</label>
+          <label style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-home-text)", marginBottom: 4, display: "block" }}>Bubble text</label>
           <input
             className="ui-input"
             value={editText}
@@ -1895,7 +1895,7 @@ function TicketStubWidget({ config, widgetId, onConfigChange, preview }: any) {
             className="wg-ticket-poster"
             onClick={preview ? undefined : triggerUpload}
             style={posterUrl ? { backgroundImage: `url(${posterUrl})`, border: 'none' } : {}}
-            title="点击上传海报/票面图片"
+            title="Click to upload poster/ticket image"
           >
             {!posterUrl && <span>+<br/>IMAGE</span>}
           </div>
@@ -1930,7 +1930,7 @@ function PostcardWidget({ config, widgetId, onConfigChange, preview }: any) {
       <div 
         className="wg-pc-overlay"
         onClick={preview ? undefined : () => triggerUpload()} 
-        title="点击更换全画幅底图"
+        title="Click to change full-frame background"
       >
         <div className="wg-pc-top-text">
           <span className="wg-pc-micro-text">NOSTALGIA / VOL.1</span>
@@ -1941,7 +1941,7 @@ function PostcardWidget({ config, widgetId, onConfigChange, preview }: any) {
           <div 
             className="wg-pc-main-text"
             onClick={preview ? undefined : (e) => { e.stopPropagation(); setEditText(msg); setShowEdit(true); }}
-            title="点击编辑焦点英文"
+            title="Click to edit focus text"
           >
             {msg}
           </div>
@@ -1964,7 +1964,7 @@ function PostcardWidget({ config, widgetId, onConfigChange, preview }: any) {
       
       {showEdit && mounted && createPortal(
         <ContentDialog 
-          title="编辑焦点文字" 
+          title="Edit focus text"
           onCancel={() => setShowEdit(false)} 
           onConfirm={() => { onConfigChange?.(widgetId, { ...config, msg: editText }); setShowEdit(false); }}
         >

@@ -13,7 +13,7 @@ interface Props {
 export default function ImportModal({ open, categories, onClose, onModelAdded }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [modelName, setModelName] = useState("");
-  const [category, setCategory] = useState("导入");
+  const [category, setCategory] = useState("Import");
   const [customCat, setCustomCat] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -29,7 +29,7 @@ export default function ImportModal({ open, categories, onClose, onModelAdded }:
   function reset() {
     setFile(null);
     setModelName("");
-    setCategory("导入");
+    setCategory("Import");
     setCustomCat("");
     onClose();
   }
@@ -40,7 +40,7 @@ export default function ImportModal({ open, categories, onClose, onModelAdded }:
     <div className="wb-modal-overlay" onClick={reset}>
       <div className="wb-modal" onClick={(e) => e.stopPropagation()}>
         <div className="wb-modal-header">
-          <span>导入模型</span>
+          <span>Import Model</span>
           <button className="wb-float-close" onClick={reset}>✕</button>
         </div>
 
@@ -59,14 +59,14 @@ export default function ImportModal({ open, categories, onClose, onModelAdded }:
             }}
           />
           <button className="wb-modal-btn" onClick={() => fileRef.current?.click()}>
-            {file ? file.name : "选择 GLB / GLTF 文件"}
+            {file ? file.name : "Choose GLB / GLTF file"}
           </button>
         </div>
 
         {file && (
           <>
             <div className="wb-modal-section">
-              <label className="wb-modal-label">模型名称</label>
+              <label className="wb-modal-label">Model Name</label>
               <input
                 className="wb-modal-input"
                 value={modelName}
@@ -75,20 +75,20 @@ export default function ImportModal({ open, categories, onClose, onModelAdded }:
             </div>
 
             <div className="wb-modal-section">
-              <label className="wb-modal-label">分类</label>
+              <label className="wb-modal-label">Category</label>
               <div className="wb-modal-cat-list">
-                {[...categories, "自定义"].map((c) => (
+                {[...categories, "Custom"].map((c) => (
                   <button
                     key={c}
                     className={`wb-modal-cat ${category === c ? "active" : ""}`}
-                    onClick={() => { setCategory(c); if (c !== "自定义") setCustomCat(""); }}
+                    onClick={() => { setCategory(c); if (c !== "Custom") setCustomCat(""); }}
                   >{c}</button>
                 ))}
               </div>
-              {category === "自定义" && (
+              {category === "Custom" && (
                 <input
                   className="wb-modal-input"
-                  placeholder="输入新分类名"
+                  placeholder="Enter new category name"
                   value={customCat}
                   onChange={(e) => setCustomCat(e.target.value)}
                   style={{ marginTop: 6 }}
@@ -97,8 +97,8 @@ export default function ImportModal({ open, categories, onClose, onModelAdded }:
             </div>
 
             <div className="wb-modal-actions">
-              <button className="wb-modal-btn wb-modal-primary" onClick={handleImport}>添加到库</button>
-              <button className="wb-modal-btn" onClick={reset}>取消</button>
+              <button className="wb-modal-btn wb-modal-primary" onClick={handleImport}>Add to Library</button>
+              <button className="wb-modal-btn" onClick={reset}>Cancel</button>
             </div>
           </>
         )}

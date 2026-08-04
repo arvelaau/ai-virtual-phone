@@ -244,14 +244,14 @@ export function BindingManager() {
             setOverrideBack(null);
             setSubpageTitle(null);
         } else if (level === "character") {
-            const charName = characters.find(c => c.id === selectedCharId)?.name || "角色";
-            setSubpageTitle(`${charName} 的绑定`);
+            const charName = characters.find(c => c.id === selectedCharId)?.name || "Character";
+            setSubpageTitle(`${charName}'s Bindings`);
             setOverrideBack(() => () => {
                 setLevel("global");
                 setSelectedCharId("");
             });
         } else if (level === "app") {
-            const charName = characters.find(c => c.id === selectedCharId)?.name || "角色";
+            const charName = characters.find(c => c.id === selectedCharId)?.name || "Character";
             const appLabel = selectedAppId ? getAppLabel(selectedAppId) : "";
             setSubpageTitle(`${appLabel} · ${charName}`);
             setOverrideBack(() => () => {
@@ -335,8 +335,8 @@ export function BindingManager() {
     };
 
     const getInheritLabel = (): string => {
-        if (level === "character") return "继承全局";
-        if (level === "app") return "继承上级绑定";
+        if (level === "character") return "Inherit from global";
+        if (level === "app") return "Inherit from parent binding";
         return "";
     };
 
@@ -411,41 +411,41 @@ export function BindingManager() {
 
     const getBindingFieldLabel = (field: BindingField): string => {
         switch (field) {
-            case "apiConfigId": return "API 配置";
-            case "voiceConfigId": return "语音 API";
-            case "presetId": return "预设";
-            case "userIdentityId": return "用户身份";
-            case "worldBookIds": return "世界书";
-            case "regexIds": return "正则规则";
+            case "apiConfigId": return "API Config";
+            case "voiceConfigId": return "Voice API";
+            case "presetId": return "Preset";
+            case "userIdentityId": return "User Identity";
+            case "worldBookIds": return "Worldbook";
+            case "regexIds": return "Regex Rules";
         }
     };
 
     const getBindingFieldDescription = (field: BindingField): string => {
         switch (field) {
-            case "apiConfigId": return "全局文本生成接口";
-            case "voiceConfigId": return "全局语音合成接口";
-            case "presetId": return "全局提示词预设";
-            case "userIdentityId": return "全局用户身份";
-            case "worldBookIds": return "全局启用的世界书";
-            case "regexIds": return "全局启用的正则规则";
+            case "apiConfigId": return "Global text generation endpoint";
+            case "voiceConfigId": return "Global voice synthesis endpoint";
+            case "presetId": return "Global prompt preset";
+            case "userIdentityId": return "Global user identity";
+            case "worldBookIds": return "Globally enabled worldbooks";
+            case "regexIds": return "Globally enabled regex rules";
         }
     };
 
     const getAuxFieldDescription = (field: AuxBindingField): string => {
         switch (field) {
-            case "memorySummaryApiConfigId": return "用于聊天记忆压缩";
-            case "embeddingApiConfigId": return "用于语义向量召回";
-            case "mascotApiConfigId": return "用于小卷对话与工具调用";
-            case "reasoningTranslateApiConfigId": return "用于翻译思考过程（思维链）内容";
+            case "memorySummaryApiConfigId": return "Used for chat memory compression";
+            case "embeddingApiConfigId": return "Used for semantic vector recall";
+            case "mascotApiConfigId": return "Used for mascot chat and tool calls";
+            case "reasoningTranslateApiConfigId": return "Used to translate reasoning (chain-of-thought) content";
         }
     };
 
     const getAuxFieldLabel = (field: AuxBindingField): string => {
         switch (field) {
-            case "memorySummaryApiConfigId": return "记忆总结 API";
-            case "embeddingApiConfigId": return "向量召回 API";
-            case "mascotApiConfigId": return "小卷助手 API";
-            case "reasoningTranslateApiConfigId": return "思维链翻译 API";
+            case "memorySummaryApiConfigId": return "Memory Summary API";
+            case "embeddingApiConfigId": return "Vector Recall API";
+            case "mascotApiConfigId": return "Mascot Assistant API";
+            case "reasoningTranslateApiConfigId": return "Chain-of-Thought Translation API";
         }
     };
 
@@ -472,9 +472,9 @@ export function BindingManager() {
             const selectedIds = (slot[field] || []).filter(id => options.some(item => item.id === id));
             if (selectedIds.length === 0) return { text: "", isEmpty: true };
             if (selectedIds.length === 1) {
-                return { text: options.find(item => item.id === selectedIds[0])?.name || "1 项已选", isEmpty: false };
+                return { text: options.find(item => item.id === selectedIds[0])?.name || "1 selected", isEmpty: false };
             }
-            return { text: `${selectedIds.length} 项已选`, isEmpty: false };
+            return { text: `${selectedIds.length} selected`, isEmpty: false };
         }
         const value = slot[field];
         const selected = options.find(item => item.id === value);
@@ -483,14 +483,14 @@ export function BindingManager() {
 
     const getInheritedFieldLabel = (field: BindingField, fallback: string): string => {
         const inherited = getSlotFieldValueDisplay(inheritedSlot, field);
-        return inherited.isEmpty ? fallback : `继承：${inherited.text}`;
+        return inherited.isEmpty ? fallback : `Inherited: ${inherited.text}`;
     };
 
     const getSlotFieldDisplay = (slot: BindingSlot, field: BindingField, emptyText: string): { text: string; isEmpty: boolean; isInherited: boolean } => {
         const current = getSlotFieldValueDisplay(slot, field);
         if (!current.isEmpty) return { ...current, isInherited: false };
         const inherited = getSlotFieldValueDisplay(inheritedSlot, field);
-        if (!inherited.isEmpty) return { text: `继承：${inherited.text}`, isEmpty: false, isInherited: true };
+        if (!inherited.isEmpty) return { text: `Inherited: ${inherited.text}`, isEmpty: false, isInherited: true };
         return { text: emptyText, isEmpty: true, isInherited: false };
     };
 
@@ -525,7 +525,7 @@ export function BindingManager() {
         const currentValue = config[field];
         const options = apiConfigs.map(c => ({ id: c.id, name: c.name || c.provider }));
         const selectedOption = options.find(o => o.id === currentValue);
-        const displayValue = selectedOption ? selectedOption.name : "继承全局";
+        const displayValue = selectedOption ? selectedOption.name : "Inherit from global";
 
         return (
             <div key={field} className="binding-aux-select">
@@ -612,7 +612,7 @@ export function BindingManager() {
     };
 
     const renderGlobalSlotCards = () => (
-        renderBindingSlotCards(config.globalDefaults, "未设置", setActiveGlobalSheetField)
+        renderBindingSlotCards(config.globalDefaults, "Not set", setActiveGlobalSheetField)
     );
 
     const renderCharacterSlotCards = () => (
@@ -647,7 +647,7 @@ export function BindingManager() {
                     className="binding-picker-dialog"
                     role="dialog"
                     aria-modal="true"
-                    aria-label={`选择${label}`}
+                    aria-label={`Select ${label}`}
                     onClick={(event) => event.stopPropagation()}
                 >
                     <div className="binding-picker-header">
@@ -655,18 +655,18 @@ export function BindingManager() {
                             type="button"
                             className="binding-picker-icon-btn"
                             onClick={() => setActiveGlobalSheetField(null)}
-                            aria-label="关闭"
+                            aria-label="Close"
                         >
                             <X size={17} />
                         </button>
-                        <h3 className="binding-picker-title">选择{label}</h3>
+                        <h3 className="binding-picker-title">Select {label}</h3>
                         {isMulti ? (
                             <button
                                 type="button"
                                 className="binding-picker-done-btn"
                                 onClick={() => setActiveGlobalSheetField(null)}
                             >
-                                完成
+                                Done
                             </button>
                         ) : (
                             <span className="binding-picker-header-spacer" />
@@ -681,10 +681,10 @@ export function BindingManager() {
                                 onClick={clearSelection}
                             >
                                 <span className="binding-sheet-check">{(isMulti ? selectedIds.length === 0 : !selectedValue) && <Check size={15} />}</span>
-                                <span className="binding-sheet-option-text">未设置</span>
+                                <span className="binding-sheet-option-text">Not set</span>
                             </button>
                             {options.length === 0 ? (
-                                <div className="binding-sheet-empty">暂无可选{label}，请先在对应设置页面创建。</div>
+                                <div className="binding-sheet-empty">No {label} available. Please create one on the corresponding settings page first.</div>
                             ) : (
                                 options.map(option => {
                                     const selected = isMulti ? selectedIds.includes(option.id) : selectedValue === option.id;
@@ -725,7 +725,7 @@ export function BindingManager() {
         const isMulti = isMultiBindingField(field);
         const selectedIds = isMulti ? ((currentSlot[field as MultiBindingField] || []).filter(id => options.some(item => item.id === id))) : [];
         const selectedValue = !isMulti ? currentSlot[field as SingleBindingField] : undefined;
-        const emptyLabel = level === "global" ? "未设置" : getInheritedFieldLabel(field, inheritLabel);
+        const emptyLabel = level === "global" ? "Not set" : getInheritedFieldLabel(field, inheritLabel);
 
         const clearSelection = () => {
             handleUpdate(field, undefined);
@@ -746,7 +746,7 @@ export function BindingManager() {
                     className="binding-picker-dialog"
                     role="dialog"
                     aria-modal="true"
-                    aria-label={`选择${label}`}
+                    aria-label={`Select ${label}`}
                     onClick={(event) => event.stopPropagation()}
                 >
                     <div className="binding-picker-header">
@@ -754,18 +754,18 @@ export function BindingManager() {
                             type="button"
                             className="binding-picker-icon-btn"
                             onClick={() => setActiveSlotSheetField(null)}
-                            aria-label="关闭"
+                            aria-label="Close"
                         >
                             <X size={17} />
                         </button>
-                        <h3 className="binding-picker-title">选择{label}</h3>
+                        <h3 className="binding-picker-title">Select {label}</h3>
                         {isMulti ? (
                             <button
                                 type="button"
                                 className="binding-picker-done-btn"
                                 onClick={() => setActiveSlotSheetField(null)}
                             >
-                                完成
+                                Done
                             </button>
                         ) : (
                             <span className="binding-picker-header-spacer" />
@@ -783,7 +783,7 @@ export function BindingManager() {
                                 <span className="binding-sheet-option-text">{emptyLabel}</span>
                             </button>
                             {options.length === 0 ? (
-                                <div className="binding-sheet-empty">暂无可选{label}，请先在对应设置页面创建。</div>
+                                <div className="binding-sheet-empty">No {label} available. Please create one on the corresponding settings page first.</div>
                             ) : (
                                 options.map(option => {
                                     const selected = isMulti ? selectedIds.includes(option.id) : selectedValue === option.id;
@@ -829,7 +829,7 @@ export function BindingManager() {
                     className="binding-picker-dialog"
                     role="dialog"
                     aria-modal="true"
-                    aria-label={`选择${label}`}
+                    aria-label={`Select ${label}`}
                     onClick={(event) => event.stopPropagation()}
                 >
                     <div className="binding-picker-header">
@@ -837,11 +837,11 @@ export function BindingManager() {
                             type="button"
                             className="binding-picker-icon-btn"
                             onClick={() => setActiveAuxSheetField(null)}
-                            aria-label="关闭"
+                            aria-label="Close"
                         >
                             <X size={17} />
                         </button>
-                        <h3 className="binding-picker-title">选择{label}</h3>
+                        <h3 className="binding-picker-title">Select {label}</h3>
                         <span className="binding-picker-header-spacer" />
                     </div>
                     <div className="binding-picker-body">
@@ -856,10 +856,10 @@ export function BindingManager() {
                                 }}
                             >
                                 <span className="binding-sheet-check">{!selectedValue && <Check size={15} />}</span>
-                                <span className="binding-sheet-option-text">继承全局</span>
+                                <span className="binding-sheet-option-text">Inherit from global</span>
                             </button>
                             {options.length === 0 ? (
-                                <div className="binding-sheet-empty">暂无可选 API 配置，请先在 API 设置页面创建。</div>
+                                <div className="binding-sheet-empty">No API configs available. Please create one on the API settings page first.</div>
                             ) : (
                                 options.map(option => {
                                     const selected = selectedValue === option.id;
@@ -896,17 +896,17 @@ export function BindingManager() {
                     className="modal-dialog"
                     role="dialog"
                     aria-modal="true"
-                    aria-label="选择角色"
+                    aria-label="Select Character"
                     onClick={(event) => event.stopPropagation()}
                 >
-                    <span className="modal-header-title">选择角色</span>
+                    <span className="modal-header-title">Select Character</span>
                     {characters.length === 0 ? (
-                        <span className="menu-desc">暂无角色，请先在角色库中创建角色。</span>
+                        <span className="menu-desc">No characters yet. Please create one in the character library first.</span>
                     ) : (
                         <div className="chat-contact-list">
                             {characters.map(char => {
                                 const configured = hasCharacterBinding(char.id);
-                                const name = char.name || "未命名角色";
+                                const name = char.name || "Unnamed Character";
                                 return (
                                     <button
                                         key={char.id}
@@ -924,7 +924,7 @@ export function BindingManager() {
                                             )}
                                         </span>
                                         <span className="chat-contact-name">{name}</span>
-                                        {configured && <span className="binding-contact-badge" aria-label="已配置" />}
+                                        {configured && <span className="binding-contact-badge" aria-label="Configured" />}
                                     </button>
                                 );
                             })}
@@ -949,7 +949,7 @@ export function BindingManager() {
                                 className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-[18px] bg-black px-3 text-[calc(11px*var(--app-text-scale,1))] font-bold text-white shadow-sm transition-all hover:bg-gray-800 hover:shadow-md active:scale-95 focus:outline-none"
                             >
                                 <UserPlus size={14} strokeWidth={1.8} />
-                                为角色配置专属绑定
+                                Configure Bindings for Character
                             </button>
                         </div>
                         {renderGlobalSlotCards()}
@@ -958,10 +958,10 @@ export function BindingManager() {
                     <section className="flex flex-col gap-3">
                         <p className="settings-menu-section-title">Auxiliary API</p>
                         <div className="flex flex-col gap-3">
-                            {renderAuxSelect("memorySummaryApiConfigId", "记忆总结 API")}
-                            {renderAuxSelect("embeddingApiConfigId", "向量召回 API")}
-                            {renderAuxSelect("mascotApiConfigId", "小卷助手 API")}
-                            {renderAuxSelect("reasoningTranslateApiConfigId", "思维链翻译 API")}
+                            {renderAuxSelect("memorySummaryApiConfigId", "Memory Summary API")}
+                            {renderAuxSelect("embeddingApiConfigId", "Vector Recall API")}
+                            {renderAuxSelect("mascotApiConfigId", "Mascot Assistant API")}
+                            {renderAuxSelect("reasoningTranslateApiConfigId", "Chain-of-Thought Translation API")}
                         </div>
                     </section>
                 </>
@@ -995,7 +995,7 @@ export function BindingManager() {
                                         }}
                                         className="g-card binding-app-card"
                                         style={bindingAccentStyle(app.color)}
-                                        aria-label={`${app.label}应用绑定`}
+                                        aria-label={`${app.label} App Binding`}
                                     >
                                         <span className="binding-app-icon">
                                             {app.iconDataUrl ? (
@@ -1034,7 +1034,7 @@ export function BindingManager() {
                         onClick={resetAppBinding}
                         className="ui-btn ui-btn-soft-danger flex justify-center"
                     >
-                        <RotateCcw size={16} /> 重置此应用绑定
+                        <RotateCcw size={16} /> Reset This App's Binding
                     </button>
                 </>
             )}

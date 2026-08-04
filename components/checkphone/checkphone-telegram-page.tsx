@@ -446,11 +446,11 @@ export function CheckPhoneTelegramPage({ character, onBack }: CheckPhoneTelegram
 
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空 Telegram 内容？"
-          message="确认后会清空当前 Telegram 缓存。之后重新刷新时，不会再带入旧 Telegram 内容。"
+          title="Clear Telegram content?"
+          message="This clears the current Telegram cache. The next refresh will not reuse old Telegram content."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

@@ -21,15 +21,15 @@ function formatTime(iso: string): string {
 }
 
 function formatSize(size: number): string {
-  if (!Number.isFinite(size) || size <= 0) return "未知大小";
+  if (!Number.isFinite(size) || size <= 0) return "Unknown size";
   if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function statusText(status: CustomAppMarketItem["reviewStatus"]): string {
-  if (status === "approved") return "已通过";
-  if (status === "rejected") return "已拒绝";
-  return "待审核";
+  if (status === "approved") return "Approved";
+  if (status === "rejected") return "Rejected";
+  return "Pending";
 }
 
 export default function AppMarketAdminPage() {
@@ -50,7 +50,7 @@ export default function AppMarketAdminPage() {
       setUnlocked(true);
       try { window.localStorage.setItem(ADMIN_KEY_STORAGE, adminKey); } catch { /* ignore */ }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "加载失败");
+      setError(err instanceof Error ? err.message : "Failed to load");
       if (!unlocked) setUnlocked(false);
     } finally {
       setLoading(false);
@@ -58,7 +58,7 @@ export default function AppMarketAdminPage() {
   }, [unlocked]);
 
   useEffect(() => {
-    document.title = "Float · 应用市场审核台";
+    document.title = "Float · App Market Review Console";
     try {
       const saved = window.localStorage.getItem(ADMIN_KEY_STORAGE) || "";
       if (saved) {
@@ -79,8 +79,8 @@ export default function AppMarketAdminPage() {
   async function decide(item: CustomAppMarketItem, action: "approve" | "reject") {
     if (busyId) return;
     const message = action === "approve"
-      ? `确认通过「${item.name}」并上架到公共市场？`
-      : `确认拒绝「${item.name}」？`;
+      ? `Confirm approval of "${item.name}" and publish it to the public market?`
+      : `Confirm rejection of "${item.name}"?`;
     if (!window.confirm(message)) return;
     setBusyId(item.id);
     setError("");
@@ -88,7 +88,7 @@ export default function AppMarketAdminPage() {
       await reviewCustomAppMarketItem({ adminKey: key.trim(), id: item.id, action });
       await refresh(key.trim(), view);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "操作失败");
+      setError(err instanceof Error ? err.message : "Action failed");
     } finally {
       setBusyId("");
     }
@@ -102,25 +102,25 @@ export default function AppMarketAdminPage() {
             <Store size={24} />
           </span>
           <div>
-            <strong>应用市场审核台</strong>
-            <p>审核用户提交的自定义 APP</p>
+            <strong>App Market Review Console</strong>
+            <p>Review custom apps submitted by users</p>
           </div>
         </header>
 
         {!unlocked ? (
           <section className="ama-panel">
             <label className="ama-field">
-              <span>管理密钥</span>
+              <span>Admin Key</span>
               <input
                 type="text"
                 value={key}
                 onChange={event => setKey(event.target.value)}
-                placeholder="APP_MARKET_ADMIN_KEY 或 VERIFY_ADMIN_KEY"
+                placeholder="APP_MARKET_ADMIN_KEY or VERIFY_ADMIN_KEY"
               />
             </label>
             {error ? <div className="ama-error">{error}</div> : null}
             <button type="button" className="ama-primary" disabled={loading || !key.trim()} onClick={() => refresh(key.trim(), view)}>
-              {loading ? "验证中..." : "进入审核台"}
+              {loading ? "Verifying..." : "Enter Review Console"}
             </button>
           </section>
         ) : (
@@ -135,13 +135,13 @@ export default function AppMarketAdminPage() {
                     data-active={view === item}
                     onClick={() => void switchView(item)}
                   >
-                    {item === "pending" ? "待审核" : item === "approved" ? "已通过" : item === "rejected" ? "已拒绝" : "全部"}
+                    {item === "pending" ? "Pending" : item === "approved" ? "Approved" : item === "rejected" ? "Rejected" : "All"}
                   </button>
                 ))}
               </div>
               <button type="button" className="ama-refresh" disabled={loading} onClick={() => refresh(key.trim(), view)}>
                 <RefreshCw size={17} />
-                <span>{loading ? "刷新中" : "刷新"}</span>
+                <span>{loading ? "Refreshing" : "Refresh"}</span>
               </button>
             </div>
 
@@ -149,7 +149,7 @@ export default function AppMarketAdminPage() {
 
             <div className="ama-list">
               {items.length === 0 && !loading ? (
-                <div className="ama-empty">{view === "pending" ? "暂无待审核 APP。" : "暂无记录。"}</div>
+                <div className="ama-empty">{view === "pending" ? "No apps pending review." : "No records."}</div>
               ) : null}
               {items.map(item => (
                 <article className="ama-item" key={item.id}>
@@ -162,7 +162,7 @@ export default function AppMarketAdminPage() {
                         <strong>{item.name}</strong>
                         <b data-status={item.reviewStatus}>{statusText(item.reviewStatus)}</b>
                       </div>
-                      <p>{item.description || "无简介"}</p>
+                      <p>{item.description || "No description"}</p>
                       <span>
                         {item.authorName} · v{item.version} · {formatSize(item.packageSize)} · {formatTime(item.updatedAt)}
                       </span>
@@ -179,11 +179,11 @@ export default function AppMarketAdminPage() {
                     <div className="ama-actions">
                       <button type="button" className="ama-approve" disabled={busyId === item.id} onClick={() => void decide(item, "approve")}>
                         <Check size={17} />
-                        <span>{busyId === item.id ? "处理中" : "通过"}</span>
+                        <span>{busyId === item.id ? "Processing" : "Approve"}</span>
                       </button>
                       <button type="button" className="ama-reject" disabled={busyId === item.id} onClick={() => void decide(item, "reject")}>
                         <X size={17} />
-                        <span>拒绝</span>
+                        <span>Reject</span>
                       </button>
                     </div>
                   ) : null}

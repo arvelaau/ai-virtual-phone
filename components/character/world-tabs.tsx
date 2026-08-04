@@ -1,8 +1,8 @@
 "use client";
 
-// 世界卷宗 tab 条 + 卷宗编辑 sheet + 新建卷宗 sheet
-// 视觉隐喻：每个世界 = 一份牛皮纸案卷，激活的 tab 是「翻开的那份」，
-// 与画布纸面连成一体；编辑模式下拍立得可以拖到 tab 上「归档」进别的世界。
+// World case-file tab strip + case editor sheet + new case sheet
+// Visual metaphor: each world = a manila case file, the active tab is "the one flipped open",
+// merging seamlessly with the canvas paper; in edit mode, Polaroids can be dragged onto a tab to "file" them into another world.
 
 import { useState } from "react";
 import type { CharacterWorldGroup } from "@/lib/character-world-storage";
@@ -20,15 +20,15 @@ export function WorldTabStrip({
   groups: CharacterWorldGroup[];
   currentWorldId: string;
   memberCounts: Map<string, number>;
-  /** 拖拽拍立得悬停中的 tab（高亮为可归档状态） */
+  /** The tab currently hovered while dragging a Polaroid (highlighted as filing target) */
   dropTargetWorldId: string | null;
   onSelect: (worldId: string) => void;
-  /** 再次点按当前激活的 tab → 打开卷宗编辑 */
+  /** Tapping the currently active tab again -> opens the case editor */
   onOpenEditor: () => void;
   onOpenCreate: () => void;
 }) {
   return (
-    <div className="wt-strip" role="tablist" aria-label="世界卷宗">
+    <div className="wt-strip" role="tablist" aria-label="World case files">
       {groups.map(group => {
         const active = group.id === currentWorldId;
         const dropping = group.id === dropTargetWorldId;
@@ -41,7 +41,7 @@ export function WorldTabStrip({
             data-world-tab-id={group.id}
             className={`wt-tab ${active ? "wt-tab-active" : ""} ${dropping ? "wt-tab-drop" : ""}`}
             onClick={() => (active ? onOpenEditor() : onSelect(group.id))}
-            title={active ? "点按编辑这份卷宗" : `打开「${group.name}」`}
+            title={active ? "Tap to edit this case file" : `Open "${group.name}"`}
           >
             <span className="wt-tab-name">{group.name}</span>
             <span className="wt-tab-count">{memberCounts.get(group.id) ?? 0}</span>
@@ -49,14 +49,14 @@ export function WorldTabStrip({
           </button>
         );
       })}
-      <button type="button" className="wt-tab wt-tab-new" onClick={onOpenCreate} aria-label="新建世界">
-        ＋
+      <button type="button" className="wt-tab wt-tab-new" onClick={onOpenCreate} aria-label="New world">
+        +
       </button>
     </div>
   );
 }
 
-/** 卷宗编辑：改名 / 世界观描述 / 删除（角色并回默认世界） */
+/** Case file editor: rename / worldview description / delete (characters merge back into the default world) */
 export function WorldCaseSheet({
   group,
   onRename,
@@ -86,43 +86,43 @@ export function WorldCaseSheet({
       <div className="wt-paper" onClick={e => e.stopPropagation()}>
         <div className="wt-paper-tape" aria-hidden />
         <div className="wt-paper-kicker">CASE FILE</div>
-        <label className="wt-paper-label">卷宗名称</label>
+        <label className="wt-paper-label">Case name</label>
         <input
           className="wt-paper-input"
           value={name}
           onChange={e => setName(e.target.value)}
-          placeholder="世界名称"
+          placeholder="World name"
           disabled={isDefault}
         />
-        {isDefault && <p className="wt-paper-hint">默认世界不可改名或删除，删除其他世界时角色会回到这里。</p>}
-        <label className="wt-paper-label">世界观描述（会注入该世界所有角色的上下文）</label>
+        {isDefault && <p className="wt-paper-hint">The default world can't be renamed or deleted; characters return here when other worlds are deleted.</p>}
+        <label className="wt-paper-label">Worldview description (injected into the context of all characters in this world)</label>
         <textarea
           className="wt-paper-textarea"
           value={description}
           onChange={e => setDescription(e.target.value)}
-          placeholder="写下这个世界的背景、时代、阵营边界、共同常识或角色互动前提…"
+          placeholder="Describe this world's background, era, faction boundaries, shared knowledge, or premises for character interaction…"
         />
         <div className="wt-paper-actions">
           {!isDefault && (
             confirmDelete ? (
               <>
-                <span className="wt-paper-confirm">确认删除？角色将并回默认世界</span>
-                <button type="button" className="wt-btn wt-btn-danger" onClick={onDelete}>删除</button>
-                <button type="button" className="wt-btn" onClick={() => setConfirmDelete(false)}>取消</button>
+                <span className="wt-paper-confirm">Confirm delete? Characters will merge back into the default world</span>
+                <button type="button" className="wt-btn wt-btn-danger" onClick={onDelete}>Delete</button>
+                <button type="button" className="wt-btn" onClick={() => setConfirmDelete(false)}>Cancel</button>
               </>
             ) : (
-              <button type="button" className="wt-btn wt-btn-danger" onClick={() => setConfirmDelete(true)}>删除卷宗</button>
+              <button type="button" className="wt-btn wt-btn-danger" onClick={() => setConfirmDelete(true)}>Delete Case File</button>
             )
           )}
           <span className="wt-paper-spacer" />
-          <button type="button" className="wt-btn wt-btn-primary" onClick={save}>完成</button>
+          <button type="button" className="wt-btn wt-btn-primary" onClick={save}>Done</button>
         </div>
       </div>
     </div>
   );
 }
 
-/** 新建卷宗 */
+/** New case file */
 export function NewWorldSheet({
   onCreate,
   onClose,
@@ -140,19 +140,19 @@ export function NewWorldSheet({
       <div className="wt-paper" onClick={e => e.stopPropagation()}>
         <div className="wt-paper-tape" aria-hidden />
         <div className="wt-paper-kicker">NEW CASE</div>
-        <label className="wt-paper-label">新卷宗名称</label>
+        <label className="wt-paper-label">New case name</label>
         <input
           className="wt-paper-input"
           value={name}
           autoFocus
           onChange={e => setName(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter") submit(); }}
-          placeholder="例如：现代都市 / 仙侠界"
+          placeholder="e.g. Modern City / Xianxia Realm"
         />
         <div className="wt-paper-actions">
-          <button type="button" className="wt-btn" onClick={onClose}>取消</button>
+          <button type="button" className="wt-btn" onClick={onClose}>Cancel</button>
           <span className="wt-paper-spacer" />
-          <button type="button" className="wt-btn wt-btn-primary" disabled={!name.trim()} onClick={submit}>建立</button>
+          <button type="button" className="wt-btn wt-btn-primary" disabled={!name.trim()} onClick={submit}>Create</button>
         </div>
       </div>
     </div>

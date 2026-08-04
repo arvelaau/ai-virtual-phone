@@ -23,7 +23,7 @@ import type { VnMessage } from "./vn-storage";
 import { createOrGetVnSession, formatBeatsForPrompt, loadVnConfig } from "./vn-storage";
 import { DEFAULT_VN_BILINGUAL_PROMPT, resolveBilingualPrompt } from "./bilingual-prompt-defaults";
 
-export const DEFAULT_VN_SUMMARY_PROMPT = "以下是{{char}}与{{user}}在漫卷模式中的一章对话。请用200字以内的中文总结这一章的关键剧情、关系变化和情感走向。";
+export const DEFAULT_VN_SUMMARY_PROMPT = "Below is one chapter of the exchange between {{char}} and {{user}} in Visual Novel mode. Summarize this chapter in under 150 words, covering the key plot beats, any change in their relationship, and the emotional arc.";
 import { getVnSceneNames, getVnSpriteNames } from "./vn-asset-storage";
 import type { ChatMessage } from "./chat-storage";
 import type { VnFrame, VnOptions } from "./vn-types";
@@ -68,7 +68,7 @@ export function resolveVnConfigs(characterId: string): {
   const activeSlot = resolveBinding(bindings, characterId, "vn");
   if (!activeSlot.apiConfigId) {
     throw new ChatEngineError(
-      `No API Configuration bound for ${character.name}. Please go to Settings -> 绑定管理 -> 漫卷 to assign one.`
+      `No API Configuration bound for ${character.name}. Please go to Settings -> Binding Manager -> Visual Novel to assign one.`
     );
   }
 
@@ -124,7 +124,7 @@ export async function generateVnCompletion(
     options: parsed.options,
     promptMessages: llmMessages,
     model: apiConfig.defaultModel,
-    presetName: preset?.name || "默认预设",
+    presetName: preset?.name || "(default preset)",
   };
 }
 
@@ -146,7 +146,7 @@ async function buildVnPromptMessages(
   const { recentBlocks, truncatedHistory, wbActivationContext, unifiedRecentItems } = prepareShortTermContext(
     characterId,
     "vn",
-    { userName: userIdentity?.name ?? "用户", history: historyMessages }
+    { userName: userIdentity?.name ?? "User", history: historyMessages }
   );
 
   const chatBilingualInstruction = buildVnBilingualInstruction(
@@ -206,7 +206,7 @@ export async function previewVnPromptPayload(
     messages: previewMessagesForApi(apiConfig, preset, llmMessages),
     characterName: character.name,
     model: apiConfig.defaultModel,
-    presetName: preset?.name || "默认预设",
+    presetName: preset?.name || "(default preset)",
   };
 }
 
@@ -216,13 +216,13 @@ export async function summarizeVnChapter(
 ): Promise<string> {
   const apiConfig = resolveAuxiliaryApiConfig("memorySummaryApiConfigId");
   if (!apiConfig) {
-    throw new ChatEngineError("未配置记忆总结 API（请在绑定配置 → 辅助API绑定中设置）");
+    throw new ChatEngineError("No memory-summarization API configured (set one under Binding Settings -> Auxiliary API).");
   }
 
   const character = loadCharacters().find((c) => c.id === characterId);
-  const charName = character?.name ?? "角色";
+  const charName = character?.name ?? "Character";
   const userIdentity = resolveUserIdentity(characterId, "vn");
-  const userName = userIdentity?.name ?? "用户";
+  const userName = userIdentity?.name ?? "User";
   const memConfig = loadMemoryConfig();
   const customPrompt = memConfig.vnSummaryPrompt?.trim() || DEFAULT_VN_SUMMARY_PROMPT;
   const resolvedPrompt = customPrompt
@@ -247,7 +247,7 @@ export async function summarizeVnChapter(
   });
 
   if (result.error || !result.content) {
-    throw new ChatEngineError(result.error || "章节总结生成失败");
+    throw new ChatEngineError(result.error || "Failed to generate the chapter summary");
   }
 
   return result.content;

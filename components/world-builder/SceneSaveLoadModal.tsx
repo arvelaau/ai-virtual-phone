@@ -57,7 +57,7 @@ export default function SceneSaveLoadModal({ open, mode, currentObjects, onLoad,
     <div className="wb-modal-overlay" onClick={onClose}>
       <div className="wb-modal" onClick={(e) => e.stopPropagation()}>
         <div className="wb-modal-header">
-          <span>{mode === "save" ? "保存场景" : "加载场景"}</span>
+          <span>{mode === "save" ? "Save Scene" : "Load Scene"}</span>
           <button className="wb-float-close" onClick={onClose}>✕</button>
         </div>
 
@@ -67,7 +67,7 @@ export default function SceneSaveLoadModal({ open, mode, currentObjects, onLoad,
               <input
                 className="wb-modal-input"
                 style={{ flex: 1 }}
-                placeholder="输入场景名称"
+                placeholder="Enter scene name"
                 value={saveName}
                 onChange={(e) => setSaveName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSave()}
@@ -78,7 +78,7 @@ export default function SceneSaveLoadModal({ open, mode, currentObjects, onLoad,
                 onClick={handleSave}
                 disabled={!saveName.trim()}
               >
-                保存
+                Save
               </button>
             </div>
           </div>
@@ -87,7 +87,7 @@ export default function SceneSaveLoadModal({ open, mode, currentObjects, onLoad,
         {scenes.length > 0 && (
           <div className="wb-modal-section">
             <label className="wb-modal-label">
-              {mode === "save" ? "覆盖已有存档" : "选择存档"}
+              {mode === "save" ? "Overwrite existing save" : "Select a save"}
             </label>
             <div className="wb-scene-list">
               {scenes.map((s) => (
@@ -95,16 +95,16 @@ export default function SceneSaveLoadModal({ open, mode, currentObjects, onLoad,
                   <div className="wb-scene-info">
                     <span className="wb-scene-name">{s.name}</span>
                     <span className="wb-scene-meta">
-                      {s.objects.length}个物体 · {new Date(s.updatedAt).toLocaleDateString()}
+                      {s.objects.length} objects · {new Date(s.updatedAt).toLocaleDateString()}
                     </span>
                   </div>
                   <div className="wb-scene-actions">
                     {mode === "save" ? (
-                      <button className="wb-scene-btn" onClick={() => handleOverwrite(s)}>覆盖</button>
+                      <button className="wb-scene-btn" onClick={() => handleOverwrite(s)}>Overwrite</button>
                     ) : (
-                      <button className="wb-scene-btn wb-scene-btn-primary" onClick={() => handleLoad(s)}>加载</button>
+                      <button className="wb-scene-btn wb-scene-btn-primary" onClick={() => handleLoad(s)}>Load</button>
                     )}
-                    <button className="wb-scene-btn wb-scene-btn-danger" onClick={() => handleDelete(s.id)}>删除</button>
+                    <button className="wb-scene-btn wb-scene-btn-danger" onClick={() => handleDelete(s.id)}>Delete</button>
                   </div>
                 </div>
               ))}
@@ -114,7 +114,7 @@ export default function SceneSaveLoadModal({ open, mode, currentObjects, onLoad,
 
         {scenes.length === 0 && mode === "load" && (
           <div className="wb-modal-hint" style={{ textAlign: "center", padding: 20 }}>
-            暂无存档
+No saves yet
           </div>
         )}
       </div>

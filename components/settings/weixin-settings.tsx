@@ -104,21 +104,21 @@ function buildLocalAssistantOnceBat(): string {
 }
 
 function buildLocalAssistantReadme(): string {
-    return `AI Phone 微信本地助手
+    return `AI Phone WeChat Local Assistant
 
-使用方法：
-1. 解压这个文件夹。
-2. 双击「启动助手.bat」。
-3. 保持这个窗口打开，电脑在线时会自动轮询微信并回复。
+How to use:
+1. Unzip this folder.
+2. Double-click "Start Assistant.bat".
+3. Keep this window open — while your computer is online, it will automatically poll WeChat and reply.
 
-测试：
-- 双击「测试一次.bat」只轮询一次，适合检查配置是否正常。
+Test:
+- Double-click "Test Once.bat" to poll only once, useful for checking that your config works.
 
-注意：
-- config.txt 已由小手机自动写入，不需要手动复制配置码。
-- config.txt 包含你的 Supabase 私密密钥，不要公开分享这个文件夹。
-- 角色、API、预设、世界书或记忆改动后，请回到小手机重新下载本地助手包。
-- 如果提示未检测到 Node.js，请安装 Node.js 20+，或使用后续提供的内置运行时版本。
+Notes:
+- config.txt is written automatically by the mini phone; you don't need to copy the config code manually.
+- config.txt contains your private Supabase key — do not share this folder publicly.
+- After changing characters, API, presets, world info, or memory, go back to the mini phone and re-download the local assistant package.
+- If Node.js is not detected, please install Node.js 20+, or use the bundled-runtime version provided later.
 `;
 }
 
@@ -133,12 +133,12 @@ export function WeixinSettings() {
     const [cloudSyncNotice, setCloudSyncNotice] = useState<{ ok: boolean; text: string } | null>(null);
     const [showLocalAssistantAdvanced, setShowLocalAssistantAdvanced] = useState(false);
 
-    // 添加流程
+    // Add flow
     const [addStep, setAddStep] = useState<AddStep | null>(null);
     const [newCharacterId, setNewCharacterId] = useState("");
     const [addError, setAddError] = useState("");
 
-    // QR 码状态
+    // QR code state
     const [qrImgUrl, setQrImgUrl] = useState("");
     const [qrStatus, setQrStatus] = useState<QrLoginStatus | "loading">("loading");
     const qrAbort = useRef<AbortController | null>(null);
@@ -163,7 +163,7 @@ export function WeixinSettings() {
         };
     }, []);
 
-    // 清理 QR 轮询
+    // Clean up QR polling
     useEffect(() => {
         return () => { qrAbort.current?.abort(); };
     }, []);
@@ -187,7 +187,7 @@ export function WeixinSettings() {
             setCloudSyncConfig(loadWeixinCloudSyncConfig());
             setCloudSyncNotice({
                 ok: true,
-                text: `已同步「${result.snapshot.character.name}」运行包：${result.snapshot.stats.messageCount} 条消息，${formatCloudSyncBytes(result.bytes)}。`,
+                text: `Synced "${result.snapshot.character.name}" runtime package: ${result.snapshot.stats.messageCount} messages, ${formatCloudSyncBytes(result.bytes)}.`,
             });
         } catch (err) {
             setCloudSyncNotice({ ok: false, text: err instanceof Error ? err.message : String(err) });
@@ -204,12 +204,12 @@ export function WeixinSettings() {
             const results = await syncAllWeixinBotRuntimesToCloud();
             setCloudSyncConfig(loadWeixinCloudSyncConfig());
             if (results.length === 0) {
-                setCloudSyncNotice({ ok: false, text: "没有可同步的已启用微信 Bot。" });
+                setCloudSyncNotice({ ok: false, text: "No enabled WeChat bots to sync." });
             } else {
                 const totalBytes = results.reduce((sum, item) => sum + item.bytes, 0);
                 setCloudSyncNotice({
                     ok: true,
-                    text: `已同步当前微信运行包，共 ${formatCloudSyncBytes(totalBytes)}。`,
+                    text: `Synced current WeChat runtime packages, total ${formatCloudSyncBytes(totalBytes)}.`,
                 });
             }
         } catch (err) {
@@ -227,7 +227,7 @@ export function WeixinSettings() {
             const result = await pullWeixinCloudMessagesFromCloud();
             setCloudSyncNotice({
                 ok: result.errors.length === 0,
-                text: `已拉取同步消息：新增 ${result.added}，跳过 ${result.skipped}${result.errors.length ? `，错误 ${result.errors.length}` : ""}。`,
+                text: `Pulled synced messages: ${result.added} added, ${result.skipped} skipped${result.errors.length ? `, ${result.errors.length} errors` : ""}.`,
             });
             for (const sessionId of result.sessionIds) {
                 window.dispatchEvent(new CustomEvent("weixin-messages-updated", { detail: { sessionId } }));
@@ -258,7 +258,7 @@ export function WeixinSettings() {
             }
             setCloudSyncNotice({
                 ok: true,
-                text: "已复制本地助手配置码。配置码包含 Supabase 私密密钥，请只粘贴到你自己的本地助手。",
+                text: "Local assistant config code copied. The config code contains your private Supabase key — only paste it into your own local assistant.",
             });
         } catch (err) {
             setCloudSyncNotice({ ok: false, text: err instanceof Error ? err.message : String(err) });
@@ -272,26 +272,26 @@ export function WeixinSettings() {
         try {
             const results = await syncAllWeixinBotRuntimesToCloud();
             if (results.length === 0) {
-                setCloudSyncNotice({ ok: false, text: "没有可同步的已启用微信 Bot。" });
+                setCloudSyncNotice({ ok: false, text: "No enabled WeChat bots to sync." });
                 return;
             }
 
             const code = buildWeixinLocalAssistantConfigCode({ pollIntervalSeconds: 5 });
             const scriptRes = await fetch("/weixin-local-assistant/assistant.mjs", { cache: "no-store" });
-            if (!scriptRes.ok) throw new Error("下载助手脚本失败，请重新部署后再试。");
+            if (!scriptRes.ok) throw new Error("Failed to download assistant script. Please redeploy and try again.");
             const assistantScript = await scriptRes.text();
             const JSZip = (await import("jszip")).default;
             const { downloadFile } = await import("@/lib/download-utils");
             const zip = new JSZip();
             zip.file("assistant.mjs", assistantScript);
             zip.file("config.txt", code);
-            zip.file("启动助手.bat", buildLocalAssistantStartBat());
-            zip.file("测试一次.bat", buildLocalAssistantOnceBat());
+            zip.file("Start Assistant.bat", buildLocalAssistantStartBat());
+            zip.file("Test Once.bat", buildLocalAssistantOnceBat());
             zip.file("README.txt", buildLocalAssistantReadme());
             for (const fileName of LOCAL_ASSISTANT_CARD_ASSETS) {
                 const assetPath = `/weixin-local-assistant/generated-cards/${fileName}`;
                 const assetRes = await fetch(assetPath, { cache: "no-store" });
-                if (!assetRes.ok) throw new Error(`下载助手卡片素材失败：${fileName}`);
+                if (!assetRes.ok) throw new Error(`Failed to download assistant card asset: ${fileName}`);
                 zip.file(`generated-cards/${fileName}`, await assetRes.arrayBuffer(), {
                     binary: true,
                     compression: "STORE",
@@ -303,7 +303,7 @@ export function WeixinSettings() {
             setCloudSyncConfig(loadWeixinCloudSyncConfig());
             setCloudSyncNotice({
                 ok: true,
-                text: `已生成本地助手包，并同步运行包 ${formatCloudSyncBytes(totalBytes)}。解压后双击「启动助手.bat」即可运行。`,
+                text: `Local assistant package generated, and runtime package synced (${formatCloudSyncBytes(totalBytes)}). Unzip and double-click "Start Assistant.bat" to run.`,
             });
         } catch (err) {
             setCloudSyncNotice({ ok: false, text: err instanceof Error ? err.message : String(err) });
@@ -333,20 +333,20 @@ export function WeixinSettings() {
         setQrStatus("loading");
     };
 
-    // 将 qrcode_img_content 转为可显示的 data URL
+    // Convert qrcode_img_content into a displayable data URL
     const resolveQrImage = async (raw: string): Promise<string> => {
-        // 已经是 data URI
+        // Already a data URI
         if (raw.startsWith("data:")) return raw;
-        // 是 base64 图片数据（无前缀）
+        // Base64 image data (no prefix)
         if (!raw.startsWith("http") && raw.length > 100) return `data:image/png;base64,${raw}`;
-        // 是 URL：需要生成二维码图片（用户用微信扫这个 URL）
+        // It's a URL: generate a QR code image (user scans this URL with WeChat)
         return QRCode.toDataURL(raw, { width: 280, margin: 2 });
     };
 
-    // 开始扫码流程
+    // Start the QR login flow
     const startQrLogin = async () => {
         setAddError("");
-        if (!newCharacterId) { setAddError("请选择角色"); return; }
+        if (!newCharacterId) { setAddError("Please select a character"); return; }
 
         setAddStep("scanning");
         setQrStatus("loading");
@@ -354,13 +354,13 @@ export function WeixinSettings() {
         try {
             const qr = await getLoginQrCode();
             if (!qr.qrcode || !qr.qrcode_img_content) {
-                throw new Error("获取二维码失败");
+                throw new Error("Failed to get QR code");
             }
             const imgUrl = await resolveQrImage(qr.qrcode_img_content);
             setQrImgUrl(imgUrl);
             setQrStatus("wait");
 
-            // 开始轮询扫码状态
+            // Start polling QR scan status
             qrAbort.current?.abort();
             const ctrl = new AbortController();
             qrAbort.current = ctrl;
@@ -374,7 +374,7 @@ export function WeixinSettings() {
                     setQrStatus(status.status);
 
                     if (status.status === "confirmed" && status.bot_token) {
-                        // 登录成功！保存 bot 配置
+                        // Login succeeded! Save the bot config
                         const char = characters.find(c => c.id === newCharacterId);
                         addExclusiveWeixinBot({
                             characterId: newCharacterId,
@@ -389,17 +389,17 @@ export function WeixinSettings() {
                     }
 
                     if (status.status === "expired") {
-                        setAddError("二维码已过期，请重试");
+                        setAddError("QR code expired, please try again");
                         setAddStep("select-character");
                         return;
                     }
                 } catch {
-                    // 单次轮询失败，继续
+                    // Single poll attempt failed, keep going
                 }
             }
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            setAddError(`登录失败: ${msg}`);
+            setAddError(`Login failed: ${msg}`);
             setAddStep("select-character");
         }
     };
@@ -415,11 +415,11 @@ export function WeixinSettings() {
     const statusLabel = (id: string) => {
         void statusTick;
         const bot = bots.find(item => item.id === id);
-        if (cloudSyncConfig.enabled && bot?.enabled) return "本地助手同步：小手机负责同步消息，本地电脑负责自动回复";
+        if (cloudSyncConfig.enabled && bot?.enabled) return "Local assistant sync: the mini phone syncs messages, the local computer handles auto-replies";
         const s = getWeixinBotStatus(id);
-        if (s.status === "running") return "运行中";
-        if (s.status === "error") return s.message ?? "错误";
-        return "已停止";
+        if (s.status === "running") return "Running";
+        if (s.status === "error") return s.message ?? "Error";
+        return "Stopped";
     };
 
     const boundCharacterIds = new Set(bots.map(b => b.characterId));
@@ -429,11 +429,11 @@ export function WeixinSettings() {
     const cloudSupabaseReady = isWeixinCloudSupabaseReady();
 
     const qrStatusText: Record<string, string> = {
-        loading: "正在获取二维码…",
-        wait: "请用微信扫描二维码",
-        scaned: "已扫描，请在微信上确认登录",
-        confirmed: "登录成功！",
-        expired: "二维码已过期",
+        loading: "Getting QR code…",
+        wait: "Scan the QR code with WeChat",
+        scaned: "Scanned — please confirm login in WeChat",
+        confirmed: "Login successful!",
+        expired: "QR code expired",
     };
 
     return (
@@ -446,16 +446,16 @@ export function WeixinSettings() {
                         onClick={() => { setAddStep("select-character"); setAddError(""); }}
                     >
                         <Plus size={14} strokeWidth={1.8} />
-                        添加微信 Bot
+                        Add WeChat Bot
                     </button>
                 )}
             </div>
 
-            {/* 保活开关 */}
+            {/* Keep-alive toggle */}
             <div className="ui-group-card !flex-row !items-center">
                 <div className="flex-1 flex flex-col gap-1">
-                    <span className="menu-label font-medium">后台保活</span>
-                    <span className="menu-desc !mt-0">切到后台时尽量保持网页运行，不依赖 Bot 是否启用</span>
+                    <span className="menu-label font-medium">Keep Alive in Background</span>
+                    <span className="menu-desc !mt-0">Try to keep the page running when switched to background, regardless of whether any bot is enabled</span>
                 </div>
                 <Toggle checked={keepAlive} onChange={v => { setKeepAlive(v); saveKeepAlive(v); notifyChange(); }} />
             </div>
@@ -464,9 +464,9 @@ export function WeixinSettings() {
                 <div className="flex items-start gap-3">
                     <div className="ui-icon-circle shrink-0"><CloudUpload size={20} /></div>
                     <div className="flex-1 flex flex-col gap-1">
-                        <span className="menu-label font-medium">微信本地助手</span>
+                        <span className="menu-label font-medium">WeChat Local Assistant</span>
                         <span className="menu-desc !mt-0">
-                            下载后在电脑上运行，小手机会自动和云端同步消息。
+                            Download and run it on your computer — the mini phone will automatically sync messages with the cloud.
                         </span>
                     </div>
                     <Toggle
@@ -484,14 +484,14 @@ export function WeixinSettings() {
                             onClick={() => void handleDownloadLocalAssistantPackage()}
                         >
                             {cloudSyncingId === "package"
-                                ? <><Loader2 size={16} className="animate-spin" /> 打包中…</>
-                                : <><Download size={16} /> 下载本地助手包</>}
+                                ? <><Loader2 size={16} className="animate-spin" /> Packaging…</>
+                                : <><Download size={16} /> Download Local Assistant Package</>}
                         </button>
-                        <span className="menu-desc !mt-0 text-center">上次同步：{cloudSyncConfig.lastSyncedAt ? formatCloudSyncTime(cloudSyncConfig.lastSyncedAt) : "尚未同步"}</span>
+                        <span className="menu-desc !mt-0 text-center">Last synced: {cloudSyncConfig.lastSyncedAt ? formatCloudSyncTime(cloudSyncConfig.lastSyncedAt) : "Not synced yet"}</span>
                     </div>
                     <div className="flex flex-col gap-2">
                         <span className="menu-desc !mt-0">
-                            自动同步开启后，小手机打开或回到前台时会自动拉取微信消息；小手机里发出的消息也会自动写入云端。
+                            When auto-sync is on, the mini phone automatically pulls WeChat messages when opened or brought to the foreground; messages sent from the mini phone are also automatically written to the cloud.
                         </span>
                         <button
                             type="button"
@@ -499,7 +499,7 @@ export function WeixinSettings() {
                             onClick={() => setShowLocalAssistantAdvanced(v => !v)}
                             aria-expanded={showLocalAssistantAdvanced}
                         >
-                            <span>{showLocalAssistantAdvanced ? "收起高级选项" : "展开高级选项"}</span>
+                            <span>{showLocalAssistantAdvanced ? "Hide Advanced Options" : "Show Advanced Options"}</span>
                             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/80 shadow-sm">
                                 <ChevronDown
                                     size={17}
@@ -517,8 +517,8 @@ export function WeixinSettings() {
                                 onClick={() => void handleSyncAllRuntimes()}
                             >
                                 {cloudSyncingId === "all"
-                                    ? <><Loader2 size={14} className="animate-spin" /> 同步中…</>
-                                    : <><CloudUpload size={14} /> 同步运行包</>}
+                                    ? <><Loader2 size={14} className="animate-spin" /> Syncing…</>
+                                    : <><CloudUpload size={14} /> Sync Runtime Package</>}
                             </button>
                             <button
                                 type="button"
@@ -527,8 +527,8 @@ export function WeixinSettings() {
                                 onClick={() => void handlePullCloudMessages()}
                             >
                                 {cloudSyncingId === "pull"
-                                    ? <><Loader2 size={14} className="animate-spin" /> 拉取中…</>
-                                    : "手动拉取消息"}
+                                    ? <><Loader2 size={14} className="animate-spin" /> Pulling…</>
+                                    : "Manually Pull Messages"}
                             </button>
                             <button
                                 type="button"
@@ -537,23 +537,23 @@ export function WeixinSettings() {
                                 onClick={() => void handleCopyLocalAssistantConfig()}
                             >
                                 <Copy size={14} />
-                                复制配置码
+                                Copy Config Code
                             </button>
                         </div>
                     )}
                     {!cloudSupabaseReady && (
-                        <Alert variant="warning">请先到「数据管理」配置并测试 Supabase 云端备份。</Alert>
+                        <Alert variant="warning">Please configure and test Supabase cloud backup in "Data Management" first.</Alert>
                     )}
                     {cloudSyncNotice && (
                         <Alert variant={cloudSyncNotice.ok ? "success" : "danger"}>{cloudSyncNotice.text}</Alert>
                     )}
                     <span className="menu-desc !mt-0">
-                        运行包会包含微信 token、当前角色绑定的 API 配置和提示词快照，仅写入你自己的 Supabase 私有备份桶。角色、API、预设、世界书或记忆变更后，请重新下载或同步运行包。本地助手包和配置码包含 Supabase 私密密钥，不要公开分享。
+                        The runtime package includes the WeChat token, the API config bound to the current character, and a prompt snapshot — it is only written to your own private Supabase backup bucket. After changing characters, API, presets, world info, or memory, please re-download or re-sync the runtime package. The local assistant package and config code contain your private Supabase key — do not share them publicly.
                     </span>
                 </div>
             </div>
 
-            {/* Bot 列表 */}
+            {/* Bot list */}
             {bots.length > 0 && (
                 <div className="flex flex-col gap-2">
                     {bots.map(bot => {
@@ -576,7 +576,7 @@ export function WeixinSettings() {
                                         data-variant="muted"
                                         onClick={() => void handleSyncRuntime(bot.id)}
                                         disabled={!cloudSupabaseReady || Boolean(cloudSyncingId)}
-                                        title="同步本地助手运行包"
+                                        title="Sync local assistant runtime package"
                                     >
                                         {cloudSyncingId === bot.id ? <Loader2 size={14} className="animate-spin" /> : <CloudUpload size={14} />}
                                     </button>
@@ -591,24 +591,24 @@ export function WeixinSettings() {
                 </div>
             )}
 
-            {/* 空状态 */}
+            {/* Empty state */}
             {bots.length === 0 && !addStep && (
                 <div className="ui-empty mt-2">
                     <div className="ui-icon-circle"><MessageSquare size={24} /></div>
-                    <span className="menu-label font-semibold">暂无微信 Bot</span>
-                    <span className="menu-desc max-w-[240px]">通过 iLink 协议让 AI 角色以真实微信号回复消息。</span>
+                    <span className="menu-label font-semibold">No WeChat Bots Yet</span>
+                    <span className="menu-desc max-w-[240px]">Use the iLink protocol to let AI characters reply as a real WeChat account.</span>
                     <button className="ui-btn ui-btn-primary" onClick={() => { setAddStep("select-character"); setAddError(""); }}>
-                        <Plus size={16} /> 添加 Bot
+                        <Plus size={16} /> Add Bot
                     </button>
                 </div>
             )}
 
-            {/* 添加弹窗 */}
+            {/* Add dialog */}
             {addStep && (
                 <ContentDialog
-                    title={addStep === "done" ? "添加成功" : "添加微信 Bot"}
-                    confirmLabel={addStep === "select-character" ? "扫码登录" : addStep === "done" ? "完成" : ""}
-                    cancelLabel={addStep === "done" ? "" : "取消"}
+                    title={addStep === "done" ? "Added Successfully" : "Add WeChat Bot"}
+                    confirmLabel={addStep === "select-character" ? "Scan to Log In" : addStep === "done" ? "Done" : ""}
+                    cancelLabel={addStep === "done" ? "" : "Cancel"}
                     onConfirm={() => {
                         if (addStep === "select-character") startQrLogin();
                         else cancelAdd();
@@ -618,9 +618,9 @@ export function WeixinSettings() {
                     {addStep === "select-character" && (
                         <div className="flex flex-col gap-3">
                             <div className="flex flex-col gap-1">
-                                <label className="menu-desc ml-1">选择角色</label>
+                                <label className="menu-desc ml-1">Select Character</label>
                                 <Select value={newCharacterId} onChange={e => setNewCharacterId(e.target.value)}>
-                                    <option value="">请选择…</option>
+                                    <option value="">Please select…</option>
                                     {availableCharacters.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
                                 </Select>
                             </div>
@@ -632,25 +632,25 @@ export function WeixinSettings() {
                             <span className="menu-label font-semibold">{characters.find(c => c.id === newCharacterId)?.name}</span>
                             <div className="w-48 h-48 rounded-lg bg-white flex items-center justify-center overflow-hidden">
                                 {qrImgUrl ? (
-                                    <img src={qrImgUrl} alt="微信登录二维码" className="w-full h-full object-contain" />
+                                    <img src={qrImgUrl} alt="WeChat login QR code" className="w-full h-full object-contain" />
                                 ) : (
                                     <Loader2 size={28} className="animate-spin opacity-30" />
                                 )}
                             </div>
                             <span className={`menu-desc !mt-0 ${qrStatus === "scaned" ? "text-amber-500 font-medium" : ""}`}>
-                                {qrStatusText[qrStatus] ?? "等待中…"}
+                                {qrStatusText[qrStatus] ?? "Waiting…"}
                             </span>
                             {qrStatus === "expired" && (
                                 <button className="ui-btn flex items-center gap-1" onClick={startQrLogin}>
-                                    <RefreshCw size={12} /> 刷新二维码
+                                    <RefreshCw size={12} /> Refresh QR Code
                                 </button>
                             )}
                         </div>
                     )}
                     {addStep === "done" && (
                         <div className="flex flex-col items-center gap-2">
-                            <span className="menu-label font-semibold text-green-500">登录成功！</span>
-                            <span className="menu-desc">{characters.find(c => c.id === newCharacterId)?.name} 的微信 Bot 已启用</span>
+                            <span className="menu-label font-semibold text-green-500">Login successful!</span>
+                            <span className="menu-desc">WeChat bot for {characters.find(c => c.id === newCharacterId)?.name} is now enabled</span>
                         </div>
                     )}
                 </ContentDialog>
@@ -658,9 +658,9 @@ export function WeixinSettings() {
 
             {confirmDeleteId && (
                 <ConfirmDialog
-                    title="确认删除？"
-                    message="删除此 Bot 配置？聊天记录不会删除。"
-                    confirmLabel="确认删除"
+                    title="Confirm Delete?"
+                    message="Delete this bot configuration? Chat history will not be deleted."
+                    confirmLabel="Confirm Delete"
                     icon={AlertCircle}
                     variant="danger"
                     onConfirm={() => { handleDelete(confirmDeleteId); setConfirmDeleteId(null); }}

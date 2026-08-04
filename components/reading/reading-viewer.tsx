@@ -71,7 +71,7 @@ function toCanvasFont(style: CSSStyleDeclaration): string {
 }
 
 function formatParagraphRangeLabel(start: number, end: number): string {
-    return start === end ? `第${start + 1}段` : `第${start + 1}-${end + 1}段`;
+    return start === end ? `Paragraph ${start + 1}` : `Paragraphs ${start + 1}-${end + 1}`;
 }
 
 function getParagraphLength(text: string): number {
@@ -79,7 +79,7 @@ function getParagraphLength(text: string): number {
 }
 
 function buildPdfChunkTitle(startPage: number, endPage: number): string {
-    return `第${startPage}-${endPage}页`;
+    return `Pages ${startPage}-${endPage}`;
 }
 
 function buildParagraphRefsFromChapters(chapters: BookChapter[]): ParagraphRef[] {
@@ -198,7 +198,7 @@ function ReadingAnnotationContent({
                 }}
                 aria-expanded={expanded}
             >
-                {expanded ? "收起中文" : "中文"}
+                {expanded ? "Hide Chinese" : "Chinese"}
             </button>
             {expanded && <div className="reading-annotation-translation">{bilingual.translated}</div>}
         </div>
@@ -345,13 +345,13 @@ export function ReadingViewer({ book, onBack }: Props) {
                                                 }}
                                                 className="ctx-menu-btn"
                                             >
-                                                复制
+                                                Copy
                                             </button>
                                             <button
                                                 onClick={() => { void handleDeleteReadingAnnotation(item.annotation.id); }}
                                                 className="ctx-menu-btn ctx-menu-btn-danger"
                                             >
-                                                删除
+                                                Delete
                                             </button>
                                         </div>
                                     )}
@@ -544,7 +544,11 @@ export function ReadingViewer({ book, onBack }: Props) {
     useEffect(() => {
         (async () => {
             if (isPdf) {
-                const groups = await Promise.all(chapters.map((chapter) => loadAnnotations(book.id, chapter.index)));
+                // Dedupe the indexes first, as loadExistingAnnotationsForItems already
+                // does: two chapter entries sharing an index would load the same rows
+                // twice and flatten into duplicate ids.
+                const chapterIndexes = [...new Set(chapters.map((chapter) => chapter.index))];
+                const groups = await Promise.all(chapterIndexes.map((index) => loadAnnotations(book.id, index)));
                 setAnnotations(groups.flat());
                 return;
             }
@@ -589,7 +593,7 @@ export function ReadingViewer({ book, onBack }: Props) {
 
         const rawData = await loadRawFileBlob(book.id);
         if (!rawData || rawData.size === 0) {
-            throw new Error("PDF 文件未找到或为空");
+            throw new Error("PDF file not found or empty");
         }
 
         const parseStart = Math.min(...missing.map((chapter) => chapter.pageStart ?? (chapter.index * PDF_PAGES_PER_CHAPTER + 1)));
@@ -660,7 +664,7 @@ export function ReadingViewer({ book, onBack }: Props) {
 
         return {
             key: `txt:${startAbsoluteIndex}:${size}`,
-            title: `第${items[0].absoluteIndex + 1}-${items[items.length - 1].absoluteIndex + 1}段`,
+            title: `Paragraphs ${items[0].absoluteIndex + 1}-${items[items.length - 1].absoluteIndex + 1}`,
             size,
             items,
         };
@@ -676,7 +680,7 @@ export function ReadingViewer({ book, onBack }: Props) {
         const endPage = Math.min(maxPage, startPage + size - 1);
         return {
             key: `pdf:${startPage}:${size}`,
-            title: `第${startPage}-${endPage}页`,
+            title: `Pages ${startPage}-${endPage}`,
             size,
             startPage,
             endPage,
@@ -745,11 +749,11 @@ export function ReadingViewer({ book, onBack }: Props) {
                     return [...merged.values()];
                 });
             } else {
-                setAnnotationError("AI 没有返回批注（可能返回了[无批注]或API调用失败）");
+                setAnnotationError("AI did not return an annotation (it may have returned [NoAnnotation] / the legacy [无批注], or the API call failed)");
             }
         } catch (err) {
             console.error("[Reading] Annotation error:", err);
-            setAnnotationError(`批注失败: ${err instanceof Error ? err.message : String(err)}`);
+            setAnnotationError(`Annotation failed: ${err instanceof Error ? err.message : String(err)}`);
         } finally {
             setGenerating(false);
         }
@@ -1063,8 +1067,8 @@ export function ReadingViewer({ book, onBack }: Props) {
         );
         const chapterTitleText = chapters[focusChapterIndex]?.title || currentChapter?.title || book.title;
         const chapterContent = [
-            `当前阅读中心：${formatParagraphRangeLabel(focusStartParagraph, focusEndParagraph)}`,
-            `本次上下文范围：${formatParagraphRangeLabel(contextStartParagraph, contextEndParagraph)}`,
+            `Current reading focus: ${formatParagraphRangeLabel(focusStartParagraph, focusEndParagraph)}`,
+            `Context range for this request: ${formatParagraphRangeLabel(contextStartParagraph, contextEndParagraph)}`,
             "",
             contextRefs.map((item) => `[${item.paragraphIndex + 1}] ${item.text}`).join("\n\n"),
         ].join("\n");
@@ -1163,7 +1167,15 @@ export function ReadingViewer({ book, onBack }: Props) {
                     createdAt: new Date().toISOString(),
                 };
                 await saveAnnotation(annotation);
-                nextAnnotations = [...nextAnnotations, annotation];
+                // Upsert by id, mirroring the Map-based merge in executeBatchAnnotation.
+                // The duplicate-key bug this used to cause is fixed at its source in
+                // reading-storage.ts (loadAnnotations handed out the cache array itself,
+                // which saveAnnotation then pushed into, so `nextAnnotations` already held
+                // this annotation before the append). Keeping the upsert anyway: it costs
+                // nothing and this optimistic update also races background reloads.
+                nextAnnotations = nextAnnotations.some((a) => a.id === annotation.id)
+                    ? nextAnnotations.map((a) => a.id === annotation.id ? annotation : a)
+                    : [...nextAnnotations, annotation];
                 continue;
             }
 
@@ -1380,8 +1392,8 @@ export function ReadingViewer({ book, onBack }: Props) {
             } else {
                 const expanded = isAnnotationTranslationExpanded(annotation.id);
                 annotationTextEl.textContent = expanded
-                    ? `${bilingual.original}\n收起中文\n${bilingual.translated}`
-                    : `${bilingual.original}\n中文`;
+                    ? `${bilingual.original}\nHide Chinese\n${bilingual.translated}`
+                    : `${bilingual.original}\nChinese`;
             }
             const blockHeight = annotationMeasure.offsetHeight || lineHeight * 2;
             return blockHeight + annotationMarginY;
@@ -1397,7 +1409,13 @@ export function ReadingViewer({ book, onBack }: Props) {
 
         const tokens: TxtPageItem[] = [];
         const annotationMap = new Map<number, ReadingAnnotation[]>();
+        const seenAnnotationIds = new Set<string>();
         for (const annotation of chapterAnnotations) {
+            // The paged renderer keys annotation tokens by `annotation.id`, so one
+            // duplicate id here garbles the render. The known cause is fixed in
+            // reading-storage.ts; this stays as a render-boundary guard.
+            if (seenAnnotationIds.has(annotation.id)) continue;
+            seenAnnotationIds.add(annotation.id);
             const list = annotationMap.get(annotation.paragraphIndex) || [];
             list.push(annotation);
             annotationMap.set(annotation.paragraphIndex, list);
@@ -1567,7 +1585,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                             type="button"
                             className="page-back-btn"
                             onClick={openNavigationDialog}
-                            aria-label="目录"
+                            aria-label="Table of contents"
                         >
                             <Menu size={18} strokeWidth={1.7} />
                         </button>
@@ -1580,7 +1598,7 @@ export function ReadingViewer({ book, onBack }: Props) {
 
             {generating && (
                 <div className="reading-status-float" aria-live="polite">
-                    {companion?.name || "AI"} 正在批注中...
+                    {companion?.name || "AI"} is annotating...
                 </div>
             )}
 
@@ -1641,21 +1659,21 @@ export function ReadingViewer({ book, onBack }: Props) {
                     null
                 ) : chapters.length === 0 ? (
                     <div className="reading-debug-card">
-                        <div className="reading-debug-title">TXT 数据自检</div>
-                        <div className="reading-debug-line">本地章节数：0</div>
-                        <div className="reading-debug-line">总段落数：0</div>
-                        <div className="reading-debug-line">当前章节索引：{chapterIndex}</div>
-                        <div className="reading-debug-line">当前页进度：{txtPage + 1}</div>
-                        <div className="reading-debug-hint">这更像是这本书在本地 IndexedDB 里的章节数据已经空了，不是单纯分页卡住。</div>
+                        <div className="reading-debug-title">TXT Data Self-Check</div>
+                        <div className="reading-debug-line">Local chapter count: 0</div>
+                        <div className="reading-debug-line">Total paragraph count: 0</div>
+                        <div className="reading-debug-line">Current chapter index: {chapterIndex}</div>
+                        <div className="reading-debug-line">Current page progress: {txtPage + 1}</div>
+                        <div className="reading-debug-hint">This looks more like the book's chapter data in local IndexedDB is already empty, rather than a simple pagination stall.</div>
                     </div>
                 ) : !currentChapter ? (
                     <div className="reading-debug-card">
-                        <div className="reading-debug-title">TXT 数据自检</div>
-                        <div className="reading-debug-line">本地章节数：{chapters.length}</div>
-                        <div className="reading-debug-line">总段落数：{totalParagraphs}</div>
-                        <div className="reading-debug-line">当前章节索引：{chapterIndex}</div>
-                        <div className="reading-debug-line">当前页进度：{txtPage + 1}/{txtTotalPages}</div>
-                        <div className="reading-debug-hint">章节数据存在，但当前索引取不到正文。这个状态不是“正在加载”，而是本地章节数据和进度状态不一致。</div>
+                        <div className="reading-debug-title">TXT Data Self-Check</div>
+                        <div className="reading-debug-line">Local chapter count: {chapters.length}</div>
+                        <div className="reading-debug-line">Total paragraph count: {totalParagraphs}</div>
+                        <div className="reading-debug-line">Current chapter index: {chapterIndex}</div>
+                        <div className="reading-debug-line">Current page progress: {txtPage + 1}/{txtTotalPages}</div>
+                        <div className="reading-debug-hint">Chapter data exists, but the current index can't retrieve the text. This isn't a "loading" state -- it's a mismatch between local chapter data and progress state.</div>
                     </div>
                 ) : (
                     <>
@@ -1670,18 +1688,18 @@ export function ReadingViewer({ book, onBack }: Props) {
                         </div>
 
                         <div className="reading-page-measure" aria-hidden="true">
-                            <p ref={txtMeasureLineRef} className="reading-line">测</p>
+                            <p ref={txtMeasureLineRef} className="reading-line">A</p>
                             <div ref={txtMeasureGapRef} className="reading-line-gap" />
                             <div ref={txtMeasureAnnotationRef} className="reading-annotation">
-                                <span className="reading-annotation-name">角色</span>
-                                <span className="reading-annotation-text">批注内容</span>
+                                <span className="reading-annotation-name">Character</span>
+                                <span className="reading-annotation-text">Annotation content</span>
                             </div>
                         </div>
                     </>
                 )}
 
                 {showTxtLoading && (
-                    <ReadingLoadingView title="正在打开书页" subtitle="正在读取并排版当前章节" overlay />
+                    <ReadingLoadingView title="Opening page" subtitle="Loading and laying out the current chapter" overlay />
                 )}
 
                 {isPdf && <div className="h-[88px]" />}
@@ -1701,7 +1719,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                             onClick={() => handleNavChapterClick(Math.max(0, chapterIndex - 1))}
                             disabled={chapterIndex <= 0}
                         >
-                            上一章
+                            Previous Chapter
                         </button>
                         <div className="reading-footer-slider">
                             {(() => {
@@ -1717,7 +1735,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                                         step={isPdf ? 1 : 0.001}
                                         value={currentVal}
                                         onChange={(e) => handleNavPageSlider(Number(e.target.value))}
-                                        aria-label={isPdf ? "跳转页码" : "跳转阅读进度"}
+                                        aria-label={isPdf ? "Jump to page" : "Jump to reading progress"}
                                         style={{ '--slider-progress': `${progressPct}%` } as React.CSSProperties}
                                     />
                                 );
@@ -1728,7 +1746,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                             onClick={() => handleNavChapterClick(Math.min(chapters.length - 1, chapterIndex + 1))}
                             disabled={chapterIndex >= chapters.length - 1}
                         >
-                            下一章
+                            Next Chapter
                         </button>
                     </div>
                     <div className="reading-footer-actions">
@@ -1738,7 +1756,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                             onClick={() => openAnnotationDialog("auto")}
                         >
                             <Bot size={22} strokeWidth={1.7} />
-                            <span>自动批注</span>
+                            <span>Auto Annotate</span>
                         </button>
                         <button
                             type="button"
@@ -1747,7 +1765,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                             disabled={generating || !companionId}
                         >
                             <PenLine size={22} strokeWidth={1.7} />
-                            <span>写批注</span>
+                            <span>Write Annotation</span>
                         </button>
                         <button
                             type="button"
@@ -1755,7 +1773,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                             onClick={() => setShowReadingSettings(true)}
                         >
                             <Languages size={22} strokeWidth={1.7} />
-                            <span>设置</span>
+                            <span>Settings</span>
                         </button>
                     </div>
                 </div>
@@ -1765,8 +1783,8 @@ export function ReadingViewer({ book, onBack }: Props) {
                 <button
                     onClick={handleChatLaunchClick}
                     className="reading-chat-launch"
-                    aria-label="打开聊天悬浮窗"
-                    title="打开聊天悬浮窗"
+                    aria-label="Open chat window"
+                    title="Open chat window"
                     style={chatFloatingStyle}
                     onPointerDown={handleChatDragStart}
                     onPointerMove={handleChatDragMove}
@@ -1809,10 +1827,10 @@ export function ReadingViewer({ book, onBack }: Props) {
                                 onClick={() => { if (shouldIgnoreChatAction()) return; setChatExpanded(true); closeCharPicker(); }}
                                 disabled={!companionId}
                             >
-                                {companion ? `和${companion.name}讨论该章节...` : "选择陪读角色"}
+                                {companion ? `Discuss this chapter with ${companion.name}...` : "Choose a reading companion"}
                                 {chatMessages.length > 0 && <span className="ml-1 ts-11 text-[var(--c-icon-active)]">({chatMessages.length})</span>}
                             </button>
-                            <button type="button" onClick={() => { if (shouldIgnoreChatAction()) return; handleCloseChat(); }} className="reading-chat-float-close" aria-label="关闭聊天悬浮窗"><ChevronRight size={16} strokeWidth={2} /></button>
+                            <button type="button" onClick={() => { if (shouldIgnoreChatAction()) return; handleCloseChat(); }} className="reading-chat-float-close" aria-label="Close chat window"><ChevronRight size={16} strokeWidth={2} /></button>
                         </div>
                     ) : (
                         <>
@@ -1825,11 +1843,11 @@ export function ReadingViewer({ book, onBack }: Props) {
                                     )}
                                 </div>
                                 <div className="reading-chat-float-header-copy">
-                                    <span className="reading-chat-float-title">和{companion?.name || "AI"}讨论该章节</span>
-                                    <span className="reading-chat-float-subtitle">拖拽任意位置移动</span>
+                                    <span className="reading-chat-float-title">Discuss this chapter with {companion?.name || "AI"}</span>
+                                    <span className="reading-chat-float-subtitle">Drag anywhere to move</span>
                                 </div>
-                                <button type="button" onClick={() => { if (shouldIgnoreChatAction()) return; setChatExpanded(false); }} className="reading-chat-float-close" aria-label="收起聊天窗口"><ChevronDown size={18} strokeWidth={2} /></button>
-                                <button type="button" onClick={() => { if (shouldIgnoreChatAction()) return; handleCloseChat(); }} className="reading-chat-float-close" aria-label="关闭聊天悬浮窗"><Minus size={18} strokeWidth={2} /></button>
+                                <button type="button" onClick={() => { if (shouldIgnoreChatAction()) return; setChatExpanded(false); }} className="reading-chat-float-close" aria-label="Collapse chat window"><ChevronDown size={18} strokeWidth={2} /></button>
+                                <button type="button" onClick={() => { if (shouldIgnoreChatAction()) return; handleCloseChat(); }} className="reading-chat-float-close" aria-label="Close chat window"><Minus size={18} strokeWidth={2} /></button>
                             </div>
                             <div className="reading-chat-float-body" onClick={() => {
                                 if (activeMessageId || readingMessageMenu) closeReadingMessageMenu();
@@ -1838,7 +1856,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                                 if (readingMessageMenu) closeReadingMessageMenu();
                             }}>
                                 {chatMessages.length === 0 && (
-                                    <div className="text-center ts-13 text-[var(--c-icon)] py-6">和{companion?.name}聊聊这章内容吧</div>
+                                    <div className="text-center ts-13 text-[var(--c-icon)] py-6">Chat with {companion?.name} about this chapter</div>
                                 )}
                                 {chatMessages.map(msg => (
                                     <div key={msg.id} className="chat-msg-wrapper" data-role={msg.role}
@@ -1874,14 +1892,14 @@ export function ReadingViewer({ book, onBack }: Props) {
                                         </div>
                                     </div>
                                 ))}
-                                {chatting && <div className="ts-13 text-[var(--c-icon)] py-1">{companion?.name} 正在思考...</div>}
+                                {chatting && <div className="ts-13 text-[var(--c-icon)] py-1">{companion?.name} is thinking...</div>}
                             </div>
                             <div className="reading-chat-float-input">
                                 <input
                                     value={chatInput}
                                     onChange={e => setChatInput(e.target.value)}
                                     onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                                    placeholder="输入消息..."
+                                    placeholder="Type a message..."
                                     className="ui-input flex-1"
                                     disabled={chatting}
                                 />
@@ -1889,7 +1907,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                                     onClick={handleSend}
                                     disabled={!chatInput.trim() || chatting}
                                     className="reading-chat-send-btn"
-                                    aria-label="发送"
+                                    aria-label="Send"
                                 ><SendHorizontal size={18} strokeWidth={1.8} /></button>
                             </div>
                         </>
@@ -1912,12 +1930,12 @@ export function ReadingViewer({ book, onBack }: Props) {
                             closeReadingMessageMenu();
                         }}
                         className="ctx-menu-btn"
-                    >复制</button>
+                    >Copy</button>
                     <button
                         type="button"
                         onClick={() => handleEditDiscussMessageStart(activeReadingMenuMessage)}
                         className="ctx-menu-btn"
-                    >编辑</button>
+                    >Edit</button>
                     <button
                         type="button"
                         onClick={() => {
@@ -1926,15 +1944,15 @@ export function ReadingViewer({ book, onBack }: Props) {
                             closeReadingMessageMenu();
                         }}
                         className="ctx-menu-btn ctx-menu-btn-danger"
-                    >删除</button>
+                    >Delete</button>
                 </div>
             )}
 
             {editingDiscussMessage && (
                 <ContentDialog
-                    title="编辑共读消息"
-                    confirmLabel="保存"
-                    cancelLabel="取消"
+                    title="Edit Reading Discussion Message"
+                    confirmLabel="Save"
+                    cancelLabel="Cancel"
                     onConfirm={handleSaveDiscussMessageEdit}
                     onCancel={() => {
                         setEditingDiscussMessage(null);
@@ -1954,9 +1972,9 @@ export function ReadingViewer({ book, onBack }: Props) {
 
             {annotationDialogMode && (
                 <ContentDialog
-                    title={annotationDialogMode === "manual" ? "生成批注" : autoAnnotate ? "关闭自动批注" : "开启自动批注"}
-                    confirmLabel={annotationDialogMode === "manual" ? "生成" : autoAnnotate ? "关闭" : "开启"}
-                    cancelLabel="取消"
+                    title={annotationDialogMode === "manual" ? "Generate Annotation" : autoAnnotate ? "Turn Off Auto Annotate" : "Turn On Auto Annotate"}
+                    confirmLabel={annotationDialogMode === "manual" ? "Generate" : autoAnnotate ? "Turn Off" : "Turn On"}
+                    cancelLabel="Cancel"
                     onConfirm={() => { void handleAnnotationDialogConfirm(); }}
                     onCancel={() => setAnnotationDialogMode(null)}
                 >
@@ -1964,12 +1982,12 @@ export function ReadingViewer({ book, onBack }: Props) {
                         {annotationDialogMode === "auto" && autoAnnotate ? (
                             <>
                                 <div className="reading-settings-inline-note">
-                                    <span>当前状态</span>
-                                    <span>自动批注已开启</span>
+                                    <span>Current Status</span>
+                                    <span>Auto annotate is on</span>
                                 </div>
                                 <div className="reading-settings-inline-note">
-                                    <span>批注单位</span>
-                                    <span>{annotationBatchSize}{isPdf ? " 页" : " 段"}</span>
+                                    <span>Annotation Unit</span>
+                                    <span>{annotationBatchSize}{isPdf ? " pages" : " paragraphs"}</span>
                                 </div>
                             </>
                         ) : (
@@ -1978,11 +1996,11 @@ export function ReadingViewer({ book, onBack }: Props) {
                                     <span>
                                         {annotationDialogMode === "manual"
                                             ? (isPdf
-                                                ? `确认让${companion?.name || "AI"}为接下来几页生成批注`
-                                                : `确认让${companion?.name || "AI"}为接下来几个段落生成批注`)
+                                                ? `Confirm letting ${companion?.name || "AI"} generate annotations for the next several pages`
+                                                : `Confirm letting ${companion?.name || "AI"} generate annotations for the next several paragraphs`)
                                             : (isPdf
-                                                ? `开启后，先生成当前页所在批次；之后翻到新批次第一页时自动生成批注`
-                                                : `开启后，先生成当前段落所在批次；之后翻到新批次第一页时自动生成批注`)}
+                                                ? `Once turned on, annotations are first generated for the batch containing the current page; afterward, annotations are generated automatically whenever you reach the first page of a new batch`
+                                                : `Once turned on, annotations are first generated for the batch containing the current paragraph; afterward, annotations are generated automatically whenever you reach the first page of a new batch`)}
                                     </span>
                                     <input
                                         value={annotationBatchInput}
@@ -1992,8 +2010,8 @@ export function ReadingViewer({ book, onBack }: Props) {
                                     />
                                 </label>
                                 <div className="reading-settings-inline-note">
-                                    <span>默认值</span>
-                                    <span>{isPdf ? "5 页" : "50 段"}</span>
+                                    <span>Default</span>
+                                    <span>{isPdf ? "5 pages" : "50 paragraphs"}</span>
                                 </div>
                             </>
                         )}
@@ -2002,15 +2020,15 @@ export function ReadingViewer({ book, onBack }: Props) {
             )}
             {showReadingSettings && (
                 <ContentDialog
-                    title="阅读双语翻译"
-                    confirmLabel="完成"
-                    cancelLabel="关闭"
+                    title="Bilingual Reading Translation"
+                    confirmLabel="Done"
+                    cancelLabel="Close"
                     onConfirm={() => setShowReadingSettings(false)}
                     onCancel={() => setShowReadingSettings(false)}
                 >
                     <div className="reading-settings-grid">
                         <div className="reading-settings-inline-note">
-                            <span>启用阅读双语翻译</span>
+                            <span>Enable bilingual reading translation</span>
                             <Toggle
                                 checked={bilingualTranslationEnabled}
                                 onChange={(checked) => {
@@ -2021,7 +2039,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                             />
                         </div>
                         <div className="reading-settings-inline-note">
-                            <span>折叠中文译文</span>
+                            <span>Collapse Chinese translation</span>
                             <Toggle
                                 checked={readingConfig.collapseBilingualTranslation === true}
                                 onChange={(checked) => {
@@ -2032,13 +2050,13 @@ export function ReadingViewer({ book, onBack }: Props) {
                             />
                         </div>
                         <div className="reading-settings-inline-note">
-                            <span>说明</span>
-                            <span>只翻译 AI 讨论消息和 AI 批注，不翻书正文</span>
+                            <span>Note</span>
+                            <span>Only AI discussion messages and AI annotations are translated; the book's original text is not translated</span>
                         </div>
                         {bilingualTranslationEnabled && (
                             <div className="reading-settings-prompt">
                                 <div className="reading-settings-prompt-head">
-                                    <span>双语提示词</span>
+                                    <span>Bilingual Prompt</span>
                                     <button
                                         type="button"
                                         onClick={() => {
@@ -2050,7 +2068,7 @@ export function ReadingViewer({ book, onBack }: Props) {
                                             saveReadingInteractionConfig(next);
                                         }}
                                     >
-                                        恢复默认
+                                        Restore Default
                                     </button>
                                 </div>
                                 <textarea
@@ -2073,12 +2091,12 @@ export function ReadingViewer({ book, onBack }: Props) {
                     <div className="reading-nav-backdrop" onClick={() => setShowNavigationDialog(false)} />
                     <aside className="reading-nav-drawer">
                         <header className="reading-nav-header">
-                            <span className="reading-nav-title">导航</span>
-                            <button type="button" className="reading-nav-close" onClick={() => setShowNavigationDialog(false)} aria-label="关闭">
+                            <span className="reading-nav-title">Navigation</span>
+                            <button type="button" className="reading-nav-close" onClick={() => setShowNavigationDialog(false)} aria-label="Close">
                                 <X size={18} strokeWidth={2} />
                             </button>
                         </header>
-                        <div className="reading-nav-chapter-count">共{chapters.length}章</div>
+                        <div className="reading-nav-chapter-count">{chapters.length} chapters total</div>
                         <div className="reading-nav-chapter-list">
                             {chapters.map((chapter, index) => {
                                 const charCount = chapter.paragraphs.reduce((sum, p) => sum + p.replace(/\s+/g, "").length, 0);
@@ -2091,8 +2109,8 @@ export function ReadingViewer({ book, onBack }: Props) {
                                         onClick={() => handleNavChapterClick(index)}
                                     >
                                         <div className="reading-nav-chapter-main">
-                                            <span className="reading-nav-chapter-name">{chapter.title || `第${index + 1}章`}</span>
-                                            <span className="reading-nav-chapter-meta">{charCount > 0 ? `${charCount}字` : ""}</span>
+                                            <span className="reading-nav-chapter-name">{chapter.title || `Chapter ${index + 1}`}</span>
+                                            <span className="reading-nav-chapter-meta">{charCount > 0 ? `${charCount} characters` : ""}</span>
                                         </div>
                                         {pageLabel && <span className="reading-nav-chapter-page">{pageLabel}</span>}
                                     </button>

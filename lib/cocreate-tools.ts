@@ -1,5 +1,6 @@
 import { reindexCoCreateChapters } from "./cocreate-storage";
 import type { LlmToolCall, LlmToolDefinition } from "./llm-provider-adapter";
+import { ACTION_DIRECTIVE_NAMES } from "./text-tool-protocol";
 import type {
   CoCreateCastMember,
   CoCreateChapter,
@@ -1530,7 +1531,7 @@ export function parseCoCreateToolFlow(text: string): {
 }
 
 function findActionToken(text: string, from: number): { start: number; end: number } | null {
-  const pattern = /\[[^\[\]]{0,40}?(?:执行动作|工具调用)\s*[:：]/g;
+  const pattern = new RegExp(`\\[[^\\[\\]]{0,40}?(?:${ACTION_DIRECTIVE_NAMES})\\s*[:：]`, "g");
   pattern.lastIndex = from;
   const match = pattern.exec(text);
   if (!match) return null;
@@ -1568,10 +1569,10 @@ function findActionToken(text: string, from: number): { start: number; end: numb
 function parseInlineActionBlock(block: string): CoCreateToolCall | null {
   if (!block.startsWith("[") || !block.endsWith("]")) return null;
   const inner = block.slice(1, -1).trim();
-  const actionIdx = Math.max(inner.indexOf("执行动作"), inner.indexOf("工具调用"));
+  const actionIdx = Math.max(...ACTION_DIRECTIVE_NAMES.split("|").map(n => inner.indexOf(n)));
   if (actionIdx < 0) return null;
   const actor = inner.slice(0, actionIdx).trim().replace(/^["'“”]+|["'“”]+$/g, "") || undefined;
-  const afterAction = inner.slice(actionIdx).replace(/^(?:执行动作|工具调用)\s*[:：]\s*/, "").trim();
+  const afterAction = inner.slice(actionIdx).replace(new RegExp(`^(?:${ACTION_DIRECTIVE_NAMES})\\s*[:：]\\s*`), "").trim();
   const parsed = splitNameAndPayload(afterAction);
   if (!parsed.name) return null;
   return {

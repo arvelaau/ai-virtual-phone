@@ -25,15 +25,15 @@ type CheckPhoneMessagesPageProps = {
 function getThreadKindLabel(kind: CheckPhoneMessageThread["kind"]): string {
   switch (kind) {
     case "verification":
-      return "验证码";
+      return "Verification Code";
     case "transaction":
-      return "支付提醒";
+      return "Payment Alert";
     case "logistics":
-      return "物流通知";
+      return "Delivery Notice";
     case "personal":
-      return "联系人";
+      return "Contact";
     default:
-      return "服务消息";
+      return "Service Message";
   }
 }
 
@@ -176,7 +176,7 @@ export function CheckPhoneMessagesPage({ character, onBack }: CheckPhoneMessages
               <span className="cp-cyber-title">{payload?.headerTitle || "MSG_LINK"}</span>
             </div>
             <div className="cp-cyber-subtitle">
-              {selectedThread ? selectedThread.sender : payload?.headerSubtitle || "通知与短信"}
+              {selectedThread ? selectedThread.sender : payload?.headerSubtitle || "Notifications & Texts"}
             </div>
           </div>
 
@@ -212,7 +212,7 @@ export function CheckPhoneMessagesPage({ character, onBack }: CheckPhoneMessages
 
       {loading && (
         <div className="cp-refresh-indicator cp-refresh-indicator--floating" aria-live="polite">
-          <span className="cp-refresh-indicator-text">正在刷新信息</span>
+          <span className="cp-refresh-indicator-text">Refreshing messages</span>
           <span className="cp-refresh-indicator-dots" aria-hidden="true">
             <i></i><i></i><i></i>
           </span>
@@ -226,7 +226,7 @@ export function CheckPhoneMessagesPage({ character, onBack }: CheckPhoneMessages
             <input
               className="cp-app-searchbar-input"
               type="text"
-              placeholder="搜索短信与通知"
+              placeholder="Search texts and notifications"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -236,14 +236,14 @@ export function CheckPhoneMessagesPage({ character, onBack }: CheckPhoneMessages
 
         {loaded && !payload && !loading && (
           <div className="cp-messages-status cp-empty-copy">
-            <p>暂无信息内容</p>
-            <span className="cp-messages-hint">点刷新同步短信与通知</span>
+            <p>No messages yet</p>
+            <span className="cp-messages-hint">Tap refresh to sync texts and notifications</span>
           </div>
         )}
 
         {error ? (
           <CheckPhoneDebugErrorCard
-            title="暂时无法解析信息内容。"
+            title="Unable to parse message content right now."
             error={error}
             debugParseMode={debugParseMode}
             debugParseError={debugParseError}
@@ -270,8 +270,8 @@ export function CheckPhoneMessagesPage({ character, onBack }: CheckPhoneMessages
                   </div>
                   <div className="cp-message-thread-meta">
                     <span className="cp-message-thread-kind">{getThreadKindLabel(thread.kind)}</span>
-                    {thread.unread && <span className="cp-message-thread-unread">未读</span>}
-                    {thread.muted && <span className="cp-message-thread-muted">静音</span>}
+                    {thread.unread && <span className="cp-message-thread-unread">Unread</span>}
+                    {thread.muted && <span className="cp-message-thread-muted">Muted</span>}
                   </div>
                   <p className="cp-message-thread-preview">
                     {getMessagesListPlainText(thread.preview)}
@@ -313,11 +313,11 @@ export function CheckPhoneMessagesPage({ character, onBack }: CheckPhoneMessages
       </div>
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空信息内容？"
-          message="确认后会清空当前信息缓存。之后重新刷新时，不会再带入旧信息内容。"
+          title="Clear message content?"
+          message="Once confirmed, the current message cache will be cleared. Future refreshes will no longer bring back the old message content."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Confirm Clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

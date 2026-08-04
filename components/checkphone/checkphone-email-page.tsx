@@ -49,8 +49,8 @@ function formatEmailTimeLabel(label: string): string {
   yesterdayStart.setDate(todayStart.getDate() - 1);
   const hh = String(parsed.getHours()).padStart(2, "0");
   const mm = String(parsed.getMinutes()).padStart(2, "0");
-  if (parsed >= todayStart) return `今天 ${hh}:${mm}`;
-  if (parsed >= yesterdayStart) return `昨天 ${hh}:${mm}`;
+  if (parsed >= todayStart) return `Today ${hh}:${mm}`;
+  if (parsed >= yesterdayStart) return `Yesterday ${hh}:${mm}`;
   return label;
 }
 
@@ -177,17 +177,17 @@ export function CheckPhoneEmailPage({ character, onBack }: CheckPhoneEmailPagePr
             <div className="cp-email-search-bar">
               <button 
                  className="cp-email-icon-btn" 
-                 onClick={onBack} 
-                 title="返回桌面"
+                 onClick={onBack}
+                 title="Back to Home"
               >
                 <ChevronLeft size={24} strokeWidth={2.5} color="#444746" />
               </button>
-              <input type="text" placeholder="搜索邮件" className="cp-email-search-input" readOnly />
+              <input type="text" placeholder="Search mail" className="cp-email-search-input" readOnly />
               <button
                  className="cp-email-icon-btn"
                  onClick={handleRefresh}
                  disabled={loading}
-                 title="刷新邮件"
+                 title="Refresh mail"
                  style={{ transform: "translateX(8px)" }}
               >
                 <RefreshCw size={20} className={loading ? "cp-spin" : ""} color="#444746" />
@@ -195,7 +195,7 @@ export function CheckPhoneEmailPage({ character, onBack }: CheckPhoneEmailPagePr
               <button
                  className="cp-email-icon-btn"
                  onClick={() => setConfirmClearOpen(true)}
-                 title="清空缓存"
+                 title="Clear cache"
               >
                 <Trash2 size={20} color="#444746" />
               </button>
@@ -206,16 +206,16 @@ export function CheckPhoneEmailPage({ character, onBack }: CheckPhoneEmailPagePr
           </header>
 
           <div className="cp-email-list-container">
-            {payload ? <div className="cp-email-list-label">主要</div> : null}
+            {payload ? <div className="cp-email-list-label">Primary</div> : null}
 
             {loading && (
-              <div className="cp-email-status">正在刷新...</div>
+              <div className="cp-email-status">Refreshing...</div>
             )}
-            
+
             {loaded && !payload && !loading && (
               <div className="cp-email-status cp-empty-copy">
-                <p>暂无邮件内容</p>
-                <span>点刷新同步收件箱和邮件记录</span>
+                <p>No emails yet</p>
+                <span>Tap refresh to sync your inbox and email records</span>
               </div>
             )}
 
@@ -264,7 +264,7 @@ export function CheckPhoneEmailPage({ character, onBack }: CheckPhoneEmailPagePr
 
           <button className="cp-email-fab" type="button">
             <Edit2 size={20} strokeWidth={2.5} color="#001d35" />
-            <span style={{ color: "#001d35", fontWeight: 500 }}>写邮件</span>
+            <span style={{ color: "#001d35", fontWeight: 500 }}>Compose</span>
           </button>
 
           <nav className="cp-email-bottom-nav">
@@ -302,7 +302,7 @@ export function CheckPhoneEmailPage({ character, onBack }: CheckPhoneEmailPagePr
             <div className="cp-email-detail-subject-row">
                <div className="cp-email-detail-subject-text">
                  <h2><CheckPhoneBilingualText text={activeEmail.subject} tone="email" variant="inline" /></h2>
-                 <span className="cp-email-tag">收件箱</span>
+                 <span className="cp-email-tag">Inbox</span>
                </div>
                <button className="cp-email-star-btn">
                  <Star size={22} strokeWidth={1.5} />
@@ -319,7 +319,7 @@ export function CheckPhoneEmailPage({ character, onBack }: CheckPhoneEmailPagePr
                   <span className="cp-email-detail-time">{activeEmail.displayTimeLabel}</span>
                 </div>
                 <div className="cp-email-detail-to">
-                  发给 me <ChevronDown size={14} />
+                  To me <ChevronDown size={14} />
                 </div>
               </div>
               <div className="cp-email-detail-sender-actions">
@@ -341,8 +341,8 @@ export function CheckPhoneEmailPage({ character, onBack }: CheckPhoneEmailPagePr
           </div>
 
           <div className="cp-email-detail-bottom-actions">
-             <button className="cp-email-action-pill"><CornerUpLeft size={16}/> 回复</button>
-             <button className="cp-email-action-pill"><CornerUpRight size={16}/> 转发</button>
+             <button className="cp-email-action-pill"><CornerUpLeft size={16}/> Reply</button>
+             <button className="cp-email-action-pill"><CornerUpRight size={16}/> Forward</button>
              <button className="cp-email-action-circle"><Smile size={18}/></button>
           </div>
         </div>
@@ -350,11 +350,11 @@ export function CheckPhoneEmailPage({ character, onBack }: CheckPhoneEmailPagePr
 
       {confirmClearOpen && (
         <ConfirmDialog
-          title="清空邮箱内容？"
-          message="确认后会清空当前邮箱缓存。之后重新刷新时，不会再带入旧邮箱内容。"
+          title="Clear email content?"
+          message="Once confirmed, the current email cache will be cleared. Future refreshes will no longer bring back the old email content."
           variant="danger"
-          confirmLabel="确认清空"
-          cancelLabel="取消"
+          confirmLabel="Confirm Clear"
+          cancelLabel="Cancel"
           onConfirm={handleClear}
           onCancel={() => setConfirmClearOpen(false)}
         />

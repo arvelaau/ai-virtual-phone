@@ -73,7 +73,7 @@ function buildOwnerOptions(): OwnerOption[] {
     key: "user:me",
     ownerType: "user",
     ownerId: "self",
-    name: identity?.name?.trim() || "我",
+    name: identity?.name?.trim() || "Me",
     avatar: identity?.avatarUrl || null,
   });
   for (const char of loadCharacters()) {
@@ -117,7 +117,7 @@ function CalendarGeneratingLabel({ loading, idle }: { loading: boolean; idle: st
   if (!loading) return <>{idle}</>;
   return (
     <span className="calendar-generating-label">
-      生成中
+      Generating
       <span className="calendar-generating-dots" aria-hidden="true">
         <i />
         <i />
@@ -385,11 +385,11 @@ export function PhoneCalendarApp({
       const result = await generateWeeklyCalendarSchedule(selectedOwner.ownerType, selectedOwner.ownerId, weekStart);
       setIsGenerating(false);
       if (!result.success) {
-        onNotice?.(result.error || "自动生成失败");
+        onNotice?.(result.error || "Auto-generation failed");
         return;
       }
       refreshPlans();
-      onNotice?.("已自动生成本周角色日程");
+      onNotice?.("This week's schedule was auto-generated");
     })();
   }, [autoGenerateEnabled, isGenerating, onNotice, selectedOwner, weekStart]);
 
@@ -415,11 +415,11 @@ export function PhoneCalendarApp({
     const result = await generateWeeklyCalendarSchedule(selectedOwner.ownerType, selectedOwner.ownerId, weekStart);
     setIsGenerating(false);
     if (!result.success) {
-      onNotice?.(result.error || "生成失败");
+      onNotice?.(result.error || "Generation failed");
       return;
     }
     refreshPlans();
-    onNotice?.("本周日程已生成");
+    onNotice?.("This week's schedule has been generated");
   };
 
   const handleSaveDraft = () => {
@@ -441,7 +441,7 @@ export function PhoneCalendarApp({
     });
     setEditingItem(null);
     refreshPlans();
-    onNotice?.("日程已保存");
+    onNotice?.("Event saved");
   };
 
   const handleDeleteItem = () => {
@@ -449,7 +449,7 @@ export function PhoneCalendarApp({
     deleteCalendarScheduleItem(selectedOwner.ownerType, selectedOwner.ownerId, weekStart, editingItem.id);
     setEditingItem(null);
     refreshPlans();
-    onNotice?.("日程已删除");
+    onNotice?.("Event deleted");
   };
 
   const refreshMenstrual = () => {
@@ -488,7 +488,7 @@ export function PhoneCalendarApp({
     const availableCharacterIds = new Set(periodCareCharacterOptions.map(option => option.characterId));
     const periodCareCharacterIds = menstrualDraft.periodCareCharacterIds.filter(id => availableCharacterIds.has(id));
     if (menstrualDraft.periodCareEnabled && periodCareCharacterIds.length === 0) {
-      onNotice?.("请选择至少一个已有聊天角色");
+      onNotice?.("Please select at least one character you've chatted with");
       return;
     }
     const savedConfig = saveMenstrualConfig({
@@ -502,53 +502,53 @@ export function PhoneCalendarApp({
     setMenstrualConfig(savedConfig);
     window.dispatchEvent(new CustomEvent("menstrual-period-care-updated"));
     setShowMenstrualSettings(false);
-    onNotice?.("周期设置已保存");
+    onNotice?.("Cycle settings saved");
   };
 
   const handleDeleteMenstrual = (recordId: string) => {
     setMenstrualRecords(deleteMenstrualRecord(recordId));
     refreshMenstrual();
-    onNotice?.("经期记录已删除");
+    onNotice?.("Period record deleted");
   };
 
   const handleStartMenstrual = () => {
     setMenstrualConfig(startCurrentPeriod(selectedDate));
     setMenstrualRecords(loadMenstrualRecords());
-    onNotice?.("已记录经期来了");
+    onNotice?.("Period start recorded");
   };
 
   const handleCancelMenstrualStart = () => {
     setMenstrualConfig(cancelCurrentPeriodStart(selectedDate));
     setMenstrualRecords(loadMenstrualRecords());
-    onNotice?.("已取消这一天的经期来了");
+    onNotice?.("Period start for this day has been undone");
   };
 
   const handleFinishMenstrual = () => {
     const result = finishCurrentPeriod(selectedDate);
     if (!result.saved) {
-      onNotice?.("请先记录经期来了");
+      onNotice?.("Please record the period start first");
       return;
     }
     setMenstrualConfig(result.config);
     setMenstrualRecords(result.records);
-    onNotice?.("已记录经期走了");
+    onNotice?.("Period end recorded");
   };
 
   const handleCancelMenstrualFinish = () => {
     const result = cancelFinishCurrentPeriod(selectedDate);
     if (!result.restored) {
-      onNotice?.("这一天还没有记录经期走了");
+      onNotice?.("Period end for this day hasn't been recorded yet");
       return;
     }
     setMenstrualConfig(result.config);
     setMenstrualRecords(result.records);
-    onNotice?.("已取消这一天的经期走了");
+    onNotice?.("Period end for this day has been undone");
   };
 
   const formatSimpleDate = (dateText: string | null) => {
-    if (!dateText) return "待记录";
+    if (!dateText) return "Not recorded";
     const date = parseIsoDate(dateText);
-    return `${date.getMonth() + 1}月${date.getDate()}日`;
+    return `${date.getMonth() + 1}/${date.getDate()}`;
   };
 
   const todayIso = formatIsoDate(new Date());
@@ -563,7 +563,7 @@ export function PhoneCalendarApp({
       <div className="calendar-app">
         <header className="calendar-header">
           <div className="calendar-header-left">
-            <button type="button" className="calendar-header-action" onClick={onClose} aria-label="返回">
+            <button type="button" className="calendar-header-action" onClick={onClose} aria-label="Back">
               <ChevronLeft size={20} />
             </button>
           </div>
@@ -571,7 +571,7 @@ export function PhoneCalendarApp({
             <span className="calendar-header-eyebrow">Weekly Planner</span>
           </div>
           <div className="calendar-header-right">
-            <button type="button" className="calendar-header-action" onClick={() => setShowThemePanel(true)} aria-label="主题色">
+            <button type="button" className="calendar-header-action" onClick={() => setShowThemePanel(true)} aria-label="Theme color">
               <Palette size={18} />
             </button>
           </div>
@@ -615,22 +615,22 @@ export function PhoneCalendarApp({
             <div className="calendar-hero">
               <div className="calendar-hero-copy">
                 <span className="calendar-hero-kicker">
-                  {selectedOwner?.ownerType === "user" ? "手动管理" : "角色周程"}
+                  {selectedOwner?.ownerType === "user" ? "Manual" : "Character Schedule"}
                 </span>
                 <div className="calendar-week-title">
-                  <strong>{selectedOwner?.name || "日程"}</strong>
+                  <strong>{selectedOwner?.name || "Schedule"}</strong>
                   <span className="calendar-week-owner">{formatWeekRangeLabel(weekStart)}</span>
                 </div>
               </div>
               <div className="calendar-hero-stat">
-                <span>本周事项</span>
+                <span>This week's events</span>
                 <strong>{weekEventCount}</strong>
               </div>
             </div>
 
             <div className="calendar-unified-grid">
               <div className="calendar-unified-weekdays">
-                {["一", "二", "三", "四", "五", "六", "日"].map(label => (
+                {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map(label => (
                   <span key={label}>{label}</span>
                 ))}
               </div>
@@ -680,7 +680,7 @@ export function PhoneCalendarApp({
             </div>
 
             <div className="calendar-week-header">
-              <button type="button" className="calendar-month-toggle" onClick={() => setMonthExpanded(prev => !prev)} aria-label={monthExpanded ? "收起月历" : "展开月历"}>
+              <button type="button" className="calendar-month-toggle" onClick={() => setMonthExpanded(prev => !prev)} aria-label={monthExpanded ? "Collapse month view" : "Expand month view"}>
                 <ChevronDown size={16} style={{ transform: monthExpanded ? "rotate(180deg)" : undefined, transition: "transform 0.3s" }} />
               </button>
             </div>
@@ -692,7 +692,7 @@ export function PhoneCalendarApp({
                 <div className="calendar-menstrual-copy">
                   <span className="calendar-menstrual-kicker">Cycle Tracker</span>
                   <div className="calendar-menstrual-title-row">
-                    <strong>经期记录</strong>
+                    <strong>Period Log</strong>
                     {menstrualSummary.todayState ? (
                       <span className="calendar-menstrual-title-tag" data-type={menstrualSummary.todayState.type}>
                         {menstrualSummary.todayState.shortLabel}
@@ -701,18 +701,18 @@ export function PhoneCalendarApp({
                   </div>
                   <span>
                     {menstrualSummary.isPeriodActive
-                      ? `本次经期从 ${formatSimpleDate(menstrualSummary.currentPeriodStartDate)} 开始`
+                      ? `This period started on ${formatSimpleDate(menstrualSummary.currentPeriodStartDate)}`
                       : menstrualSummary.latest
-                        ? "已根据最近记录在日历中标注预测经期和排卵期"
-                        : "点按“经期来了”后，会自动开始预测经期和排卵期"}
+                        ? "Predicted period and ovulation days are marked on the calendar based on your latest record"
+                        : "Tap \"Period Started\" to begin predicting your period and ovulation days"}
                   </span>
                 </div>
                 <button
                   type="button"
                   className="calendar-menstrual-settings-trigger"
                   onClick={openMenstrualSettings}
-                  aria-label="周期设置"
-                  title="周期设置"
+                  aria-label="Cycle settings"
+                  title="Cycle settings"
                 >
                   <MoreHorizontal size={17} />
                 </button>
@@ -728,7 +728,7 @@ export function PhoneCalendarApp({
                 >
                   <span className="calendar-menstrual-pill-label">
                     <Droplets size={12} />
-                    经期来了
+                    Period Started
                   </span>
                   <span className="calendar-menstrual-pill-switch" aria-hidden="true">
                     <span className="calendar-menstrual-pill-switch-thumb" />
@@ -743,7 +743,7 @@ export function PhoneCalendarApp({
                 >
                   <span className="calendar-menstrual-pill-label">
                     <Droplets size={12} />
-                    经期走了
+                    Period Ended
                   </span>
                   <span className="calendar-menstrual-pill-switch" aria-hidden="true">
                     <span className="calendar-menstrual-pill-switch-thumb" />
@@ -754,25 +754,25 @@ export function PhoneCalendarApp({
               <div className="calendar-menstrual-stats">
                 <div className="calendar-menstrual-stat-row">
                   <div className="calendar-menstrual-stat">
-                    <span>最近一次</span>
+                    <span>Last period</span>
                     <strong>
                       {menstrualSummary.latest
                         ? `${formatSimpleDate(menstrualSummary.latest.startDate)} - ${formatSimpleDate(menstrualSummary.latest.endDate)}`
-                        : "暂无记录"}
+                        : "No record yet"}
                     </strong>
                   </div>
                   <div className="calendar-menstrual-stat calendar-menstrual-stat-column-only">
-                    <span>周期 / 经期</span>
-                    <strong>{menstrualConfig.cycleLength}天 / {menstrualConfig.periodLength}天</strong>
+                    <span>Cycle / Period</span>
+                    <strong>{menstrualConfig.cycleLength}d / {menstrualConfig.periodLength}d</strong>
                   </div>
                 </div>
               </div>
 
               <div className="calendar-menstrual-legend">
-                <span data-type="period">经期</span>
-                <span data-type="predicted_period">预计</span>
-                <span data-type="fertile">易孕</span>
-                <span data-type="ovulation">排卵</span>
+                <span data-type="period">Period</span>
+                <span data-type="predicted_period">Predicted</span>
+                <span data-type="fertile">Fertile</span>
+                <span data-type="ovulation">Ovulation</span>
               </div>
             </div>
           ) : null}
@@ -780,16 +780,16 @@ export function PhoneCalendarApp({
           <div className="calendar-grid-card">
             <div className="calendar-grid-header" onClick={() => setExpandedDate(null)} style={{ cursor: "pointer" }}>
               <div className="calendar-grid-heading">
-                <strong>本周安排</strong>
-                <span>{selectedOwner?.ownerType === "user" ? "手动维护你的时间表" : "像课表一样查看角色的时间块"}</span>
+                <strong>This Week's Schedule</strong>
+                <span>{selectedOwner?.ownerType === "user" ? "Manually keep track of your schedule" : "View the character's time blocks like a timetable"}</span>
               </div>
-              <span className="calendar-grid-counter">{weekEventCount} 项</span>
+              <span className="calendar-grid-counter">{weekEventCount} events</span>
             </div>
 
             {!plan || plan.items.length === 0 ? (
               <EmptyState
                 icon={CalendarDays}
-                message={selectedOwner?.ownerType === "user" ? "你本周还没有安排" : "这个角色本周还没有安排"}
+                message={selectedOwner?.ownerType === "user" ? "Nothing scheduled this week" : "This character has nothing scheduled this week"}
                 action={selectedOwner?.ownerType === "character" ? (
                   <button
                     type="button"
@@ -800,7 +800,7 @@ export function PhoneCalendarApp({
                     aria-busy={isGenerating}
                   >
                     <Wand2 size={16} className="calendar-generate-button-icon" />
-                    <CalendarGeneratingLabel loading={isGenerating} idle="生成日程" />
+                    <CalendarGeneratingLabel loading={isGenerating} idle="Generate Schedule" />
                   </button>
                 ) : undefined}
               />
@@ -863,7 +863,7 @@ export function PhoneCalendarApp({
                             >
                               <strong>{item.title}</strong>
                               <span><Clock3 size={12} />{item.startTime}-{item.endTime}</span>
-                              <span><MapPin size={12} />{item.location || "未定"}</span>
+                              <span><MapPin size={12} />{item.location || "TBD"}</span>
                             </button>
                           );
                         })}
@@ -884,7 +884,7 @@ export function PhoneCalendarApp({
                   type="button"
                   className={`calendar-fab ${autoGenerateEnabled ? 'calendar-fab-primary' : 'calendar-fab-secondary'}`}
                   onClick={() => setShowAutoConfirm(true)}
-                  aria-label="切换自动生成"
+                  aria-label="Toggle auto-generation"
                 >
                   <Bot size={18} />
                 </button>
@@ -894,7 +894,7 @@ export function PhoneCalendarApp({
                   onClick={() => setShowGenerateConfirm(true)}
                   disabled={isGenerating}
                   data-loading={isGenerating ? "true" : undefined}
-                  aria-label="AI 生成并覆盖本周日程"
+                  aria-label="AI generate and overwrite this week's schedule"
                 >
                   <Wand2 size={18} />
                 </button>
@@ -904,7 +904,7 @@ export function PhoneCalendarApp({
               type="button"
               className="calendar-fab calendar-fab-primary"
               onClick={() => setEditingItem(createDefaultScheduleDraft(weekDates[0]))}
-              aria-label="新增事项"
+              aria-label="Add event"
             >
               <Plus size={18} />
             </button>
@@ -915,19 +915,19 @@ export function PhoneCalendarApp({
         <div className="modal-overlay calendar-edit-modal-overlay" onClick={() => setShowThemePanel(false)}>
           <div className="calendar-edit-modal" style={{ padding: 24 }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <div className="ts-14 font-semibold text-[var(--c-calendar-text)]">主题色</div>
+              <div className="ts-14 font-semibold text-[var(--c-calendar-text)]">Theme Color</div>
               <button type="button" onClick={() => setShowThemePanel(false)} className="p-1 rounded-full" style={{ color: "var(--c-calendar-sub)" }}>
                 <X size={18} />
               </button>
             </div>
             <div className="flex flex-wrap gap-3 justify-start">
               {[
-                { id: "ocean", color: "#7BC6EC", name: "海洋" },
-                { id: "orange", color: "#FF7E5F", name: "橘汽" },
-                { id: "honey", color: "#D4A373", name: "蜜糖" },
-                { id: "mint", color: "#80CBC4", name: "薄荷" },
-                { id: "mist", color: "#B399D4", name: "晨雾" },
-                { id: "melon", color: "#D1E5D0", name: "蜜瓜" }
+                { id: "ocean", color: "#7BC6EC", name: "Ocean" },
+                { id: "orange", color: "#FF7E5F", name: "Citrus" },
+                { id: "honey", color: "#D4A373", name: "Honey" },
+                { id: "mint", color: "#80CBC4", name: "Mint" },
+                { id: "mist", color: "#B399D4", name: "Mist" },
+                { id: "melon", color: "#D1E5D0", name: "Melon" }
               ].map(t => (
                 <button
                   key={t.id}
@@ -952,7 +952,7 @@ export function PhoneCalendarApp({
               ))}
             </div>
 
-            <div className="ts-14 font-semibold text-[var(--c-calendar-text)] mt-5 mb-2">自定义 CSS</div>
+            <div className="ts-14 font-semibold text-[var(--c-calendar-text)] mt-5 mb-2">Custom CSS</div>
             <textarea
               className="w-full ts-12 px-3 py-2 rounded-lg"
               style={{
@@ -965,7 +965,7 @@ export function PhoneCalendarApp({
               }}
               value={calendarCustomCss}
               onChange={e => setCalendarCustomCss(e.target.value)}
-              placeholder="/* 输入 CSS 覆盖日历样式... */"
+              placeholder="/* Enter CSS to override calendar styles... */"
               spellCheck={false}
               autoCapitalize="off"
               autoCorrect="off"
@@ -985,9 +985,9 @@ export function PhoneCalendarApp({
                 inputBorder: "var(--c-calendar-border, rgba(167,139,250,0.2))",
                 accent: "var(--c-calendar-action, #5B8FB9)",
               }} />
-              <button type="button" className="ui-btn ui-btn-outline flex-1" style={{ borderColor: "var(--c-calendar-action)", color: "var(--c-calendar-action)", fontSize: "calc(11px*var(--app-text-scale,1))", padding: "6px 0", minWidth: 0 }} onClick={() => setCalendarCustomCss(CALENDAR_CSS_EXAMPLE)}>示例</button>
-              <button type="button" className="ui-btn ui-btn-outline flex-1" style={{ borderColor: "var(--c-calendar-action)", color: "var(--c-calendar-action)", fontSize: "calc(11px*var(--app-text-scale,1))", padding: "6px 0", minWidth: 0 }} onClick={() => setCalendarCustomCss("")}>清空</button>
-              <button type="button" className="ui-btn ui-btn-primary flex-1" style={{ background: "var(--c-calendar-action)", fontSize: "calc(11px*var(--app-text-scale,1))", padding: "6px 0", minWidth: 0 }} onClick={handleApplyCalendarCss}>应用</button>
+              <button type="button" className="ui-btn ui-btn-outline flex-1" style={{ borderColor: "var(--c-calendar-action)", color: "var(--c-calendar-action)", fontSize: "calc(11px*var(--app-text-scale,1))", padding: "6px 0", minWidth: 0 }} onClick={() => setCalendarCustomCss(CALENDAR_CSS_EXAMPLE)}>Example</button>
+              <button type="button" className="ui-btn ui-btn-outline flex-1" style={{ borderColor: "var(--c-calendar-action)", color: "var(--c-calendar-action)", fontSize: "calc(11px*var(--app-text-scale,1))", padding: "6px 0", minWidth: 0 }} onClick={() => setCalendarCustomCss("")}>Clear</button>
+              <button type="button" className="ui-btn ui-btn-primary flex-1" style={{ background: "var(--c-calendar-action)", fontSize: "calc(11px*var(--app-text-scale,1))", padding: "6px 0", minWidth: 0 }} onClick={handleApplyCalendarCss}>Apply</button>
             </div>
           </div>
         </div>
@@ -1000,8 +1000,8 @@ export function PhoneCalendarApp({
               <button onClick={() => setEditingItem(null)} className="modal-header-btn modal-header-btn-muted">
                 <ChevronLeft size={18} />
               </button>
-              <span className="modal-header-title">{editingItem.id ? "编辑日程" : "新增日程"}</span>
-              <button onClick={handleSaveDraft} className="modal-header-btn modal-header-btn-action" aria-label="保存">
+              <span className="modal-header-title">{editingItem.id ? "Edit Event" : "New Event"}</span>
+              <button onClick={handleSaveDraft} className="modal-header-btn modal-header-btn-action" aria-label="Save">
                 <Check size={18} />
               </button>
             </div>
@@ -1010,7 +1010,7 @@ export function PhoneCalendarApp({
               <div className="flex flex-col gap-3">
                 {/* Row 1: Date */}
                 <div className="flex flex-col gap-1">
-                  <label className="menu-desc ml-1">日期</label>
+                  <label className="menu-desc ml-1">Date</label>
                   <Select
                     value={editingItem.date}
                     onChange={e => setEditingItem(prev => prev ? { ...prev, date: e.target.value } : prev)}
@@ -1024,7 +1024,7 @@ export function PhoneCalendarApp({
                 {/* Row 2: Start Time and End Time */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1">
-                    <label className="menu-desc ml-1">开始时间</label>
+                    <label className="menu-desc ml-1">Start Time</label>
                     <Input
                       type="time"
                       value={editingItem.startTime}
@@ -1032,7 +1032,7 @@ export function PhoneCalendarApp({
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="menu-desc ml-1">结束时间</label>
+                    <label className="menu-desc ml-1">End Time</label>
                     <Input
                       type="time"
                       value={editingItem.endTime}
@@ -1043,27 +1043,27 @@ export function PhoneCalendarApp({
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="menu-desc ml-1">地点</label>
+                <label className="menu-desc ml-1">Location</label>
                 <Input
                   value={editingItem.location}
                   onChange={e => setEditingItem(prev => prev ? { ...prev, location: e.target.value } : prev)}
-                  placeholder="例如：公司会议室 / 家里 / 商场"
+                  placeholder="e.g. Office / Home / Mall"
                 />
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="menu-desc ml-1">事项</label>
+                <label className="menu-desc ml-1">Event</label>
                 <Input
                   value={editingItem.title}
                   onChange={e => setEditingItem(prev => prev ? { ...prev, title: e.target.value } : prev)}
-                  placeholder="例如：部门周会"
+                  placeholder="e.g. Department weekly meeting"
                 />
               </div>
 
               {editingItem.id ? (
                 <button type="button" className="ui-btn ui-btn-outline" onClick={handleDeleteItem} style={{ color: "var(--c-danger)" }}>
                   <Trash2 size={16} />
-                  删除该事项
+                  Delete This Event
                 </button>
               ) : null}
             </div>
@@ -1078,8 +1078,8 @@ export function PhoneCalendarApp({
               <button onClick={() => setShowMenstrualSettings(false)} className="modal-header-btn modal-header-btn-muted">
                 <ChevronLeft size={18} />
               </button>
-              <span className="modal-header-title">周期设置</span>
-              <button onClick={handleSaveMenstrualSettings} className="modal-header-btn modal-header-btn-action" aria-label="保存">
+              <span className="modal-header-title">Cycle Settings</span>
+              <button onClick={handleSaveMenstrualSettings} className="modal-header-btn modal-header-btn-action" aria-label="Save">
                 <Check size={18} />
               </button>
             </div>
@@ -1087,7 +1087,7 @@ export function PhoneCalendarApp({
             <div className="modal-body hide-scrollbar flex flex-col gap-3 pb-10" data-ui="modal-body">
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
-                  <label className="menu-desc ml-1">周期长度</label>
+                  <label className="menu-desc ml-1">Cycle Length</label>
                   <Input
                     type="number"
                     min={21}
@@ -1097,7 +1097,7 @@ export function PhoneCalendarApp({
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="menu-desc ml-1">经期天数</label>
+                  <label className="menu-desc ml-1">Period Length</label>
                   <Input
                     type="number"
                     min={2}
@@ -1119,8 +1119,8 @@ export function PhoneCalendarApp({
                     <HeartPulse size={16} />
                   </span>
                   <span className="calendar-menstrual-care-toggle-copy">
-                    <strong>让TA关心我的经期</strong>
-                    <span>只显示已有聊天会话的角色</span>
+                    <strong>Let them check in on my period</strong>
+                    <span>Only shows characters with existing chat sessions</span>
                   </span>
                   <span className="calendar-menstrual-pill-switch" aria-hidden="true">
                     <span className="calendar-menstrual-pill-switch-thumb" />
@@ -1130,7 +1130,7 @@ export function PhoneCalendarApp({
                 {menstrualDraft.periodCareEnabled ? (
                   <div className="calendar-menstrual-care-body">
                     <div className="calendar-menstrual-care-section">
-                      <label className="menu-desc ml-1">提前多久关心</label>
+                      <label className="menu-desc ml-1">How far ahead to check in</label>
                       <div className="calendar-period-care-lead-row">
                         {(["1", "2", "3"] as const).map(value => (
                           <button
@@ -1140,14 +1140,14 @@ export function PhoneCalendarApp({
                             data-active={menstrualDraft.periodCareLeadDays === value ? "true" : undefined}
                             onClick={() => setMenstrualDraft(prev => ({ ...prev, periodCareLeadDays: value }))}
                           >
-                            {value}天
+                            {value}d
                           </button>
                         ))}
                       </div>
                     </div>
 
                     <div className="calendar-menstrual-care-section">
-                      <label className="menu-desc ml-1">选择角色</label>
+                      <label className="menu-desc ml-1">Select Character</label>
                       {periodCareCharacterOptions.length > 0 ? (
                         <div className="calendar-period-care-avatars">
                           {periodCareCharacterOptions.map(option => {
@@ -1167,7 +1167,7 @@ export function PhoneCalendarApp({
                           })}
                         </div>
                       ) : (
-                        <div className="calendar-menstrual-empty">已有聊天会话的角色会显示在这里。</div>
+                        <div className="calendar-menstrual-empty">Characters with existing chat sessions will show up here.</div>
                       )}
                     </div>
                   </div>
@@ -1176,19 +1176,19 @@ export function PhoneCalendarApp({
 
               {menstrualRecords.length > 0 ? (
                 <div className="calendar-menstrual-modal-history">
-                  <label className="menu-desc ml-1">最近完成的经期</label>
+                  <label className="menu-desc ml-1">Recently Completed Periods</label>
                   <div className="calendar-menstrual-modal-list">
                     {menstrualRecords.slice(0, 4).map(record => (
                       <div key={record.id} className="calendar-menstrual-modal-item">
                         <div>
                           <strong>{formatSimpleDate(record.startDate)} - {formatSimpleDate(record.endDate)}</strong>
-                          <span>{record.startDate} 至 {record.endDate}</span>
+                          <span>{record.startDate} to {record.endDate}</span>
                         </div>
                         <button
                           type="button"
                           className="calendar-menstrual-modal-delete"
                           onClick={() => handleDeleteMenstrual(record.id)}
-                          aria-label="删除记录"
+                          aria-label="Delete record"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -1197,7 +1197,7 @@ export function PhoneCalendarApp({
                   </div>
                 </div>
               ) : (
-                <div className="calendar-menstrual-empty">还没有完成的经期记录。先在主页点“经期来了”，结束时再点“经期走了”。</div>
+                <div className="calendar-menstrual-empty">No completed period records yet. Tap "Period Started" on the main page, then "Period Ended" when it's over.</div>
               )}
             </div>
           </div>
@@ -1209,13 +1209,13 @@ export function PhoneCalendarApp({
           <div className="calendar-edit-modal calendar-confirm-dialog" onClick={e => e.stopPropagation()}>
             <Wand2 size={28} className="calendar-confirm-icon" />
             <div className="calendar-confirm-title">
-              确认生成日程？
+              Generate schedule?
             </div>
             <div className="calendar-confirm-desc">
-              将为 <strong>{selectedOwner.name}</strong> 生成一周日程并覆盖当前已有安排
+              This will generate a week's schedule for <strong>{selectedOwner.name}</strong> and overwrite the current one
             </div>
             <div className="calendar-confirm-footer">
-              <button className="ui-btn ui-btn-outline" style={{ borderColor: "var(--c-calendar-action)", color: "var(--c-calendar-action)" }} onClick={() => setShowGenerateConfirm(false)}>取消</button>
+              <button className="ui-btn ui-btn-outline" style={{ borderColor: "var(--c-calendar-action)", color: "var(--c-calendar-action)" }} onClick={() => setShowGenerateConfirm(false)}>Cancel</button>
               <button
                 className="ui-btn calendar-generate-button calendar-confirm-generate-button"
                 data-loading={isGenerating ? "true" : undefined}
@@ -1223,7 +1223,7 @@ export function PhoneCalendarApp({
                 disabled={isGenerating}
                 aria-busy={isGenerating}
               >
-                <CalendarGeneratingLabel loading={isGenerating} idle="确认" />
+                <CalendarGeneratingLabel loading={isGenerating} idle="Confirm" />
               </button>
             </div>
           </div>
@@ -1235,24 +1235,24 @@ export function PhoneCalendarApp({
           <div className="calendar-edit-modal calendar-confirm-dialog" onClick={e => e.stopPropagation()}>
             <Bot size={28} className="calendar-confirm-icon" />
             <div className="calendar-confirm-title">
-              {autoGenerateEnabled ? "关闭自动生成？" : "开启自动生成？"}
+              {autoGenerateEnabled ? "Turn off auto-generation?" : "Turn on auto-generation?"}
             </div>
             <div className="calendar-confirm-desc">
               {autoGenerateEnabled
-                ? "关闭后将不再自动为角色生成每周日程"
-                : <>每周将自动为 <strong>{selectedOwner.name}</strong> 生成日程安排</>}
+                ? "Weekly schedules will no longer be generated automatically for this character"
+                : <>A schedule will be generated automatically for <strong>{selectedOwner.name}</strong> every week</>}
             </div>
             <div className="calendar-confirm-footer">
-              <button className="ui-btn ui-btn-outline" style={{ borderColor: "var(--c-calendar-action)", color: "var(--c-calendar-action)" }} onClick={() => setShowAutoConfirm(false)}>取消</button>
+              <button className="ui-btn ui-btn-outline" style={{ borderColor: "var(--c-calendar-action)", color: "var(--c-calendar-action)" }} onClick={() => setShowAutoConfirm(false)}>Cancel</button>
               <button className="ui-btn ui-btn-primary" style={{ background: "var(--c-calendar-action)" }} onClick={() => {
                 const next = !autoGenerateEnabled;
                 const nextConfig = { ...config, autoGenerateEnabled: next };
                 setConfig(nextConfig);
                 saveCalendarConfig(nextConfig);
                 setShowAutoConfirm(false);
-                onNotice?.(next ? "已开启每周自动生成" : "已关闭每周自动生成");
+                onNotice?.(next ? "Weekly auto-generation turned on" : "Weekly auto-generation turned off");
               }}>
-                确认
+                Confirm
               </button>
             </div>
           </div>

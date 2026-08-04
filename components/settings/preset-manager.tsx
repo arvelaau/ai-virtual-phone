@@ -47,7 +47,7 @@ function getPromptTagsLabel(p: Prompt, tagProfiles = flattenTagGroups(CONTENT_SC
 
 function getPromptTagsInlineLabel(p: Prompt): string {
     const tags = getPromptTags(p);
-    return tags.length > 0 ? tags.map(resolveContentTagLabel).join(" · ") : "通用";
+    return tags.length > 0 ? tags.map(resolveContentTagLabel).join(" · ") : "General";
 }
 
 function setPromptTags(tags: string[]): Partial<Prompt> {
@@ -58,8 +58,8 @@ function setPromptTags(tags: string[]): Partial<Prompt> {
     };
 }
 
-// ── Marker 名称自动识别（手动编辑与桌宠填表共用） ──
-// marker 条目靠 identifier 注入内容，条目名称命中下表时自动补齐 identifier + marker。
+// ── Marker name auto-detection (shared by manual editing and mascot form-fill) ──
+// Marker entries inject content via their identifier; when an entry's name matches the table below, its identifier + marker are auto-filled.
 const MARKER_NAMES: Record<string, string> = {
     "◇ 用户人设": "personaDescription", "◇ 世界书（角色前）": "worldInfoBefore",
     "◇ 角色描述": "charDescription", "◇ 角色性格": "charPersonality",
@@ -70,7 +70,7 @@ const MARKER_NAMES: Record<string, string> = {
     "◇ [短期记忆]": "shortTermMemory",
 };
 
-// 宽松匹配：忽略 ◇ 前缀、空白和方括号，"用户人设" / "◇ 用户人设" 都能命中
+// Loose matching: ignores the ◇ prefix, whitespace, and brackets, so "用户人设" / "◇ 用户人设" both match
 function normalizeMarkerName(name: string): string {
     return name.replace(/[◇\s\[\]]/g, "");
 }
@@ -169,7 +169,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
         if (viewMode === "detail" && editingId) {
             setOverrideBack(() => () => setViewMode("list"));
             const target = presets.find(p => p.id === editingId);
-            setSubpageTitle(target?.name || "预设详情");
+            setSubpageTitle(target?.name || "Preset Details");
         } else {
             setOverrideBack(null);
             setSubpageTitle(null);
@@ -214,14 +214,14 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
             notifyMascotPageContext({
                 page: "presets",
                 mode: "editing",
-                label: `预设 · ${preset.name}`,
+                label: `Preset · ${preset.name}`,
                 fields,
             });
         } else if (viewMode === "list") {
             notifyMascotPageContext({
                 page: "presets",
                 mode: "viewing",
-                label: "预设列表",
+                label: "Preset List",
                 fields: {},
             });
         }
@@ -230,7 +230,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
     // Reset mascot context on unmount
     useEffect(() => {
         return () => {
-            notifyMascotPageContext({ page: "desktop", mode: "idle", label: "桌面", fields: {} });
+            notifyMascotPageContext({ page: "desktop", mode: "idle", label: "Desktop", fields: {} });
         };
     }, []);
 
@@ -383,7 +383,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
     }, []);
 
     const addPreset = useCallback(() => {
-        const newPreset = createPreset("新预设");
+        const newPreset = createPreset("New Preset");
         persist([newPreset, ...presets]);
         setEditingId(newPreset.id);
         setViewMode("detail");
@@ -395,7 +395,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
         const copy: PresetConfig = {
             ...source,
             id: `preset_${now}_${Math.random().toString(36).slice(2, 9)}`,
-            name: `${source.name || "预设"} 副本`,
+            name: `${source.name || "Preset"} Copy`,
             createdAt: now,
             updatedAt: now,
             builtIn: undefined,
@@ -419,7 +419,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                     className="inline-flex h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] border border-black/10 bg-white px-4 text-xs font-bold text-gray-800 shadow-sm transition-all hover:bg-gray-50 hover:shadow-md active:scale-95 focus:outline-none"
                 >
                     <Upload size={15} strokeWidth={1.8} />
-                    <span>导入预设</span>
+                    <span>Import Preset</span>
                 </button>
                 <button
                     type="button"
@@ -427,7 +427,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                     className="inline-flex h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] bg-black px-4 text-xs font-bold text-white shadow-sm transition-all hover:bg-gray-800 hover:shadow-md active:scale-95 focus:outline-none"
                 >
                     <Plus size={15} strokeWidth={1.8} />
-                    <span>新建预设</span>
+                    <span>New Preset</span>
                 </button>
             </div>
         );
@@ -495,13 +495,13 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                 if (parsed) {
                     persist([parsed, ...presets]);
                 } else {
-                    setImportError("无法解析预设文件，格式不正确。");
+                    setImportError("Could not parse the preset file — invalid format.");
                 }
             } catch (e) {
                 if (e instanceof Error && e.message === UNSUPPORTED_IMPORT_FORMAT) {
-                    setImportError("不支持该预设格式");
+                    setImportError("This preset format is not supported");
                 } else {
-                    setImportError("无法解析预设文件，格式不正确。");
+                    setImportError("Could not parse the preset file — invalid format.");
                 }
             }
         };
@@ -535,13 +535,13 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                             <div className="ui-icon-circle">
                                 <MessageSquare size={24} />
                             </div>
-                            <span className="menu-label font-semibold">没有预设</span>
+                            <span className="menu-label font-semibold">No presets</span>
                             <span className="menu-desc max-w-[240px]">
-                                预设用于定义 AI 的回复风格、行为设定和核心参数。
+                                Presets define the AI's reply style, behavior settings, and core parameters.
                             </span>
                             <div className="flex gap-3">
                                 <button onClick={addPreset} className="ui-btn ui-btn-primary">
-                                    <Plus size={16} /> 新建预设
+                                    <Plus size={16} /> New Preset
                                 </button>
                             </div>
                         </div>
@@ -554,7 +554,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                     style={{ minHeight: "84px", padding: "16px", justifyContent: "space-between" }}
                                     role="button"
                                     tabIndex={0}
-                                    aria-label={`编辑 ${preset.name || "预设"}`}
+                                    aria-label={`Edit ${preset.name || "preset"}`}
                                     onClick={() => { setEditingId(preset.id); setViewMode("detail"); }}
                                     onKeyDown={(event) => {
                                         if (event.target !== event.currentTarget) return;
@@ -569,13 +569,13 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                         <div className="min-w-0 flex items-center gap-[6px]">
                                             <span className="truncate text-[calc(14.4px*var(--app-text-scale,1))] font-bold leading-tight text-[var(--c-text-title)]">{preset.name}</span>
                                             {preset.builtIn && (
-                                                <span className="ui-badge shrink-0" data-variant="success">内置</span>
+                                                <span className="ui-badge shrink-0" data-variant="success">Built-in</span>
                                             )}
                                         </div>
-                                        <span className="menu-desc truncate">{preset.description || `包含 ${preset.prompts?.length || 0} 个设定条目`}</span>
+                                        <span className="menu-desc truncate">{preset.description || `Contains ${preset.prompts?.length || 0} entries`}</span>
                                     </div>
                                     <div className="flex items-center justify-between gap-2">
-                                        <span className="menu-desc ts-12">条目 {preset.prompts?.length || 0}</span>
+                                        <span className="menu-desc ts-12">Entries {preset.prompts?.length || 0}</span>
                                         <ChevronLeft size={16} style={{ transform: "rotate(180deg)", opacity: 0.4 }} />
                                     </div>
                                 </div>
@@ -596,7 +596,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                         className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[20px] border border-black/10 bg-white px-4 text-xs font-bold text-gray-800 shadow-sm transition-all hover:bg-gray-50 hover:shadow-md active:scale-95"
                                     >
                                         <Copy size={15} strokeWidth={1.8} />
-                                        <span>复制预设</span>
+                                        <span>Duplicate Preset</span>
                                     </button>
                                     <button
                                         type="button"
@@ -604,17 +604,17 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                         className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[20px] bg-black px-4 text-xs font-bold text-white shadow-sm transition-all hover:bg-gray-800 hover:shadow-md active:scale-95"
                                     >
                                         <Download size={15} strokeWidth={1.8} />
-                                        <span>导出预设</span>
+                                        <span>Export Preset</span>
                                     </button>
                                     {preset.builtIn ? (
                                         <button
                                             type="button"
                                             onClick={() => setConfirmResetId(preset.id)}
                                             className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[20px] border border-black/10 bg-white px-4 text-xs font-bold text-gray-800 shadow-sm transition-all hover:bg-gray-50 hover:shadow-md active:scale-95"
-                                            title="重置为默认"
+                                            title="Reset to default"
                                         >
                                             <RotateCcw size={15} strokeWidth={1.8} />
-                                            <span>重置默认</span>
+                                            <span>Reset to Default</span>
                                         </button>
                                     ) : (
                                         <button
@@ -623,7 +623,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                             className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[20px] border border-black/10 bg-white px-4 text-xs font-bold text-[var(--c-danger)] shadow-sm transition-all hover:bg-gray-50 hover:shadow-md active:scale-95"
                                         >
                                             <Trash2 size={15} strokeWidth={1.8} />
-                                            <span>删除预设</span>
+                                            <span>Delete Preset</span>
                                         </button>
                                     )}
                                 </div>
@@ -631,36 +631,36 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                 <div className="ui-entry-card" style={{ cursor: "default" }}>
                                         <div className="flex flex-col gap-2">
                                             <div className="flex justify-between items-center">
-                                                <label className="menu-label ts-13 font-semibold ml-1">预设名称</label>
+                                                <label className="menu-label ts-13 font-semibold ml-1">Preset Name</label>
                                             </div>
                                             <input
                                                 type="text"
                                                 value={preset.name}
                                                 onChange={(e) => updatePreset(preset.id, { name: e.target.value })}
-                                                placeholder="预设名称..."
+                                                placeholder="Preset name..."
                                                 className="ui-input font-medium"
                                             />
                                         </div>
 
                                         <div className="flex flex-col gap-2">
-                                            <label className="menu-label ts-13 font-semibold ml-1">简介描述</label>
+                                            <label className="menu-label ts-13 font-semibold ml-1">Description</label>
                                             <textarea
                                                 value={preset.description || ""}
                                                 onChange={(e) => updatePreset(preset.id, { description: e.target.value })}
-                                                placeholder="在这个预设的描述..."
+                                                placeholder="Describe this preset..."
                                                 rows={2}
                                                 className="ui-textarea resize-none"
                                             />
                                         </div>
 
-                                        {/* Collapsible: 生成参数 */}
+                                        {/* Collapsible: Generation Parameters */}
                                         <div className="ui-collapsible">
                                             <div
                                                 onClick={() => setParamsOpen(!paramsOpen)}
                                                 className="ui-collapsible-header flex justify-between items-center select-none"
                                                 data-open={paramsOpen}
                                             >
-                                                <span className="menu-label ts-13 font-semibold">生成参数</span>
+                                                <span className="menu-label ts-13 font-semibold">Generation Parameters</span>
                                                 <ChevronDown size={16} className="text-[var(--c-text)]" style={{ transition: "transform 0.2s", transform: paramsOpen ? "rotate(180deg)" : "rotate(0deg)" }} />
                                             </div>
                                             {paramsOpen && (
@@ -673,8 +673,8 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                             </div>
                                                             <input className="ui-slider" type="range" min="0" max="2" step="any" value={preset.temperature} onChange={(e) => updatePreset(preset.id, { temperature: Math.round(parseFloat(e.target.value) * 100) / 100 })} />
                                                             <div className="ui-slider-hints">
-                                                                <span className="ui-slider-hint">稳定保守</span>
-                                                                <span className="ui-slider-hint">发散创造</span>
+                                                                <span className="ui-slider-hint">Stable & conservative</span>
+                                                                <span className="ui-slider-hint">Creative & varied</span>
                                                             </div>
                                                         </div>
 
@@ -685,8 +685,8 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                             </div>
                                                             <input className="ui-slider" type="range" min="0" max="1" step="any" value={preset.top_p} onChange={(e) => updatePreset(preset.id, { top_p: Math.round(parseFloat(e.target.value) * 100) / 100 })} />
                                                             <div className="ui-slider-hints">
-                                                                <span className="ui-slider-hint">用词精准</span>
-                                                                <span className="ui-slider-hint">词汇丰富</span>
+                                                                <span className="ui-slider-hint">Precise wording</span>
+                                                                <span className="ui-slider-hint">Rich vocabulary</span>
                                                             </div>
                                                         </div>
 
@@ -697,8 +697,8 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                             </div>
                                                             <input className="ui-slider" type="range" min="0" max="100" step="1" value={preset.top_k} onChange={(e) => updatePreset(preset.id, { top_k: parseInt(e.target.value) })} />
                                                             <div className="ui-slider-hints">
-                                                                <span className="ui-slider-hint">用词精准</span>
-                                                                <span className="ui-slider-hint">词汇丰富</span>
+                                                                <span className="ui-slider-hint">Precise wording</span>
+                                                                <span className="ui-slider-hint">Rich vocabulary</span>
                                                             </div>
                                                         </div>
 
@@ -709,8 +709,8 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                             </div>
                                                             <input className="ui-slider" type="range" min="0" max="1" step="any" value={preset.min_p || 0} onChange={(e) => updatePreset(preset.id, { min_p: Math.round(parseFloat(e.target.value) * 100) / 100 })} />
                                                             <div className="ui-slider-hints">
-                                                                <span className="ui-slider-hint">发散跳跃</span>
-                                                                <span className="ui-slider-hint">逻辑连贯</span>
+                                                                <span className="ui-slider-hint">Divergent & random</span>
+                                                                <span className="ui-slider-hint">Coherent & logical</span>
                                                             </div>
                                                         </div>
 
@@ -721,8 +721,8 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                             </div>
                                                             <input className="ui-slider" type="range" min="0" max="1" step="any" value={preset.top_a || 0} onChange={(e) => updatePreset(preset.id, { top_a: Math.round(parseFloat(e.target.value) * 100) / 100 })} />
                                                             <div className="ui-slider-hints">
-                                                                <span className="ui-slider-hint">自由发散</span>
-                                                                <span className="ui-slider-hint">限制胡言乱语</span>
+                                                                <span className="ui-slider-hint">Free & divergent</span>
+                                                                <span className="ui-slider-hint">Limits nonsense output</span>
                                                             </div>
                                                         </div>
 
@@ -733,8 +733,8 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                             </div>
                                                             <input className="ui-slider" type="range" min="1" max="2" step="any" value={preset.repetition_penalty} onChange={(e) => updatePreset(preset.id, { repetition_penalty: Math.round(parseFloat(e.target.value) * 100) / 100 })} />
                                                             <div className="ui-slider-hints">
-                                                                <span className="ui-slider-hint">允许重复</span>
-                                                                <span className="ui-slider-hint">极力惩罚重复</span>
+                                                                <span className="ui-slider-hint">Allows repetition</span>
+                                                                <span className="ui-slider-hint">Heavily penalizes repetition</span>
                                                             </div>
                                                         </div>
 
@@ -745,8 +745,8 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                             </div>
                                                             <input className="ui-slider" type="range" min="0" max="2" step="any" value={preset.frequency_penalty} onChange={(e) => updatePreset(preset.id, { frequency_penalty: Math.round(parseFloat(e.target.value) * 100) / 100 })} />
                                                             <div className="ui-slider-hints">
-                                                                <span className="ui-slider-hint">自然口癖</span>
-                                                                <span className="ui-slider-hint">杜绝车轱辘话</span>
+                                                                <span className="ui-slider-hint">Natural verbal tics</span>
+                                                                <span className="ui-slider-hint">Avoids repetitive phrasing</span>
                                                             </div>
                                                         </div>
 
@@ -757,25 +757,25 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                             </div>
                                                             <input className="ui-slider" type="range" min="0" max="2" step="any" value={preset.presence_penalty} onChange={(e) => updatePreset(preset.id, { presence_penalty: Math.round(parseFloat(e.target.value) * 100) / 100 })} />
                                                             <div className="ui-slider-hints">
-                                                                <span className="ui-slider-hint">聚焦当前话题</span>
-                                                                <span className="ui-slider-hint">积极拓展新话题</span>
+                                                                <span className="ui-slider-hint">Stays on topic</span>
+                                                                <span className="ui-slider-hint">Actively explores new topics</span>
                                                             </div>
                                                         </div>
 
                                                         <div className="flex flex-col gap-1 col-span-full">
                                                             <div className="flex justify-between">
                                                                 <label className="ui-slider-label">Max Tokens</label>
-                                                                <span className="ui-slider-value">{preset.openai_max_tokens || "自动"}</span>
+                                                                <span className="ui-slider-value">{preset.openai_max_tokens || "Auto"}</span>
                                                             </div>
                                                             <input className="ui-slider" type="range" min="0" max="8192" step="128" value={preset.openai_max_tokens} onChange={(e) => updatePreset(preset.id, { openai_max_tokens: parseInt(e.target.value) })} />
                                                             <div className="ui-slider-hints">
-                                                                <span className="ui-slider-hint">自动 (推荐)</span>
-                                                                <span className="ui-slider-hint">限制回复长度</span>
+                                                                <span className="ui-slider-hint">Auto (recommended)</span>
+                                                                <span className="ui-slider-hint">Limits reply length</span>
                                                             </div>
                                                         </div>
 
                                                         <div className="flex flex-col gap-2 col-span-full">
-                                                            <label className="ui-slider-label">剧情/线下模式摘要字段</label>
+                                                            <label className="ui-slider-label">Story/Offline Mode Summary Field</label>
                                                             <input
                                                                 type="text"
                                                                 value={preset.story_summary_tag || "summary"}
@@ -784,7 +784,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                                 className="ui-input"
                                                             />
                                                             <div className="ui-slider-hint">
-                                                                用于从剧情模式和聊天线下模式的原始 XML 输出中提取事件摘要字段名。默认读取 {"<summary>"}。
+                                                                Used to extract the event summary field name from the raw XML output of story mode and offline chat mode. Reads {"<summary>"} by default.
                                                             </div>
                                                         </div>
                                                     </div>
@@ -852,7 +852,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                                     {/* Drag Handle shown subtly */}
                                                                     <GripVertical size={14} className="text-[var(--c-text)]" style={{ opacity: isEditing ? 0 : 0.5 }} />
                                                                     <span className="menu-label ts-15 font-semibold break-all">
-                                                                        {prompt.name || "未命名提示词"}
+                                                                        {prompt.name || "Untitled Prompt"}
                                                                     </span>
                                                                 </div>
                                                                 {!isEditing && (
@@ -872,12 +872,12 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                                         )}
                                                                         {/* System/User badge — shown for all entries */}
                                                                         <span className="ui-status-tag">
-                                                                            {prompt.role === "system" ? "系统 (System)" : prompt.role === "assistant" ? "助手 (Assistant)" : "用户 (User)"}
+                                                                            {prompt.role === "system" ? "System" : prompt.role === "assistant" ? "Assistant" : "User"}
                                                                         </span>
                                                                         {!prompt.marker && (
                                                                             /* Depth badge — only for non-marker entries */
                                                                             <span className="ui-status-tag" data-variant="action">
-                                                                                深度: {prompt.injection_depth}
+                                                                                Depth: {prompt.injection_depth}
                                                                             </span>
                                                                         )}
                                                                     </div>
@@ -934,7 +934,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                                     value={prompt.name}
                                                                     onChange={(e) => {
                                                                         const nextName = e.target.value;
-                                                                        // 名称命中 marker 固定名时自动补齐 identifier + marker（与桌宠填表同逻辑）
+                                                                        // When the name matches a fixed marker name, auto-fill identifier + marker (same logic as mascot form-fill)
                                                                         const markerId = matchMarkerByName(nextName);
                                                                         if (
                                                                             markerId
@@ -968,7 +968,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                                             current => ({ ...current, name: nextName }),
                                                                         );
                                                                     }}
-                                                                    placeholder="提示词名称 (例如: 主力 Prompt)"
+                                                                    placeholder="Prompt name (e.g. Main Prompt)"
                                                                     rows={1}
                                                                     className="border-none bg-transparent ts-16 font-semibold outline-none flex-1 min-w-0 font-[inherit] py-1 px-0 text-[var(--c-text)]"
                                                                 />
@@ -984,7 +984,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                                             current => ({ ...current, content: e.target.value }),
                                                                         );
                                                                     }}
-                                                                    placeholder="在此输入提示词内容..."
+                                                                    placeholder="Enter prompt content here..."
                                                                     rows={6}
                                                                     className="ui-textarea resize-y"
                                                                 />
@@ -994,12 +994,12 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                             <div className="flex flex-col gap-3 p-[10px] rounded-lg bg-[var(--c-input)]">
                                                                 {prompt.marker && (
                                                                     <div className="menu-desc ts-11">
-                                                                        标记条目的位置由排序与「短期记忆」分界决定，Role 固定为 System——以下「注入方式 / Inject Depth / Role」对标记条目不生效
+                                                                        A marker entry's position is determined by its order and the "Short-term Memory" boundary; Role is fixed to System — the "Injection Position / Inject Depth / Role" options below don't apply to marker entries
                                                                     </div>
                                                                 )}
                                                                 <div className="grid grid-cols-2 gap-3">
                                                                     <div className={`flex flex-col gap-1 min-w-0${prompt.marker ? " opacity-40 pointer-events-none" : ""}`}>
-                                                                        <label className="menu-desc ts-11">注入方式</label>
+                                                                        <label className="menu-desc ts-11">Injection Position</label>
                                                                         <select disabled={!!prompt.marker} value={(prompt.injection_position ?? 0) === 0 ? "0" : "1"} onChange={e => {
                                                                             updatePrompt(
                                                                                 preset,
@@ -1007,8 +1007,8 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                                                 current => ({ ...current, injection_position: parseInt(e.target.value) }),
                                                                             );
                                                                         }} className="ui-select ts-13 px-2 py-[6px] rounded-[6px]">
-                                                                            <option value="0">跟随排序</option>
-                                                                            <option value="1">插入聊天</option>
+                                                                            <option value="0">Follow Order</option>
+                                                                            <option value="1">Insert into Chat</option>
                                                                         </select>
                                                                     </div>
                                                                     <div className={`flex flex-col gap-1 min-w-0${prompt.marker ? " opacity-40 pointer-events-none" : ""}`}>
@@ -1043,7 +1043,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                                         </select>
                                                                     </div>
                                                                     <div className="flex flex-col gap-[2px] min-w-0">
-                                                                        <label className="menu-desc ts-11 ml-[2px]">适用范围</label>
+                                                                        <label className="menu-desc ts-11 ml-[2px]">Scope</label>
                                                                         <div className="grid grid-cols-2 gap-2">
                                                                             <select
                                                                                 value={isCustomPromptTags ? "__custom__" : selectedTagGroup.id}
@@ -1060,7 +1060,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                                                 className="ui-select ts-13 px-2 py-[6px] rounded-[6px]"
                                                                             >
                                                                                 {isCustomPromptTags ? (
-                                                                                    <option value="__custom__">自定义</option>
+                                                                                    <option value="__custom__">Custom</option>
                                                                                 ) : null}
                                                                                 {tagGroups.map((group) => (
                                                                                     <option key={group.id} value={group.id}>{group.label}</option>
@@ -1080,7 +1080,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                                                 className="ui-select ts-13 px-2 py-[6px] rounded-[6px]"
                                                                             >
                                                                                 {isCustomPromptTags ? (
-                                                                                    <option value="__custom__">自定义</option>
+                                                                                    <option value="__custom__">Custom</option>
                                                                                 ) : null}
                                                                                 {selectedTagGroup.minors.map((minor) => (
                                                                                     <option key={minor.id} value={minor.id}>{minor.label}</option>
@@ -1102,7 +1102,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                                     Marker
                                                                 </label>
                                                                 <span className="menu-desc ts-11 whitespace-nowrap">
-                                                                    实际标签：{getPromptTagsInlineLabel(prompt)}
+                                                                    Actual tags: {getPromptTagsInlineLabel(prompt)}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -1112,7 +1112,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                         })}
                                         {(!preset.prompts || preset.prompts.length === 0) && (
                                             <div className="menu-desc text-center ts-13 p-3">
-                                                空预设不会产生背景设定，请添加提示词条目。
+                                                An empty preset produces no background context — please add a prompt entry.
                                             </div>
                                         )}
                                     </div>
@@ -1122,7 +1122,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                         onClick={() => {
                                             const newPrompt = {
                                                 identifier: `prompt-${Date.now()}`,
-                                                name: "新提示词",
+                                                name: "New Prompt",
                                                 role: "system" as const,
                                                 content: "",
                                                 injection_depth: 0,
@@ -1140,7 +1140,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                         className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[20px] bg-black px-4 text-xs font-bold text-white shadow-sm transition-all hover:bg-gray-800 hover:shadow-md active:scale-95 focus:outline-none"
                                     >
                                         <Plus size={15} strokeWidth={1.8} />
-                                        添加条目
+                                        Add Entry
                                     </button>
                                 </div>
                             </div>
@@ -1154,11 +1154,11 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                 if (!targetPreset) return null;
                 return (
                     <ConfirmDialog
-                        title="确认导出预设？"
-                        message={`将导出“${targetPreset.name || "当前预设"}”为 JSON 文件。是否继续？`}
+                        title="Export preset?"
+                        message={`This will export "${targetPreset.name || "the current preset"}" as a JSON file. Continue?`}
                         icon={Download}
                         variant="action"
-                        confirmLabel="确认导出"
+                        confirmLabel="Export"
                         onConfirm={() => {
                             handleExport(targetPreset);
                             setConfirmExportId(null);
@@ -1173,11 +1173,11 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                 if (!targetPreset) return null;
                 return (
                     <ConfirmDialog
-                        title="确认重置默认？"
-                        message={`这会把“${targetPreset.name || "默认预设"}”恢复为出厂内容，当前修改会被覆盖。是否继续？`}
+                        title="Reset to default?"
+                        message={`This will restore "${targetPreset.name || "the default preset"}" to its factory content, overwriting any current changes. Continue?`}
                         icon={RotateCcw}
                         variant="danger"
-                        confirmLabel="确认重置"
+                        confirmLabel="Reset"
                         onConfirm={() => {
                             resetBuiltinPreset();
                             setPresets(loadPresets());
@@ -1190,11 +1190,11 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
 
             {confirmDeleteId && (
                 <ConfirmDialog
-                    title="确认删除？"
-                    message="删除预设后无法恢复。是否继续？"
+                    title="Confirm delete?"
+                    message="This preset cannot be recovered after deletion. Continue?"
                     icon={AlertCircle}
                     variant="danger"
-                    confirmLabel="确认删除"
+                    confirmLabel="Delete"
                     onConfirm={() => {
                         removePreset(confirmDeleteId);
                         setConfirmDeleteId(null);
@@ -1205,11 +1205,11 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
             {/* Confirm delete entry dialog */}
             {confirmDeleteEntry !== null && editingId && (
                 <ConfirmDialog
-                    title="确认删除？"
-                    message="删除条目后无法恢复。是否继续？"
+                    title="Confirm delete?"
+                    message="This entry cannot be recovered after deletion. Continue?"
                     icon={AlertCircle}
                     variant="danger"
-                    confirmLabel="确认删除"
+                    confirmLabel="Delete"
                     onConfirm={() => {
                         const p = presets.find(x => x.id === editingId);
                         if (p) {
@@ -1227,11 +1227,11 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
 
             {importError && (
                 <ConfirmDialog
-                    title="导入失败"
+                    title="Import Failed"
                     message={importError}
                     icon={AlertCircle}
                     variant="danger"
-                    confirmLabel="知道了"
+                    confirmLabel="Got it"
                     cancelLabel=""
                     onConfirm={() => setImportError(null)}
                     onCancel={() => setImportError(null)}
@@ -1245,14 +1245,14 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                 if (!preset || !prompt || promptIdx < 0) return null;
                 return (
                     <TextExpandModal
-                        title={prompt.name || "编辑提示词"}
+                        title={prompt.name || "Edit Prompt"}
                         value={prompt.content}
                         onChange={(v) => {
                             const newPrompts = [...preset.prompts];
                             newPrompts[promptIdx] = { ...prompt, content: v };
                             updatePreset(preset.id, { prompts: newPrompts });
                         }}
-                        placeholder="在此输入提示词内容..."
+                        placeholder="Enter prompt content here..."
                         onClose={() => setExpandTarget(null)}
                     />
                 );
