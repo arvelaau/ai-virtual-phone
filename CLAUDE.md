@@ -875,6 +875,32 @@ Remaining Chinese in `lib/builtin-preset.ts` is **1481 lines, and every line of 
 
 Re-verify with the per-entry script above; anything appearing outside those six rows is new work.
 
+## PHASE D2 (started 2026-08-06) — the mascot files
+
+### D2 batch 7 — the `小卷` → **Scroll** rename: **DONE**
+18 sites across 11 files, one commit, `tsc` clean. Name derived from the original (卷 = scroll/roll), which also matches the app's paper-and-journal aesthetic, and is gender-neutral so it does not fight the "cool guy" persona. To change it later: it is now a plain-ASCII token, so a single repo-wide replace of `Scroll` is enough — but check the word is not used in an unrelated sense first.
+
+It had to move as one change: the name reaches the model through the **persona prompt**, through **tool descriptions** (`mascot-tools.ts:537,548,549`), and through a debug label (`mascot-engine.ts:655`, verified display-only — `characterName` is compared nowhere). Renaming a subset forks the mascot's identity between files.
+
+**Stale cross-reference fixed on the way**: `css-asset-tools.ts:1099` told the user to enable a setting spelled `「允许小卷上传图床」`, but the UI has read **"Allow the mascot to upload to image hosting"** since the Phase 1 sweep — so the instruction pointed at a label that does not exist. All three `css-asset-tools` messages naming the mascot are now English and point at the real label. Their `name:` fields stay Chinese (tool identifiers matched by `mascot-tools.ts`). Note `css-asset-tools.ts` still has ~92 Chinese lines and was never on any list — **add it to the queue**.
+
+### D2 batch 8 — `mascot-prompts.ts`, first half: **PARTIAL, and deliberately so**
+532 → **394** CJK lines. Done: `MASCOT_PERSONA`, `CHARACTER_CARD_PROMPT` (0 left), `REGEX_PROMPT` (10 left, all deliberate). 31/31 fixture, `tsc` exit 0.
+
+**`REGEX_PROMPT` was the load-bearing one and is why this file is not just prose.** The mascot *writes the user's regex rules*. It was teaching `[状态栏]` / `[内心]`, but the preset now makes the AI emit `[StatusPanel]` / `[InnerThoughts]` — so every regex the mascot wrote would have silently failed to fire. Now teaches the English tags, with an explicit legacy note that both forms are still parsed and a `/\[(?:StatusPanel|状态栏)\]/` pattern for styling old messages too. The fixture extracts the taught story-mode regex **out of the prompt text and runs it** against a real block, and asserts the legacy spellings appear *only* inside that note.
+
+**Three Chinese families deliberately survive**, and the fixture asserts each is a real identifier rather than a missed line: state value names (`mergeStateValues` merges by name), the legacy block tags inside the note, and the three regex tool names (`创建正则组`, `添加正则规则`, `更新正则规则` — verified present in `mascot-tools.ts`).
+
+**Verified unparsed, so kept as pure formatting**: the `■` section markers and `【…】` subsections in the character-card spec — grep found no consumer anywhere. Fixture pins that they survive, since the card's readability depends on the model using them.
+
+**Finding worth a decision (NOT changed — behaviour, not translation).** `MASCOT_PERSONA` hardcoded `用户是女性` and prescribed feminine endearments while forbidding masculine ones. That contradicts `components/settings/user-identity.tsx`, where gender is user-configurable and includes `保密` (prefer not to say). I translated it behaviour-preservingly as "address the user warmly and affectionately; never use blokey forms of address" — which drops the explicit gender assertion while keeping the register the original intended. **If you want the mascot to actually respect the configured identity, that is a separate change**: the persona would need to read from the identity system rather than assert a gender.
+
+#### Still to do in `mascot-prompts.ts` (394 lines)
+`WORLDBOOK_PROMPT` 69, `PRESET_PROMPT` 135, `GENERAL_PRESET_PROMPT` 108, `CSS_PROMPT` 62, `PAGE_GREETINGS` 8, plus two stray header comments. **Two known constraints for whoever continues:**
+1. `PRESET_PROMPT` (~lines 337-346 and 416-424) lists the **marker names** `◇ 用户人设`, `◇ 世界书（角色前）`, `◇ 角色描述`, `◇ 角色性格`, `◇ 角色关系`, `◇ 世界书（角色后）`, `◇ 日程`, `◇ 核心记忆`, `◇ 长期记忆`, `◇ [短期记忆]`. These are the exact strings in `builtin-preset.ts` and are matched by `preset-manager.tsx:64-70` `matchMarkerByName()`. **Never translate them** — the mascot creates preset entries with those literal names.
+2. The preset-tool names `创建剧情预设`, `克隆内置预设`, `复制预设`, `添加预设条目`, `更新预设条目`, `更新预设信息` are matched by `preset-manager.tsx:86-93` `MASCOT_PRESET_STORAGE_TOOL_NAMES`. Same rule.
+3. `WORLDBOOK_PROMPT:242,285` carry an explicit **"output in Chinese" order** (`标签名用中文` — world book entry content should use Chinese XML tag names). That is the fifth engine in a row with that trap. Those XML tags are free text injected into prompts and parsed nowhere, so flipping them to English is safe.
+
 ### Track 1 progress
 `lib/custom-app-creator-guide.ts` — **done**, ~520 strings translated, `npm run build` passes, zero smart quotes / zero CJK escapes. (Agent hit a session usage limit mid-file at ~26%; resumed via `SendMessage` after verifying no smart-quote damage — the completed portion was intact.) Notes:
 - **4 markdown anchor links** re-derived in lockstep with their retitled headings; all 4 verified to resolve to a heading that still exists.
