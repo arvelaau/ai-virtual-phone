@@ -47,6 +47,22 @@ export interface ParsedAIResponse {
     innerMonologue: string;
 }
 
+// Ported from upstream (2026-08-04, "修复：媒体消息后的零宽字符被存成空气泡").
+// Zero-width spaces, BOMs and friends are not \s, so trim() cannot remove them. When a
+// model trails one of these after a media marker, the text gets split into a segment
+// that is non-empty but renders as nothing — an empty bubble.
+// They must NOT simply be deleted from the content: U+200D is the joiner in composite
+// emoji and U+200C carries meaning in some scripts. So they only count as blank when
+// deciding whether a segment is empty.
+const INVISIBLE_OR_WHITESPACE_ONLY_RE = new RegExp(
+    "^[\\s\\u00AD\\u034F\\u180E\\u200B-\\u200F\\u2060-\\u2064\\uFEFF]*$",
+);
+
+/** True when the text has no visible characters (empty, whitespace, zero-width/BOM, or any mix). */
+export function isInvisibleOrWhitespaceOnly(text: string): boolean {
+    return INVISIBLE_OR_WHITESPACE_ONLY_RE.test(text);
+}
+
 // ── Rich-media patterns (non-global, for single match with index) ──
 
 const C = "\\s*[：:]\\s*"; // half-width or full-width colon, allowing surrounding spaces
@@ -759,7 +775,7 @@ export function parseAIResponse(rawText: string, previousState: StateValue[]): P
         if (p.mediaType) return p;
         const display = stripTextToolDirectives(restore(p.content));
         return { ...p, content: display };
-    }).filter(p => p.mediaType || p.content);
+    }).filter(p => p.mediaType || !isInvisibleOrWhitespaceOnly(p.content));
 
     return {
         parts: cleaned,
