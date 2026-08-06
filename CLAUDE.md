@@ -870,7 +870,25 @@ Naming choices worth keeping consistent: `diary` → **Journal** (the app is 手
 
 Still Chinese and deliberately untouched: the `◇ 用户人设` / `◇ 角色描述` family in `preset-manager.tsx:64-70`. Those are preset-entry identifiers matched loosely (see the comment at :73), not scope labels.
 
+## Editing a character mid-conversation had no visible effect — fixed 2026-08-05
+
+User-reported: change a character's persona (friendly + emoji → fierce, curt, no emoji), save, keep chatting in the **same** thread — the replies stay in the old voice. Deleting the chat history makes the new persona take effect immediately. New characters were always fine.
+
+**Not a code bug.** Instrumentation on the whole path (`loadCharacters()` → `assemblePromptPayload` → final payload) was added and then removed; the save path, the `_charsCache` invalidation and the assembler were all already correct — the edited persona *does* reach the prompt, on the very next message. What loses is the instruction, not the data: the model sees dozens of its own prior messages written in the old voice and imitates them, because few-shot examples outweigh a description. That is also exactly why a brand-new character never showed the problem — no history to imitate.
+
+**Fix: a new preset entry `persona_style_authority`** in `lib/builtin-preset.ts`, modelled on `output_language_rule`:
+- **No `tags`**, so the assembler's tag filter (`entryTags && !entryTags.every(...)`, `llm-prompt-assembler.ts:811` / `:2249`) never drops it and one entry covers every surface.
+- Registered in `prompt_order` **immediately after the `shortTermMemory` divider**, which puts it at `depth: 0` — i.e. *below* the chat history whose style it is correcting. Placement is the point: above the history it would be just another description competing with the examples.
+- `BUILTIN_PRESET_VERSION` → **268** (without the bump it would be dead code — see the warning on that line).
+
+**Scope is deliberately narrow: VOICE only.** The entry says the profile outranks past messages for tone/register/emoji/manner, and then says in as many words that this *does not* apply to substance — plot, relationship state, promises, and everything in conversation history, short-term events, core and long-term memories must still be recalled and used exactly as before. That clause is load-bearing: a blanket "ignore earlier context" rule would fight the memory system (`lib/memory-types.ts`, `memoryCore`/`memoryLongTerm` markers, `characterRelations`) and trade a style bug for a continuity bug. The fixture pins it with scope guards so a later trim can't quietly widen it.
+
+**Fixture (24/24, `_fx-persona.mjs`, deleted — recreate from this)**: structural (version bumped, entry enabled, **no `tags`**, ordered after the divider, CJK-free, and the four scope-guard phrases still present); behavioural through the **real** `assemblePromptPayload` and `assembleGroupPromptPayload` — the rule reaches the 1:1, Moments, Reading and group surfaces, lands *after* the last history message, and does **not** displace persona / core memory / long-term memory / history / `output_language_rule`. Non-vacuity control: flipping the entry to `enabled: false` in `prompt_order` makes it disappear while everything else still assembles, proving the assertions measure the assembler rather than a substring accident.
+
+**Unrelated finding, NOT fixed (out of this task's scope):** the assembled chat prompt still carries Chinese from `lib/macro-engine.ts:247` and `lib/chat-time.ts:1` — `const weekdays = ["星期日", …]`, producing `当前系统时间：2026年8月5日10:12，星期三` inside `<chat_output_format>` on **every** chat prompt. Two more `.ts` files the `.tsx`-only Phase 1 sweep never covered. Pure display strings fed to the model; worth a look when the queue reaches them.
+
 ## Still open / not yet done
+- `lib/macro-engine.ts:247` + `lib/chat-time.ts:1` Chinese weekday/date formatting reaching every chat prompt (found 2026-08-05, see above).
 - `notifyMascotPageContext` label in `components/chat/phone-chat-app.tsx` (2 call sites) — flagged since round 2, needs revisiting per the standing-rule note above.
 - `app/api/**/route.ts` — ~420 Chinese occurrences across 43 files, scope not yet decided (see "Scope note" above) — ask the user before starting.
 - The handful of out-of-scope `.ts` files under `components/world-builder/` and `components/debug-prompt-registry.ts` noted above — never explicitly in scope (rule 1 says `.tsx` only), no decision needed unless the user wants to expand scope.

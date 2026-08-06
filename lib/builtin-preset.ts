@@ -22,7 +22,12 @@ export const BUILTIN_PRESET_ID = "builtin_default_v1";
 //                   lib/tool-prompt.ts. Tool NAMES (e.g. 发送便签) stay Chinese —
 //                   they are identifiers registered in lib/internal-capability-storage.ts
 //                   and are a separate rename track.
-export const BUILTIN_PRESET_VERSION = 267;
+// 268 (2026-08-05): new global `persona_style_authority` entry — a persona edited
+//                   mid-conversation had no visible effect, because the model kept
+//                   imitating the speaking style of its own earlier replies. Scoped
+//                   to VOICE only; facts, plot and relationship state remain owned
+//                   by the history and the memory system.
+export const BUILTIN_PRESET_VERSION = 268;
 
 export function createBuiltinPreset(): PresetConfig {
     const now = Date.now();
@@ -61,6 +66,10 @@ export function createBuiltinPreset(): PresetConfig {
 
             // ── Divider ──
             { identifier: "shortTermMemory", enabled: true },
+
+            // First thing after the history block on purpose: it is the history's own
+            // style that this rule has to override, so it must be read after it.
+            { identifier: "persona_style_authority", enabled: true },
 
             // ── Feature entries (after chatHistory) ──
             { identifier: "chat_tools", enabled: true },
@@ -158,6 +167,29 @@ export function createBuiltinPreset(): PresetConfig {
                     "Do not append a translation in any other language, and do not mirror the user's language.",
                     "Proper nouns (people, places, brands) may keep their original spelling.",
                     "Structural markers stay exactly as specified elsewhere in this prompt: bracket directives, XML tags, field names, and section headers are not to be translated or reworded.",
+                ].join("\n"),
+                injection_position: 0,
+                injection_depth: 0,
+                enabled: true,
+            },
+            // Persona edits must take effect immediately, even mid-conversation.
+            // Like output_language_rule this deliberately has NO `tags`, so the
+            // assembler's tag filter never drops it and it reaches every surface.
+            // It is registered AFTER the shortTermMemory divider in prompt_order,
+            // which puts it at depth 0 — i.e. below the chat history whose style it
+            // is correcting. Scope is deliberately narrow: VOICE only. Facts, plot
+            // and relationship state stay owned by history and the memory system.
+            // Added 2026-08-05: editing a character mid-conversation changed nothing
+            // observable, because the model kept imitating its own earlier replies.
+            {
+                identifier: "persona_style_authority",
+                name: "▸ Persona Style Authority",
+                role: "system",
+                content: [
+                    "## Your character profile outranks your own past messages",
+                    "The persona, personality and description given for you in this prompt are the current source of truth for HOW you speak: tone, register, warmth or coldness, politeness, verbosity, emoji and punctuation habits, speech tics, and manner in general. They always take precedence over the way you happened to speak in earlier messages of this conversation.",
+                    "A character profile can be edited at any time, so your earlier replies may have been written under an older version of it. Read them as a record of what was said, never as a style guide for how to say things now. Where your recent messages and the profile above disagree about your manner, follow the profile, and let your voice change starting with this message — without announcing the change, apologising for it, or explaining it in or out of character.",
+                    "**This applies to voice only, never to substance.** Everything that has already happened remains true and must still be honoured in full: past events and plot, the current state of your relationship with the user and with other characters, promises made, running jokes, and every detail carried in the conversation history, short-term events, core memories and long-term memories. Keep recalling and using all of it exactly as before, with the same continuity you would show otherwise. What changes is only how you express it — not what you know, not what you feel about the user, and not what has happened between you.",
                 ].join("\n"),
                 injection_position: 0,
                 injection_depth: 0,
