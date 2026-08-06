@@ -29,9 +29,15 @@ const TOOL_NAMES = T.MASCOT_TOOL_PACKAGES.flatMap(p => p.subTools.map(t => t.nam
 // State value names and the legacy block tags are quoted inside REGEX_PROMPT on
 // purpose (see D2 batch 8); they are not untranslated prose.
 const STATE_AND_TAGS = ["好感度", "占有欲", "焦虑值", "状态栏", "内心"];
+// The ◇ marker names are fixed system identifiers quoted inside PRESET_PROMPT; they
+// must stay Chinese (preset-manager.tsx matches them), so they are not untranslated prose.
+const MARKER_NAMES = [
+    "◇ 用户人设", "◇ 世界书（角色前）", "◇ 角色描述", "◇ 角色性格", "◇ 角色关系",
+    "◇ 世界书（角色后）", "◇ 日程", "◇ 核心记忆", "◇ 长期记忆", "◇ [短期记忆]",
+];
 // LONGEST FIRST — otherwise a shorter tool name eats a prefix of a longer one and
 // leaves a fragment that looks like untranslated text.
-const ALLOWED = [...new Set([...TOOL_NAMES, ...STATE_AND_TAGS])].sort((a, b) => b.length - a.length);
+const ALLOWED = [...new Set([...TOOL_NAMES, ...STATE_AND_TAGS, ...MARKER_NAMES])].sort((a, b) => b.length - a.length);
 const strip = s => ALLOWED.reduce((acc, n) => acc.split(n).join(""), s);
 
 // Guard the stripper itself: it must not be broad enough to hide real prose.
@@ -109,11 +115,13 @@ const GUIDE_STATE = [
     ["CHARACTER_CARD_PROMPT", P.CHARACTER_CARD_PROMPT, false],
     ["REGEX_PROMPT", P.REGEX_PROMPT, false],
     ["WIDGET_PROMPT", P.WIDGET_PROMPT, false],
+    ["WORLDBOOK_PROMPT", P.WORLDBOOK_PROMPT, false],
+    ["PRESET_PROMPT", P.PRESET_PROMPT, false],
     ["CSS_PROMPT", P.CSS_PROMPT, true],
-    ["WORLDBOOK_PROMPT", P.WORLDBOOK_PROMPT, true],
-    ["PRESET_PROMPT", P.PRESET_PROMPT, true],
     ["GENERAL_PRESET_PROMPT", P.GENERAL_PRESET_PROMPT, true],
 ];
+// PRESET_PROMPT keeps the 10 ◇ marker names and 5 tool names by design, so it is
+// checked against the same allow-list as everything else rather than a bare CJK test.
 GUIDE_STATE.forEach(([name, text, expectChinese]) => {
     // REGEX_PROMPT legitimately quotes state names and legacy tags.
     const body = strip(String(text));
