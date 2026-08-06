@@ -9,6 +9,7 @@ import { loadChatContacts } from "./chat-storage";
 import type { Character } from "./character-types";
 import {
     addMomentPost,
+    updateMomentPost,
     addMomentComment,
     findRecentDuplicateMomentPost,
     toggleMomentLike,
@@ -347,9 +348,9 @@ async function triggerAIPost(characterId: string): Promise<void> {
 
         const contacts = loadChatContacts();
         const visibility = contacts.map(c => c.characterId);
-        const photoUrl = parsed.photoDescription
-            ? await generateMomentPhotoUrl(parsed.photoDescription, characterId, parsed.photoUseReferenceImage === true)
-            : undefined;
+        // Save the post first, generate the image afterwards: the post is visible
+        // immediately, and a slow, timed-out or interrupted generation can no longer
+        // lose it. (Ported from upstream.)
 
         const post = addMomentPost({
             authorType: "character",
@@ -357,14 +358,15 @@ async function triggerAIPost(characterId: string): Promise<void> {
             content: parsed.content,
             photoDescription: parsed.photoDescription,
             photoUseReferenceImage: parsed.photoUseReferenceImage === true,
-            photoGenerationStatus: parsed.photoDescription ? (photoUrl ? "generated" : "failed") : undefined,
-            photoGenerationError: parsed.photoDescription && !photoUrl ? "Image generation is not configured, or the request failed." : undefined,
-            photoUrl,
+            photoGenerationStatus: parsed.photoDescription ? "pending" : undefined,
             visibility,
         });
         if (!post) {
             console.warn(`[Moments] SKIP duplicate AI post from ${character.name}`);
             return;
+        }
+        if (parsed.photoDescription) {
+            attachMomentPhotoInBackground(post.id, parsed.photoDescription, characterId, parsed.photoUseReferenceImage === true);
         }
 
         // Increment event counter for auto-summarization (native data read at summarization time)
@@ -1232,6 +1234,33 @@ export function parseMomentPostResponse(rawText: string): {
 }
 
 // ── Helpers ──
+
+/**
+ * Background image job. The post is already stored with photoGenerationStatus "pending";
+ * the image is attached once it finishes. A failure, timeout or interruption only marks
+ * the status "failed" (the card offers a manual retry) and never affects the post itself.
+ */
+export function attachMomentPhotoInBackground(
+    postId: string,
+    description: string,
+    characterId: string,
+    useReferenceImage: boolean,
+    signal?: AbortSignal,
+): void {
+    void (async () => {
+        let photoUrl: string | undefined;
+        let errorMessage: string | undefined;
+        try {
+            photoUrl = await generateMomentPhotoUrl(description, characterId, useReferenceImage, signal);
+        } catch (error) {
+            errorMessage = error instanceof Error ? error.message : String(error);
+        }
+        updateMomentPost(postId, photoUrl
+            ? { photoUrl, photoGenerationStatus: "generated", photoGenerationError: undefined }
+            : { photoGenerationStatus: "failed", photoGenerationError: errorMessage || "Image generation is not configured, or the request failed." });
+        dispatchMomentsUpdated();
+    })();
+}
 
 export async function generateMomentPhotoUrl(
     description: string,
