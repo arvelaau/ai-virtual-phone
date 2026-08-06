@@ -790,6 +790,34 @@ Protocol audit done first, and it came back clean:
 **Fixture (35/35, `_fx-d1b2.mjs`, deleted — recreate from this)**: the VN template is **extracted out of the entry and run through the real `parseVnResponse`**, asserting 3 frames (one per non-empty *line*, not per `<scene>`), bg/sprite inheritance across frames, speaker split off the pipe, and that an apostrophe survives; plus the taught `<options>` syntax parsing into two choices, a narration negative control (same line without the pipe), the story summary round trip with a missing-`<summary>` negative control, the macro fallback rendering English, no CJK beyond state names, no stray full-width punctuation outside `【…】`, the version bump, and unchanged `tags` arrays. **Verified non-vacuous**: swapping the template's `|` for `：` and putting one Chinese line back gives 32/35, failing the CJK check, the full-width check *and* the parser-level dialogue assertion.
 
 
+### D1b batch 3 — calendar / diary / note wall / add-friend / cocreate: **DONE** (2026-08-06)
+68/68 fixture, `npx tsc --noEmit` exit 0, `BUILTIN_PRESET_VERSION` → **271**. Entries: `calendar_plan_generation` (name only — its body was already English), `diary_entry_generation`, `diary_notewall_generation`, `diary_notewall_reply`, `add_friend_prompt`, `cocreate_write`, `cocreate_discuss`, `cocreate_tools_write`, `cocreate_tools_read` (~98 CJK lines).
+
+**Tool NAMES deliberately still Chinese**, and the fixture asserts each one is a real registered identifier so nobody "finishes the job": `发送便签` / `发送便签评论` (`internal-capability-storage.ts:504,509`, matched exactly by `notewall-utils.ts:425,468` and switched on in `tool-executor.ts:1575,1577`) and the cocreate actions `追加` / `编辑` / `删除` / `查看` (`cocreate-tools.ts:42-45`). Each is now glossed in the prose (`the 「追加」 (append) action`) so an English-reading model still knows what it does. Diary/note-wall JSON keys and enum values were already ASCII.
+
+**`add_friend_prompt` needed a parser migration first, not just translation.** `friend-request-engine.ts` — a prompt/protocol file that was never on any list — had a Chinese-only parser: `/\[添加好友\]…/` and a bare `text.includes("放弃")`. Made bilingual before the teaching flipped to `[AddFriend]` / `【Instruction】Abandon`. Three notes:
+- The abandon branch is **anchored to a directive-shaped line** (`^…【Instruction】? (Abandon|Give up)`), not a substring test. `放弃` was distinctive enough to test loosely; "give up" is an ordinary English phrase that appears naturally inside a plea ("I'm not going to give up on us"). Fixture covers exactly that case.
+- Its **fallback path was stripping `[内心]…[/内心]` Chinese-only**, so once the preset began teaching `[InnerThoughts]`, a leaked monologue would have been sent to the user as the friend-request message. Now built from the shared bilingual `BLOCK_TAG_INNER` via `closedBlockRegex`.
+- `parseAddFriendResponse` is now exported for the fixture (pure; otherwise only reachable behind a network call).
+
+### 🚨 REGRESSION FOUND WHILE VERIFYING BATCH 3: five regexes silently stopped matching
+Not a translation bug — a **JS escaping bug introduced by this project's own `tool-prompt.ts` phase**, when regex *literals* were converted to `new RegExp(\`template literal\`)` so they could interpolate `FETCH_DIRECTIVE_NAMES` / `ACTION_DIRECTIVE_NAMES`. **The backslashes were not doubled.** In a template literal an unrecognised escape loses its backslash, so `\s` becomes `s` and `[\s\S]` becomes `[sS]`. The regex still compiles and still runs — it just stops matching. Nothing throws.
+
+Broken, and now fixed:
+
+| file | function | effect while broken |
+|---|---|---|
+| `tool-executor.ts:246` | `parseToolFetches` | `[FetchTool:…]` never recognised |
+| `tool-executor.ts:305` | `parseToolCallAt` | tool-call header parsing |
+| `notewall-utils.ts:393` | `parseNoteWallToolCalls` | **every AI-written note/comment fell through to the raw-text fallback** — the whole `[CallTool:发送便签({…})]` string got stored as the note body |
+| `mascot-engine.ts:316,345,513` | protocol start / tool-name peek / display strip | mascot tool directives |
+
+The `tool-executor` pair is the worst of these and is the **exact failure mode CLAUDE.md already warned about** in the tool-prompt entry: `text-tool-protocol.ts` still *strips* the directive from the visible reply, so a broken execution parser means the directive silently vanishes and never runs, with no error anywhere. Confirmed against the baseline commit — `git show 6a067d4:lib/notewall-utils.ts` has the working regex *literal*.
+
+**Guard added to the fixture, and it is worth keeping in every future protocol fixture**: a repo-wide scan of `lib/` and `components/` for `` new RegExp(`…`) `` containing a single backslash before a regex-only metacharacter (`\s \S \d \w \b \[ \] \( \) \. \* \+ \? \^ \$ \{ \} \| \/ \-`), excluding real string escapes (`\\ \u \x \n \t \` `). It found **three sites beyond the two I set out to fix**.
+
+**Fixture (68/68, `_fx-d1b3.mjs`, deleted — recreate from this)**: the note-wall directives are **lifted out of the teaching text itself** (undoing TS-level `\'` / `\\` escaping first), given concrete values, and run through the real `parseNoteWallActionContent` / `parseNoteWallReplyContent`, asserting a genuine parse rather than the raw-text fallback (which is distinguished by `authorName === ""` and `body` containing `CallTool`); a reply to a noteId outside the allow-list is dropped; both taught add-friend directives plus both legacy Chinese forms plus a mixed-alias pair round-trip; leaked `[InnerThoughts]` and `[内心]` are both stripped; "give up" inside a message body does not abandon; `parseToolFetches` / `parseToolCalls` recognise English **and** legacy Chinese directives and the call is removed from the visible text; every entry keeps its `tags`, and `add_friend_prompt` keeps `role: "user"` (it is sent as a turn, not as system context). **Non-vacuity was observed live rather than simulated**: before the regex fix the run was 52/57 with the note assertions failing and the failure output showing the raw directive stored as the note body.
+
 ### Track 1 progress
 `lib/custom-app-creator-guide.ts` — **done**, ~520 strings translated, `npm run build` passes, zero smart quotes / zero CJK escapes. (Agent hit a session usage limit mid-file at ~26%; resumed via `SendMessage` after verifying no smart-quote damage — the completed portion was intact.) Notes:
 - **4 markdown anchor links** re-derived in lockstep with their retitled headings; all 4 verified to resolve to a heading that still exists.

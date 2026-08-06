@@ -310,7 +310,10 @@ function parseSseEvents(buffer: string): { events: string[]; rest: string } {
 }
 
 function findMascotProtocolStart(text: string, fromIndex: number): number {
-    const toolPattern = new RegExp(`\[[^\[\]]{0,160}?(?:${FETCH_DIRECTIVE_NAMES}|${ACTION_DIRECTIVE_NAMES})`, "g");
+    // Backslashes must be DOUBLED inside a template literal -- see the note in
+    // lib/notewall-utils.ts parseNoteWallToolCalls. Undoubled, \[ became a literal "["
+    // opening a character class, and the pattern stopped finding tool directives.
+    const toolPattern = new RegExp(`\\[[^\\[\\]]{0,160}?(?:${FETCH_DIRECTIVE_NAMES}|${ACTION_DIRECTIVE_NAMES})`, "g");
     toolPattern.lastIndex = fromIndex;
     const toolMatch = toolPattern.exec(text);
 
@@ -342,7 +345,7 @@ function getMascotProtocolEnd(text: string, startIndex: number): number | null {
 function peekMascotProtocolToolName(text: string, startIndex: number): string | null {
     const slice = text.slice(startIndex);
     const match = new RegExp(
-        `^\[[""\u201C]?([^""\u201D\]]*?)[""\u201D]?\s*(${FETCH_DIRECTIVE_NAMES}|${ACTION_DIRECTIVE_NAMES})\s*[:：]\s*([^(（\]\n]+)`,
+        `^\\[[""\u201C]?([^""\u201D\\]]*?)[""\u201D]?\\s*(${FETCH_DIRECTIVE_NAMES}|${ACTION_DIRECTIVE_NAMES})\\s*[:：]\\s*([^(（\\]\\n]+)`,
     ).exec(slice);
     if (!match) return null;
     const kind = match[2];
@@ -507,7 +510,7 @@ function buildMascotTextResponse(raw: string): Pick<MascotToolResponse, "reply" 
     const toolFetches = parseToolFetches(raw);
     const { cleanText, toolCalls } = parseToolCalls(raw);
     let displayText = cleanText;
-    displayText = displayText.replace(new RegExp(`\[(?:${FETCH_DIRECTIVE_NAMES}):[^\]]+\]`, "g"), "").trim();
+    displayText = displayText.replace(new RegExp(`\\[(?:${FETCH_DIRECTIVE_NAMES}):[^\\]]+\\]`, "g"), "").trim();
     displayText = displayText.replace(/<(?:think|thinking)>[\s\S]*?<\/(?:think|thinking)>/gi, "").trim();
     const reply = displayText ? displayText.split(/\n{2,}/).map((s) => s.trim()).filter(Boolean) : [];
     return {

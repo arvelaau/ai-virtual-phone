@@ -243,7 +243,8 @@ export type ToolFetch = { actor?: string; name: string };
 export function parseToolFetches(text: string): ToolFetch[] {
     const results: ToolFetch[] = [];
     const pattern = new RegExp(
-        `\[[""\u201C]?([^""\u201D\]]*?)[""\u201D]?\s*(?:${FETCH_DIRECTIVE_NAMES})[:：]\s*([^\]]+?)\s*\]`,
+        // Backslashes DOUBLED: this is a template literal, not a regex literal.
+        `\\[[""\u201C]?([^""\u201D\\]]*?)[""\u201D]?\\s*(?:${FETCH_DIRECTIVE_NAMES})[:：]\\s*([^\\]]+?)\\s*\\]`,
         "g",
     );
     let match: RegExpExecArray | null;
@@ -302,7 +303,7 @@ function parseToolCallAt(text: string, start: number): ParsedToolCallSpan | null
 
     const header = text.slice(start + 1, opener).trim();
     const actionMatch = new RegExp(
-        `^(.*?)\s*(?:${ACTION_DIRECTIVE_NAMES})\s*[:：]\s*(.+)$`,
+        `^(.*?)\\s*(?:${ACTION_DIRECTIVE_NAMES})\\s*[:：]\\s*(.+)$`,
     ).exec(header);
     if (!actionMatch) return null;
 

@@ -389,8 +389,13 @@ function parseJsonLike(content: string): unknown | null {
 
 function parseNoteWallToolCalls(content: string, expectedName: string): Record<string, unknown>[] {
   const calls: Record<string, unknown>[] = [];
+  // NOTE: every backslash here must be DOUBLED. This was a regex LITERAL until the
+  // directive names were centralised into ACTION_DIRECTIVE_NAMES; converting it to a
+  // template literal without doubling turned \s into "s" and [\s\S] into [sS], so the
+  // pattern matched nothing and every AI-written note fell through to the raw-text
+  // fallback -- silently, because that fallback still produces a note.
   const pattern = new RegExp(
-    `\[[""\u201C]?([^""\u201D\]]*?)[""\u201D]?\s*(?:${ACTION_DIRECTIVE_NAMES})[:：]\s*([^(（\]]+?)\s*[（(]([\s\S]*?)[)）]\]`,
+    `\\[[""\u201C]?([^""\u201D\\]]*?)[""\u201D]?\\s*(?:${ACTION_DIRECTIVE_NAMES})[:：]\\s*([^(（\\]]+?)\\s*[（(]([\\s\\S]*?)[)）]\\]`,
     "g",
   );
   let match: RegExpExecArray | null;

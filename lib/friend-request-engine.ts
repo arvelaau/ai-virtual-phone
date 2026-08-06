@@ -14,6 +14,7 @@ import {
 } from "./chat-storage";
 import { generateChatCompletion, flattenCompletionResult } from "./chat-engine";
 import { resolveUserIdentity } from "./settings-storage";
+import { BLOCK_TAG_INNER, closedBlockRegex } from "./block-tags";
 
 export const PENDING_REPLY_PREFIX = "pending_friend_reply_";
 registerDynamicPrefix(PENDING_REPLY_PREFIX);
@@ -187,22 +188,37 @@ async function generateAndStoreFriendRequest(
     }
 }
 
-function parseAddFriendResponse(text: string): { action: "add" | "abandon"; message?: string } {
-    // Match [添加好友]message content
-    const addMatch = text.match(/\[添加好友\]([\s\S]*?)(?:\[\/添加好友\]|$)/);
+// Bilingual, like every other parser in this migration: the preset teaches the English
+// forms, but a model steered by a Chinese persona still reaches for the legacy ones, and
+// this text is never stored as a tag, so both stay accepted indefinitely.
+// Open and close may use different aliases ([AddFriend]…[/添加好友]) — same reasoning as
+// closedBlockRegex in lib/block-tags.ts.
+const ADD_FRIEND_RE = /\[(?:添加好友|AddFriend)\]([\s\S]*?)(?:\[\/(?:添加好友|AddFriend)\]|$)/i;
+// Deliberately anchored to a directive-shaped line rather than a bare substring test:
+// "give up" is an ordinary English phrase that could easily appear inside a plea, whereas
+// 放弃 was distinctive enough on its own. The Chinese branch keeps the old loose test so
+// its behaviour is unchanged.
+const ABANDON_RE = /(?:^|\n)\s*(?:[【\[]\s*(?:指令|Instruction)\s*[】\]]\s*)?(?:Abandon|Give up)\b/i;
+
+// Exported for the protocol fixture: pure, and otherwise only reachable behind a
+// network call inside maybeGenerateFriendRequestReaction.
+export function parseAddFriendResponse(text: string): { action: "add" | "abandon"; message?: string } {
+    const addMatch = text.match(ADD_FRIEND_RE);
     if (addMatch) {
         return { action: "add", message: addMatch[1].trim() };
     }
 
-    // Check for 放弃 keyword
-    if (text.includes("放弃")) {
+    if (text.includes("放弃") || ABANDON_RE.test(text)) {
         return { action: "abandon" };
     }
 
     // Fallback: if the response doesn't match either format, treat entire response as friend request
     // (AI didn't follow format strictly)
     const cleaned = text
-        .replace(/\[内心\][\s\S]*?\[\/内心\]/g, "")
+        // Built from the shared bilingual alias list. This was Chinese-only, so once the
+        // preset started teaching [InnerThoughts] a leaked monologue would have been sent
+        // as the friend-request message itself.
+        .replace(closedBlockRegex(BLOCK_TAG_INNER), "")
         .replace(/\[好感度[^\]]*\]/g, "")
         .replace(/\[[^\]]*值[^\]]*\]/g, "")
         .trim();
