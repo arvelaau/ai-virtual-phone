@@ -122,7 +122,7 @@ const GUIDE_STATE = [
     ["WORLDBOOK_PROMPT", P.WORLDBOOK_PROMPT, false],
     ["PRESET_PROMPT", P.PRESET_PROMPT, false],
     ["GENERAL_PRESET_PROMPT", P.GENERAL_PRESET_PROMPT, false],
-    ["CSS_PROMPT", P.CSS_PROMPT, true],
+    ["CSS_PROMPT", P.CSS_PROMPT, false],
 ];
 // PRESET_PROMPT keeps the 10 ◇ marker names and 5 tool names by design, so it is
 // checked against the same allow-list as everything else rather than a bare CJK test.

@@ -445,7 +445,7 @@ Changing it afterwards:
 · the user wants an entry changed → find its promptIndex (0-based) with 读取预设, then change the single field with 更新预设条目
 · the user wants the preset renamed or re-described → 更新预设信息`;
 
-// ── 通用预设写作规范 ──
+// ── General preset writing spec ──
 
 export const GENERAL_PRESET_PROMPT = `===== General preset writing spec =====
 
@@ -598,97 +598,91 @@ export const PAGE_PROMPTS: Record<string, string> = {
 
 // ── CSS writing spec ──
 
-export const CSS_PROMPT = `===== CSS 样式写作规范 =====
+export const CSS_PROMPT = `===== CSS styling spec =====
 
-你正在帮用户编写自定义 CSS 样式。系统有 6 个 CSS 注入位置：
-· chat_app（整个聊天应用全局）— 影响 联系人列表 + 朋友圈 + 所有聊天室的默认样式
-· chat_session（单独某个聊天室）— 只影响那一个聊天室，优先级高于 chat_app
-· mascot_chat（AI助手自己的聊天室）— 只影响 AI助手这一个聊天室，不需要 sessionName
-· story（剧情模式）— 单个剧情会话
-· music（音乐）— 音乐播放器
-· calendar（日历）— 日历页面
+You are helping the user write custom CSS. The system has 6 CSS injection points:
+· chat_app (the whole chat application) — affects the contacts list, Moments and the default style of every chat room
+· chat_session (one individual chat room) — affects only that room, and outranks chat_app
+· mascot_chat (the AI assistant's own chat room) — affects only that room, and needs no sessionName
+· story (story mode) — a single story session
+· music — the music player
+· calendar — the calendar page
 
-注：global 全局 CSS 暂未对你开放，不要尝试。
+Note: the global CSS location is not available to you. Do not try to use it.
 
-===== ⚠️ chat_app vs chat_session 别搞混 =====
+===== ⚠️ Do not confuse chat_app with chat_session =====
 
-· "和XX的聊天/聊天室" → chat_session（传 sessionName）
-· "你的聊天室/AI助手聊天室/你自己的聊天页" → mascot_chat
-· "所有聊天/默认样式/朋友圈/联系人" → chat_app
-· "聊天背景/聊天主题/改聊天/暗色"等含糊说法 → **先反问**，别凭感觉默认选一个：
-  "想改所有聊天室（chat_app）还是只改某一个（chat_session，比如和小张的）？"
+· "the chat with X" / "X's chat room" → chat_session (pass sessionName)
+· "your chat room" / "the AI assistant's chat" / "your own chat page" → mascot_chat
+· "all chats" / "the default style" / "Moments" / "the contacts list" → chat_app
+· vague phrasings like "the chat background", "the chat theme", "change the chat", "dark mode" → **ask first**, never guess one:
+  "Did you want every chat room changed (chat_app), or just one of them (chat_session, the chat with Zhang say)?"
 
-===== 工作流（只有 3 个工具：读取CSS / 覆写CSS / 清除CSS）=====
-1. 用户说要改样式 → 先调 读取CSS 拿到当前 CSS 内容和可用选择器参考
-2. 在自己脑子里组装"完整的新 CSS"：保留所有要留下的旧规则 + 加入/修改用户要的部分
-3. 调 覆写CSS 一次性写入完整内容
-4. 用户要清空 → 用 清除CSS
+===== Workflow (there are only 3 tools: 读取CSS / 覆写CSS / 清除CSS) =====
+1. The user asks for a style change → call 读取CSS first, to get the current CSS and the selector reference
+2. Assemble the complete new CSS in your head: every old rule that should stay, plus what the user asked to add or change
+3. Call 覆写CSS once, writing the whole thing
+4. The user wants it cleared → 清除CSS
 
-===== 聊天气泡图片素材 =====
-· 如果用户要把图片素材做成聊天气泡，不要用 background-size: 100% 100%、background-size: cover 或直接 background-image 把整张气泡图拉伸到消息上。
-· 应先用图像处理套件的「生成九宫格CSS」拿到九宫格片段，再把返回片段合并进目标 CSS。
-· 如果当前 CSS 已经有图片气泡背景规则，改成九宫格规则时要清掉同一选择器上的 background-image/background-size/background-repeat，避免旧规则覆盖九宫格。
+===== Image assets as chat bubbles =====
+· If the user wants an image asset as a chat bubble, do not stretch the whole bubble image onto the message with background-size: 100% 100%, background-size: cover, or a bare background-image.
+· Use the Image Pack's 生成九宫格CSS first to get the nine-slice fragment, then merge that fragment into the target CSS.
+· If the current CSS already has an image bubble background rule, clear background-image / background-size / background-repeat off that same selector when switching to nine-slice, or the old rule will override it.
 
-要点：
-· 覆写CSS 会**整段替换**，所以拼接时**不要丢任何用户原本想保留的规则**
-· 如果当前 CSS 是空的，直接写新内容就行
-· 单次"读+覆写"两轮搞定，不要反复调用
+Key points:
+· 覆写CSS **replaces the whole thing**, so when assembling, do not drop any rule the user wanted to keep
+· If the current CSS is empty, just write the new content
+· One read plus one overwrite should do it — do not call back and forth
 
-===== 关于 sessionName 参数（chat_session / story 位置） =====
+===== About the sessionName parameter (the chat_session and story locations) =====
 
-修改某个聊天室或剧情会话的 CSS 时，不需要要求用户先跳到对应页面——可以直接传 sessionName 指定。
+To change one chat room's or story session's CSS, the user does not have to navigate there first — pass sessionName directly.
 
-· 用户说"改和某某的聊天背景" → 传 sessionName 为该角色名
-· 用户说"改剧情XX的样式" → 传 sessionName 为剧情标题或主角名
-· 用户当前正在某聊天室/剧情会话页面 → 可以省略 sessionName（自动用当前会话）
-· 用户没说哪个 + 也没在对应页面 → 调 读取CSS({location:"chat_session"}) 不传 sessionName，工具会成功返回所有可改的会话列表，把列表给用户看让 ta 选
+· "change the background of my chat with X" → pass that character's name as sessionName
+· "change the style of the story X" → pass the story title or the lead character's name
+· the user is already on that chat room or story page → sessionName may be omitted (the current session is used)
+· the user did not say which, and is not on such a page → call 读取CSS({location:"chat_session"}) with no sessionName. The tool succeeds and returns the list of sessions you could change; show that list and let them pick
 
-例 1：用户明确："把和小张的聊天室加个暗色背景"
-  → 读取CSS({location:"chat_session", sessionName:"小张"})
-  → 追加CSS({location:"chat_session", sessionName:"小张", css:"..."})
+Example 1 — the user is explicit: "give my chat with Zhang a dark background"
+  → 读取CSS({location:"chat_session", sessionName:"Zhang"})
+  → 覆写CSS({location:"chat_session", sessionName:"Zhang", css:"..."})
 
-例 2：用户模糊："给某个聊天室换个皮肤"
-  → 读取CSS({location:"chat_session"})  ← 不传 sessionName，会返回所有会话列表
-  → 把列表列给用户看：「想改哪个？我这边能改的是：小张、林林、读书群」
-  → 用户："小张"
-  → 继续用 sessionName:"小张" 调读取CSS / 追加CSS
+Example 2 — the user is vague: "reskin one of the chat rooms"
+  → 读取CSS({location:"chat_session"})  ← no sessionName, so the session list comes back
+  → show them the list: "Which one? I can change: Zhang, Lin, the book club group"
+  → user: "Zhang"
+  → carry on with sessionName:"Zhang" for 读取CSS / 覆写CSS
 
-===== 通用结构（所有页面共用）=====
-.page-header（标题栏容器）
-  ├── .page-header-safe-area（安全区占位，⚠️ 不要改高度、不要 display:none）
-  ├── .page-header-content（左/中/右 grid 布局，padding 改这里）
-  │     ├── .page-back-btn（返回按钮）
-  │     ├── .page-title（标题文字）
-  │     └── .page-header-right（右侧按钮区）
-.page-body（内容区）
+===== Shared structure (common to every page) =====
+.page-header (the title bar container)
+  ├── .page-header-safe-area (safe-area spacer — ⚠️ do not change its height, do not display:none it)
+  ├── .page-header-content (a left/centre/right grid; change padding here)
+  │     ├── .page-back-btn (the back button)
+  │     ├── .page-title (the title text)
+  │     └── .page-header-right (the right-hand button area)
+.page-body (the content area)
 
-注意：
-· 想改标题栏的背景/毛玻璃 → 改 .page-header 的 background / backdrop-filter
-· 想调内容间距 → 改 .page-header-content 的 padding
-· **不要**把 .page-header 的 padding 改成 0 或者负值，安全区是结构性占位元素，但行内的边距错误仍会破坏对齐
-· 剧情模式有自己的标题栏 .story-header（结构类似但 class 不同），不要混用
+Note:
+· to change the title bar's background or blur → change .page-header's background / backdrop-filter
+· to adjust the spacing inside → change .page-header-content's padding
+· **do not** set .page-header's padding to 0 or a negative value. The safe area is a structural spacer, but wrong inline spacing still breaks the alignment
+· story mode has its own title bar, .story-header — a similar structure under a different class. Do not mix the two
 
-===== 写作规则 =====
-· 用 :root { --变量名: 值; } 覆盖颜色变量（读取CSS 返回的 reference 里有完整变量名）
-· 用类选择器写规则
-· 不要复述 reference 全文，只取你需要用到的部分
-· 调用工具时，回复文本只用一两句话简短说明做了什么改动，不要把生成的 CSS 也读一遍`;
+===== Writing rules =====
+· Override colour variables with :root { --variable-name: value; } (the reference returned by 读取CSS lists every variable name)
+· Write rules against class selectors
+· Do not restate the whole reference — take only the part you need
+· When calling a tool, keep the reply to a sentence or two about what you changed. Do not read the generated CSS back out`;
 
-// Skill-based prompt mapping — loaded on skill invocation (new system)
-// Note: "preset" uses auto-detection — see mascot-engine.ts resolvePresetPrompt()
-// SKILL_PROMPTS / OUTPUT_FORMAT 已弃用：迁移到了原生工具体系。
-// PROMPT 字符串仍然导出，被 mascot-tools.ts 引用作为各套件的 usageGuide。
-
-// Auto-greetings by page+mode
 export const PAGE_GREETINGS: Record<string, string> = {
-  character_editing: "在编辑角色呢~ 要帮忙吗？",
-  character_viewing: "想改的话得先点编辑按钮哦~",
-  worldbook_editing: "世界书嘛...告诉我你想写什么词条",
-  regex: "又来折腾正则了？说说你想要什么效果",
-  presets_editing: "改预设呢，小心别改炸了~",
-  chat: "在聊天呢~ 有什么需要帮忙的随时说",
-  vn: "剧情不错嘛~ 需要帮你想台词吗？",
-  desktop: "随时待命~ 角色卡、预设、世界书、正则、CSS，你说了算",
+  character_editing: "Editing a character, I see~ want a hand?",
+  character_viewing: "You'll need to hit edit first if you want to change anything~",
+  worldbook_editing: "World books, right... tell me what entry you want to write",
+  regex: "Wrestling with regex again? Tell me what effect you're after",
+  presets_editing: "Editing a preset — careful you don't blow it up~",
+  chat: "Chatting away~ shout if you need anything",
+  vn: "Nice story you've got going~ want help with the lines?",
+  desktop: "Ready when you are~ character cards, presets, world books, regex, CSS — your call",
 };
 
 // ── Desktop widget writing spec ──
