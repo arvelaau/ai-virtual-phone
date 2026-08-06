@@ -6,6 +6,13 @@ import { buildCharacterTimeContext, getSystemTimeZone } from "./character-time";
 
 const TRIM_SENTINEL = "\x00TRIM\x00";
 
+// Used by the {{time}} and {{weekday}} macros, which expand into prompt text only.
+const MACRO_WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MACRO_MONTH_NAMES = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+];
+
 export class MacroEngine {
     localVars: Map<string, string> = new Map();
     globalVars: Map<string, string> = new Map();
@@ -162,13 +169,16 @@ export class MacroEngine {
         if (body === "characterWeekday") return this.characterWeekday || "\x00TRIM\x00";
         if (body === "customStickers") return this.customStickerNames || "\x00TRIM\x00";
         if (body === "stickerExample") return this.customStickerExample || "\x00TRIM\x00";
-        if (body === "musicLocal") return this.musicLocal || "无";
-        if (body === "musicCloud") return this.musicCloud || "无";
+        if (body === "musicLocal") return this.musicLocal || "none";
+        if (body === "musicCloud") return this.musicCloud || "none";
         if (body === "musicOnlineHint") return this.musicOnlineHint;
-        if (body === "currentSchedule" || body === "当前日程") return this.currentSchedule || "无";
-        // Prompt-facing fallbacks, compared nowhere (verified repo-wide). Translated with
-        // vn_output_format so the VN prompt is not half English. The other "暂无" defaults
-        // further down are the same category and are still pending.
+        // "当前日程" stays as a macro ALIAS forever: user-saved presets written before the
+        // migration may still contain {{当前日程}}. The fallback moved to "none", which is
+        // what calendar-storage already returns and what group-chat-engine's NO_SCHEDULE
+        // sentinel is — both consumers accept "none" and the legacy "无".
+        if (body === "currentSchedule" || body === "当前日程") return this.currentSchedule || "none";
+        // Prompt-facing fallbacks, compared nowhere (verified repo-wide). These went first,
+        // alongside vn_output_format; the rest of the family further down followed later.
         if (body === "vnScenes") return this.vnScenes || "none yet";
         if (body === "vnSprites") return this.vnSprites || "none yet";
         if (body === "vnBeats") return this.vnBeats || "\x00TRIM\x00";
@@ -200,55 +210,57 @@ export class MacroEngine {
         if (body === "chapterTitle") return this.chapterTitle || "\x00TRIM\x00";
         if (body === "chapterContent") return this.chapterContent || "\x00TRIM\x00";
         if (body === "annotationHistory") return this.annotationHistory || "\x00TRIM\x00";
-        if (body === "noteWallContext") return this.noteWallContext || "暂无便签";
-        if (body === "diaryEntryContext") return this.diaryEntryContext || "暂无日记";
-        if (body === "xiaohongshuFeedContext") return this.xiaohongshuFeedContext || "暂无小红书笔记";
-        if (body === "xiaohongshuUserPostContext") return this.xiaohongshuUserPostContext || "暂无用户小红书笔记";
-        if (body === "xiaohongshuCommentContext") return this.xiaohongshuCommentContext || "暂无小红书评论上下文";
-        if (body === "xiaohongshuMentionContext") return this.xiaohongshuMentionContext || "暂无小红书@上下文";
+        if (body === "noteWallContext") return this.noteWallContext || "no notes yet";
+        if (body === "diaryEntryContext") return this.diaryEntryContext || "no diary entries yet";
+        if (body === "xiaohongshuFeedContext") return this.xiaohongshuFeedContext || "no Xiaohongshu notes yet";
+        if (body === "xiaohongshuUserPostContext") return this.xiaohongshuUserPostContext || "no Xiaohongshu notes from the user yet";
+        if (body === "xiaohongshuCommentContext") return this.xiaohongshuCommentContext || "no Xiaohongshu comment context yet";
+        if (body === "xiaohongshuMentionContext") return this.xiaohongshuMentionContext || "no Xiaohongshu @ mention context yet";
         if (body === "interviewTheme") return this.interviewTheme || "\x00TRIM\x00";
-        if (body === "interviewHostName") return this.interviewHostName || "主持人";
+        if (body === "interviewHostName") return this.interviewHostName || "the host";
         if (body === "interviewGuests") return this.interviewGuests || this.charName || "\x00TRIM\x00";
         if (body === "interviewGuestCount") return this.interviewGuestCount || "1";
         if (body === "interviewCurrentGuest") return this.interviewCurrentGuest || this.charName || "\x00TRIM\x00";
-        if (body === "interviewOtherGuests") return this.interviewOtherGuests || "无";
+        if (body === "interviewOtherGuests") return this.interviewOtherGuests || "none";
         if (body === "interviewQuestion") return this.interviewQuestion || "\x00TRIM\x00";
-        if (body === "interviewTranscript") return this.interviewTranscript || "（暂无采访实录）";
+        if (body === "interviewTranscript") return this.interviewTranscript || "(no interview transcript yet)";
         if (body === "interviewPhase") return this.interviewPhase || "\x00TRIM\x00";
         if (body === "interviewRound") return this.interviewRound || "1";
         if (body === "interviewUserAnswer") return this.interviewUserAnswer || "\x00TRIM\x00";
-        if (body === "interviewCharacterAnswerHistory") return this.interviewCharacterAnswerHistory || "（暂无）";
+        if (body === "interviewCharacterAnswerHistory") return this.interviewCharacterAnswerHistory || "(none yet)";
         if (body === "cocreateProjectContext") return this.cocreateProjectContext || "\x00TRIM\x00";
         if (body === "cocreateCurrentMode") return this.cocreateCurrentMode || "\x00TRIM\x00";
         if (body === "cocreateCurrentChapter") return this.cocreateCurrentChapter || "\x00TRIM\x00";
-        if (body === "cocreateChapterIndex") return this.cocreateChapterIndex || "暂无章节目录。";
-        if (body === "cocreateArchivedChapterContext") return this.cocreateArchivedChapterContext || "暂无已结束章节。";
-        if (body === "cocreateWriterNotebook") return this.cocreateWriterNotebook || "暂无笔记。";
+        if (body === "cocreateChapterIndex") return this.cocreateChapterIndex || "No chapter index yet.";
+        if (body === "cocreateArchivedChapterContext") return this.cocreateArchivedChapterContext || "No finished chapters yet.";
+        if (body === "cocreateWriterNotebook") return this.cocreateWriterNotebook || "No notes yet.";
 
-        // realCharacterList — 用户创建的其他角色名单（不含当前角色），供朋友圈等场景做"真实角色"判定
+        // realCharacterList — the other characters the user has created (excluding the current one),
+        // used by Moments and similar surfaces to decide what counts as a "real character"
         if (body === "realCharacterList") {
             try {
-                // 延迟 require，避免模块加载期的存储访问与潜在循环依赖
+                // Lazy require: avoids touching storage during module init, and a potential import cycle
                 // eslint-disable-next-line @typescript-eslint/no-require-imports
                 const { loadCharacters } = require("./character-storage") as typeof import("./character-storage");
                 const names = loadCharacters()
                     .map(c => (c.name || "").trim())
                     .filter(n => n && n !== this.charName);
-                return names.length ? names.join("、") : "（无）";
+                return names.length ? names.join(", ") : "(none)";
             } catch {
-                return "（无）";
+                return "(none)";
             }
         }
 
-        // time — shortcut for current datetime like "2026年3月2日15:40"
+        // time — shortcut for the current datetime, e.g. "2 March 2026 15:40".
+        // Verified nothing parses this back: it is expanded into prompt text only.
         if (body === "time") {
             const now = new Date();
-            return `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+            const month = MACRO_MONTH_NAMES[now.getMonth()];
+            return `${now.getDate()} ${month} ${now.getFullYear()} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
         }
 
         if (body === "weekday") {
-            const weekdays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
-            return weekdays[new Date().getDay()];
+            return MACRO_WEEKDAY_NAMES[new Date().getDay()];
         }
 
         // uuid
