@@ -1,14 +1,15 @@
 // lib/mascot-tools.ts
-// Scroll工具系统：7 个套件 + 36 个细粒度工具，支持文本协议和原生协议双轨。
+// Scroll's tool system: 7 packs + 43 fine-grained tools, on a dual text/native protocol.
 //
-// 套件设计（默认只暴露 loader，按需展开）：
-//   - 角色卡套件 (character_pack)     — 3 个子工具
-//   - 世界书套件 (worldbook_pack)     — 5 个子工具
-//   - 预设套件 (preset_pack)          — 5 个子工具
-//   - 正则套件 (regex_pack)           — 5 个子工具
-//   - CSS套件 (css_pack)              — 3 个子工具
-//   - 图像处理套件 (image_pack)       — 10 个子工具
-//   - 导航工具 (navigate)             — 1 个独立工具（直接暴露）
+// Pack design (only the loader is exposed by default; a pack expands on demand):
+//   - Character Card Pack  (character_pack) — 3 sub-tools
+//   - World Book Pack      (worldbook_pack) — 5 sub-tools
+//   - Preset Pack          (preset_pack)    — 9 sub-tools
+//   - Regex Pack           (regex_pack)     — 5 sub-tools
+//   - CSS Styling Pack     (css_pack)       — 3 sub-tools
+//   - Image Pack           (image_pack)     — 10 sub-tools
+//   - Desktop Widget Pack  (widget_pack)    — 7 sub-tools
+//   - Navigation           (navigate)       — 1 standalone tool, always exposed
 
 import type { LlmToolDefinition } from "./llm-provider-adapter";
 import type { ToolCall, ToolResult } from "./tool-executor";
@@ -29,7 +30,7 @@ import {
     type CssAssetUserImageHistoryMessage,
 } from "./css-asset-tools";
 
-// ── 通用类型 ────────────────────────────────────────────
+// ── Shared types ────────────────────────────────────────
 
 export type MascotSubTool = {
     name: string;
@@ -51,17 +52,17 @@ export type MascotToolPackage = {
     usageGuide?: string; // extra writing guide surfaced when the pack is expanded, under the text protocol
 };
 
-// ── 工具参数 Schema 定义 ────────────────────────────────
+// ── Tool parameter schemas ──────────────────────────────
 
-// ── CSS 工具 ──
+// ── CSS tools ──
 const CSS_LOCATION_ENUM = ["chat_app", "chat_session", "mascot_chat", "story", "music", "calendar"];
 
-const SESSION_NAME_DESC = "（仅 location=chat_session 或 story 时使用）会话名：聊天室填角色名/备注名/群名；剧情会话填角色名/标题。不传则用当前页面正在打开的会话；当前页面没打开会话时，工具会返回可选会话列表让你确认。mascot_chat 不需要传。";
+const SESSION_NAME_DESC = "(only used when location=chat_session or story) The session name. For a chat room, give the character name, remark name or group name; for a story session, the character name or title. If omitted, the session currently open on the page is used; when the page has no session open, the tool returns a list of sessions for you to confirm. Not needed for mascot_chat.";
 
 const READ_CSS_SCHEMA = {
     type: "object",
     properties: {
-        location: { type: "string", enum: CSS_LOCATION_ENUM, description: "CSS 位置；不传则返回所有位置的状态概览" },
+        location: { type: "string", enum: CSS_LOCATION_ENUM, description: "The CSS location. If omitted, returns a status overview of every location" },
         sessionName: { type: "string", description: SESSION_NAME_DESC },
     },
     additionalProperties: false,
@@ -70,8 +71,8 @@ const READ_CSS_SCHEMA = {
 const OVERWRITE_CSS_SCHEMA = {
     type: "object",
     properties: {
-        location: { type: "string", enum: CSS_LOCATION_ENUM, description: "CSS 位置" },
-        css: { type: "string", description: "新的完整 CSS 内容，会替换该位置的所有 CSS" },
+        location: { type: "string", enum: CSS_LOCATION_ENUM, description: "The CSS location" },
+        css: { type: "string", description: "The complete new CSS, which replaces all CSS at that location" },
         sessionName: { type: "string", description: SESSION_NAME_DESC },
     },
     required: ["location", "css"],
@@ -81,24 +82,24 @@ const OVERWRITE_CSS_SCHEMA = {
 const CLEAR_CSS_SCHEMA = {
     type: "object",
     properties: {
-        location: { type: "string", enum: CSS_LOCATION_ENUM, description: "CSS 位置" },
+        location: { type: "string", enum: CSS_LOCATION_ENUM, description: "The CSS location" },
         sessionName: { type: "string", description: SESSION_NAME_DESC },
     },
     required: ["location"],
     additionalProperties: false,
 };
 
-// ── 图像处理工具 ──
+// ── Image tools ──
 const IMAGE_ASSET_KIND_ENUM = ["bubble", "icon", "texture", "background", "misc"];
 
 const GENERATE_IMAGE_ASSET_SCHEMA = {
     type: "object",
     properties: {
-        description: { type: "string", description: "要生成的图片素材描述。用于 CSS 的素材应明确用途、颜色和尺寸倾向。制作气泡/图标时，不要要求透明背景；应要求纯白背景/solid white background、不要透明棋盘格/checkerboard、不要示例文字/水印、主体四周留白，生成后再用「去底透明」转透明。制作九宫格气泡时，重要装饰应靠四角或尾部，避开顶部/底部横向中间、左右竖向中间和中心拉伸区。" },
-        kind: { type: "string", enum: IMAGE_ASSET_KIND_ENUM, description: "素材类型：bubble=聊天气泡，icon=图标，texture=纹理，background=背景，misc=其他" },
-        label: { type: "string", description: "素材名称，便于后续读取/裁切/上传" },
-        characterId: { type: "string", description: "可选：使用某角色参考图时传角色 id" },
-        useReferenceImage: { type: "boolean", description: "是否使用角色参考图；不确定不要传 true" },
+        description: { type: "string", description: "A description of the image asset to generate. An asset destined for CSS should state its purpose, colours and rough proportions. For bubbles and icons, do NOT ask for a transparent background; ask for a plain solid white background, no checkerboard, no sample text or watermark, and margin around the subject — then knock the white out afterwards with 去底透明. For a nine-slice bubble, keep the important decoration near the corners or the tail, and away from the top-centre, bottom-centre, left-middle, right-middle and the central stretch area." },
+        kind: { type: "string", enum: IMAGE_ASSET_KIND_ENUM, description: "Asset kind: bubble = chat bubble, icon, texture, background, misc = anything else" },
+        label: { type: "string", description: "A name for the asset, so it is easy to read, crop or upload later" },
+        characterId: { type: "string", description: "Optional: the character id, when using that character's reference image" },
+        useReferenceImage: { type: "boolean", description: "Whether to use the character's reference image. If unsure, do not pass true" },
     },
     required: ["description"],
     additionalProperties: false,
@@ -107,7 +108,7 @@ const GENERATE_IMAGE_ASSET_SCHEMA = {
 const LIST_USER_IMAGES_SCHEMA = {
     type: "object",
     properties: {
-        limit: { type: "number", description: "最多返回多少张最近用户图片，默认 12，最大 20" },
+        limit: { type: "number", description: "How many recent user images to return at most. Default 12, maximum 20" },
     },
     additionalProperties: false,
 };
@@ -115,11 +116,11 @@ const LIST_USER_IMAGES_SCHEMA = {
 const IMPORT_USER_IMAGE_ASSET_SCHEMA = {
     type: "object",
     properties: {
-        sourceImageId: { type: "string", description: "用户图片 id，从「列出用户图片」获取；不传则默认导入 user_image_1" },
-        messageOffset: { type: "number", description: "可选：第几条带图用户消息，0=最近；传 sourceImageId 时忽略" },
-        imageIndex: { type: "number", description: "可选：同一条消息里的第几张图，0=第一张；传 sourceImageId 时忽略" },
-        kind: { type: "string", enum: IMAGE_ASSET_KIND_ENUM, description: "素材类型：bubble=聊天气泡，icon=图标，texture=纹理，background=背景，misc=其他" },
-        label: { type: "string", description: "导入后的素材名称" },
+        sourceImageId: { type: "string", description: "The user image id, obtained from 列出用户图片. If omitted, user_image_1 is imported" },
+        messageOffset: { type: "number", description: "Optional: which image-bearing user message, 0 being the most recent. Ignored when sourceImageId is given" },
+        imageIndex: { type: "number", description: "Optional: which image within that message, 0 being the first. Ignored when sourceImageId is given" },
+        kind: { type: "string", enum: IMAGE_ASSET_KIND_ENUM, description: "Asset kind: bubble = chat bubble, icon, texture, background, misc = anything else" },
+        label: { type: "string", description: "The asset name to use after import" },
     },
     additionalProperties: false,
 };
@@ -127,18 +128,18 @@ const IMPORT_USER_IMAGE_ASSET_SCHEMA = {
 const CROP_IMAGE_ASSET_SCHEMA = {
     type: "object",
     properties: {
-        assetId: { type: "string", description: "素材 id，从「生成图像素材」或「列出读取素材」结果获取" },
-        cropMode: { type: "string", enum: ["coordinates", "auto_trim"], description: "coordinates=按坐标裁切；auto_trim=自动裁掉透明/近似纯色边缘" },
-        unit: { type: "string", enum: ["pixel", "percent"], description: "坐标单位；默认 pixel。percent 表示 0-100 百分比" },
-        x: { type: "number", description: "裁切框左上角 x；coordinates 模式使用" },
-        y: { type: "number", description: "裁切框左上角 y；coordinates 模式使用" },
-        width: { type: "number", description: "裁切框宽度；coordinates 模式使用" },
-        height: { type: "number", description: "裁切框高度；coordinates 模式使用" },
-        padding: { type: "number", description: "裁切框额外保留边距，单位像素；auto_trim 时常用 2-12" },
-        tolerance: { type: "number", description: "auto_trim 的边缘容差，0-255；默认 18，背景边缘不干净时可提高" },
-        outputWidth: { type: "number", description: "可选：输出宽度。不传则使用裁切宽度" },
-        outputHeight: { type: "number", description: "可选：输出高度。不传则使用裁切高度" },
-        label: { type: "string", description: "新素材名称" },
+        assetId: { type: "string", description: "The asset id, taken from the result of 生成图像素材 or 列出读取素材" },
+        cropMode: { type: "string", enum: ["coordinates", "auto_trim"], description: "coordinates = crop by coordinates; auto_trim = automatically trim transparent or near-flat edges" },
+        unit: { type: "string", enum: ["pixel", "percent"], description: "Coordinate unit, default pixel. percent means 0-100" },
+        x: { type: "number", description: "Top-left x of the crop box; used in coordinates mode" },
+        y: { type: "number", description: "Top-left y of the crop box; used in coordinates mode" },
+        width: { type: "number", description: "Width of the crop box; used in coordinates mode" },
+        height: { type: "number", description: "Height of the crop box; used in coordinates mode" },
+        padding: { type: "number", description: "Extra margin to keep around the crop, in pixels. 2-12 is typical for auto_trim" },
+        tolerance: { type: "number", description: "Edge tolerance for auto_trim, 0-255. Default 18; raise it when the background edge is not clean" },
+        outputWidth: { type: "number", description: "Optional output width. Defaults to the cropped width" },
+        outputHeight: { type: "number", description: "Optional output height. Defaults to the cropped height" },
+        label: { type: "string", description: "A name for the new asset" },
     },
     required: ["assetId"],
     additionalProperties: false,
@@ -147,12 +148,12 @@ const CROP_IMAGE_ASSET_SCHEMA = {
 const REMOVE_IMAGE_BACKGROUND_SCHEMA = {
     type: "object",
     properties: {
-        assetId: { type: "string", description: "素材 id" },
-        tolerance: { type: "number", description: "底色容差，0-255；白底/浅灰底默认 36，仍有白边可提高到 45-70" },
-        feather: { type: "number", description: "边缘羽化半径，0-4；默认 2，用来减轻白边锯齿" },
-        backgroundColor: { type: "string", description: "可选：指定要去掉的底色，例如 #ffffff；不传则自动取四角平均色" },
-        format: { type: "string", enum: ["png", "webp"], description: "输出格式；默认 png，保留透明度" },
-        label: { type: "string", description: "新素材名称" },
+        assetId: { type: "string", description: "The asset id" },
+        tolerance: { type: "number", description: "Background tolerance, 0-255. Default 36 for a white or light grey ground; raise to 45-70 if a white fringe remains" },
+        feather: { type: "number", description: "Edge feather radius, 0-4. Default 2, to soften jagged white fringing" },
+        backgroundColor: { type: "string", description: "Optional: the background colour to remove, e.g. #ffffff. If omitted, the average of the four corners is used" },
+        format: { type: "string", enum: ["png", "webp"], description: "Output format. Default png, which keeps transparency" },
+        label: { type: "string", description: "A name for the new asset" },
     },
     required: ["assetId"],
     additionalProperties: false,
@@ -161,12 +162,12 @@ const REMOVE_IMAGE_BACKGROUND_SCHEMA = {
 const CONVERT_IMAGE_ASSET_SCHEMA = {
     type: "object",
     properties: {
-        assetId: { type: "string", description: "素材 id" },
-        format: { type: "string", enum: ["webp", "png", "jpeg"], description: "输出格式；CSS 素材优先 webp" },
-        quality: { type: "number", description: "图片质量，0.1-1；webp/jpeg 有效，默认 0.82" },
-        maxWidth: { type: "number", description: "最大宽度；不传则不放大也不缩小" },
-        maxHeight: { type: "number", description: "最大高度；不传则不放大也不缩小" },
-        label: { type: "string", description: "新素材名称" },
+        assetId: { type: "string", description: "The asset id" },
+        format: { type: "string", enum: ["webp", "png", "jpeg"], description: "Output format. Prefer webp for CSS assets" },
+        quality: { type: "number", description: "Image quality, 0.1-1. Applies to webp and jpeg; default 0.82" },
+        maxWidth: { type: "number", description: "Maximum width. If omitted the image is neither enlarged nor shrunk" },
+        maxHeight: { type: "number", description: "Maximum height. If omitted the image is neither enlarged nor shrunk" },
+        label: { type: "string", description: "A name for the new asset" },
     },
     required: ["assetId"],
     additionalProperties: false,
@@ -175,23 +176,23 @@ const CONVERT_IMAGE_ASSET_SCHEMA = {
 const NINE_SLICE_CSS_SCHEMA = {
     type: "object",
     properties: {
-        assetId: { type: "string", description: "素材 id；如果素材已上传图床，会自动使用 publicUrl" },
-        url: { type: "string", description: "可选：直接传图片 URL；传了 url 时可不传 assetId" },
-        selector: { type: "string", description: "要应用九宫格的 CSS 选择器，默认 .chat-bubble-role-assistant；用户气泡通常用 .chat-bubble-role-user" },
-        sliceTop: { type: "number", description: "九宫格上切片像素；必须使用「校准九宫格」返回值" },
-        sliceRight: { type: "number", description: "九宫格右切片像素；必须使用「校准九宫格」返回值" },
-        sliceBottom: { type: "number", description: "九宫格下切片像素；必须使用「校准九宫格」返回值" },
-        sliceLeft: { type: "number", description: "九宫格左切片像素；必须使用「校准九宫格」返回值" },
-        displayTop: { type: "number", description: "实际显示的上边区宽度，单位 CSS 像素；必须使用「校准九宫格」返回值，不是源图 slice" },
-        displayRight: { type: "number", description: "实际显示的右边区宽度，单位 CSS 像素；通常 12-48" },
-        displayBottom: { type: "number", description: "实际显示的下边区宽度，单位 CSS 像素；通常 14-56" },
-        displayLeft: { type: "number", description: "实际显示的左边区宽度，单位 CSS 像素；通常 12-48" },
-        paddingTop: { type: "number", description: "文字离气泡外框顶部的留白，独立于九宫格保护区；文字可以进入保护区，必须使用「校准九宫格」返回值" },
-        paddingRight: { type: "number", description: "文字离气泡外框右侧的留白，独立于九宫格保护区；文字可以进入保护区，必须使用「校准九宫格」返回值" },
-        paddingBottom: { type: "number", description: "文字离气泡外框底部的留白，独立于九宫格保护区；文字可以进入保护区，必须使用「校准九宫格」返回值" },
-        paddingLeft: { type: "number", description: "文字离气泡外框左侧的留白，独立于九宫格保护区；文字可以进入保护区，必须使用「校准九宫格」返回值" },
-        minWidth: { type: "number", description: "左右保护区最低宽度；有「校准九宫格」返回值时必须照传，用来防止左右保护区互相挤压" },
-        minHeight: { type: "number", description: "上下保护区最低高度；有「校准九宫格」返回值时必须照传，用来防止上下保护区互相挤压" },
+        assetId: { type: "string", description: "The asset id. If the asset has already been uploaded to the image host, its publicUrl is used automatically" },
+        url: { type: "string", description: "Optional: pass an image URL directly. When url is given, assetId may be omitted" },
+        selector: { type: "string", description: "The CSS selector to apply the nine-slice to. Default .chat-bubble-role-assistant; the user's bubble is usually .chat-bubble-role-user" },
+        sliceTop: { type: "number", description: "Top slice in pixels. Must come from 校准九宫格" },
+        sliceRight: { type: "number", description: "Right slice in pixels. Must come from 校准九宫格" },
+        sliceBottom: { type: "number", description: "Bottom slice in pixels. Must come from 校准九宫格" },
+        sliceLeft: { type: "number", description: "Left slice in pixels. Must come from 校准九宫格" },
+        displayTop: { type: "number", description: "The rendered width of the top band in CSS pixels. Must come from 校准九宫格 — it is not the source slice" },
+        displayRight: { type: "number", description: "The rendered width of the right band in CSS pixels; typically 12-48" },
+        displayBottom: { type: "number", description: "The rendered width of the bottom band in CSS pixels; typically 14-56" },
+        displayLeft: { type: "number", description: "The rendered width of the left band in CSS pixels; typically 12-48" },
+        paddingTop: { type: "number", description: "Padding between the text and the top edge of the bubble. Independent of the nine-slice protected zone — text may enter it. Must come from 校准九宫格" },
+        paddingRight: { type: "number", description: "Padding between the text and the right edge of the bubble. Independent of the nine-slice protected zone — text may enter it. Must come from 校准九宫格" },
+        paddingBottom: { type: "number", description: "Padding between the text and the bottom edge of the bubble. Independent of the nine-slice protected zone — text may enter it. Must come from 校准九宫格" },
+        paddingLeft: { type: "number", description: "Padding between the text and the left edge of the bubble. Independent of the nine-slice protected zone — text may enter it. Must come from 校准九宫格" },
+        minWidth: { type: "number", description: "Minimum width of the left and right protected zones. Pass the value from 校准九宫格 when you have one; it stops the two sides squeezing each other" },
+        minHeight: { type: "number", description: "Minimum height of the top and bottom protected zones. Pass the value from 校准九宫格 when you have one; it stops the two sides squeezing each other" },
     },
     required: [
         "sliceTop",
@@ -213,8 +214,8 @@ const NINE_SLICE_CSS_SCHEMA = {
 const CALIBRATE_NINE_SLICE_SCHEMA = {
     type: "object",
     properties: {
-        assetId: { type: "string", description: "要校准九宫格切线的素材 id" },
-        selector: { type: "string", description: "要应用九宫格的 CSS 选择器，默认 .chat-bubble-role-assistant；用户气泡通常用 .chat-bubble-role-user" },
+        assetId: { type: "string", description: "The id of the asset whose nine-slice guides are being calibrated" },
+        selector: { type: "string", description: "The CSS selector to apply the nine-slice to. Default .chat-bubble-role-assistant; the user's bubble is usually .chat-bubble-role-user" },
     },
     required: ["assetId"],
     additionalProperties: false,
@@ -223,7 +224,7 @@ const CALIBRATE_NINE_SLICE_SCHEMA = {
 const READ_IMAGE_ASSET_SCHEMA = {
     type: "object",
     properties: {
-        assetId: { type: "string", description: "可选：素材 id。不传则列出最近 20 个素材" },
+        assetId: { type: "string", description: "Optional asset id. If omitted, the 20 most recent assets are listed" },
     },
     additionalProperties: false,
 };
@@ -231,19 +232,19 @@ const READ_IMAGE_ASSET_SCHEMA = {
 const UPLOAD_IMAGE_ASSET_SCHEMA = {
     type: "object",
     properties: {
-        assetId: { type: "string", description: "素材 id" },
-        filename: { type: "string", description: "上传文件名，可选" },
-        expirationSeconds: { type: "number", description: "ImgBB 过期秒数；0=永久，60-15552000=定时过期。不传则用设置页默认值" },
+        assetId: { type: "string", description: "The asset id" },
+        filename: { type: "string", description: "Optional upload filename" },
+        expirationSeconds: { type: "number", description: "ImgBB expiry in seconds. 0 = never, 60-15552000 = timed expiry. Defaults to the value configured in settings" },
     },
     required: ["assetId"],
     additionalProperties: false,
 };
 
-// ── 角色工具 ──
+// ── Character tools ──
 const READ_CHARACTER_SCHEMA = {
     type: "object",
     properties: {
-        name: { type: "string", description: "角色名；不传则列出所有角色" },
+        name: { type: "string", description: "The character name. If omitted, every character is listed" },
     },
     additionalProperties: false,
 };
@@ -251,9 +252,9 @@ const READ_CHARACTER_SCHEMA = {
 const CREATE_CHARACTER_SCHEMA = {
     type: "object",
     properties: {
-        name: { type: "string", description: "角色全名" },
-        persona: { type: "string", description: "完整人设（7 段式 markdown）" },
-        personality: { type: "string", description: "性格简介（80-200 字）" },
+        name: { type: "string", description: "The character's full name" },
+        persona: { type: "string", description: "The complete persona (7-section markdown)" },
+        personality: { type: "string", description: "A short personality summary (roughly 60-150 words)" },
     },
     required: ["name", "persona", "personality"],
     additionalProperties: false,
@@ -262,19 +263,19 @@ const CREATE_CHARACTER_SCHEMA = {
 const UPDATE_CHARACTER_FIELD_SCHEMA = {
     type: "object",
     properties: {
-        name: { type: "string", description: "要修改的角色名" },
-        field: { type: "string", enum: ["name", "persona", "personality"], description: "字段名" },
-        value: { type: "string", description: "新值" },
+        name: { type: "string", description: "The name of the character to change" },
+        field: { type: "string", enum: ["name", "persona", "personality"], description: "The field name" },
+        value: { type: "string", description: "The new value" },
     },
     required: ["name", "field", "value"],
     additionalProperties: false,
 };
 
-// ── 世界书工具 ──
+// ── World book tools ──
 const LIST_WORLDBOOKS_SCHEMA = {
     type: "object",
     properties: {
-        name: { type: "string", description: "世界书名；不传则列出所有世界书" },
+        name: { type: "string", description: "The world book name. If omitted, every world book is listed" },
     },
     additionalProperties: false,
 };
@@ -282,8 +283,8 @@ const LIST_WORLDBOOKS_SCHEMA = {
 const READ_WORLDBOOK_ENTRY_SCHEMA = {
     type: "object",
     properties: {
-        worldbook: { type: "string", description: "世界书名" },
-        entryComment: { type: "string", description: "词条的 comment（备注名）" },
+        worldbook: { type: "string", description: "The world book name" },
+        entryComment: { type: "string", description: "The entry's comment, i.e. its remark name" },
     },
     required: ["worldbook", "entryComment"],
     additionalProperties: false,
@@ -292,12 +293,12 @@ const READ_WORLDBOOK_ENTRY_SCHEMA = {
 const CREATE_WORLDBOOK_ENTRY_SCHEMA = {
     type: "object",
     properties: {
-        worldbook: { type: "string", description: "世界书名；如果不存在会自动创建" },
-        comment: { type: "string", description: "词条备注（用户可见的标签）" },
-        key: { type: "string", description: "触发关键词，多个用逗号分隔" },
-        content: { type: "string", description: "词条内容（推荐用 XML 标签包裹）" },
-        constant: { type: "boolean", description: "是否常驻（true=每次都注入，false=关键词触发）" },
-        position: { type: "string", enum: ["0", "1"], description: "0=角色描述前，1=角色描述后" },
+        worldbook: { type: "string", description: "The world book name. It is created automatically if it does not exist" },
+        comment: { type: "string", description: "The entry's remark — the label the user sees" },
+        key: { type: "string", description: "Trigger keywords, comma-separated" },
+        content: { type: "string", description: "The entry content (wrapping it in XML tags is recommended)" },
+        constant: { type: "boolean", description: "Whether the entry is always active (true = injected every time, false = triggered by keyword)" },
+        position: { type: "string", enum: ["0", "1"], description: "0 = before the character description, 1 = after it" },
     },
     required: ["worldbook", "comment", "key", "content"],
     additionalProperties: false,
@@ -306,10 +307,10 @@ const CREATE_WORLDBOOK_ENTRY_SCHEMA = {
 const UPDATE_WORLDBOOK_ENTRY_SCHEMA = {
     type: "object",
     properties: {
-        worldbook: { type: "string", description: "世界书名" },
-        entryUid: { type: "string", description: "词条 uid（从读取/列出结果里获取）" },
-        field: { type: "string", enum: ["key", "content", "comment", "constant", "position"], description: "要更新的字段" },
-        value: { type: "string", description: "新值（boolean 字段用 'true'/'false'，position 用 '0'/'1'）" },
+        worldbook: { type: "string", description: "The world book name" },
+        entryUid: { type: "string", description: "The entry uid, taken from a read or list result" },
+        field: { type: "string", enum: ["key", "content", "comment", "constant", "position"], description: "The field to update" },
+        value: { type: "string", description: "The new value. Use 'true'/'false' for boolean fields and '0'/'1' for position" },
     },
     required: ["worldbook", "entryUid", "field", "value"],
     additionalProperties: false,
@@ -318,14 +319,14 @@ const UPDATE_WORLDBOOK_ENTRY_SCHEMA = {
 const DELETE_WORLDBOOK_ENTRY_SCHEMA = {
     type: "object",
     properties: {
-        worldbook: { type: "string", description: "世界书名" },
-        entryUid: { type: "string", description: "词条 uid" },
+        worldbook: { type: "string", description: "The world book name" },
+        entryUid: { type: "string", description: "The entry uid" },
     },
     required: ["worldbook", "entryUid"],
     additionalProperties: false,
 };
 
-// ── 预设工具 ──
+// ── Preset tools ──
 const LIST_PRESETS_SCHEMA = {
     type: "object",
     properties: {},
@@ -335,7 +336,7 @@ const LIST_PRESETS_SCHEMA = {
 const READ_PRESET_SCHEMA = {
     type: "object",
     properties: {
-        name: { type: "string", description: "预设名" },
+        name: { type: "string", description: "The preset name" },
     },
     required: ["name"],
     additionalProperties: false,
@@ -344,8 +345,8 @@ const READ_PRESET_SCHEMA = {
 const READ_PRESET_PROMPT_SCHEMA = {
     type: "object",
     properties: {
-        presetId: { type: "string", description: "预设 id（从读取预设结果获取）" },
-        promptIndex: { type: "number", description: "条目索引（从读取预设结果获取，从 0 开始）" },
+        presetId: { type: "string", description: "The preset id, taken from a read-preset result" },
+        promptIndex: { type: "number", description: "The entry index, taken from a read-preset result; 0-based" },
     },
     required: ["presetId", "promptIndex"],
     additionalProperties: false,
@@ -354,9 +355,9 @@ const READ_PRESET_PROMPT_SCHEMA = {
 const DUPLICATE_PRESET_SCHEMA = {
     type: "object",
     properties: {
-        sourceName: { type: "string", description: "要复制的源预设名" },
-        newName: { type: "string", description: "副本的新名字" },
-        newDescription: { type: "string", description: "副本描述（可选，默认沿用源预设的描述）" },
+        sourceName: { type: "string", description: "The name of the preset to copy" },
+        newName: { type: "string", description: "The new name for the copy" },
+        newDescription: { type: "string", description: "A description for the copy (optional; defaults to the source preset's description)" },
     },
     required: ["sourceName", "newName"],
     additionalProperties: false,
@@ -365,17 +366,17 @@ const DUPLICATE_PRESET_SCHEMA = {
 const CREATE_STORY_PRESET_SCHEMA = {
     type: "object",
     properties: {
-        name: { type: "string", description: "预设名" },
-        description: { type: "string", description: "预设描述" },
+        name: { type: "string", description: "The preset name" },
+        description: { type: "string", description: "The preset description" },
         prompts: {
             type: "array",
-            description: "Prompt 列表，按板块顺序排列。每条至少有 name；marker 条目（◇ 开头）只需 name；普通条目传 name+content；assistant 角色额外加 role:'assistant'",
+            description: "The prompt list, in block order. Every entry needs at least a name; a marker entry (one starting with ◇) needs only a name; an ordinary entry takes name plus content; an assistant-role entry also takes role:'assistant'",
             items: {
                 type: "object",
                 properties: {
-                    name: { type: "string", description: "Prompt 名（◇ 开头会被识别为 marker）" },
+                    name: { type: "string", description: "The prompt name (one starting with ◇ is treated as a marker)" },
                     role: { type: "string", enum: ["system", "user", "assistant"] },
-                    content: { type: "string", description: "Prompt 内容；marker 无需 content" },
+                    content: { type: "string", description: "The prompt content; a marker needs none" },
                 },
                 required: ["name"],
             },
@@ -388,8 +389,8 @@ const CREATE_STORY_PRESET_SCHEMA = {
 const CLONE_BUILTIN_PRESET_SCHEMA = {
     type: "object",
     properties: {
-        name: { type: "string", description: "新预设名" },
-        description: { type: "string", description: "新预设描述（可选，默认空）" },
+        name: { type: "string", description: "The new preset name" },
+        description: { type: "string", description: "A description for the new preset (optional; empty by default)" },
     },
     required: ["name"],
     additionalProperties: false,
@@ -398,10 +399,10 @@ const CLONE_BUILTIN_PRESET_SCHEMA = {
 const UPDATE_PRESET_PROMPT_SCHEMA = {
     type: "object",
     properties: {
-        presetId: { type: "string", description: "预设 id" },
-        promptIndex: { type: "number", description: "Prompt 在数组中的索引（从 0 开始）" },
-        field: { type: "string", enum: ["name", "role", "content", "identifier"], description: "要更新的字段" },
-        value: { type: "string", description: "新值" },
+        presetId: { type: "string", description: "The preset id" },
+        promptIndex: { type: "number", description: "The prompt's index in the array; 0-based" },
+        field: { type: "string", enum: ["name", "role", "content", "identifier"], description: "The field to update" },
+        value: { type: "string", description: "The new value" },
     },
     required: ["presetId", "promptIndex", "field", "value"],
     additionalProperties: false,
@@ -410,16 +411,16 @@ const UPDATE_PRESET_PROMPT_SCHEMA = {
 const ADD_PRESET_PROMPT_SCHEMA = {
     type: "object",
     properties: {
-        presetId: { type: "string", description: "预设 id（从读取预设结果获取）" },
-        name: { type: "string", description: "Prompt 名；◇ 开头会被识别为 marker 并清空 content" },
-        role: { type: "string", enum: ["system", "user", "assistant"], description: "角色，默认 system" },
-        content: { type: "string", description: "Prompt 内容；marker 条目可不传" },
-        identifier: { type: "string", description: "可选 identifier；不传则自动生成且避开重复" },
-        insertAfterIndex: { type: "number", description: "可选：插到该 promptIndex 后；不传则追加到末尾" },
-        enabled: { type: "boolean", description: "是否启用，默认 true" },
+        presetId: { type: "string", description: "The preset id, taken from a read-preset result" },
+        name: { type: "string", description: "The prompt name. One starting with ◇ is treated as a marker and its content is cleared" },
+        role: { type: "string", enum: ["system", "user", "assistant"], description: "The role; system by default" },
+        content: { type: "string", description: "The prompt content; a marker entry may omit it" },
+        identifier: { type: "string", description: "An optional identifier. If omitted, one is generated automatically and de-duplicated" },
+        insertAfterIndex: { type: "number", description: "Optional: insert after this promptIndex. If omitted, it is appended at the end" },
+        enabled: { type: "boolean", description: "Whether it is enabled; true by default" },
         tags: {
             type: "array",
-            description: "可选：通用预设的适用标签数组；不确定不要传",
+            description: "Optional: the tag array a general preset applies to. If unsure, do not pass it",
             items: { type: "string" },
         },
     },
@@ -430,15 +431,15 @@ const ADD_PRESET_PROMPT_SCHEMA = {
 const UPDATE_PRESET_INFO_SCHEMA = {
     type: "object",
     properties: {
-        presetId: { type: "string", description: "预设 id" },
-        name: { type: "string", description: "新的预设名（可选）" },
-        description: { type: "string", description: "新的预设描述（可选）" },
+        presetId: { type: "string", description: "The preset id" },
+        name: { type: "string", description: "A new preset name (optional)" },
+        description: { type: "string", description: "A new preset description (optional)" },
     },
     required: ["presetId"],
     additionalProperties: false,
 };
 
-// ── 正则工具 ──
+// ── Regex tools ──
 const LIST_REGEX_GROUPS_SCHEMA = {
     type: "object",
     properties: {},
@@ -448,7 +449,7 @@ const LIST_REGEX_GROUPS_SCHEMA = {
 const READ_REGEX_GROUP_SCHEMA = {
     type: "object",
     properties: {
-        name: { type: "string", description: "正则组名" },
+        name: { type: "string", description: "The regex group name" },
     },
     required: ["name"],
     additionalProperties: false,
@@ -457,19 +458,19 @@ const READ_REGEX_GROUP_SCHEMA = {
 const REGEX_RULE_OBJ = {
     type: "object",
     properties: {
-        scriptName: { type: "string", description: "规则名" },
-        findRegex: { type: "string", description: "查找正则（/pattern/flags 格式）" },
-        replaceString: { type: "string", description: "替换字符串（支持 $0/$1 等捕获组）" },
+        scriptName: { type: "string", description: "The rule name" },
+        findRegex: { type: "string", description: "The find pattern, in /pattern/flags form" },
+        replaceString: { type: "string", description: "The replacement string; $0, $1 and other capture groups are supported" },
         tags: {
             type: "array",
             items: { type: "string", enum: ["chat", "text", "group_chat", "story", "offline"] },
-            description: "必填适用范围，四选一：聊天=[\"chat\",\"text\"]；群聊=[\"group_chat\",\"text\"]；剧情/故事模式=[\"story\"]；线下=[\"offline\"]。不要留空。",
+            description: "Required scope, one of four: chat = [\"chat\",\"text\"]; group chat = [\"group_chat\",\"text\"]; story mode = [\"story\"]; offline = [\"offline\"]. Never leave it empty.",
         },
-        placement: { type: "array", items: { type: "number" }, description: "[1]=输入,[2]=输出(聊天/群聊/线下的状态栏·内心·状态值都在这),[5]=世界书,[6]=思维链/推理(仅剧情·漫卷模式获取,聊天等用不到)" },
+        placement: { type: "array", items: { type: "number" }, description: "[1] = input, [2] = output (the status panel, inner thoughts and state values in chat/group/offline all live here), [5] = world book, [6] = chain of thought / reasoning (only story and visual novel mode fetch one; chat and the rest never do)" },
         disabled: { type: "boolean" },
-        markdownOnly: { type: "boolean", description: "仅显示层应用，不影响存储" },
-        promptOnly: { type: "boolean", description: "仅 prompt 应用，不影响显示" },
-        substituteRegex: { type: "string", enum: ["0", "1", "2"], description: "0=不替换 1=原始替换 2=转义后替换宏（如{{user}}）" },
+        markdownOnly: { type: "boolean", description: "Applies at the display layer only; what is stored is unaffected" },
+        promptOnly: { type: "boolean", description: "Applies when assembling the prompt only; the display is unaffected" },
+        substituteRegex: { type: "string", enum: ["0", "1", "2"], description: "0 = no substitution, 1 = raw substitution, 2 = escaped macro substitution (for things like {{user}})" },
     },
     required: ["scriptName", "findRegex", "replaceString"],
 };
@@ -477,8 +478,8 @@ const REGEX_RULE_OBJ = {
 const CREATE_REGEX_GROUP_SCHEMA = {
     type: "object",
     properties: {
-        name: { type: "string", description: "正则组名" },
-        rules: { type: "array", items: REGEX_RULE_OBJ, description: "规则列表" },
+        name: { type: "string", description: "The regex group name" },
+        rules: { type: "array", items: REGEX_RULE_OBJ, description: "The rule list" },
     },
     required: ["name", "rules"],
     additionalProperties: false,
@@ -487,7 +488,7 @@ const CREATE_REGEX_GROUP_SCHEMA = {
 const ADD_REGEX_RULE_SCHEMA = {
     type: "object",
     properties: {
-        groupName: { type: "string", description: "正则组名" },
+        groupName: { type: "string", description: "The regex group name" },
         rule: REGEX_RULE_OBJ,
     },
     required: ["groupName", "rule"],
@@ -497,41 +498,41 @@ const ADD_REGEX_RULE_SCHEMA = {
 const UPDATE_REGEX_RULE_SCHEMA = {
     type: "object",
     properties: {
-        groupName: { type: "string", description: "正则组名" },
-        ruleId: { type: "string", description: "规则 id" },
+        groupName: { type: "string", description: "The regex group name" },
+        ruleId: { type: "string", description: "The rule id" },
         updates: { ...REGEX_RULE_OBJ, required: [] as string[] },
     },
     required: ["groupName", "ruleId", "updates"],
     additionalProperties: false,
 };
 
-// ── 导航工具 ──
+// ── Navigation tool ──
 const NAVIGATE_SCHEMA = {
     type: "object",
     properties: {
-        page: { type: "string", enum: ["chat", "characters", "story", "vnmode", "moments", "calendar", "music", "resources", "settings"], description: "页面名" },
-        subpage: { type: "string", enum: ["presets", "worldbook", "regex", "api", "voice", "binding", "data", "identity"], description: "子页面（仅 settings 下有效）" },
+        page: { type: "string", enum: ["chat", "characters", "story", "vnmode", "moments", "calendar", "music", "resources", "settings"], description: "The page name" },
+        subpage: { type: "string", enum: ["presets", "worldbook", "regex", "api", "voice", "binding", "data", "identity"], description: "The sub-page; only meaningful under settings" },
     },
     required: ["page"],
     additionalProperties: false,
 };
 
 const IMAGE_ASSET_USAGE_GUIDE = [
-    "图像处理套件用于给 CSS 主题制作可复用素材。推荐工作流：",
-    "1. 先用「生成图像素材」得到素材 id 和预览。制作气泡/图标时，生图提示词里要写 plain solid white background / no checkerboard background / no sample text / no watermark / subject centered with margin，不要写 transparent background。",
-    "2. 制作九宫格气泡时，生图提示词必须要求 decorative elements only near corners or the speech-tail area / keep the center and middle edges clean / avoid decorations in the top-center, bottom-center, left-middle, right-middle, and center stretch areas。猫头、蝴蝶结、花、爪子等大装饰不要放在横向或竖向中间。",
-    "3. Image 2 这类模型常会把“透明背景”画成伪透明棋盘格：用白底生成后，再用「去底透明」把外缘连通的白底转透明，最后用「裁切素材」裁掉多余画布。",
-    "4. 如果用户上传了现成素材，先用「列出用户图片」确认 sourceImageId，再用「导入用户图片为素材」导入素材库。",
-    "5. 气泡/图标如果有多余边缘，优先用 cropMode=auto_trim 的「裁切素材」；结果不理想再按坐标微调。",
-    "6. 写入 CSS 前先用「压缩转换素材」转 WebP，并限制尺寸，减少主题加载负担。",
-    "7. 只有用户允许图床上传且设置了 ImgBB key 后，才用「上传图床」拿公开 URL。",
-    "8. 图片气泡不允许自动猜九宫格参数。需要图片气泡时，先调用「校准九宫格」让用户在弹窗里手动拖切线；校准结果会返回 slice/display/padding 和 CSS。",
-    "9. 「生成九宫格CSS」只接受已经校准好的完整参数；缺参数时会失败。不要用系统默认比例、不要自己瞎猜参数。",
-    "10. 不要用 background-size: 100% 100% 或 background-size: cover 直接拉伸整张气泡图。",
-    "11. 上传成功后只会得到图床URL；不要把 API Key 或 delete_url 写入 CSS。",
+    "The Image Pack makes reusable assets for CSS themes. Recommended workflow:",
+    "1. Start with 生成图像素材 to get an asset id and a preview. For bubbles and icons the generation prompt must say plain solid white background / no checkerboard background / no sample text / no watermark / subject centered with margin — never write transparent background.",
+    "2. For a nine-slice bubble the generation prompt must require decorative elements only near corners or the speech-tail area / keep the center and middle edges clean / avoid decorations in the top-center, bottom-center, left-middle, right-middle, and center stretch areas. Large decorations such as a cat head, bow, flower or paw must not sit in the horizontal or vertical middle.",
+    "3. Models like Image 2 often draw a \"transparent background\" as a fake checkerboard. Generate on white, then use 去底透明 to knock out the white connected to the edge, and finally 裁切素材 to trim the leftover canvas.",
+    "4. If the user uploaded an asset already, confirm its sourceImageId with 列出用户图片 first, then bring it into the library with 导入用户图片为素材.",
+    "5. When a bubble or icon has spare edges, prefer 裁切素材 with cropMode=auto_trim; only fall back to coordinates if the result is unsatisfying.",
+    "6. Before writing CSS, convert to WebP with 压缩转换素材 and cap the dimensions, to keep the theme light to load.",
+    "7. Only use 上传图床 for a public URL once the user has allowed image-host uploads and set an ImgBB key.",
+    "8. Nine-slice values for an image bubble may never be guessed. When one is wanted, call 校准九宫格 first so the user can drag the guides by hand; the result returns slice/display/padding and the CSS.",
+    "9. 生成九宫格CSS only accepts a complete, already-calibrated set of values and fails if any is missing. Do not fall back on default proportions and do not invent values.",
+    "10. Never stretch a whole bubble image with background-size: 100% 100% or background-size: cover.",
+    "11. A successful upload only yields the host URL. Never write an API key or a delete_url into CSS.",
 ].join("\n");
 
-// ── 套件定义 ────────────────────────────────────────────
+// ── Pack definitions ────────────────────────────────────
 
 // ── Desktop widget tools ──
 // Ported from upstream b41da23. Tool NAMES stay Chinese, matching every other tool in
@@ -716,10 +717,10 @@ export const MASCOT_TOOL_PACKAGES: MascotToolPackage[] = [
     },
 ];
 
-// 导航是独立工具（不在套件里），直接暴露
+// Navigation is standalone (not in a pack) and always exposed directly
 export const MASCOT_NAVIGATE_TOOL: MascotSubTool = {
     name: "导航",
-    description: "跳转到手机里指定页面。subpage 仅在 page=settings 时生效。",
+    description: "Jump to a given page inside the phone. subpage only applies when page=settings.",
     parameterSchema: NAVIGATE_SCHEMA,
 };
 
@@ -761,32 +762,33 @@ export function buildMascotPackageSchemaPrompt(packageLabel: string, protocol: "
     if (!pkg) return `(No such pack: ${packageLabel})`;
 
     const lines: string[] = [];
-    lines.push(`【${pkg.label}】动作详解`);
+    lines.push(`【${pkg.label}】action reference`);
     lines.push(pkg.description);
     lines.push("");
     for (const tool of pkg.subTools) {
         lines.push(`◆ ${tool.name}`);
-        lines.push(`  说明：${tool.description}`);
+        lines.push(`  Description: ${tool.description}`);
         const params = (tool.parameterSchema as Record<string, unknown>).properties as Record<string, Record<string, unknown>> | undefined;
         const required = (tool.parameterSchema as Record<string, unknown>).required as string[] | undefined;
         if (params && Object.keys(params).length > 0) {
-            lines.push(`  参数：`);
+            lines.push(`  Parameters:`);
             for (const [paramName, paramDef] of Object.entries(params)) {
-                const isRequired = required?.includes(paramName) ? "必填" : "可选";
-                const enumStr = paramDef.enum ? `（枚举：${(paramDef.enum as unknown[]).join("/")}）` : "";
+                const isRequired = required?.includes(paramName) ? "required" : "optional";
+                const enumStr = paramDef.enum ? ` (one of: ${(paramDef.enum as unknown[]).join("/")})` : "";
                 lines.push(`    · ${paramName} (${paramDef.type}, ${isRequired})${enumStr} — ${paramDef.description || ""}`);
             }
         } else {
-            lines.push(`  参数：无`);
+            lines.push(`  Parameters: none`);
         }
-        // 文本协议下展示 [执行动作:...] 语法；原生协议下 LLM 已经能直接看 tool schema，不需要这一行
+        // Under the text protocol, show the call syntax. Under the native protocol the LLM
+        // already sees the tool schema directly, so this line is unnecessary.
         if (protocol === "text") {
-            lines.push(`  调用：[执行动作:${tool.name}(${formatExampleArgs(tool.parameterSchema)})]`);
+            lines.push(`  Call it as: [CallTool:${tool.name}(${formatExampleArgs(tool.parameterSchema)})]`);
         }
         lines.push("");
     }
     if (pkg.usageGuide) {
-        lines.push("===== 写作指南 =====");
+        lines.push("===== Writing guide =====");
         lines.push(pkg.usageGuide);
     }
     return lines.join("\n");
@@ -816,7 +818,7 @@ function numberOption(value: unknown, fallback: number): number {
     return fallback;
 }
 
-// ── 原生协议下的工具定义 ─────────────────────────────────
+// ── Tool definitions under the native protocol ──────────
 
 const MASCOT_NATIVE_TOOL_NAMES: Record<string, string> = {
     "导航": "mascot_navigate",
@@ -886,22 +888,22 @@ export function getMascotNativeLoaderName(packageId: string): string {
     return name;
 }
 
-/** 根据已展开的套件 id，构建原生 LLM 工具定义列表 */
+/** Build the native LLM tool definition list from the set of already-expanded pack ids. */
 export function getMascotNativeToolDefinitions(expandedPackageIds: string[] = []): LlmToolDefinition[] {
     const defs: LlmToolDefinition[] = [];
 
-    // 导航工具：始终暴露
+    // Navigation: always exposed
     defs.push({
         name: getMascotNativeToolName(MASCOT_NAVIGATE_TOOL.name),
         description: MASCOT_NAVIGATE_TOOL.description,
         parameters: MASCOT_NAVIGATE_TOOL.parameterSchema,
     });
 
-    // 每个套件先暴露一个 loader（除非已展开）
+    // Each pack exposes a loader first, unless it is already expanded
     const expanded = new Set(expandedPackageIds);
     for (const pkg of MASCOT_TOOL_PACKAGES) {
         if (expanded.has(pkg.id)) {
-            // 已展开 → 暴露所有子工具
+            // Expanded → expose every sub-tool
             for (const tool of pkg.subTools) {
                 defs.push({
                     name: getMascotNativeToolName(tool.name),
@@ -910,15 +912,16 @@ export function getMascotNativeToolDefinitions(expandedPackageIds: string[] = []
                 });
             }
         } else {
-            // 未展开 → 暴露 loader
-            // 注：properties 故意带一个无意义可选字段，避免某些 provider（如 Gemini）把空 args 视为未初始化的 protobuf Struct 而拒绝。
+            // Not expanded → expose the loader
+            // Note: properties deliberately carries one meaningless optional field. Some providers
+        // (Gemini among them) reject empty args, treating them as an uninitialised protobuf Struct.
             defs.push({
                 name: getMascotNativeLoaderName(pkg.id),
-                description: `展开「${pkg.label}」动作说明。${pkg.description}`,
+                description: `Expand the action reference for "${pkg.label}". ${pkg.description}`,
                 parameters: {
                     type: "object",
                     properties: {
-                        reason: { type: "string", description: "可选：为什么要展开这个套件" },
+                        reason: { type: "string", description: "Optional: why you want to expand this pack" },
                     },
                     additionalProperties: false,
                 },
@@ -928,7 +931,7 @@ export function getMascotNativeToolDefinitions(expandedPackageIds: string[] = []
     return defs;
 }
 
-/** 原生工具名 → 中文工具名映射（用于将 LLM 调用转回中文工具名执行） */
+/** Native tool id → tool name, used to turn an LLM call back into the name the dispatcher switches on. */
 export function buildMascotNativeNameMap(): Map<string, string> {
     const map = new Map<string, string>();
     map.set(getMascotNativeToolName(MASCOT_NAVIGATE_TOOL.name), MASCOT_NAVIGATE_TOOL.name);
@@ -941,14 +944,14 @@ export function buildMascotNativeNameMap(): Map<string, string> {
     return map;
 }
 
-// ── 工具执行器 ────────────────────────────────────────
+// ── Tool executor ─────────────────────────────────────
 
 export type MascotToolContext = {
     pageContext: MascotPageContext;
     history?: CssAssetUserImageHistoryMessage[];
 };
 
-/** 执行Scroll工具调用 */
+/** Execute a Scroll tool call. */
 export async function executeMascotToolCall(call: ToolCall, ctx: MascotToolContext): Promise<ToolResult> {
     try {
         switch (call.name) {
@@ -957,7 +960,7 @@ export async function executeMascotToolCall(call: ToolCall, ctx: MascotToolConte
             case "覆写CSS": return await handleOverwriteCss(call.args, ctx);
             case "清除CSS": return await handleClearCss(call.args, ctx);
 
-            // ─── 图像处理 ───
+            // ─── Images ───
             case "生成图像素材": return await handleGenerateCssAsset(call.args);
             case "列出用户图片": return await handleListUserImages(call.args, ctx);
             case "导入用户图片为素材": return await handleImportUserImageAsAsset(call.args, ctx);
@@ -978,19 +981,19 @@ export async function executeMascotToolCall(call: ToolCall, ctx: MascotToolConte
             case "摆放组件": return await handlePlaceWidget(call.args);
             case "移除DIY组件": return await handleRemoveDiyWidget(call.args);
 
-            // ─── 角色 ───
+            // ─── Characters ───
             case "读取角色": return await handleReadCharacter(call.args);
             case "创建角色": return await handleCreateCharacter(call.args);
             case "更新角色字段": return await handleUpdateCharacterField(call.args);
 
-            // ─── 世界书 ───
+            // ─── World books ───
             case "列出世界书": return await handleListWorldbooks(call.args);
             case "读取词条": return await handleReadWorldbookEntry(call.args);
             case "创建词条": return await handleCreateWorldbookEntry(call.args);
             case "更新词条": return await handleUpdateWorldbookEntry(call.args);
             case "删除词条": return await handleDeleteWorldbookEntry(call.args);
 
-            // ─── 预设 ───
+            // ─── Presets ───
             case "列出预设": return await handleListPresets();
             case "读取预设": return await handleReadPreset(call.args);
             case "读取预设条目": return await handleReadPresetPrompt(call.args);
@@ -1001,7 +1004,7 @@ export async function executeMascotToolCall(call: ToolCall, ctx: MascotToolConte
             case "更新预设条目": return await handleUpdatePresetPrompt(call.args);
             case "更新预设信息": return await handleUpdatePresetInfo(call.args);
 
-            // ─── 正则 ───
+            // ─── Regex ───
             case "列出正则组": return await handleListRegexGroups();
             case "读取正则组": return await handleReadRegexGroup(call.args);
             case "创建正则组": return await handleCreateRegexGroup(call.args);
@@ -1012,7 +1015,7 @@ export async function executeMascotToolCall(call: ToolCall, ctx: MascotToolConte
             case "导航": return await handleNavigate(call.args);
 
             default:
-                return { name: call.name, success: false, error: `未知工具：${call.name}` };
+                return { name: call.name, success: false, error: `Unknown tool: ${call.name}` };
         }
     } catch (err) {
         return { name: call.name, success: false, error: (err as Error).message };
@@ -1134,12 +1137,12 @@ async function handleUploadCssAsset(args: Record<string, unknown>): Promise<Tool
 // ── CSS Handlers ────────────────────────────────
 
 const CSS_LOCATION_LABELS: Record<string, { label: string; storageKey?: string; needsSession?: "chat" | "story" }> = {
-    chat_app: { label: "聊天应用 CSS", storageKey: "chat-app-custom-css" },
-    chat_session: { label: "单独聊天室 CSS", needsSession: "chat" },
-    mascot_chat: { label: "AI助手聊天室 CSS" },
-    story: { label: "剧情模式 CSS", needsSession: "story" },
-    music: { label: "音乐 CSS", storageKey: "music-custom-css" },
-    calendar: { label: "日历 CSS", storageKey: "calendar-custom-css" },
+    chat_app: { label: "Chat app CSS", storageKey: "chat-app-custom-css" },
+    chat_session: { label: "Individual chat room CSS", needsSession: "chat" },
+    mascot_chat: { label: "AI assistant chat room CSS" },
+    story: { label: "Story mode CSS", needsSession: "story" },
+    music: { label: "Music CSS", storageKey: "music-custom-css" },
+    calendar: { label: "Calendar CSS", storageKey: "calendar-custom-css" },
 };
 
 async function handleListCssLocations(): Promise<ToolResult> {
@@ -1149,20 +1152,20 @@ async function handleListCssLocations(): Promise<ToolResult> {
     for (const [key, info] of Object.entries(CSS_LOCATION_LABELS)) {
         let status = "—";
         if (key === "mascot_chat") {
-            status = getMascotSettingsSnapshot().chatCustomCSS ? "已设置" : "空";
+            status = getMascotSettingsSnapshot().chatCustomCSS ? "set" : "empty";
         } else if (info.storageKey) {
             const has = !!kvGet(info.storageKey);
-            status = has ? "已设置" : "空";
+            status = has ? "set" : "empty";
         } else {
-            status = "需在对应会话中查看";
+            status = "view it from within that session";
         }
         lines.push(`· ${key} — ${info.label}：${status}`);
     }
     return { name: "列出CSS位置", success: true, data: lines.join("\n") };
 }
 
-/** 根据用户传入的 sessionName 或当前页面 context 解析出 chat session id。
- *  返回 { sessionId, displayName } 或 { error, choices } */
+/** Resolve a chat session id from the sessionName the user gave, or from the current
+ *  page context. Returns { sessionId, displayName } or { error, choices }. */
 async function resolveChatSession(sessionName: string | undefined, ctx: MascotToolContext): Promise<
     | { sessionId: string; displayName: string }
     | { error: string; choices?: string[] }
@@ -1170,12 +1173,12 @@ async function resolveChatSession(sessionName: string | undefined, ctx: MascotTo
     const { loadChatSessions } = await import("./chat-storage");
     const { loadCharacters } = await import("./character-storage");
     const sessions = loadChatSessions();
-    if (sessions.length === 0) return { error: "还没有任何聊天会话，先和角色发起聊天再来改 CSS" };
+    if (sessions.length === 0) return { error: "There are no chat sessions yet. Start a chat with a character before changing its CSS" };
     const chars = loadCharacters();
     const charNameById = new Map(chars.map((c) => [c.id, c.name || ""]));
 
     const buildDisplayName = (s: typeof sessions[number]): string => {
-        if (s.isGroup) return s.groupName || "群聊";
+        if (s.isGroup) return s.groupName || "Group chat";
         return s.alias || charNameById.get(s.contactId) || s.contactId;
     };
 
@@ -1187,18 +1190,18 @@ async function resolveChatSession(sessionName: string | undefined, ctx: MascotTo
         });
         if (matched) return { sessionId: matched.id, displayName: buildDisplayName(matched) };
         const choices = sessions.map((s) => buildDisplayName(s));
-        return { error: `找不到匹配「${sessionName}」的聊天会话`, choices };
+        return { error: `No chat session matching "${sessionName}"`, choices };
     }
 
-    // 没传 sessionName：优先用当前页面的 sessionId
+    // No sessionName given: prefer the sessionId of the page currently open
     const ctxSessionId = ctx.pageContext.fields.sessionId;
     if (ctxSessionId) {
         const session = sessions.find((s) => s.id === ctxSessionId);
         if (session) return { sessionId: session.id, displayName: buildDisplayName(session) };
     }
-    // 没法定位 → 列出选项
+    // Cannot pin it down → offer the choices
     const choices = sessions.map((s) => buildDisplayName(s));
-    return { error: "请用 sessionName 指定要操作哪个聊天会话", choices };
+    return { error: "Use sessionName to say which chat session to act on", choices };
 }
 
 async function resolveStorySession(sessionName: string | undefined, ctx: MascotToolContext): Promise<
@@ -1208,7 +1211,7 @@ async function resolveStorySession(sessionName: string | undefined, ctx: MascotT
     const { loadStorySessions } = await import("./story-storage");
     const { loadCharacters } = await import("./character-storage");
     const sessions = loadStorySessions();
-    if (sessions.length === 0) return { error: "还没有任何剧情会话" };
+    if (sessions.length === 0) return { error: "There are no story sessions yet" };
     const chars = loadCharacters();
     const charNameById = new Map(chars.map((c) => [c.id, c.name || ""]));
 
@@ -1221,7 +1224,7 @@ async function resolveStorySession(sessionName: string | undefined, ctx: MascotT
         const matched = sessions.find((s) => buildDisplayName(s).toLowerCase().includes(lowered));
         if (matched) return { sessionId: matched.id, displayName: buildDisplayName(matched) };
         const choices = sessions.map((s) => buildDisplayName(s));
-        return { error: `找不到匹配「${sessionName}」的剧情会话`, choices };
+        return { error: `No story session matching "${sessionName}"`, choices };
     }
 
     const ctxSessionId = ctx.pageContext.fields.storySessionId || ctx.pageContext.fields.sessionId;
@@ -1230,7 +1233,7 @@ async function resolveStorySession(sessionName: string | undefined, ctx: MascotT
         if (session) return { sessionId: session.id, displayName: buildDisplayName(session) };
     }
     const choices = sessions.map((s) => buildDisplayName(s));
-    return { error: "请用 sessionName 指定要操作哪个剧情会话", choices };
+    return { error: "Use sessionName to say which story session to act on", choices };
 }
 
 async function readCssAt(location: string, ctx: MascotToolContext, sessionName?: string): Promise<{ css: string; sessionId?: string; displayName?: string; note?: string; choices?: string[] }> {
@@ -1239,7 +1242,7 @@ async function readCssAt(location: string, ctx: MascotToolContext, sessionName?:
     if (location === "mascot_chat") {
         const { getMascotSettingsSnapshot } = await import("./mascot-settings");
         const settings = getMascotSettingsSnapshot();
-        return { css: settings.chatCustomCSS || "", displayName: settings.nickname || "AI助手" };
+        return { css: settings.chatCustomCSS || "", displayName: settings.nickname || "AI assistant" };
     }
     if (location === "music") return { css: kvGet("music-custom-css") || "" };
     if (location === "calendar") return { css: kvGet("calendar-custom-css") || "" };
@@ -1261,16 +1264,17 @@ async function readCssAt(location: string, ctx: MascotToolContext, sessionName?:
             return { css: (session as Record<string, unknown>)?.customCSS as string || "", sessionId: resolved.sessionId, displayName: resolved.displayName };
         } catch { return { css: "", sessionId: resolved.sessionId, displayName: resolved.displayName }; }
     }
-    throw new Error(`未知 CSS 位置：${location}`);
+    throw new Error(`Unknown CSS location: ${location}`);
 }
 
 async function handleReadCss(args: Record<string, unknown>, ctx: MascotToolContext): Promise<ToolResult> {
     const location = args.location as string;
     const sessionName = args.sessionName as string | undefined;
     if (!location) return await handleListCssLocations();
-    if (!CSS_LOCATION_LABELS[location]) return { name: "读取CSS", success: false, error: `未知位置：${location}` };
+    if (!CSS_LOCATION_LABELS[location]) return { name: "读取CSS", success: false, error: `Unknown location: ${location}` };
 
-    // 对 chat_session / story：sessionName 未传 + 当前页面也没打开对应会话 → 改为"发现模式"，返回会话列表（成功状态）
+    // For chat_session / story: no sessionName and no matching session open on the page →
+    // switch to discovery mode and return the session list as a success, not an error.
     if ((location === "chat_session" || location === "story") && !sessionName) {
         const ctxSessionId = location === "chat_session"
             ? ctx.pageContext.fields.sessionId
@@ -1281,11 +1285,11 @@ async function handleReadCss(args: Record<string, unknown>, ctx: MascotToolConte
                 : await resolveStorySession(undefined, ctx);
             if ("error" in resolved && resolved.choices) {
                 const parts = [
-                    `位置：${location}（${CSS_LOCATION_LABELS[location].label}）`,
-                    `当前没指定会话，下面是所有可改的会话：`,
+                    `Location: ${location} (${CSS_LOCATION_LABELS[location].label})`,
+                    `No session was specified. These are the sessions you can change:`,
                     ...resolved.choices.map((c) => `· ${c}`),
                     "",
-                    `请向用户确认想改哪一个，然后用 sessionName 参数重新调用本工具读取。`,
+                    `Confirm with the user which one they mean, then call this tool again with the sessionName parameter.`,
                 ];
                 return { name: "读取CSS", success: true, data: parts.join("\n") };
             }
@@ -1296,12 +1300,12 @@ async function handleReadCss(args: Record<string, unknown>, ctx: MascotToolConte
     }
 
     const result = await readCssAt(location, ctx, sessionName);
-    // 传了 sessionName 但找不到匹配 → 真正的错误
+    // A sessionName was given but nothing matched → a genuine error
     if (result.note && result.choices) {
         return {
             name: "读取CSS",
             success: false,
-            error: `${result.note}。可选会话：${result.choices.map((c) => `「${c}」`).join("、")}`,
+            error: `${result.note}. Available sessions: ${result.choices.map((c) => `"${c}"`).join(", ")}`,
         };
     }
 
@@ -1316,11 +1320,11 @@ async function handleReadCss(args: Record<string, unknown>, ctx: MascotToolConte
     };
     const reference = refMap[location] || "";
     const parts: string[] = [];
-    parts.push(`位置：${location}（${CSS_LOCATION_LABELS[location].label}）`);
-    if (result.displayName) parts.push(`会话：${result.displayName}`);
-    if (result.note) parts.push(`注意：${result.note}`);
-    parts.push(`\n=== 当前 CSS ===\n${result.css || "(空)"}`);
-    parts.push(`\n=== 可用选择器和变量参考 ===\n${reference}`);
+    parts.push(`Location: ${location} (${CSS_LOCATION_LABELS[location].label})`);
+    if (result.displayName) parts.push(`Session: ${result.displayName}`);
+    if (result.note) parts.push(`Note: ${result.note}`);
+    parts.push(`\n=== Current CSS ===\n${result.css || "(empty)"}`);
+    parts.push(`\n=== Available selectors and variables ===\n${reference}`);
     return { name: "读取CSS", success: true, data: parts.join("\n") };
 }
 
@@ -1335,7 +1339,7 @@ async function writeCssAt(location: string, css: string, ctx: MascotToolContext,
     if (location === "mascot_chat") {
         const { getMascotSettingsSnapshot, updateMascotSettings } = await import("./mascot-settings");
         updateMascotSettings({ chatCustomCSS: trimmed });
-        return { displayName: getMascotSettingsSnapshot().nickname || "AI助手" };
+        return { displayName: getMascotSettingsSnapshot().nickname || "AI assistant" };
     }
     if (location === "music") {
         if (trimmed) kvSet("music-custom-css", trimmed); else kvRemove("music-custom-css");
@@ -1350,13 +1354,13 @@ async function writeCssAt(location: string, css: string, ctx: MascotToolContext,
     if (location === "chat_session") {
         const resolved = await resolveChatSession(sessionName, ctx);
         if ("error" in resolved) {
-            const err = new Error(`${resolved.error}${resolved.choices ? `。可选会话：${resolved.choices.map((c) => `「${c}」`).join("、")}` : ""}`);
+            const err = new Error(`${resolved.error}${resolved.choices ? `. Available sessions: ${resolved.choices.map((c) => `"${c}"`).join(", ")}` : ""}`);
             throw err;
         }
         const { loadChatSessions, saveChatSessions } = await import("./chat-storage");
         const sessions = loadChatSessions();
         const idx = sessions.findIndex((s) => s.id === resolved.sessionId);
-        if (idx < 0) throw new Error("找不到当前会话");
+        if (idx < 0) throw new Error("No current session found");
         (sessions[idx] as Record<string, unknown>).customCSS = trimmed;
         saveChatSessions(sessions);
         if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("chat-session-css-updated", { detail: { sessionId: resolved.sessionId, css: trimmed } }));
@@ -1365,7 +1369,7 @@ async function writeCssAt(location: string, css: string, ctx: MascotToolContext,
     if (location === "story") {
         const resolved = await resolveStorySession(sessionName, ctx);
         if ("error" in resolved) {
-            const err = new Error(`${resolved.error}${resolved.choices ? `。可选会话：${resolved.choices.map((c) => `「${c}」`).join("、")}` : ""}`);
+            const err = new Error(`${resolved.error}${resolved.choices ? `. Available sessions: ${resolved.choices.map((c) => `"${c}"`).join(", ")}` : ""}`);
             throw err;
         }
         const { updateStorySession } = await import("./story-storage");
@@ -1373,24 +1377,24 @@ async function writeCssAt(location: string, css: string, ctx: MascotToolContext,
         if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("story-session-css-updated", { detail: { sessionId: resolved.sessionId, css: trimmed } }));
         return { displayName: resolved.displayName };
     }
-    throw new Error(`未知 CSS 位置：${location}`);
+    throw new Error(`Unknown CSS location: ${location}`);
 }
 
 async function handleOverwriteCss(args: Record<string, unknown>, ctx: MascotToolContext): Promise<ToolResult> {
     const location = args.location as string;
     const css = args.css as string;
     const sessionName = args.sessionName as string | undefined;
-    if (!location || !CSS_LOCATION_LABELS[location]) return { name: "覆写CSS", success: false, error: `未知位置：${location}` };
+    if (!location || !CSS_LOCATION_LABELS[location]) return { name: "覆写CSS", success: false, error: `Unknown location: ${location}` };
     const result = await writeCssAt(location, css, ctx, sessionName);
-    return { name: "覆写CSS", success: true, data: `已覆写 ${location}${result.displayName ? `（${result.displayName}）` : ""} 的 CSS，共 ${css.length} 字符` };
+    return { name: "覆写CSS", success: true, data: `Overwrote the CSS at ${location}${result.displayName ? ` (${result.displayName})` : ""}, ${css.length} characters` };
 }
 
 async function handleClearCss(args: Record<string, unknown>, ctx: MascotToolContext): Promise<ToolResult> {
     const location = args.location as string;
     const sessionName = args.sessionName as string | undefined;
-    if (!location || !CSS_LOCATION_LABELS[location]) return { name: "清除CSS", success: false, error: `未知位置：${location}` };
+    if (!location || !CSS_LOCATION_LABELS[location]) return { name: "清除CSS", success: false, error: `Unknown location: ${location}` };
     const result = await writeCssAt(location, "", ctx, sessionName);
-    return { name: "清除CSS", success: true, data: `已清除 ${location}${result.displayName ? `（${result.displayName}）` : ""} 的 CSS` };
+    return { name: "清除CSS", success: true, data: `Cleared the CSS at ${location}${result.displayName ? ` (${result.displayName})` : ""}` };
 }
 
 // ── Character Handlers ──────────────────────────
@@ -1400,12 +1404,12 @@ async function handleReadCharacter(args: Record<string, unknown>): Promise<ToolR
     const chars = loadCharacters();
     const name = args.name as string | undefined;
     if (!name) {
-        if (chars.length === 0) return { name: "读取角色", success: true, data: "（没有角色）" };
-        const lines = chars.map((c) => `· ${c.name || "(未命名)"} [id: ${c.id}]`);
-        return { name: "读取角色", success: true, data: `共 ${chars.length} 个角色：\n${lines.join("\n")}` };
+        if (chars.length === 0) return { name: "读取角色", success: true, data: "(no characters)" };
+        const lines = chars.map((c) => `· ${c.name || "(unnamed)"} [id: ${c.id}]`);
+        return { name: "读取角色", success: true, data: `${chars.length} character(s):\n${lines.join("\n")}` };
     }
     const char = chars.find((c) => c.name === name);
-    if (!char) return { name: "读取角色", success: false, error: `找不到角色：${name}` };
+    if (!char) return { name: "读取角色", success: false, error: `No character named ${name}` };
     const parts: string[] = [];
     parts.push(`id: ${char.id}`);
     parts.push(`name: ${char.name || ""}`);
@@ -1417,7 +1421,7 @@ async function handleReadCharacter(args: Record<string, unknown>): Promise<ToolR
 async function handleCreateCharacter(args: Record<string, unknown>): Promise<ToolResult> {
     const { loadCharacters, saveCharacters } = await import("./character-storage");
     const chars = loadCharacters();
-    if (chars.find((c) => c.name === args.name)) return { name: "创建角色", success: false, error: "已存在同名角色" };
+    if (chars.find((c) => c.name === args.name)) return { name: "创建角色", success: false, error: "A character with that name already exists" };
     const now = new Date().toISOString();
     const newChar = {
         id: `char_${Date.now()}`,
@@ -1430,26 +1434,26 @@ async function handleCreateCharacter(args: Record<string, unknown>): Promise<Too
     };
     chars.push(newChar as typeof chars[number]);
     saveCharacters(chars);
-    return { name: "创建角色", success: true, data: `已创建角色 ${newChar.name} (${newChar.id})` };
+    return { name: "创建角色", success: true, data: `Created character ${newChar.name} (${newChar.id})` };
 }
 
 async function handleUpdateCharacterField(args: Record<string, unknown>): Promise<ToolResult> {
     const { loadCharacters, saveCharacters } = await import("./character-storage");
     const chars = loadCharacters();
     const idx = chars.findIndex((c) => c.name === args.name);
-    if (idx < 0) return { name: "更新角色字段", success: false, error: `找不到角色：${args.name}` };
+    if (idx < 0) return { name: "更新角色字段", success: false, error: `No character named ${args.name}` };
     const field = args.field as string;
     const value = args.value as string;
     const char = { ...chars[idx] } as Record<string, unknown>;
     if (field === "name" || field === "persona" || field === "personality") {
         char[field] = value;
     } else {
-        return { name: "更新角色字段", success: false, error: `不支持的字段：${field}` };
+        return { name: "更新角色字段", success: false, error: `Unsupported field: ${field}` };
     }
     char.updatedAt = new Date().toISOString();
     chars[idx] = char as typeof chars[number];
     saveCharacters(chars);
-    return { name: "更新角色字段", success: true, data: `已更新 ${args.name} 的 ${field}` };
+    return { name: "更新角色字段", success: true, data: `Updated ${field} on ${args.name}` };
 }
 
 // ── Worldbook Handlers ──────────────────────────
@@ -1459,24 +1463,24 @@ async function handleListWorldbooks(args: Record<string, unknown>): Promise<Tool
     const books = loadWorldBooks();
     const name = args.name as string | undefined;
     if (!name) {
-        if (books.length === 0) return { name: "列出世界书", success: true, data: "（没有世界书）" };
-        const lines = books.map((b) => `· ${b.name}（${b.entries?.length || 0} 条词条）`);
-        return { name: "列出世界书", success: true, data: `共 ${books.length} 个世界书：\n${lines.join("\n")}` };
+        if (books.length === 0) return { name: "列出世界书", success: true, data: "(no world books)" };
+        const lines = books.map((b) => `· ${b.name} (${b.entries?.length || 0} entries)`);
+        return { name: "列出世界书", success: true, data: `${books.length} world book(s):\n${lines.join("\n")}` };
     }
     const book = books.find((b) => b.name === name);
-    if (!book) return { name: "列出世界书", success: false, error: `找不到世界书：${name}` };
-    if (!book.entries || book.entries.length === 0) return { name: "列出世界书", success: true, data: `世界书 ${name} 暂无词条` };
-    const lines = book.entries.map((e) => `· [${e.uid}] ${e.comment || "(无备注)"} — keys: ${e.key || "(无)"} ${e.constant ? "[常驻]" : ""} ${e.position === 0 ? "(前置)" : "(后置)"}`);
-    return { name: "列出世界书", success: true, data: `世界书 ${name} 共 ${book.entries.length} 条词条：\n${lines.join("\n")}` };
+    if (!book) return { name: "列出世界书", success: false, error: `No world book named ${name}` };
+    if (!book.entries || book.entries.length === 0) return { name: "列出世界书", success: true, data: `World book ${name} has no entries yet` };
+    const lines = book.entries.map((e) => `· [${e.uid}] ${e.comment || "(no remark)"} — keys: ${e.key || "(none)"} ${e.constant ? "[always active]" : ""} ${e.position === 0 ? "(before)" : "(after)"}`);
+    return { name: "列出世界书", success: true, data: `World book ${name} has ${book.entries.length} entries:\n${lines.join("\n")}` };
 }
 
 async function handleReadWorldbookEntry(args: Record<string, unknown>): Promise<ToolResult> {
     const { loadWorldBooks } = await import("./settings-storage");
     const books = loadWorldBooks();
     const book = books.find((b) => b.name === args.worldbook);
-    if (!book) return { name: "读取词条", success: false, error: `找不到世界书：${args.worldbook}` };
+    if (!book) return { name: "读取词条", success: false, error: `No world book named ${args.worldbook}` };
     const entry = book.entries?.find((e) => e.comment === args.entryComment || e.uid === args.entryComment);
-    if (!entry) return { name: "读取词条", success: false, error: `找不到词条：${args.entryComment}` };
+    if (!entry) return { name: "读取词条", success: false, error: `No entry named ${args.entryComment}` };
     const parts: string[] = [];
     parts.push(`uid: ${entry.uid}`);
     parts.push(`comment: ${entry.comment || ""}`);
@@ -1513,18 +1517,18 @@ async function handleCreateWorldbookEntry(args: Record<string, unknown>): Promis
     book.updatedAt = Date.now();
     books[bookIdx] = book;
     saveWorldBooks(books);
-    return { name: "创建词条", success: true, data: `已在《${args.worldbook}》创建词条「${args.comment}」(uid: ${newEntry.uid})` };
+    return { name: "创建词条", success: true, data: `Created entry "${args.comment}" in ${args.worldbook} (uid: ${newEntry.uid})` };
 }
 
 async function handleUpdateWorldbookEntry(args: Record<string, unknown>): Promise<ToolResult> {
     const { loadWorldBooks, saveWorldBooks } = await import("./settings-storage");
     const books = loadWorldBooks();
     const bookIdx = books.findIndex((b) => b.name === args.worldbook);
-    if (bookIdx < 0) return { name: "更新词条", success: false, error: `找不到世界书：${args.worldbook}` };
+    if (bookIdx < 0) return { name: "更新词条", success: false, error: `No world book named ${args.worldbook}` };
     const book = { ...books[bookIdx] };
     const entries = [...(book.entries || [])];
     const entryIdx = entries.findIndex((e) => e.uid === args.entryUid);
-    if (entryIdx < 0) return { name: "更新词条", success: false, error: `找不到词条 uid：${args.entryUid}` };
+    if (entryIdx < 0) return { name: "更新词条", success: false, error: `No entry with uid ${args.entryUid}` };
     const entry = { ...entries[entryIdx] };
     const field = args.field as string;
     const value = args.value as string;
@@ -1533,28 +1537,28 @@ async function handleUpdateWorldbookEntry(args: Record<string, unknown>): Promis
     else if (field === "comment") entry.comment = value;
     else if (field === "constant") entry.constant = value === "true";
     else if (field === "position") entry.position = parseInt(value, 10) || 0;
-    else return { name: "更新词条", success: false, error: `不支持的字段：${field}` };
+    else return { name: "更新词条", success: false, error: `Unsupported field: ${field}` };
     entries[entryIdx] = entry;
     book.entries = entries;
     book.updatedAt = Date.now();
     books[bookIdx] = book;
     saveWorldBooks(books);
-    return { name: "更新词条", success: true, data: `已更新词条 ${args.entryUid} 的 ${field}` };
+    return { name: "更新词条", success: true, data: `Updated ${field} on entry ${args.entryUid}` };
 }
 
 async function handleDeleteWorldbookEntry(args: Record<string, unknown>): Promise<ToolResult> {
     const { loadWorldBooks, saveWorldBooks } = await import("./settings-storage");
     const books = loadWorldBooks();
     const bookIdx = books.findIndex((b) => b.name === args.worldbook);
-    if (bookIdx < 0) return { name: "删除词条", success: false, error: `找不到世界书：${args.worldbook}` };
+    if (bookIdx < 0) return { name: "删除词条", success: false, error: `No world book named ${args.worldbook}` };
     const book = { ...books[bookIdx] };
     const before = book.entries?.length || 0;
     book.entries = (book.entries || []).filter((e) => e.uid !== args.entryUid);
-    if (book.entries.length === before) return { name: "删除词条", success: false, error: `找不到词条 uid：${args.entryUid}` };
+    if (book.entries.length === before) return { name: "删除词条", success: false, error: `No entry with uid ${args.entryUid}` };
     book.updatedAt = Date.now();
     books[bookIdx] = book;
     saveWorldBooks(books);
-    return { name: "删除词条", success: true, data: `已删除词条 ${args.entryUid}` };
+    return { name: "删除词条", success: true, data: `Deleted entry ${args.entryUid}` };
 }
 
 // ── Preset Handlers ────────────────────────────
@@ -1602,27 +1606,27 @@ function rebuildPresetPromptOrder(prompts: Prompt[], previousOrder: Array<{ iden
 async function handleListPresets(): Promise<ToolResult> {
     const { loadPresets } = await loadPresetStorage();
     const presets = loadPresets();
-    if (presets.length === 0) return { name: "列出预设", success: true, data: "（没有预设）" };
+    if (presets.length === 0) return { name: "列出预设", success: true, data: "(no presets)" };
     const lines = presets.map((p) => {
         const featureTag = (p.prompts || []).some((x) => (x as Record<string, unknown>).featureTag);
-        return `· ${p.name}${p.builtIn ? "（内置）" : ""} — ${featureTag ? "通用型" : "剧情型"} [id: ${p.id}]`;
+        return `· ${p.name}${p.builtIn ? " (built-in)" : ""} — ${featureTag ? "general" : "story"} [id: ${p.id}]`;
     });
-    return { name: "列出预设", success: true, data: `共 ${presets.length} 个预设：\n${lines.join("\n")}` };
+    return { name: "列出预设", success: true, data: `${presets.length} preset(s):\n${lines.join("\n")}` };
 }
 
 async function handleReadPreset(args: Record<string, unknown>): Promise<ToolResult> {
     const { loadPresets } = await loadPresetStorage();
     const presets = loadPresets();
     const preset = presets.find((p) => p.name === args.name || p.name.includes(args.name as string));
-    if (!preset) return { name: "读取预设", success: false, error: `找不到预设：${args.name}` };
+    if (!preset) return { name: "读取预设", success: false, error: `No preset named ${args.name}` };
     const parts: string[] = [];
     parts.push(`id: ${preset.id}`);
     parts.push(`name: ${preset.name}`);
     parts.push(`description: ${preset.description || ""}`);
     parts.push(`builtIn: ${preset.builtIn || false}`);
-    parts.push(`prompts (${preset.prompts?.length || 0} 条，仅显示摘要；查看完整内容请用「读取预设条目」)：`);
+    parts.push(`prompts (${preset.prompts?.length || 0}, summaries only — use 读取预设条目 for the full content):`);
     (preset.prompts || []).forEach((p, i) => {
-        const segs: string[] = [`[${i}] ${p.name || p.identifier || "(无名)"}`];
+        const segs: string[] = [`[${i}] ${p.name || p.identifier || "(unnamed)"}`];
         if (p.marker) segs.push("(marker)");
         const tags = (p as Record<string, unknown>).tags;
         const legacyTag = (p as Record<string, unknown>).featureTag;
@@ -1632,12 +1636,12 @@ async function handleReadPreset(args: Record<string, unknown>): Promise<ToolResu
             segs.push(`tag=${legacyTag}`);
         }
         if (p.role && p.role !== "system") segs.push(`role=${p.role}`);
-        // 摘要：仅前 100 字
+        // Summary: the opening only
         if (p.content) {
             const snippet = p.content.replace(/\s+/g, " ").slice(0, 100);
             segs.push(`— ${snippet}${p.content.length > 100 ? "..." : ""}`);
         } else if (!p.marker) {
-            segs.push("(无内容)");
+            segs.push("(no content)");
         }
         parts.push(segs.join(" "));
     });
@@ -1648,10 +1652,10 @@ async function handleReadPresetPrompt(args: Record<string, unknown>): Promise<To
     const { loadPresets } = await loadPresetStorage();
     const presets = loadPresets();
     const preset = presets.find((p) => p.id === args.presetId);
-    if (!preset) return { name: "读取预设条目", success: false, error: `找不到预设 id：${args.presetId}` };
+    if (!preset) return { name: "读取预设条目", success: false, error: `No preset with id ${args.presetId}` };
     const idx = args.promptIndex as number;
     const p = preset.prompts?.[idx];
-    if (!p) return { name: "读取预设条目", success: false, error: `promptIndex ${idx} 越界（共 ${preset.prompts?.length || 0} 条）` };
+    if (!p) return { name: "读取预设条目", success: false, error: `promptIndex ${idx} is out of range (${preset.prompts?.length || 0} entries)` };
     const parts: string[] = [];
     parts.push(`promptIndex: ${idx}`);
     parts.push(`identifier: ${p.identifier}`);
@@ -1663,19 +1667,20 @@ async function handleReadPresetPrompt(args: Record<string, unknown>): Promise<To
     if (Array.isArray(tags) && tags.length > 0) {
         parts.push(`tags: [${tags.join(", ")}]`);
     } else if (legacyTag) {
-        parts.push(`featureTag: ${legacyTag}（旧字段）`);
+        parts.push(`featureTag: ${legacyTag} (legacy field)`);
     }
-    parts.push(`content:\n${p.content || "(空)"}`);
+    parts.push(`content:\n${p.content || "(empty)"}`);
     return { name: "读取预设条目", success: true, data: parts.join("\n") };
 }
 
 async function handleCreateStoryPreset(args: Record<string, unknown>): Promise<ToolResult> {
     const { loadPresets, savePresetsAsync, createPreset } = await loadPresetStorage();
     const presets = loadPresets();
-    if (presets.find((p) => p.name === args.name)) return { name: "创建剧情预设", success: false, error: "已存在同名预设" };
+    if (presets.find((p) => p.name === args.name)) return { name: "创建剧情预设", success: false, error: "A preset with that name already exists" };
 
     const promptInputs = (args.prompts as Array<Record<string, unknown>>) || [];
-    // 用现成的 createPreset 拿带默认采样参数（temperature/top_p 等）的骨架，避免缺字段
+    // Use the existing createPreset to get a skeleton carrying the default sampling
+    // parameters (temperature, top_p and so on), so no field is left missing
     const newPreset = createPreset(args.name as string);
     newPreset.description = (args.description as string) || "";
 
@@ -1708,16 +1713,16 @@ async function handleCreateStoryPreset(args: Record<string, unknown>): Promise<T
 
     presets.push(newPreset);
     await savePresetsAsync(presets);
-    return { name: "创建剧情预设", success: true, data: `已创建剧情预设 ${newPreset.name} (${newPreset.id})，含 ${newPreset.prompts.length} 条 prompt` };
+    return { name: "创建剧情预设", success: true, data: `Created story preset ${newPreset.name} (${newPreset.id}) with ${newPreset.prompts.length} prompt(s)` };
 }
 
 async function handleCloneBuiltinPreset(args: Record<string, unknown>): Promise<ToolResult> {
     const { loadPresets, savePresetsAsync } = await loadPresetStorage();
     const presets = loadPresets();
-    if (presets.find((p) => p.name === args.name)) return { name: "克隆内置预设", success: false, error: "已存在同名预设" };
+    if (presets.find((p) => p.name === args.name)) return { name: "克隆内置预设", success: false, error: "A preset with that name already exists" };
 
     const builtIn = presets.find((p) => p.builtIn);
-    if (!builtIn) return { name: "克隆内置预设", success: false, error: "系统里没有内置预设，无法克隆" };
+    if (!builtIn) return { name: "克隆内置预设", success: false, error: "There is no built-in preset in the system to clone" };
 
     const copy = JSON.parse(JSON.stringify(builtIn)) as typeof builtIn;
     copy.id = `preset_${Date.now()}`;
@@ -1729,16 +1734,16 @@ async function handleCloneBuiltinPreset(args: Record<string, unknown>): Promise<
     copy.updatedAt = Date.now();
     presets.push(copy);
     await savePresetsAsync(presets);
-    return { name: "克隆内置预设", success: true, data: `已克隆内置预设为「${copy.name}」(${copy.id})，含 ${copy.prompts.length} 条 prompt。后续按需用「更新预设条目」改` };
+    return { name: "克隆内置预设", success: true, data: `Cloned the built-in preset as "${copy.name}" (${copy.id}) with ${copy.prompts.length} prompt(s). Adjust entries afterwards with 更新预设条目 as needed` };
 }
 
 async function handleDuplicatePreset(args: Record<string, unknown>): Promise<ToolResult> {
     const { loadPresets, savePresetsAsync } = await loadPresetStorage();
     const presets = loadPresets();
     const source = presets.find((p) => p.name === args.sourceName || p.name.includes(args.sourceName as string));
-    if (!source) return { name: "复制预设", success: false, error: `找不到源预设：${args.sourceName}` };
+    if (!source) return { name: "复制预设", success: false, error: `No source preset named ${args.sourceName}` };
     const newName = args.newName as string;
-    if (presets.find((p) => p.name === newName)) return { name: "复制预设", success: false, error: `已存在同名预设：${newName}` };
+    if (presets.find((p) => p.name === newName)) return { name: "复制预设", success: false, error: `A preset named ${newName} already exists` };
     const copy = JSON.parse(JSON.stringify(source)) as typeof source;
     copy.id = `preset_${Date.now()}`;
     copy.name = newName;
@@ -1749,17 +1754,17 @@ async function handleDuplicatePreset(args: Record<string, unknown>): Promise<Too
     copy.updatedAt = Date.now();
     presets.push(copy);
     await savePresetsAsync(presets);
-    return { name: "复制预设", success: true, data: `已基于「${source.name}」创建副本「${copy.name}」(${copy.id})，含 ${copy.prompts.length} 条 prompt` };
+    return { name: "复制预设", success: true, data: `Created "${copy.name}" (${copy.id}) as a copy of "${source.name}", with ${copy.prompts.length} prompt(s)` };
 }
 
 async function handleAddPresetPrompt(args: Record<string, unknown>): Promise<ToolResult> {
     const { loadPresets, savePresetsAsync } = await loadPresetStorage();
     const presets = loadPresets();
     const idx = presets.findIndex((p) => p.id === args.presetId);
-    if (idx < 0) return { name: "添加预设条目", success: false, error: `找不到预设 id：${args.presetId}` };
+    if (idx < 0) return { name: "添加预设条目", success: false, error: `No preset with id ${args.presetId}` };
 
     const name = typeof args.name === "string" ? args.name.trim() : "";
-    if (!name) return { name: "添加预设条目", success: false, error: "name 不能为空" };
+    if (!name) return { name: "添加预设条目", success: false, error: "name must not be empty" };
 
     const preset = { ...presets[idx], prompts: [...(presets[idx].prompts || [])] };
     const existingIds = new Set(preset.prompts.map((prompt) => prompt.identifier).filter(Boolean));
@@ -1799,17 +1804,17 @@ async function handleAddPresetPrompt(args: Record<string, unknown>): Promise<Too
     await savePresetsAsync(presets);
 
     const promptIndex = preset.prompts.findIndex((item) => item.identifier === prompt.identifier);
-    return { name: "添加预设条目", success: true, data: `已添加 prompt[${promptIndex}]「${prompt.name}」(${prompt.identifier})` };
+    return { name: "添加预设条目", success: true, data: `Added prompt[${promptIndex}] "${prompt.name}" (${prompt.identifier})` };
 }
 
 async function handleUpdatePresetPrompt(args: Record<string, unknown>): Promise<ToolResult> {
     const { loadPresets, savePresetsAsync } = await loadPresetStorage();
     const presets = loadPresets();
     const idx = presets.findIndex((p) => p.id === args.presetId);
-    if (idx < 0) return { name: "更新预设条目", success: false, error: `找不到预设 id：${args.presetId}` };
+    if (idx < 0) return { name: "更新预设条目", success: false, error: `No preset with id ${args.presetId}` };
     const preset = { ...presets[idx], prompts: [...presets[idx].prompts] };
     const promptIdx = args.promptIndex as number;
-    if (promptIdx < 0 || promptIdx >= preset.prompts.length) return { name: "更新预设条目", success: false, error: `promptIndex 越界（共 ${preset.prompts.length} 条）` };
+    if (promptIdx < 0 || promptIdx >= preset.prompts.length) return { name: "更新预设条目", success: false, error: `promptIndex is out of range (${preset.prompts.length} entries)` };
     const prompt = { ...preset.prompts[promptIdx] };
     const field = args.field as string;
     const value = args.value as string;
@@ -1817,26 +1822,26 @@ async function handleUpdatePresetPrompt(args: Record<string, unknown>): Promise<
     else if (field === "role") prompt.role = value as "system" | "user" | "assistant";
     else if (field === "content") prompt.content = value;
     else if (field === "identifier") prompt.identifier = value;
-    else return { name: "更新预设条目", success: false, error: `不支持的字段：${field}` };
+    else return { name: "更新预设条目", success: false, error: `Unsupported field: ${field}` };
     preset.prompts[promptIdx] = prompt;
     preset.updatedAt = Date.now();
     presets[idx] = preset;
     await savePresetsAsync(presets);
-    return { name: "更新预设条目", success: true, data: `已更新 prompt[${promptIdx}] 的 ${field}` };
+    return { name: "更新预设条目", success: true, data: `Updated ${field} on prompt[${promptIdx}]` };
 }
 
 async function handleUpdatePresetInfo(args: Record<string, unknown>): Promise<ToolResult> {
     const { loadPresets, savePresetsAsync } = await loadPresetStorage();
     const presets = loadPresets();
     const idx = presets.findIndex((p) => p.id === args.presetId);
-    if (idx < 0) return { name: "更新预设信息", success: false, error: `找不到预设 id：${args.presetId}` };
+    if (idx < 0) return { name: "更新预设信息", success: false, error: `No preset with id ${args.presetId}` };
     const preset = { ...presets[idx] };
     if (args.name !== undefined) preset.name = args.name as string;
     if (args.description !== undefined) preset.description = args.description as string;
     preset.updatedAt = Date.now();
     presets[idx] = preset;
     await savePresetsAsync(presets);
-    return { name: "更新预设信息", success: true, data: `已更新预设 ${preset.name}` };
+    return { name: "更新预设信息", success: true, data: `Updated preset ${preset.name}` };
 }
 
 // ── Regex Handlers ────────────────────────────
@@ -1844,16 +1849,16 @@ async function handleUpdatePresetInfo(args: Record<string, unknown>): Promise<To
 async function handleListRegexGroups(): Promise<ToolResult> {
     const { loadRegexes } = await import("./settings-storage");
     const groups = loadRegexes();
-    if (groups.length === 0) return { name: "列出正则组", success: true, data: "（没有正则组）" };
-    const lines = groups.map((g) => `· ${g.name}（${g.rules?.length || 0} 条规则）[id: ${g.id}]`);
-    return { name: "列出正则组", success: true, data: `共 ${groups.length} 个正则组：\n${lines.join("\n")}` };
+    if (groups.length === 0) return { name: "列出正则组", success: true, data: "(no regex groups)" };
+    const lines = groups.map((g) => `· ${g.name} (${g.rules?.length || 0} rule(s)) [id: ${g.id}]`);
+    return { name: "列出正则组", success: true, data: `${groups.length} regex group(s):\n${lines.join("\n")}` };
 }
 
 async function handleReadRegexGroup(args: Record<string, unknown>): Promise<ToolResult> {
     const { loadRegexes } = await import("./settings-storage");
     const groups = loadRegexes();
     const group = groups.find((g) => g.name === args.name || g.name.includes(args.name as string));
-    if (!group) return { name: "读取正则组", success: false, error: `找不到正则组：${args.name}` };
+    if (!group) return { name: "读取正则组", success: false, error: `No regex group named ${args.name}` };
     const lines: string[] = [`id: ${group.id}`, `name: ${group.name}`, `rules:`];
     (group.rules || []).forEach((r) => {
         lines.push(`  [${r.id}] ${r.disabled ? "❌" : "✅"} ${r.scriptName}`);
@@ -1901,37 +1906,37 @@ function normalizeRule(r: Record<string, unknown>): Record<string, unknown> {
 async function handleCreateRegexGroup(args: Record<string, unknown>): Promise<ToolResult> {
     const { loadRegexes, saveRegexes, createRegexGroup } = await import("./settings-storage");
     const groups = loadRegexes();
-    if (groups.find((g) => g.name === args.name)) return { name: "创建正则组", success: false, error: "已存在同名正则组" };
+    if (groups.find((g) => g.name === args.name)) return { name: "创建正则组", success: false, error: "A regex group with that name already exists" };
     const newGroup = createRegexGroup(args.name as string);
     const rules = (args.rules as Array<Record<string, unknown>>) || [];
     newGroup.rules = rules.map(normalizeRule) as typeof newGroup.rules;
     groups.push(newGroup);
     saveRegexes(groups);
-    return { name: "创建正则组", success: true, data: `已创建正则组 ${newGroup.name} (${newGroup.id})，含 ${newGroup.rules.length} 条规则` };
+    return { name: "创建正则组", success: true, data: `Created regex group ${newGroup.name} (${newGroup.id}) with ${newGroup.rules.length} rule(s)` };
 }
 
 async function handleAddRegexRule(args: Record<string, unknown>): Promise<ToolResult> {
     const { loadRegexes, saveRegexes } = await import("./settings-storage");
     const groups = loadRegexes();
     const idx = groups.findIndex((g) => g.name === args.groupName);
-    if (idx < 0) return { name: "添加正则规则", success: false, error: `找不到正则组：${args.groupName}` };
+    if (idx < 0) return { name: "添加正则规则", success: false, error: `No regex group named ${args.groupName}` };
     const group = { ...groups[idx], rules: [...(groups[idx].rules || [])] };
     const newRule = normalizeRule(args.rule as Record<string, unknown>);
     group.rules.push(newRule as typeof group.rules[number]);
     group.updatedAt = Date.now();
     groups[idx] = group;
     saveRegexes(groups);
-    return { name: "添加正则规则", success: true, data: `已向 ${args.groupName} 添加规则 ${newRule.id}` };
+    return { name: "添加正则规则", success: true, data: `Added rule ${newRule.id} to ${args.groupName}` };
 }
 
 async function handleUpdateRegexRule(args: Record<string, unknown>): Promise<ToolResult> {
     const { loadRegexes, saveRegexes } = await import("./settings-storage");
     const groups = loadRegexes();
     const idx = groups.findIndex((g) => g.name === args.groupName);
-    if (idx < 0) return { name: "更新正则规则", success: false, error: `找不到正则组：${args.groupName}` };
+    if (idx < 0) return { name: "更新正则规则", success: false, error: `No regex group named ${args.groupName}` };
     const group = { ...groups[idx], rules: [...(groups[idx].rules || [])] };
     const ruleIdx = group.rules.findIndex((r) => r.id === args.ruleId);
-    if (ruleIdx < 0) return { name: "更新正则规则", success: false, error: `找不到规则 id：${args.ruleId}` };
+    if (ruleIdx < 0) return { name: "更新正则规则", success: false, error: `No rule with id ${args.ruleId}` };
     const updates = { ...(args.updates as Record<string, unknown>) };
     if ("substituteRegex" in updates) updates.substituteRegex = numberOption(updates.substituteRegex, 0);
     if ("tags" in updates) updates.tags = normalizeMascotRegexRuleTags(updates.tags);
@@ -1939,7 +1944,7 @@ async function handleUpdateRegexRule(args: Record<string, unknown>): Promise<Too
     group.updatedAt = Date.now();
     groups[idx] = group;
     saveRegexes(groups);
-    return { name: "更新正则规则", success: true, data: `已更新规则 ${args.ruleId}` };
+    return { name: "更新正则规则", success: true, data: `Updated rule ${args.ruleId}` };
 }
 
 // ── Navigation ────────────────────────────────
@@ -1949,10 +1954,10 @@ async function handleNavigate(args: Record<string, unknown>): Promise<ToolResult
     const subpage = args.subpage as string | undefined;
     const { mascotNavigate } = await import("./mascot-events");
     mascotNavigate(page, subpage);
-    return { name: "导航", success: true, data: `已跳转到 ${page}${subpage ? `:${subpage}` : ""}` };
+    return { name: "导航", success: true, data: `Navigated to ${page}${subpage ? `:${subpage}` : ""}` };
 }
 
-// ── 套件展开管理 ─────────────────────────────
+// ── Pack expansion management ────────────────
 
 const EXPANDED_STORAGE_KEY = "mascot_expanded_packages_v1";
 const MAX_EXPANDED = 2;
