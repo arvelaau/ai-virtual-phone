@@ -129,6 +129,19 @@ function expandXiaohongshuNpcMacros(text: string, context: XiaohongshuNpcMacroCo
     .replace(/\{\{\s*xiaohongshuNpcIdentityGuard\s*\}\}/g, buildDefaultXiaohongshuNpcIdentityGuard(context));
 }
 
+// The NPC paths (feed, DM reply) call sendLLMRequest with a NULL preset, so
+// `output_language_rule` from lib/builtin-preset.ts never reaches them — the same
+// bypass fixed locally in interview-magazine-engine and shopping-engine. Restating it
+// here covers every NPC path at once, and it still applies when the user has a stored
+// Chinese npcFeedPrompt / npcDmReplyPrompt, which the defaults below cannot.
+const XIAOHONGSHU_NPC_OUTPUT_LANGUAGE_RULE = [
+  "Write every piece of visible content in English: note titles and bodies, comments,",
+  "replies, nicknames, tags and direct messages. Read context in whatever language it",
+  "arrives in and keep using it normally, but do not mirror its language in your output,",
+  "and never append a translation. Leave the bracket field names and block headings of",
+  "the output format exactly as specified.",
+].join(" ");
+
 function buildXiaohongshuNpcPrompt(
   settings: XiaohongshuSettings,
   prompt: string,
@@ -137,7 +150,7 @@ function buildXiaohongshuNpcPrompt(
   const guardTemplate = (settings.npcIdentityGuardPrompt ?? "").trim() || DEFAULT_XIAOHONGSHU_NPC_IDENTITY_GUARD_PROMPT;
   const guard = expandXiaohongshuNpcMacros(guardTemplate, context).trim();
   const body = expandXiaohongshuNpcMacros(prompt, context).trim();
-  return [guard, body].filter(Boolean).join("\n\n");
+  return [XIAOHONGSHU_NPC_OUTPUT_LANGUAGE_RULE, guard, body].filter(Boolean).join("\n\n");
 }
 
 function getUserXiaohongshuNamesFromNote(note: XiaohongshuNote): string[] {
@@ -420,7 +433,10 @@ function isCharacterXiaohongshuAuthor(authorName: string, characterDisplayName: 
  * - "延伸N" → replyToCommentId 指向前面已生成的 thread comment
  * - 作者名匹配 character.name 或小红书显示名 → authorType="character"，否则 "npc"
  */
-function appendCharacterThreadToNote(args: {
+// Exported for the protocol fixture: this is where the MainComment / ExtraN reply
+// sentinels are resolved into real comment ids, and it is otherwise only reachable
+// behind a network call.
+export function appendCharacterThreadToNote(args: {
   note: XiaohongshuNote;
   characterDisplayName: string;
   characterName: string;
@@ -439,12 +455,16 @@ function appendCharacterThreadToNote(args: {
   thread.forEach((item) => {
     const isCharacter = isCharacterXiaohongshuAuthor(item.authorName, characterDisplayName, characterName);
     const replyTarget = (item.replyTo || "").trim();
-    const referenceMatch = /^延伸(\d+)$/.exec(replyTarget);
-    const isMainReply = !replyTarget || /^主评论$/.test(replyTarget);
+    // Bilingual, like every other field in this file: the preset now teaches
+    // `Extra1` / `MainComment`, but a model steered by a Chinese persona still
+    // writes the legacy 延伸N / 主评论, and both must resolve to the same target.
+    const referenceMatch = /^(?:Extra\s*(\d+)|延伸(\d+))$/i.exec(replyTarget);
+    const referenceNumber = referenceMatch ? (referenceMatch[1] ?? referenceMatch[2]) : null;
+    const isMainReply = !replyTarget || /^(?:MainComment|主评论)$/i.test(replyTarget);
     const replyToCommentId = isMainReply
       ? mainCommentId
-      : referenceMatch
-        ? numberToId.get(Number(referenceMatch[1])) || mainCommentId
+      : referenceNumber
+        ? numberToId.get(Number(referenceNumber)) || mainCommentId
         : mainCommentId;
     const comment = makeXiaohongshuComment({
       noteId: note.id,
@@ -714,10 +734,14 @@ export function parseXiaohongshuCharacterReaction(raw: string): ParsedXiaohongsh
 
 export function parseXiaohongshuCharacterMentionReply(raw: string): ParsedXiaohongshuCharacterMentionReply {
   const blocks = parseBlocks(raw);
-  const block = blocks.find(item => /角色回复|回复|评论/.test(item.title)) ?? blocks[0];
+  // Was Chinese-only on both counts, and the second one indexed `fields` by a Chinese
+  // key directly instead of going through textField — the one field read in this file
+  // that the alias conversion missed. It only appeared to work because the block title
+  // falls back to blocks[0].
+  const block = blocks.find(item => /Reply|Comment|角色回复|回复|评论/i.test(item.title)) ?? blocks[0];
   const thread = block ? parseCharacterThreadFields(block.fields) : [];
   return {
-    comment: cleanMultiline(block?.fields["内容"] ?? block?.fields["评论"], 600),
+    comment: cleanMultiline(textField(block?.fields, F_REPLY_BODY), 600),
     thread: thread.length > 0 ? thread : undefined,
   };
 }
