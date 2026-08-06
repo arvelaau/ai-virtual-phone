@@ -911,6 +911,23 @@ Audit first, and it was the cleanest file in a long while: **zero local parsers*
 
 Kept Chinese and **verified rather than assumed**: the 10 `ToolResult` `name:` fields, which echo mascot tool identifiers. Each was checked against `mascot-tools.ts` — all 10 registered, 0 unregistered. `KIND_LABELS` values *were* safe to translate, because the schema enum keys are ASCII (`bubble`/`icon`/`texture`/`background`/`misc`) and only the display labels were Chinese.
 
+### `lib/xiaohongshu-engine.ts` prose — **DONE** (`11813b9`)
+112 strings; 205 CJK lines → 87, all deliberate. `tsc` clean.
+
+Confirmed first that the earlier half really was finished: all 5 xiaohongshu preset entries have **0 CJK lines** in their content, and `XIAOHONGSHU_NPC_OUTPUT_LANGUAGE_RULE` is wired into `buildXiaohongshuNpcPrompt`, closing both null-preset bypasses.
+
+**The substantive part was the context builders, not loose prose.** They showed the model `[笔记ID]`, `[标题]`, `[正文]`, `[作者]`, `[点赞]`, `#笔记` while the teaching (flipped in `2352e63`) says `[NoteId]`, `[Title]`, `[Body]`, `[Author]`, `[Likes]`, `#Note`. Nothing broke — the parsers take both — but the context was quietly teaching the legacy names, and **a model copies the shapes it is shown**. Same lesson as `moments-engine`'s snapshot connector.
+
+Kept Chinese, each verified load-bearing: every parser alias list and regex alternation; `isVisionUnsupportedError`'s keyword list and `/参数|格式|不支持|请求体/`, which match error text returned **by the provider** (genuinely Chinese for some Chinese APIs); and the comments documenting which legacy spellings the aliases accept.
+
+#### 🚨 DEFERRED — xiaohongshu notification texts are a live producer/consumer pair
+**Do not translate these without doing the consumers first.** `xiaohongshu-engine.ts` produces notification `text:` fields (`赞了你的笔记`, `收藏了你的笔记`, and the `等${count}人` compact-count template at `:1543,1552`). Three consumers parse them in `components/xiaohongshu/xiaohongshu-app.tsx`:
+- `:182` `parseNotificationCountFromText` — `/等\s*([0-9]…)\s*人/` for the count
+- `:943` — `/^(.+?)等\s*[0-9]…\s*人/` to extract the actor name
+- `:966` — strips `^${actorName}\s*(评论了你的笔记|回复了你)[:：]?\s*`
+
+Translating the producer alone breaks notification counts and previews **silently**. Make the three consumers bilingual first, then flip. Its own change.
+
 ### ✅ PHASE D2 IS COMPLETE (2026-08-06)
 Both files done, `npx tsc --noEmit` exit 0 at every step, and a **permanent fixture is committed**: `_fx-mascot-tools.mjs` (202/202) — the first fixture in this project kept in the repo rather than deleted. Run it with `node _fx-mascot-tools.mjs`.
 
