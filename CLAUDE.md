@@ -920,7 +920,20 @@ Confirmed first that the earlier half really was finished: all 5 xiaohongshu pre
 
 Kept Chinese, each verified load-bearing: every parser alias list and regex alternation; `isVisionUnsupportedError`'s keyword list and `/参数|格式|不支持|请求体/`, which match error text returned **by the provider** (genuinely Chinese for some Chinese APIs); and the comments documenting which legacy spellings the aliases accept.
 
-#### 🚨 DEFERRED — xiaohongshu notification texts are a live producer/consumer pair
+### xiaohongshu notification texts — **DONE** (`bf172f8`), consumers first
+31/31 fixture, **`_fx-xhs-notif.mjs` kept in the repo**. The deferral recorded below is now closed; kept for the reasoning.
+
+Order mattered and was followed: **consumers made bilingual first, producers flipped second.** Notifications already stored carry the legacy Chinese wording and nothing rewrites them, so the reverse order would have broken counts and previews for existing data.
+
+Both readers now share two constants so they cannot drift: `NOTIFICATION_COUNT_RE` = `(?:等\s*|\s+and\s+)(N)\s*(?:人|people)` and `NOTIFICATION_ACTOR_RE`, the same clause anchored at the start.
+
+**Wording decision worth keeping**: the count is the **total** in both languages — `等N人` includes the named actors — so the English form is `and N people`, **not** `and N others`. "others" reads better but would have silently shifted the number by however many names are shown.
+
+Two things fixed in passing:
+- `notice.actorName` was interpolated into a `RegExp` **unescaped**, so a name containing `(` or `+` would throw or mis-strip. Now escaped, and the fixture drives a name full of metacharacters.
+- `评论了你的笔记` / `回复了你` turned out to have **no producer anywhere** — that strip is purely defensive. Left in place and extended rather than removed.
+
+#### 🚨 (CLOSED by `bf172f8`) xiaohongshu notification texts were a live producer/consumer pair
 **Do not translate these without doing the consumers first.** `xiaohongshu-engine.ts` produces notification `text:` fields (`赞了你的笔记`, `收藏了你的笔记`, and the `等${count}人` compact-count template at `:1543,1552`). Three consumers parse them in `components/xiaohongshu/xiaohongshu-app.tsx`:
 - `:182` `parseNotificationCountFromText` — `/等\s*([0-9]…)\s*人/` for the count
 - `:943` — `/^(.+?)等\s*[0-9]…\s*人/` to extract the actor name
