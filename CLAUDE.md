@@ -807,16 +807,31 @@ Broken, and now fixed:
 
 | file | function | effect while broken |
 |---|---|---|
-| `tool-executor.ts:246` | `parseToolFetches` | `[FetchTool:…]` never recognised |
-| `tool-executor.ts:305` | `parseToolCallAt` | tool-call header parsing |
-| `notewall-utils.ts:393` | `parseNoteWallToolCalls` | **every AI-written note/comment fell through to the raw-text fallback** — the whole `[CallTool:发送便签({…})]` string got stored as the note body |
-| `mascot-engine.ts:316,345,513` | protocol start / tool-name peek / display strip | mascot tool directives |
+| `tool-executor.ts:246` | `parseToolFetches` | **broken** — returned `[]`, so `[FetchTool:…]` was never recognised |
+| `notewall-utils.ts:393` | `parseNoteWallToolCalls` | **broken** — every AI-written note/comment fell through to the raw-text fallback, storing the whole `[CallTool:发送便签({…})]` string as the note body |
+| `mascot-engine.ts:316,345,513` | protocol start / tool-name peek / display strip | **broken** by static analysis: `[[^\[\]]` collapsed to the class `{[, ^}` followed by a literal `]`, which no real directive matches. Not testable behaviourally — those functions are module-private |
+| `tool-executor.ts:305` | `parseToolCallAt` | **NOT actually broken.** `\s*`→`s*` was harmless here because the preceding `(.*?)` absorbs the difference, so `[CallTool:…]` kept working throughout. Fixed anyway (latently wrong), but it had no user-visible impact |
+
+**Correction to a claim I made before measuring**: I first reported all five sites as broken. A before/after run against `ebc45e8` disproved that for `parseToolCallAt` — see the table. The lesson is the obvious one: run the pre-fix code against the fixture before describing impact, rather than inferring it from the diff.
 
 The `tool-executor` pair is the worst of these and is the **exact failure mode CLAUDE.md already warned about** in the tool-prompt entry: `text-tool-protocol.ts` still *strips* the directive from the visible reply, so a broken execution parser means the directive silently vanishes and never runs, with no error anywhere. Confirmed against the baseline commit — `git show 6a067d4:lib/notewall-utils.ts` has the working regex *literal*.
 
 **Guard added to the fixture, and it is worth keeping in every future protocol fixture**: a repo-wide scan of `lib/` and `components/` for `` new RegExp(`…`) `` containing a single backslash before a regex-only metacharacter (`\s \S \d \w \b \[ \] \( \) \. \* \+ \? \^ \$ \{ \} \| \/ \-`), excluding real string escapes (`\\ \u \x \n \t \` `). It found **three sites beyond the two I set out to fix**.
 
 **Fixture (68/68, `_fx-d1b3.mjs`, deleted — recreate from this)**: the note-wall directives are **lifted out of the teaching text itself** (undoing TS-level `\'` / `\\` escaping first), given concrete values, and run through the real `parseNoteWallActionContent` / `parseNoteWallReplyContent`, asserting a genuine parse rather than the raw-text fallback (which is distinguished by `authorName === ""` and `body` containing `CallTool`); a reply to a noteId outside the allow-list is dropped; both taught add-friend directives plus both legacy Chinese forms plus a mixed-alias pair round-trip; leaked `[InnerThoughts]` and `[内心]` are both stripped; "give up" inside a message body does not abandon; `parseToolFetches` / `parseToolCalls` recognise English **and** legacy Chinese directives and the call is removed from the visible text; every entry keeps its `tags`, and `add_friend_prompt` keeps `role: "user"` (it is sent as a turn, not as system context). **Non-vacuity was observed live rather than simulated**: before the regex fix the run was 52/57 with the note assertions failing and the failure output showing the raw directive stored as the note body.
+
+### D1b batch 4 — dwelling: **DONE** (2026-08-06)
+56/56 fixture, `npx tsc --noEmit` exit 0, `BUILTIN_PRESET_VERSION` → **272**. Entries: `dwelling_layout`, `dwelling_layout_items`, `dwelling_item_detail` (~51 CJK lines). **Zero CJK remains** — no exception applies to this batch.
+
+The protocol was already ASCII: JSON keys (`rooms`/`id`/`name`/`en`/`description`/`imagePrompt`/`furniture`/`icon`/`label`/`position`/`marker`/`items`/`preview`) and the nine `position` values. `dwelling-engine.ts` has **no** Chinese-literal parser (corrected detector: 0 hits) — its Chinese was confined to error strings and preview fallbacks.
+
+**`name` + `en` is a deliberate PAIR, not redundancy.** `room-view.tsx:320,382` and `dwelling-app.tsx:403` render `.en` as a separate stylised sub-label beneath the name — the same two-line device as the map's `l1_name_cn` / `l1_name_en`. Collapsing them now that `name` is English too would silently drop a visual element, so the teaching still asks for both (`name` = the name, `en` = the same name in capitals). Fixture pins it.
+
+Two small consequential edits outside the preset:
+- `dwelling-engine.ts:353-356` — the Prompt Viewer preview placeholders (`房间`/`家具`/`物品`/`物品外观与细节`) are interpolated straight into `dwelling_item_detail`; verified compared nowhere, so translated to keep the previewed prompt from being half English.
+- The item-detail page's font stack was reordered to `Georgia, "Songti SC", "Noto Serif SC", serif` (Latin serif first, CJK kept as fallback) so a dwelling generated before the translation still renders its Chinese text properly.
+
+**Fixture (56/56, `_fx-d1b4.mjs`, deleted — recreate from this)**: zero CJK and zero full-width punctuation per entry; the taught JSON template is **extracted from the entry and `JSON.parse`d**, then every key the engine and renderer read is asserted present at each nesting level (a reworded template that renames a key produces an unusable layout with no error); the nine taught `position` values are checked against `dwelling-engine.ts`'s own map **and** each is run through the real `resolveFurnitureMarker`, with an invented position as a negative control; the preview fallbacks are asserted CJK-free; version bump and `tags` unchanged. **Verified non-vacuous**: restoring one Chinese template line and renaming one position gives 53/56, failing exactly the CJK, full-width and position-lockstep assertions.
 
 ### Track 1 progress
 `lib/custom-app-creator-guide.ts` — **done**, ~520 strings translated, `npm run build` passes, zero smart quotes / zero CJK escapes. (Agent hit a session usage limit mid-file at ~26%; resumed via `SendMessage` after verifying no smart-quote damage — the completed portion was intact.) Notes:

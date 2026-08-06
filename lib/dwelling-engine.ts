@@ -350,10 +350,13 @@ export async function previewDwellingPromptPayload(
             appTags,
             undefined,
             {
-                dwellingRoom: cached?.layout.rooms[0]?.name ?? "房间",
-                dwellingFurniture: cached?.layout.rooms[0]?.furniture[0]?.label ?? "家具",
-                dwellingItem: cached?.layout.rooms[0]?.furniture[0]?.items[0]?.name ?? "物品",
-                dwellingItemPreview: cached?.layout.rooms[0]?.furniture[0]?.items[0]?.preview ?? "物品外观与细节",
+                // Prompt-facing placeholders for the Prompt Viewer preview, compared
+                // nowhere (verified repo-wide). Translated alongside dwelling_item_detail
+                // so the previewed prompt is not half English.
+                dwellingRoom: cached?.layout.rooms[0]?.name ?? "room",
+                dwellingFurniture: cached?.layout.rooms[0]?.furniture[0]?.label ?? "furniture",
+                dwellingItem: cached?.layout.rooms[0]?.furniture[0]?.items[0]?.name ?? "object",
+                dwellingItemPreview: cached?.layout.rooms[0]?.furniture[0]?.items[0]?.preview ?? "the object's appearance and detail",
             },
         )
         : await buildDwellingMessages(characterId, preset, worldBooks, regexes, appTags, dwellingContext);
