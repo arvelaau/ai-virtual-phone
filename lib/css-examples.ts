@@ -15,7 +15,7 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   --c-text-title: #2C3440;        /* 主要文字 */
   --c-text: #797E85;              /* 次要文字 */
   --c-icon: #A0A3A8;              /* 普通图标 */
-  --c-icon-active: #4A4A4A;       /* 强调色 */
+  --c-icon-active: #4A4A4A;       /* accent */
 
   --c-input: #EBEBEB;
   --c-input-border: #DADBDF;
@@ -612,7 +612,7 @@ export const CHAT_APP_CSS_EXAMPLE = `/* ═══ 聊天应用 CSS 示例 ══
   --c-text-title: #2C3440;        /* 主要文字 */
   --c-text: #797E85;              /* 次要文字 */
   --c-icon: #A0A3A8;              /* 普通图标 */
-  --c-icon-active: #4A4A4A;       /* 强调色 */
+  --c-icon-active: #4A4A4A;       /* accent */
 }
 
 
@@ -1185,7 +1185,7 @@ export const STORY_CSS_EXAMPLE = `/* ═══ 剧情模式样式示例 ══�
   /* ── 装饰 ── */
   --c-story-ornament: rgba(148,163,184,0.15);    /* 装饰元素 */
   --c-story-ornament-soft: rgba(148,163,184,0.08);
-  --c-story-accent: #64748b;                     /* 强调色 */
+  --c-story-accent: #64748b;                     /* accent */
   --c-story-accent-light: #e2e8f0;               /* 浅强调色 */
 
   /* ── 输入区 ── */
@@ -1531,13 +1531,13 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
   /* --vn-ui-text: rgba(255,255,255,0.65); */      /* 主文字 */
   /* --vn-ui-text-dim: rgba(255,255,255,0.3); */   /* 次要文字 */
   /* --vn-ui-text-bright: rgba(255,255,255,0.85); */ /* 高亮文字 */
-  /* --vn-ui-accent: rgba(180,165,220,0.85); */    /* 强调色 */
+  /* --vn-ui-accent: rgba(180,165,220,0.85); */    /* accent */
   /* --vn-ui-accent-dim: rgba(180,165,220,0.25); */ /* 淡强调 */
   /* --vn-ui-accent-bg: rgba(180,165,220,0.06); */ /* 强调背景 */
   /* --vn-ui-input: rgba(255,255,255,0.04); */     /* 输入框背景 */
   /* --vn-ui-input-border: rgba(255,255,255,0.1); */ /* 输入框边框 */
   /* --vn-ui-input-text: rgba(255,255,255,0.8); */ /* 输入框文字 */
-  /* --vn-ui-overlay: rgba(0, 0, 0, 0.35); */     /* 遮罩 */
+  /* --vn-ui-overlay: rgba(0, 0, 0, 0.35); */     /* overlay */
   /* --vn-ui-danger: rgba(220,90,75,0.8); */       /* 危险色 */
   /* --vn-ui-success: rgba(90,180,130,0.7); */     /* 成功色 */
 
@@ -1802,35 +1802,35 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
 `;
 
 export const CALENDAR_CSS_EXAMPLE = `/* ══════════════════════════════════════════
-   日历页面自定义样式 — 暗夜星空主题
-   修改后点击「保存」即刻生效
-   清空全部内容保存即恢复默认
+   Calendar page custom styling — Night Sky theme
+   Changes take effect as soon as you hit Save
+   Clear everything and save to go back to the default
    ══════════════════════════════════════════ */
 
-/* ━━ 全部色彩变量 ━━ */
+/* ━━ All colour variables ━━ */
 .calendar-app-shell {
-  /* 背景渐变三段 */
+  /* the three background gradient stops */
   --c-calendar-bg-top: #0f0e1a;
   --c-calendar-bg-mid: #151228;
   --c-calendar-bg-bottom: #1a1530;
-  /* 装饰光球 */
+  /* decorative glow orbs */
   --c-calendar-orb-1: rgba(100, 60, 220, 0.5);
   --c-calendar-orb-2: rgba(220, 80, 160, 0.4);
-  /* 文字 */
+  /* text */
   --c-calendar-text: #f0ecfa;
   --c-calendar-sub: #bdb2da;
-  /* 强调色 */
+  /* accent */
   --c-calendar-accent: #a78bfa;
   --c-calendar-accent-dim: rgba(167, 139, 250, 0.2);
-  /* 周末色 */
+  /* weekend colour */
   --c-calendar-weekend: #f472b6;
-  /* 按钮 / 操作色 */
+  /* buttons and actions */
   --c-calendar-action: #818cf8;
-  /* 弹窗背景渐变 */
+  /* dialog background gradient */
   --c-calendar-modal-pink: rgba(80, 50, 140, 0.4);
   --c-calendar-modal-blue: rgba(40, 30, 100, 0.4);
-  /* 面板底色 / 边框 */
-  /* 玻璃层 (透明度梯度) */
+  /* panel background and border */
+  /* glass layers (opacity steps) */
   --c-calendar-glass-1: rgba(255, 255, 255, 0.04);
   --c-calendar-glass-3: rgba(255, 255, 255, 0.06);
   --c-calendar-glass-4: rgba(255, 255, 255, 0.08);
@@ -1842,15 +1842,15 @@ export const CALENDAR_CSS_EXAMPLE = `/* ═════════════�
   --c-calendar-glass-85: rgba(255, 255, 255, 0.85);
   --c-calendar-glass-9: rgba(255, 255, 255, 0.9);
   --c-calendar-glass-full: #fff;
-  /* 阴影 */
+  /* shadows */
   --c-calendar-shadow-2: rgba(0, 0, 0, 0.08);
   --c-calendar-shadow-3: rgba(0, 0, 0, 0.12);
   --c-calendar-shadow-4: rgba(0, 0, 0, 0.15);
   --c-calendar-shadow-6: rgba(0, 0, 0, 0.2);
   --c-calendar-shadow-10: rgba(0, 0, 0, 0.3);
   --c-calendar-shadow-15: rgba(0, 0, 0, 0.4);
-  /* 遮罩 */
-  /* 日程事件色板 */
+  /* overlay */
+  /* schedule event palette */
   --c-calendar-event-blue: #818cf8;
   --c-calendar-event-green: #34d399;
   --c-calendar-event-amber: #fbbf24;
@@ -1861,13 +1861,13 @@ export const CALENDAR_CSS_EXAMPLE = `/* ═════════════�
   --c-calendar-event-purple: #c084fc;
 }
 
-/* ━━ 页面整体 ━━ */
+/* ━━ The page overall ━━ */
 .calendar-app {
-  /* 可替换整体背景 */
+  /* swap the whole background here */
   /* background: linear-gradient(180deg, #0f0e1a, #1a1530); */
 }
 
-/* ━━ 顶部导航栏 ━━ */
+/* ━━ Top navigation bar ━━ */
 .calendar-header {
   /* backdrop-filter: blur(20px); */
 }
@@ -1878,7 +1878,7 @@ export const CALENDAR_CSS_EXAMPLE = `/* ═════════════�
   /* opacity: 0.8; */
 }
 
-/* ━━ 角色/用户切换条 ━━ */
+/* ━━ Character / user switcher ━━ */
 .calendar-owner-strip {
   /* gap: 8px; */
 }
@@ -1887,7 +1887,7 @@ export const CALENDAR_CSS_EXAMPLE = `/* ═════════════�
   /* box-shadow: 0 2px 12px rgba(167, 139, 250, 0.2); */
 }
 
-/* ━━ 周标题区 ━━ */
+/* ━━ Weekday header row ━━ */
 .calendar-week-header {
   /* padding: 12px 16px; */
 }
@@ -1895,7 +1895,7 @@ export const CALENDAR_CSS_EXAMPLE = `/* ═════════════�
   /* font-size: calc(15px*var(--app-text-scale,1)); */
 }
 
-/* ━━ 月历网格 ━━ */
+/* ━━ Month grid ━━ */
 .calendar-grid-shell {
   border-radius: 18px;
   /* box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3); */
@@ -1907,7 +1907,7 @@ export const CALENDAR_CSS_EXAMPLE = `/* ═════════════�
   /* font-size: calc(10px*var(--app-text-scale,1)); */
 }
 
-/* ━━ 日程时间轴 ━━ */
+/* ━━ Schedule timeline ━━ */
 .calendar-day-columns {
   /* gap: 2px; */
 }
@@ -1919,7 +1919,7 @@ export const CALENDAR_CSS_EXAMPLE = `/* ═════════════�
   /* box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); */
 }
 
-/* ━━ 统一视图 ━━ */
+/* ━━ Combined view ━━ */
 .calendar-unified-grid {
   /* border-radius: 16px; */
 }
@@ -1930,7 +1930,7 @@ export const CALENDAR_CSS_EXAMPLE = `/* ═════════════�
   border-radius: 8px;
 }
 
-/* ━━ Hero 卡片 ━━ */
+/* ━━ Hero card ━━ */
 .calendar-hero {
   border-radius: 20px;
   /* box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); */
@@ -1948,7 +1948,7 @@ export const CALENDAR_CSS_EXAMPLE = `/* ═════════════�
   -webkit-text-fill-color: transparent;
 }
 
-/* ━━ 设置卡片 ━━ */
+/* ━━ Settings card ━━ */
 .calendar-setting-card {
   border-radius: 16px;
 }
@@ -1956,7 +1956,7 @@ export const CALENDAR_CSS_EXAMPLE = `/* ═════════════�
   /* padding: 12px 16px; */
 }
 
-/* ━━ 浮动按钮 ━━ */
+/* ━━ Floating button ━━ */
 .calendar-fab {
   /* box-shadow: 0 4px 16px rgba(167, 139, 250, 0.3); */
 }
@@ -1967,13 +1967,13 @@ export const CALENDAR_CSS_EXAMPLE = `/* ═════════════�
   /* opacity: 0.9; */
 }
 
-/* ━━ 编辑弹窗 ━━ */
+/* ━━ Edit dialog ━━ */
 .calendar-edit-modal {
   border-radius: 24px;
   /* backdrop-filter: blur(5px) saturate(140%); */
 }
 
-/* ━━ 确认弹窗 ━━ */
+/* ━━ Confirm dialog ━━ */
 .calendar-confirm-dialog {
   /* max-width: 280px; */
 }
@@ -1985,48 +1985,48 @@ export const CALENDAR_CSS_EXAMPLE = `/* ═════════════�
 }`;
 
 export const MUSIC_CSS_EXAMPLE = `/* ══════════════════════════════════════════
-   音乐页面自定义样式 — 极光紫夜主题
-   修改后点击「保存」即刻生效
-   清空全部内容保存即恢复默认
+   Music page custom styling — Aurora Purple Night theme
+   Changes take effect as soon as you hit Save
+   Clear everything and save to go back to the default
    ══════════════════════════════════════════ */
 
-/* ━━ 全部 18 个色彩变量 ━━ */
+/* ━━ All 18 colour variables ━━ */
 .music-app,
 .music-player,
 .music-float {
-  /* 页面底色 */
+  /* page background */
   --c-music-bg: #0c0a1a;
-  /* 背景渐变 · 5 层 */
+  /* background gradient, 5 layers */
   --c-music-bg-mint: rgba(100, 60, 220, 0.35);
   --c-music-bg-cream: rgba(180, 80, 200, 0.2);
   --c-music-bg-lime: rgba(60, 120, 255, 0.2);
   --c-music-bg-mint-dim: rgba(80, 40, 180, 0.25);
   --c-music-bg-center: rgba(60, 40, 200, 0.3);
-  /* 全屏播放器背景光 */
+  /* glow behind the full-screen player */
   --c-music-bg-glow: rgba(140, 80, 255, 0.15);
   --c-music-bg-mist: rgba(80, 40, 160, 0.15);
-  /* 玻璃面板 / 边框 / 极淡装饰 */
+  /* glass panel, border, very faint decoration */
   --c-music-surface: rgba(255, 255, 255, 0.06);
   --c-music-surface-solid: rgba(255, 255, 255, 0.12);
   --c-music-glass-dim: rgba(255, 255, 255, 0.03);
-  /* 文字 / 强调 / 纯白 */
+  /* text, accent, pure white */
   --c-music-white: #e0d8f0;
   --c-music-text: #e0d8f0;
   --c-music-accent: #b49de8;
   --c-music-accent-dim: rgba(180, 157, 232, 0.12);
-  /* 金色 / 遮罩 / 红心 */
+  /* gold, overlay, heart */
   --c-music-gold: rgba(232, 180, 100, 0.35);
   --c-music-overlay: rgba(0, 0, 0, 0.4);
   --c-music-liked: #ff5c8a;
 }
 
-/* ━━ 页面整体 ━━ */
+/* ━━ The page overall ━━ */
 .music-app {
-  /* 可替换背景渐变方式 */
+  /* swap the background gradient approach here */
   /* background-image: linear-gradient(135deg, #0c0a1a, #1a1030); */
 }
 
-/* ━━ 顶部标签栏 ━━ */
+/* ━━ Top tab bar ━━ */
 .music-tabs {
   border-radius: 24px;
   box-shadow: 0 2px 16px rgba(140, 80, 255, 0.25);
@@ -2040,12 +2040,12 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
 .music-tab[data-active] {
   box-shadow: 0 2px 12px rgba(180, 157, 232, 0.3);
 }
-/* 顶部左右图标按钮 */
+/* the icon buttons at either end of the top bar */
 .music-header-action {
   /* opacity: 0.8; */
 }
 
-/* ━━ 推荐 / 我的页 ━━ */
+/* ━━ Recommended and Library pages ━━ */
 .music-discovery {
   gap: 18px;
   padding: 12px 16px 120px;
@@ -2070,7 +2070,7 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
   border-radius: 14px;
 }
 
-/* ━━ 歌曲列表 ━━ */
+/* ━━ Track list ━━ */
 .music-list {
   gap: 10px;
   padding: 12px 16px 120px;
@@ -2098,12 +2098,12 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
 .music-song-duration {
   font-size: calc(11px*var(--app-text-scale,1));
 }
-/* 播放中高亮 */
+/* highlight for the track currently playing */
 .music-song[data-playing] .music-song-title {
   /* color: #c8b4ff; */
 }
 
-/* ━━ 底部正在播放条 ━━ */
+/* ━━ Now-playing bar at the bottom ━━ */
 .music-now-bar {
   border-radius: 28px;
   backdrop-filter: blur(32px) saturate(160%);
@@ -2116,19 +2116,19 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
 .music-now-bar-title {
   font-size: calc(13px*var(--app-text-scale,1));
 }
-/* 小鸟装饰 */
+/* the little bird decoration */
 .music-bird {
-  /* opacity: 0; */ /* 隐藏小鸟 */
-  /* filter: hue-rotate(180deg); */ /* 变色 */
+  /* opacity: 0; */ /* hide the bird */
+  /* filter: hue-rotate(180deg); */ /* recolour it */
 }
 
-/* ━━ 全屏播放器 ━━ */
-/* 背景光晕 */
+/* ━━ Full-screen player ━━ */
+/* background halo */
 .music-player-bg {
   filter: blur(80px);
   /* opacity: 0.8; */
 }
-/* 唱片 */
+/* the record */
 .music-player-vinyl {
   width: 240px;
   height: 240px;
@@ -2144,7 +2144,7 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
   background: radial-gradient(circle,
     rgba(140, 80, 255, 0.25) 0%, transparent 60%);
 }
-/* 唱片中心 */
+/* record centre */
 .music-player-vinyl-center {
   width: 90px;
   height: 90px;
@@ -2153,19 +2153,19 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
   width: 8px;
   height: 8px;
 }
-/* 唱片沟槽 */
+/* record grooves */
 .music-player-vinyl-groove {
   /* border-color: rgba(180, 157, 232, 0.1); */
 }
-/* 唱臂 */
+/* tonearm */
 .music-player-tonearm {
-  /* transform: rotate(-25deg); */ /* 休息角度 */
+  /* transform: rotate(-25deg); */ /* resting angle */
 }
 .music-player-tonearm-pivot {
   /* background: radial-gradient(circle, #fff, #b49de8); */
 }
 
-/* ━━ 歌词视图 ━━ */
+/* ━━ Lyrics view ━━ */
 .music-player-lyrics {
   padding: 40px 28px;
   gap: 16px;
@@ -2181,7 +2181,7 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
   /* text-shadow: 0 0 12px rgba(180, 157, 232, 0.5); */
 }
 
-/* ━━ 进度条 ━━ */
+/* ━━ Progress bar ━━ */
 .music-player-progress::before {
   height: 3px;
   border-radius: 2px;
@@ -2195,7 +2195,7 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
   box-shadow: 0 0 8px rgba(180, 157, 232, 0.6);
 }
 
-/* ━━ 播放控制按钮 ━━ */
+/* ━━ Playback controls ━━ */
 .music-player-ctrl-play {
   width: 64px;
   height: 64px;
@@ -2203,13 +2203,13 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
   box-shadow: 0 4px 24px rgba(180, 157, 232, 0.35);
 }
 .music-player-ctrl-btn {
-  /* 前进/后退按钮 */
+  /* skip forward / back */
 }
 .music-player-ctrl-side {
-  /* 模式/红心按钮 */
+  /* repeat mode and heart buttons */
 }
 
-/* ━━ 悬浮窗 ━━ */
+/* ━━ Floating window ━━ */
 .music-float {
   border-radius: 36px;
   backdrop-filter: blur(28px);
@@ -2221,14 +2221,14 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
   border-radius: 24px;
 }
 .music-float-cover-wrap {
-  /* 悬浮窗封面唱片 */
+  /* the record artwork in the floating window */
 }
 .music-float-title {
   font-size: calc(13px*var(--app-text-scale,1));
   font-weight: 600;
 }
 
-/* ━━ 搜索页 ━━ */
+/* ━━ Search page ━━ */
 .music-search-bar {
   border-radius: 20px;
   height: 40px;
@@ -2241,7 +2241,7 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
   /* color: rgba(180, 157, 232, 0.4); */
 }
 
-/* ━━ 歌单页 ━━ */
+/* ━━ Playlist page ━━ */
 .music-playlist-grid {
   gap: 12px;
   /* grid-template-columns: repeat(3, 1fr); */
@@ -2263,7 +2263,7 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
   font-weight: 600;
 }
 
-/* ━━ 空状态 ━━ */
+/* ━━ Empty states ━━ */
 .music-empty {
   opacity: 0.4;
 }
@@ -2275,7 +2275,7 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
   letter-spacing: 1px;
 }
 
-/* ━━ 浮动按钮 ━━ */
+/* ━━ Floating button ━━ */
 .music-fab-add {
   width: 44px;
   height: 44px;
@@ -2283,7 +2283,7 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
   box-shadow: 0 4px 20px rgba(140, 80, 255, 0.3);
 }
 
-/* ━━ 设置弹窗 ━━ */
+/* ━━ Settings dialog ━━ */
 .music-settings-modal-dialog {
   border-radius: 24px;
   backdrop-filter: blur(28px);
@@ -2299,13 +2299,13 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
   height: 36px;
 }
 .music-settings-toggle {
-  /* 开关轨道 */
+  /* toggle track */
 }
 .music-settings-toggle[data-checked] {
-  /* 开关开启态 */
+  /* toggle, on state */
 }
 
-/* ━━ 收藏歌单弹窗 / 分享弹窗 (底部上滑) ━━ */
+/* ━━ Save-to-playlist and share sheets (slide up from the bottom) ━━ */
 .music-playlist-picker {
   /* background: var(--c-music-surface-solid); */
   /* border-radius: 20px 20px 0 0; */
@@ -2327,7 +2327,7 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
   /* color: var(--c-music-accent); */
 }
 
-/* ━━ 播放队列抽屉 (右侧滑入) ━━ */
+/* ━━ Play queue drawer (slides in from the right) ━━ */
 .music-queue-drawer {
   /* width: 75%; */
   /* background: var(--c-music-surface-solid); */
@@ -2348,7 +2348,7 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
   /* color: var(--c-music-accent); */
 }
 
-/* ━━ 确认弹窗 ━━ */
+/* ━━ Confirm dialog ━━ */
 .music-confirm-dialog {
   /* max-width: 280px; */
 }
@@ -2361,7 +2361,7 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
   /* color: var(--c-music-white); */
 }
 
-/* ━━ Toast 通知 ━━ */
+/* ━━ Toast notifications ━━ */
 .music-toast {
   /* border-radius: 20px; */
   /* font-size: calc(13px*var(--app-text-scale,1)); */
@@ -2374,7 +2374,7 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
   /* color: var(--c-music-liked); */
 }
 
-/* ━━ 聊天音乐分享卡片 ━━ */
+/* ━━ Music share card in chat ━━ */
 .chat-music-share-card {
   /* width: 220px; */
   /* border-radius: 16px; */
@@ -2400,7 +2400,7 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
   /* color: var(--c-music-accent); */
 }
 
-/* ━━ 动画速度 ━━ */
+/* ━━ Animation speed ━━ */
 /* .music-player-vinyl[data-spinning] {
   animation-duration: 8s;
 } */
@@ -2408,11 +2408,11 @@ export const MUSIC_CSS_EXAMPLE = `/* ══════════════�
   animation-duration: 6s;
 } */`;
 
-export const GLOBAL_CSS_EXAMPLE = `/* === 全局 CSS 选择器示例 === */
-/* 本示例只列全局相对稳定的选择器，不包含具体 APP 的业务类名，也不依赖全局变量。 */
-/* 取消注释需要的属性后点击「应用」。全局 CSS 会影响所有页面，请尽量用选择器限定范围。 */
+export const GLOBAL_CSS_EXAMPLE = `/* === Global CSS selector examples === */
+/* This lists only the globally stable selectors. It avoids app-specific class names and does not rely on global variables. */
+/* Uncomment the properties you want, then hit Apply. Global CSS affects every page, so keep your selectors as narrow as you can. */
 
-/* === 页面基础结构 === */
+/* === Page structure === */
 [data-ui="phone-screen"] {
   /* background: #f7f7f8; */
   /* color: #222222; */
@@ -2442,7 +2442,7 @@ export const GLOBAL_CSS_EXAMPLE = `/* === 全局 CSS 选择器示例 === */
   /* border-top: 1px solid rgba(0, 0, 0, 0.08); */
 }
 
-/* === 通用页面壳 === */
+/* === Shared page shell === */
 .page-shell {
   /* background: #f5f5f6; */
 }
@@ -2466,7 +2466,7 @@ export const GLOBAL_CSS_EXAMPLE = `/* === 全局 CSS 选择器示例 === */
   /* background: transparent; */
 }
 
-/* === 通用卡片 / 列表 === */
+/* === Shared cards and lists === */
 [data-ui="card"],
 .app-card,
 .ui-entry-card,
@@ -2479,7 +2479,7 @@ export const GLOBAL_CSS_EXAMPLE = `/* === 全局 CSS 选择器示例 === */
   /* box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06); */
 }
 
-/* === 通用按钮 === */
+/* === Shared buttons === */
 .ui-btn {
   /* border-radius: 10px; */
   /* min-height: 38px; */
@@ -2507,7 +2507,7 @@ export const GLOBAL_CSS_EXAMPLE = `/* === 全局 CSS 选择器示例 === */
   /* color: #ffffff; */
 }
 
-/* === 通用输入控件 === */
+/* === Shared form controls === */
 .ui-input,
 .ui-textarea,
 .ui-select {
@@ -2542,7 +2542,7 @@ export const GLOBAL_CSS_EXAMPLE = `/* === 全局 CSS 选择器示例 === */
   /* background: #ffffff; */
 }
 
-/* === 标签 / 徽章 / 头像 === */
+/* === Tags, badges and avatars === */
 .ui-badge,
 .ui-status-tag,
 .ui-tag,
@@ -2568,7 +2568,7 @@ export const GLOBAL_CSS_EXAMPLE = `/* === 全局 CSS 选择器示例 === */
   /* border-radius: 12px; */
 }
 
-/* === 菜单 === */
+/* === Menus === */
 [data-ui="menu"],
 .menu-group {
   /* background: rgba(255, 255, 255, 0.82); */
@@ -2589,7 +2589,7 @@ export const GLOBAL_CSS_EXAMPLE = `/* === 全局 CSS 选择器示例 === */
   /* color: #777777; */
 }
 
-/* === 弹窗 === */
+/* === Dialogs === */
 [data-ui="modal"] {
   /* background: rgba(0, 0, 0, 0.42); */
 }
@@ -2615,7 +2615,7 @@ export const GLOBAL_CSS_EXAMPLE = `/* === 全局 CSS 选择器示例 === */
   /* gap: 10px; */
 }
 
-/* === 进度条 === */
+/* === Progress bars === */
 [data-ui="progress"],
 .ui-progress-track {
   /* height: 4px; */
@@ -2627,7 +2627,7 @@ export const GLOBAL_CSS_EXAMPLE = `/* === 全局 CSS 选择器示例 === */
   /* background: #2f7cf6; */
 }
 
-/* === 消息气泡：只在存在这些语义节点的页面生效 === */
+/* === Message bubbles: only applies on pages that have these semantic nodes === */
 [data-ui="bubble-user"],
 [data-ui="bubble-bot"] {
   /* border-radius: 18px; */
@@ -2644,7 +2644,7 @@ export const GLOBAL_CSS_EXAMPLE = `/* === 全局 CSS 选择器示例 === */
   /* color: #222222; */
 }
 
-/* === 组合限定示例 === */
+/* === Examples of narrowing with combinators === */
 [data-ui="modal"] .ui-btn {
   /* border-radius: 12px; */
 }
