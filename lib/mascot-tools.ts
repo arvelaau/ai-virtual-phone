@@ -40,9 +40,15 @@ export type MascotSubTool = {
 export type MascotToolPackage = {
     id: string;
     label: string;
+    /**
+     * The pre-translation Chinese label. The model types the label in
+     * `[FetchTool:<label>]`, so findPackageByLabel keeps accepting the old name
+     * forever — the mascot's saved history is full of them.
+     */
+    legacyLabel?: string;
     description: string;
     subTools: MascotSubTool[];
-    usageGuide?: string; // 文本协议下，展开时额外的写作指南
+    usageGuide?: string; // extra writing guide surfaced when the pack is expanded, under the text protocol
 };
 
 // ── 工具参数 Schema 定义 ────────────────────────────────
@@ -605,90 +611,97 @@ const REMOVE_DIY_WIDGET_SCHEMA = {
 export const MASCOT_TOOL_PACKAGES: MascotToolPackage[] = [
     {
         id: "css_pack",
-        label: "CSS样式套件",
-        description: "查看 / 覆写 / 清除 各页面的自定义 CSS。工作流：先 读取CSS 拿到当前内容和可用选择器，再把（要保留的旧内容 + 要修改的部分）拼成完整新内容，最后 覆写CSS 写回。",
+        label: "CSS Styling Pack",
+        legacyLabel: "CSS样式套件",
+        description: "Read / overwrite / clear each page's custom CSS. Workflow: 读取CSS first to get the current content and the available selectors, then assemble the full new content (the old rules you are keeping plus your changes), and finally write it back with 覆写CSS.",
         subTools: [
-            { name: "读取CSS", description: "读取指定位置的当前 CSS 内容 + 该位置可用的选择器/变量参考。修改前必读。不传 location 时返回 5 个位置的状态概览。", parameterSchema: READ_CSS_SCHEMA },
-            { name: "覆写CSS", description: "用新内容替换该位置的全部 CSS。需要Scroll自己把（保留的旧规则 + 改动）拼成完整内容再写入。", parameterSchema: OVERWRITE_CSS_SCHEMA },
-            { name: "清除CSS", description: "清空指定位置的所有自定义 CSS。", parameterSchema: CLEAR_CSS_SCHEMA },
+            { name: "读取CSS", description: "Read the current CSS at a location, plus the selectors and variables available there. Always read before changing anything. With no location, returns a status overview of all 5 locations.", parameterSchema: READ_CSS_SCHEMA },
+            { name: "覆写CSS", description: "Replace all CSS at that location with new content. You must assemble the complete content yourself (the old rules you are keeping plus your changes) before writing.", parameterSchema: OVERWRITE_CSS_SCHEMA },
+            { name: "清除CSS", description: "Clear all custom CSS at the given location.", parameterSchema: CLEAR_CSS_SCHEMA },
         ],
         usageGuide: CSS_PROMPT,
     },
     {
         id: "image_pack",
-        label: "图像处理套件",
-        description: "生成、导入用户图、去底透明、裁切、压缩转换、列出读取、上传和生成九宫格 CSS。适合制作聊天气泡、图标、背景纹理等主题素材。",
+        label: "Image Pack",
+        legacyLabel: "图像处理套件",
+        description: "Generate images, import the user's own, knock out backgrounds, crop, compress and convert, list and read, upload, and build nine-slice CSS. Suited to making themed assets such as chat bubbles, icons and background textures.",
         subTools: [
-            { name: "生成图像素材", description: "调用已配置的图像生成接口，生成一张可用于 CSS 的素材并保存到本地素材库，返回素材 id 和预览。", parameterSchema: GENERATE_IMAGE_ASSET_SCHEMA },
-            { name: "列出用户图片", description: "列出最近Scroll对话里用户上传的图片，返回 sourceImageId 和预览，用于选择要导入的素材。", parameterSchema: LIST_USER_IMAGES_SCHEMA },
-            { name: "导入用户图片为素材", description: "把用户上传给Scroll的图片导入 CSS 素材库，返回 assetId，后续可继续裁切、去底、上传和写 CSS。", parameterSchema: IMPORT_USER_IMAGE_ASSET_SCHEMA },
-            { name: "去底透明", description: "把与图片外缘连通的白底/纯色底转成透明，适合处理 Image 2 生成的白底气泡/图标。", parameterSchema: REMOVE_IMAGE_BACKGROUND_SCHEMA },
-            { name: "裁切素材", description: "基于素材 id 生成裁切后的新素材。支持坐标裁切，也支持自动裁掉透明/近似纯色边缘。", parameterSchema: CROP_IMAGE_ASSET_SCHEMA },
-            { name: "压缩转换素材", description: "把素材转换成 WebP/PNG/JPEG，可限制最大宽高和压缩质量，生成新的素材 id。", parameterSchema: CONVERT_IMAGE_ASSET_SCHEMA },
-            { name: "列出读取素材", description: "不传 assetId 时列出最近素材；传 assetId 时读取该素材详情并返回预览。", parameterSchema: READ_IMAGE_ASSET_SCHEMA },
-            { name: "上传图床", description: "把素材上传到设置页配置的 ImgBB 图床，返回公开 URL 并保存到素材记录。", parameterSchema: UPLOAD_IMAGE_ASSET_SCHEMA },
-            { name: "校准九宫格", description: "打开弹窗让用户手动拖动九宫格切线，并返回精确 slice/display/padding 参数；复杂图片气泡必须先用它校准。", parameterSchema: CALIBRATE_NINE_SLICE_SCHEMA },
-            { name: "生成九宫格CSS", description: "根据已校准的完整 slice/display/padding 参数生成 border-image 九宫格 CSS；不会自动猜参数。", parameterSchema: NINE_SLICE_CSS_SCHEMA },
+            { name: "生成图像素材", description: "Call the configured image-generation API to produce an asset usable in CSS, save it to the local asset library, and return its id and a preview.", parameterSchema: GENERATE_IMAGE_ASSET_SCHEMA },
+            { name: "列出用户图片", description: "List the images the user uploaded in the recent Scroll conversation, returning sourceImageId and a preview so one can be chosen for import.", parameterSchema: LIST_USER_IMAGES_SCHEMA },
+            { name: "导入用户图片为素材", description: "Import an image the user sent to Scroll into the CSS asset library and return its assetId, ready to crop, knock out, upload and write CSS against.", parameterSchema: IMPORT_USER_IMAGE_ASSET_SCHEMA },
+            { name: "去底透明", description: "Turn a white or flat-colour background that touches the image edge transparent. Good for the white-backed bubbles and icons Image 2 produces.", parameterSchema: REMOVE_IMAGE_BACKGROUND_SCHEMA },
+            { name: "裁切素材", description: "Produce a new cropped asset from an existing asset id. Supports cropping by coordinates, and automatically trimming transparent or near-flat edges.", parameterSchema: CROP_IMAGE_ASSET_SCHEMA },
+            { name: "压缩转换素材", description: "Convert an asset to WebP/PNG/JPEG, optionally capping the maximum dimensions and the quality, and return a new asset id.", parameterSchema: CONVERT_IMAGE_ASSET_SCHEMA },
+            { name: "列出读取素材", description: "With no assetId, list the most recent assets. With an assetId, read that asset's details and return a preview.", parameterSchema: READ_IMAGE_ASSET_SCHEMA },
+            { name: "上传图床", description: "Upload an asset to the ImgBB image host configured in settings, return the public URL, and store it on the asset record.", parameterSchema: UPLOAD_IMAGE_ASSET_SCHEMA },
+            { name: "校准九宫格", description: "Open a dialog so the user can drag the nine-slice guides by hand, and return exact slice/display/padding values. Complex image bubbles must be calibrated with this first.", parameterSchema: CALIBRATE_NINE_SLICE_SCHEMA },
+            { name: "生成九宫格CSS", description: "Build border-image nine-slice CSS from a complete, already-calibrated set of slice/display/padding values. It never guesses the values for you.", parameterSchema: NINE_SLICE_CSS_SCHEMA },
         ],
         usageGuide: IMAGE_ASSET_USAGE_GUIDE,
     },
     {
         id: "character_pack",
-        label: "角色卡套件",
-        description: "创建 / 修改 / 查看 角色卡。角色由 name/persona/personality 三个字段组成。",
+        label: "Character Card Pack",
+        legacyLabel: "角色卡套件",
+        description: "Create / edit / view character cards. A character is made of three fields: name, persona and personality.",
         subTools: [
-            { name: "读取角色", description: "不传 name 时列出所有角色；传 name 时返回完整字段。", parameterSchema: READ_CHARACTER_SCHEMA },
-            { name: "创建角色", description: "新建一张角色卡。persona 必须包含 7 段式人设（基础信息/外貌/世界观/性格/补充信息/经历）。", parameterSchema: CREATE_CHARACTER_SCHEMA },
-            { name: "更新角色字段", description: "修改某角色的单个字段（name/persona/personality）。", parameterSchema: UPDATE_CHARACTER_FIELD_SCHEMA },
+            { name: "读取角色", description: "With no name, list every character. With a name, return that character's full fields.", parameterSchema: READ_CHARACTER_SCHEMA },
+            { name: "创建角色", description: "Create a new character card. The persona must follow the 7-section structure (basics / appearance / worldview / personality / additional notes / history).", parameterSchema: CREATE_CHARACTER_SCHEMA },
+            { name: "更新角色字段", description: "Change a single field on a character (name / persona / personality).", parameterSchema: UPDATE_CHARACTER_FIELD_SCHEMA },
         ],
         usageGuide: CHARACTER_CARD_PROMPT,
     },
     {
         id: "worldbook_pack",
-        label: "世界书套件",
-        description: "管理世界书及其词条。一个世界书包含多个词条，每个词条可以是常驻或关键词触发。",
+        label: "World Book Pack",
+        legacyLabel: "世界书套件",
+        description: "Manage world books and their entries. A world book holds several entries, and each entry is either always active or triggered by keywords.",
         subTools: [
-            { name: "列出世界书", description: "不传 name 时列出所有世界书；传 name 时返回该世界书的词条列表（含 uid）。", parameterSchema: LIST_WORLDBOOKS_SCHEMA },
-            { name: "读取词条", description: "读取某个词条的完整内容。", parameterSchema: READ_WORLDBOOK_ENTRY_SCHEMA },
-            { name: "创建词条", description: "在世界书里新建词条。如果指定的世界书不存在会自动创建。content 推荐用 XML 标签包裹增强结构性。", parameterSchema: CREATE_WORLDBOOK_ENTRY_SCHEMA },
-            { name: "更新词条", description: "修改词条的某个字段（key/content/comment/constant/position）。", parameterSchema: UPDATE_WORLDBOOK_ENTRY_SCHEMA },
-            { name: "删除词条", description: "删除世界书里的某个词条。", parameterSchema: DELETE_WORLDBOOK_ENTRY_SCHEMA },
+            { name: "列出世界书", description: "With no name, list every world book. With a name, return that book's entry list (including uids).", parameterSchema: LIST_WORLDBOOKS_SCHEMA },
+            { name: "读取词条", description: "Read an entry's full content.", parameterSchema: READ_WORLDBOOK_ENTRY_SCHEMA },
+            { name: "创建词条", description: "Create an entry in a world book. If the named book does not exist it is created automatically. Wrapping the content in XML tags is recommended for structure.", parameterSchema: CREATE_WORLDBOOK_ENTRY_SCHEMA },
+            { name: "更新词条", description: "Change one field on an entry (key / content / comment / constant / position).", parameterSchema: UPDATE_WORLDBOOK_ENTRY_SCHEMA },
+            { name: "删除词条", description: "Delete an entry from a world book.", parameterSchema: DELETE_WORLDBOOK_ENTRY_SCHEMA },
         ],
         usageGuide: WORLDBOOK_PROMPT,
     },
     {
         id: "preset_pack",
-        label: "预设套件",
-        description: "管理 LLM 预设。预设分为剧情型(story)和通用型(general)；通用型基于内置预设克隆。每个预设包含多条 prompt，按顺序拼接成系统提示词。",
+        label: "Preset Pack",
+        legacyLabel: "预设套件",
+        description: "Manage LLM presets. A preset is either story type or general type; general ones are cloned from the built-in preset. Each preset holds several prompts, joined in order into the system prompt.",
         subTools: [
-            { name: "列出预设", description: "列出所有预设（含类型和是否内置）。", parameterSchema: LIST_PRESETS_SCHEMA },
-            { name: "读取预设", description: "读取某预设的条目列表（含每条的 promptIndex/name/tag/role/content 摘要前 100 字）。不返回完整内容，全量条目可能有数十条，省 token。需要看某条详情用「读取预设条目」。", parameterSchema: READ_PRESET_SCHEMA },
-            { name: "读取预设条目", description: "读取某预设中单条 prompt 的完整内容（按 promptIndex 定位）。", parameterSchema: READ_PRESET_PROMPT_SCHEMA },
-            { name: "创建剧情预设", description: "创建空白剧情预设。剧情预设没有内置模板，prompts 必须自己按 8 板块顺序填写（主人格→标记位→剧情指导→文风→防崩→附加→输出格式→COT）。", parameterSchema: CREATE_STORY_PRESET_SCHEMA },
-            { name: "克隆内置预设", description: "基于系统内置的通用预设克隆一份新预设（含 70+ 条 prompt 覆盖所有 app 模式）。克隆后通常用「更新预设条目」按需改 1-5 条。", parameterSchema: CLONE_BUILTIN_PRESET_SCHEMA },
-            { name: "复制预设", description: "深拷贝用户已有的某个预设做副本（保留所有条目+顺序+tag）。适合「基于现有 XX 预设做个变体」场景，剧情/通用预设都能复制。", parameterSchema: DUPLICATE_PRESET_SCHEMA },
-            { name: "添加预设条目", description: "向已有预设追加或插入一条 prompt，并同步 prompt_order。", parameterSchema: ADD_PRESET_PROMPT_SCHEMA },
-            { name: "更新预设条目", description: "修改预设中某条 prompt 的单个字段。", parameterSchema: UPDATE_PRESET_PROMPT_SCHEMA },
-            { name: "更新预设信息", description: "修改预设的 name 或 description。", parameterSchema: UPDATE_PRESET_INFO_SCHEMA },
+            { name: "列出预设", description: "List every preset, with its type and whether it is the built-in one.", parameterSchema: LIST_PRESETS_SCHEMA },
+            { name: "读取预设", description: "Read a preset's entry list (each entry's promptIndex, name, tag, role, and the first ~60 words of its content). It deliberately omits full content — a preset can hold dozens of entries — so use 读取预设条目 when you need one in full.", parameterSchema: READ_PRESET_SCHEMA },
+            { name: "读取预设条目", description: "Read the full content of a single prompt in a preset, located by promptIndex.", parameterSchema: READ_PRESET_PROMPT_SCHEMA },
+            { name: "创建剧情预设", description: "Create an empty story preset. Story presets have no built-in template, so you must write the prompts yourself in the 8-block order (main persona → markers → story guidance → prose style → anti-derailment → extras → output format → CoT).", parameterSchema: CREATE_STORY_PRESET_SCHEMA },
+            { name: "克隆内置预设", description: "Clone the system's built-in general preset into a new one (70+ prompts covering every app mode). After cloning you would normally change 1-5 entries with 更新预设条目.", parameterSchema: CLONE_BUILTIN_PRESET_SCHEMA },
+            { name: "复制预设", description: "Deep-copy one of the user's existing presets (keeping every entry, its order and its tags). Suits \"make a variant of my existing X preset\"; both story and general presets can be copied.", parameterSchema: DUPLICATE_PRESET_SCHEMA },
+            { name: "添加预设条目", description: "Append or insert a prompt into an existing preset, keeping prompt_order in sync.", parameterSchema: ADD_PRESET_PROMPT_SCHEMA },
+            { name: "更新预设条目", description: "Change a single field on one prompt in a preset.", parameterSchema: UPDATE_PRESET_PROMPT_SCHEMA },
+            { name: "更新预设信息", description: "Change a preset's name or description.", parameterSchema: UPDATE_PRESET_INFO_SCHEMA },
         ],
-        usageGuide: `${PRESET_PROMPT}\n\n=== 通用型预设（type=general）补充规则 ===\n${GENERAL_PRESET_PROMPT}`,
+        usageGuide: `${PRESET_PROMPT}\n\n=== Extra rules for general presets (type=general) ===\n${GENERAL_PRESET_PROMPT}`,
     },
     {
         id: "regex_pack",
-        label: "正则套件",
-        description: "管理正则规则组。每个组包含多条规则，每条规则定义查找/替换模式和应用范围。",
+        label: "Regex Pack",
+        legacyLabel: "正则套件",
+        description: "Manage regex rule groups. Each group holds several rules, and each rule defines a find/replace pattern and where it applies.",
         subTools: [
-            { name: "列出正则组", description: "列出所有正则组及其规则数量。", parameterSchema: LIST_REGEX_GROUPS_SCHEMA },
-            { name: "读取正则组", description: "读取某组的所有规则（含 rule id）。", parameterSchema: READ_REGEX_GROUP_SCHEMA },
-            { name: "创建正则组", description: "新建正则组并填入规则。", parameterSchema: CREATE_REGEX_GROUP_SCHEMA },
-            { name: "添加正则规则", description: "向现有组追加一条规则。", parameterSchema: ADD_REGEX_RULE_SCHEMA },
-            { name: "更新正则规则", description: "修改某规则的字段（updates 里传部分字段即可）。", parameterSchema: UPDATE_REGEX_RULE_SCHEMA },
+            { name: "列出正则组", description: "List every regex group and how many rules each holds.", parameterSchema: LIST_REGEX_GROUPS_SCHEMA },
+            { name: "读取正则组", description: "Read all rules in a group, including their rule ids.", parameterSchema: READ_REGEX_GROUP_SCHEMA },
+            { name: "创建正则组", description: "Create a new regex group and fill it with rules.", parameterSchema: CREATE_REGEX_GROUP_SCHEMA },
+            { name: "添加正则规则", description: "Append one rule to an existing group.", parameterSchema: ADD_REGEX_RULE_SCHEMA },
+            { name: "更新正则规则", description: "Change fields on a rule (pass a partial set in updates).", parameterSchema: UPDATE_REGEX_RULE_SCHEMA },
         ],
         usageGuide: REGEX_PROMPT,
     },
     {
         id: "widget_pack",
-        label: "桌面组件套件",
+        label: "Desktop Widget Pack",
+        legacyLabel: "桌面组件套件",
         description: "Create / update / preview / place DIY desktop widgets (self-contained HTML, rendered in a sandbox). Desktop instances hot-reload after an update, which suits small iterative steps.",
         subTools: [
             { name: "列出组件目录", description: "List the built-in widgets and the DIY widget templates (with templateId, size and mode).", parameterSchema: LIST_WIDGET_CATALOG_SCHEMA },
@@ -710,37 +723,42 @@ export const MASCOT_NAVIGATE_TOOL: MascotSubTool = {
     parameterSchema: NAVIGATE_SCHEMA,
 };
 
-// ── 文本协议下的工具列表渲染 ─────────────────────────────
+// ── Tool list rendering under the text protocol ─────────────────────────────
 
-/** 紧凑工具列表（每轮都注入到 system prompt） */
+/** The compact tool list, injected into the system prompt every turn. */
 export function buildMascotToolsListPrompt(): string {
     const lines: string[] = [];
-    lines.push("===== 你的工具 =====");
-    lines.push("以下工具按套件分组。需要使用某套件时，先调用 `展开[套件名]套件` 获取详细动作说明，再执行具体动作。");
+    lines.push("===== Your tools =====");
+    lines.push("The tools below are grouped into packs. To use a pack, first fetch it to get the detailed action reference, then call the action you want.");
     lines.push("");
     for (const pkg of MASCOT_TOOL_PACKAGES) {
         lines.push(`【${pkg.label}】${pkg.description}`);
     }
-    // 导航工具不在套件里，schema 直接在这里展开（只一个工具，省得用 [获取指令] 再加载）
-    lines.push("【独立工具】导航 — 跳转到指定页面，可直接调用。");
-    lines.push("  参数：");
-    lines.push("    · page (必填) — 页面名。可选值：chat / characters / story / vnmode / moments / calendar / music / resources / settings");
-    lines.push("    · subpage (可选) — 子页面（仅 page=settings 时有效）。可选值：presets / worldbook / regex / api / voice / binding / data / identity");
-    lines.push("  调用：[执行动作:导航({\"page\":\"chat\"})] 或 [执行动作:导航({\"page\":\"settings\",\"subpage\":\"presets\"})]");
+    // Navigation sits outside the packs, so its schema is expanded inline here — it is a
+    // single tool, and this saves a whole fetch round trip.
+    lines.push("【Standalone tool】导航 (navigate) — jump to a given page. Callable directly.");
+    lines.push("  Parameters:");
+    lines.push("    · page (required) — the page name. One of: chat / characters / story / vnmode / moments / calendar / music / resources / settings");
+    lines.push("    · subpage (optional) — a sub-page, only meaningful when page=settings. One of: presets / worldbook / regex / api / voice / binding / data / identity");
+    lines.push("  Call it as: [CallTool:导航({\"page\":\"chat\"})] or [CallTool:导航({\"page\":\"settings\",\"subpage\":\"presets\"})]");
     lines.push("");
-    lines.push("===== 调用规则 =====");
-    lines.push("· 展开套件：使用 [获取指令:套件名] 格式，例如 [获取指令:CSS样式套件]");
-    lines.push("· 执行动作：使用 [执行动作:动作名({\"参数\":\"值\"})] 格式，例如 [执行动作:读取CSS({\"location\":\"chat_session\"})]");
-    lines.push("· 同时展开的套件最多 2 个，超过会自动淘汰最旧的");
-    lines.push("· 不需要工具时直接回复文字，正常聊天");
-    lines.push("· 重要：调用动作时，回复文本里**不要复述**动作参数的内容（比如不要把 persona 完整文本再写一遍），回复只用一两句话简短说明你在做什么");
+    lines.push("===== Calling rules =====");
+    lines.push("· Fetch a pack with [FetchTool:packName], for example [FetchTool:CSS Styling Pack]");
+    lines.push("· Run an action with [CallTool:actionName({\"param\":\"value\"})], for example [CallTool:读取CSS({\"location\":\"chat_session\"})]");
+    lines.push("· Action names are the literal names shown in each pack — keep them exactly as written, including any Chinese characters");
+    lines.push("· At most 2 packs can be open at once; fetching a third drops the oldest");
+    lines.push("· When you do not need a tool, just reply in text and chat normally");
+    lines.push("· Important: when you call an action, do NOT restate the action's arguments in your reply (for instance, never write the whole persona out again). Keep the reply to a sentence or two about what you are doing");
     return lines.join("\n");
 }
 
-/** 套件展开后的详细 schema（用于 [获取指令] 响应） */
+/** The detailed schema shown once a pack is expanded (the response to a fetch directive). */
 export function buildMascotPackageSchemaPrompt(packageLabel: string, protocol: "text" | "native" = "text"): string {
-    const pkg = MASCOT_TOOL_PACKAGES.find(p => p.label === packageLabel || p.id === packageLabel);
-    if (!pkg) return `（找不到套件：${packageLabel}）`;
+    // Goes through findPackageByLabel so the legacy Chinese pack names keep resolving
+    // here too — this lookup used to be its own `p.label === packageLabel` comparison,
+    // which would have silently stopped matching the moment the labels were translated.
+    const pkg = findPackageByLabel(packageLabel) ?? MASCOT_TOOL_PACKAGES.find(p => p.id === packageLabel);
+    if (!pkg) return `(No such pack: ${packageLabel})`;
 
     const lines: string[] = [];
     lines.push(`【${pkg.label}】动作详解`);
@@ -1989,9 +2007,25 @@ export function touchExpandedPackage(currentIds: string[], packageId: string): s
     return next.slice(-MAX_EXPANDED);
 }
 
-/** 套件 label → packageId */
+/**
+ * Pack label → package.
+ *
+ * The label is a live protocol token: the model types it in `[FetchTool:<label>]` and
+ * mascot-chat-store.ts:450 resolves it through here. So the lookup is bilingual, like
+ * every other parser in this migration — the labels are English now, but a model
+ * steered by Chinese history still reaches for the legacy names, and the mascot's own
+ * saved history is full of them. Matching is case-insensitive and trim-tolerant
+ * because the model types these by hand.
+ */
 export function findPackageByLabel(label: string): MascotToolPackage | undefined {
-    return MASCOT_TOOL_PACKAGES.find((p) => p.label === label);
+    // The label comes straight out of what the model typed, so it may be anything.
+    if (typeof label !== "string") return undefined;
+    const wanted = label.trim().toLowerCase();
+    if (!wanted) return undefined;
+    return MASCOT_TOOL_PACKAGES.find(
+        (p) => p.label.toLowerCase() === wanted
+            || (p.legacyLabel && p.legacyLabel.toLowerCase() === wanted),
+    );
 }
 
 // ── Desktop widget handlers ─────────────────────────

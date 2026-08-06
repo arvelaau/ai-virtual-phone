@@ -901,6 +901,47 @@ It had to move as one change: the name reaches the model through the **persona p
 2. The preset-tool names `创建剧情预设`, `克隆内置预设`, `复制预设`, `添加预设条目`, `更新预设条目`, `更新预设信息` are matched by `preset-manager.tsx:86-93` `MASCOT_PRESET_STORAGE_TOOL_NAMES`. Same rule.
 3. `WORLDBOOK_PROMPT:242,285` carry an explicit **"output in Chinese" order** (`标签名用中文` — world book entry content should use Chinese XML tag names). That is the fifth engine in a row with that trap. Those XML tags are free text injected into prompts and parsed nowhere, so flipping them to English is safe.
 
+## UPSTREAM (2026-08-06) — remote added, and what has been ported
+
+Upstream is `https://github.com/xiaolongbao0709/ai-virtual-phone`, added as remote **`upstream`** with its **push URL disabled** (`push = DISABLED_no_push`). Fetch-only; nothing has ever been merged or rebased.
+
+**Our repo shares NO history with it** (this is a local `git init`), so `merge-base` is empty and there are no commit ranges — only tree diffs. **And most of the raw diff is CRLF noise**: `llm-prompt-assembler.ts` shows 3702 changed lines but has *zero* real changes. Always compare with `--ignore-cr-at-eol`:
+```
+git diff --shortstat --ignore-cr-at-eol 6a067d4 upstream/main
+```
+Real divergence from our baseline: **129 files, +23024 / −5191**, 149 commits, 29 new files, 0 deleted.
+
+**Do not merge.** With unrelated histories plus CRLF noise, a merge conflicts in ~39 files where most are byte-identical. Cherry-pick by hand instead.
+
+`upstream/test` vs `upstream/main` is only **11 files / 432 lines**, all mobile/tablet shell work that exists **only in `test`** (`lib/mobile-shell.ts`, `phone-shell.css`, `layout.tsx`) — detecting real phones when the browser lies about the viewport. Note both branches carry **duplicated parallel histories** (same messages, different hashes), so never take both.
+
+### Ported so far
+| what | commit | notes |
+|---|---|---|
+| **DIY desktop widget tools** (upstream `b41da23`) | `ef13953` | 7 mascot tools + `WIDGET_PROMPT`. Touched **5** files, not the 2 the diff summary suggested — `mascot-events.ts`, `desktop-shell.tsx` and `mascot-float.tsx` are required or the tools write to storage but the desktop never refreshes and preview never opens. All our infrastructure already existed. Translated on the way in; tool NAMES kept Chinese per this project's pattern. 56/56 fixture. |
+| **Zero-width chars saved as empty bubbles** | `f61f34c` | `isInvisibleOrWhitespaceOnly()` in `rich-message-parser.ts`. Zero-width chars are **not** deleted (U+200D joins composite emoji) — they only count as blank when deciding emptiness. |
+| **3 Moments anti-hallucination rules** | `f5860a4` | Written into our English entries. Version bump deferred at the time; **activated in `275`**. |
+| **Store the post first, attach the photo after** | `1976054` | `attachMomentPhotoInBackground`. **Architecture check done first, as asked:** our UI needed no change — `moment-post-card`'s retry affordance keys off `photoDescription && !photoUrl`, not the status field, so a `"pending"` post already renders a working retry button. The only required change was widening the type union, which had only `"failed" | "generated"`. |
+
+### Not ported (decide per feature; each is a Chinese-language feature port that would then need translating)
+`工坊` / Workshop app (12 `lib/qa-*.ts` + `phone-qa-app.tsx` + docs — docs Q&A plus a **GitHub agent that reads and edits code**), the WeChat cloud assistant (Supabase edge function + local scripts + a polling-traffic fix), the `夜光 Lumen` music overhaul (~40 commits), local test modes for Game Hall and Black Market theater, and a run of story-mode polish fixes.
+
+## PHASE D2 batch 9 — `mascot-tools.ts`: **PARTIAL** (2026-08-06)
+96/96 fixture, `tsc` exit 0. Done: **the whole pack surface** — every pack label, pack description and sub-tool description, plus the compact tool list that is injected into the system prompt every turn. That is what the model actually reads, so it was taken first.
+
+**The pack `label` turned out to be a live protocol token, not a display string.** The model types it in `[FetchTool:<label>]` and `mascot-chat-store.ts:450` resolves it via `findPackageByLabel`. So labels got the standard dual-recognition treatment: a new `legacyLabel` field on `MascotToolPackage` holds the pre-translation Chinese name, and the lookup accepts either, case-insensitively and trim-tolerantly (the model types these by hand).
+
+**And a second consumer was about to be left behind** — the classic failure of this project. `buildMascotPackageSchemaPrompt` did its **own** `p.label === packageLabel` comparison rather than calling the helper, so a legacy fetch would have silently returned "no such pack". It now routes through `findPackageByLabel`. The fixture's non-vacuity control removes one `legacyLabel` and that consumer fails by name.
+
+Also hardened: `findPackageByLabel` now returns `undefined` for a non-string, since the value comes straight from model output.
+
+The compact tool list now teaches `[FetchTool:…]` / `[CallTool:…]` (matching the rest of the app) and says explicitly that action names must be typed exactly as shown, Chinese characters included. The fixture runs the worked navigate example through the **real execution parser**, and asserts every advertised pack name round-trips through the lookup.
+
+#### Still to do in `mascot-tools.ts` — ~309 lines
+Schema `description:` fields and code comments, spread thin across ~60 sections. **No protocol risk left in them**: the corrected detector finds 2 hits and both are `name.replace(/[^\w一-鿿]/g, "")` character classes that *permit* CJK in generated ids (they must stay), and the single `中文` hit is a code comment. Tool names, the `◇` marker names and the `legacyLabel` values stay Chinese.
+
+`mascot-prompts.ts` still has its own **394** lines outstanding (see D2 batch 8 above). **D2 is not finished.**
+
 ### Track 1 progress
 `lib/custom-app-creator-guide.ts` — **done**, ~520 strings translated, `npm run build` passes, zero smart quotes / zero CJK escapes. (Agent hit a session usage limit mid-file at ~26%; resumed via `SendMessage` after verifying no smart-quote damage — the completed portion was intact.) Notes:
 - **4 markdown anchor links** re-derived in lockstep with their retitled headings; all 4 verified to resolve to a heading that still exists.

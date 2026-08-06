@@ -54,7 +54,12 @@ export const BUILTIN_PRESET_ID = "builtin_default_v1";
 //                   [内心] while chat_output_format taught [InnerThoughts], and
 //                   follow-up-service sends BOTH tag sets — a live surface
 //                   self-consistency conflict, the same shape as the 1:1 leak.
-export const BUILTIN_PRESET_VERSION = 274;
+// 275 (2026-08-06): activates the three Moments anti-hallucination rules ported from
+//                   upstream (commit f5860a4), which were written in but deliberately
+//                   left un-bumped at the time. Nothing else in D2 touches this file:
+//                   mascot-tools.ts and mascot-prompts.ts are not part of the preset,
+//                   so no further bump is coming from that work.
+export const BUILTIN_PRESET_VERSION = 275;
 
 export function createBuiltinPreset(): PresetConfig {
     const now = Date.now();
