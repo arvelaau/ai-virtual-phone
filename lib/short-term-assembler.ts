@@ -219,7 +219,7 @@ export function loadNativeTimeline(
             let sender: string;
             if (msg.role === "user") sender = userName;
             else if (msg.role === "tool") sender = "工具";
-            else if (isSystemInstructionMessage(msg)) sender = "系统指令";
+            else if (isSystemInstructionMessage(msg)) sender = "System instruction";
             else if (msg.role === "system") continue; // skip system messages in group timeline
             else sender = msg.senderName || "未知";
 
@@ -310,7 +310,7 @@ export function loadNativeTimeline(
                         sourceApp: "chat",
                         sourceDetail: "system",
                         timestamp: msg.createdAt,
-                        content: `${msgLabel} [系统指令] ${msg.content || ""}`,
+                        content: `${msgLabel} [System instruction] ${msg.content || ""}`,
                     });
                     continue;
                 }

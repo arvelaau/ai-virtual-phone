@@ -279,7 +279,7 @@ export function loadStoryProjectionEntries(
     projections.push({
       id: `story_projection_${current.id}`,
       timestamp: current.createdAt,
-      content: `[事件 ${ts}] ${summaryText}`,
+      content: `[Event ${ts}] ${summaryText}`,
     });
   }
 

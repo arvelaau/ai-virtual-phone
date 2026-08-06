@@ -382,7 +382,7 @@ export function loadVnProjectionEntries(
     projections.push({
       id: `vn_projection_${chapter.id}`,
       timestamp: ts,
-      content: `[事件 ${formattedTs}] ${snippet}`,
+      content: `[Event ${formattedTs}] ${snippet}`,
     });
   }
 

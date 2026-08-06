@@ -283,7 +283,7 @@ const MEDIA_PREVIEW_MAP: Record<string, string> = {
     xiaohongshu_note_share: "[小红书分享]",
     app_card: "[应用卡片]",
     tool_notice: "[执行动作]",
-    system_instruction: "[系统指令]",
+    system_instruction: "[System instruction]",
     media_file: "[文件]",
 };
 
@@ -315,7 +315,7 @@ export function getChatMessagePreview(msg: ChatMessage): string {
     }
     if (isSystemInstructionMessage(msg)) {
         const content = msg.content.trim();
-        return content ? `[系统指令] ${content}` : "[系统指令]";
+        return content ? `[System instruction] ${content}` : "[System instruction]";
     }
 
     // Action notifications: show natural language with user name → "你"

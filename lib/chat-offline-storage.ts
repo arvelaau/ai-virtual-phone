@@ -175,7 +175,7 @@ export function loadChatOfflineProjectionEntries(
                 sessionId: session.id,
                 ...(session.isGroup ? { groupSessionId: session.id } : {}),
                 timestamp: turn.createdAt,
-                content: `[事件 ${ts}] ${summaryText}`,
+                content: `[Event ${ts}] ${summaryText}`,
             });
         }
     }
