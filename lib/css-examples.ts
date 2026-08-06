@@ -1162,87 +1162,87 @@ export const CHAT_APP_CSS_EXAMPLE = `/* ═══ Chat application CSS example �
 /* .chat-app { font-family: "ZCOOL KuaiLe", sans-serif; } */
 `;
 
-export const STORY_CSS_EXAMPLE = `/* ═══ 剧情模式样式示例 ═══ */
-/* 此 CSS 仅作用于当前剧情会话 */
+export const STORY_CSS_EXAMPLE = `/* ═══ Story mode styling example ═══ */
+/* This CSS applies only to the current story session */
 
-/* ══ 颜色变量 ══ */
+/* ══ Colour variables ══ */
 :root {
-  /* ── 页面背景 ── */
-  --c-story-bg-top: #fafafa;         /* 顶部渐变色 */
-  --c-story-bg-mid: #f5f5f5;         /* 中间渐变色 */
-  --c-story-bg-bottom: #f0f0f0;      /* 底部渐变色 */
-  --c-story-text: #3a3b3c;           /* 正文颜色 */
+  /* ── Page background ── */
+  --c-story-bg-top: #fafafa;         /* gradient, top */
+  --c-story-bg-mid: #f5f5f5;         /* gradient, middle */
+  --c-story-bg-bottom: #f0f0f0;      /* gradient, bottom */
+  --c-story-text: #3a3b3c;           /* body text */
   --c-story-text-light: #64748b;     /* secondary text */
-  --c-story-heading: #1e293b;        /* 标题颜色 */
-  --c-story-sub: #94a3b8;            /* 辅助文字 */
+  --c-story-heading: #1e293b;        /* headings */
+  --c-story-sub: #94a3b8;            /* supporting text */
 
   /* ── Bubbles ── */
-  --c-story-bubble-bg: rgba(255,255,255,0.8);   /* AI气泡背景 */
-  --c-story-bubble-border: rgba(0,0,0,0.06);    /* AI气泡边框 */
-  --c-story-bubble-user: rgba(0,0,0,0.04);      /* 用户气泡背景 */
-  --c-story-text-user: #1e293b;                  /* 用户气泡文字 */
+  --c-story-bubble-bg: rgba(255,255,255,0.8);   /* AI bubble background */
+  --c-story-bubble-border: rgba(0,0,0,0.06);    /* AI bubble border */
+  --c-story-bubble-user: rgba(0,0,0,0.04);      /* user bubble background */
+  --c-story-text-user: #1e293b;                  /* user bubble text */
 
-  /* ── 装饰 ── */
-  --c-story-ornament: rgba(148,163,184,0.15);    /* 装饰元素 */
+  /* ── Decoration ── */
+  --c-story-ornament: rgba(148,163,184,0.15);    /* decorative elements */
   --c-story-ornament-soft: rgba(148,163,184,0.08);
   --c-story-accent: #64748b;                     /* accent */
-  --c-story-accent-light: #e2e8f0;               /* 浅强调色 */
+  --c-story-accent-light: #e2e8f0;               /* light accent */
 
-  /* ── 输入区 ── */
-  --c-story-input-bar: rgba(255,255,255,0.9);    /* 输入栏背景 */
+  /* ── Input area ── */
+  --c-story-input-bar: rgba(255,255,255,0.9);    /* input bar background */
   --c-story-input-bar-focus: rgba(255,255,255,0.95);
-  --c-story-input-border: rgba(0,0,0,0.08);      /* 输入栏外框边缘 */
-  --c-story-input-inner: rgba(248,250,252,0.78); /* 内层文字输入框 */
+  --c-story-input-border: rgba(0,0,0,0.08);      /* input bar outer edge */
+  --c-story-input-inner: rgba(248,250,252,0.78); /* inner text field */
   --c-story-input-inner-focus: rgba(248,250,252,0.94);
-  --c-story-send-bg-active: #0f172a;              /* 发送按钮激活 */
-  --c-story-send-color: #64748b;                  /* 发送按钮颜色 */
+  --c-story-send-bg-active: #0f172a;              /* send button, active */
+  --c-story-send-color: #64748b;                  /* send button colour */
 
-  /* ── 按钮/面板 ── */
-  --c-story-btn-bg: rgba(255,255,255,0.5);       /* 按钮背景 */
-  --c-story-btn-border: rgba(0,0,0,0.08);        /* 按钮边框 */
-  --c-story-panel: rgba(248,250,252,0.95);        /* 面板背景 */
+  /* ── Buttons and panels ── */
+  --c-story-btn-bg: rgba(255,255,255,0.5);       /* button background */
+  --c-story-btn-border: rgba(0,0,0,0.08);        /* button border */
+  --c-story-panel: rgba(248,250,252,0.95);        /* panel background */
   --c-story-panel-active: rgba(241,245,249,0.8);
   --c-story-panel-border: rgba(0,0,0,0.06);
 
-  /* ── 抽屉/侧栏 ── */
-  --c-story-drawer-top: #f8fafc;                  /* 抽屉顶部 */
-  --c-story-drawer-bottom: #f1f5f9;               /* 抽屉底部 */
+  /* ── Drawer and sidebar ── */
+  --c-story-drawer-top: #f8fafc;                  /* drawer, top */
+  --c-story-drawer-bottom: #f1f5f9;               /* drawer, bottom */
   --c-story-drawer-border: rgba(0,0,0,0.06);
 
-  /* ── 代码块 ── */
+  /* ── Code blocks ── */
   --c-story-code-bg: rgba(248,250,252,0.8);
   --c-story-code-color: #334155;
 
-  /* ── 其他 ── */
-  --c-story-fold-bg: rgba(248,250,252,0.6);       /* 折叠块背景 */
-  --c-story-meta-bg: rgba(255,255,255,0.8);       /* 元数据卡片背景 */
+  /* ── Other ── */
+  --c-story-fold-bg: rgba(248,250,252,0.6);       /* folded block background */
+  --c-story-meta-bg: rgba(255,255,255,0.8);       /* metadata card background */
   --c-story-meta-border: rgba(0,0,0,0.06);
-  --c-story-cover-bg: #f1f5f9;                    /* 封面背景 */
-  --c-story-cover-border: #fff;                   /* 封面边框 */
-  --c-story-placeholder: #94a3b8;                 /* 占位符颜色 */
-  --c-story-quote: #475569;                       /* 引用颜色 */
-  --c-story-quote-bg: rgba(248,250,252,0.5);      /* 引用背景 */
-  --c-story-table-header-bg: rgba(248,250,252,0.8); /* 表头背景 */
-  --c-story-bold-highlight: rgba(148,163,184,0.2);  /* 加粗下划高亮 */
-  --c-story-overlay: rgba(0,0,0,0.2);             /* 遮罩层 */
-  --c-story-css-box-bg: rgba(248,250,252,0.6);    /* CSS编辑框背景 */
-  --story-font: serif;                            /* 剧情字体 */
+  --c-story-cover-bg: #f1f5f9;                    /* cover background */
+  --c-story-cover-border: #fff;                   /* cover border */
+  --c-story-placeholder: #94a3b8;                 /* placeholder colour */
+  --c-story-quote: #475569;                       /* quote colour */
+  --c-story-quote-bg: rgba(248,250,252,0.5);      /* quote background */
+  --c-story-table-header-bg: rgba(248,250,252,0.8); /* table header background */
+  --c-story-bold-highlight: rgba(148,163,184,0.2);  /* bold underline highlight */
+  --c-story-overlay: rgba(0,0,0,0.2);             /* overlay */
+  --c-story-css-box-bg: rgba(248,250,252,0.6);    /* CSS editor background */
+  --story-font: serif;                            /* story font */
 }
 
-/* ══ 页面整体 ══ */
+/* ══ The page overall ══ */
 .story-app-shell {
   /* background: linear-gradient(160deg, var(--c-story-bg-top), var(--c-story-bg-mid), var(--c-story-bg-bottom)); */
   /* color: var(--c-story-text); */
 }
 .story-app-shell::before,
 .story-app-shell::after {
-  /* 装饰光晕 */
+  /* decorative halo */
   /* background: radial-gradient(circle, rgba(139,92,246,0.15) 0%, transparent 70%); */
 }
 
-/* ══ 顶部标题栏 ══ */
-/* .story-header = 整个标题栏（含安全区），改背景用这个 */
-/* .story-header-content = 按钮+标题那一行，改 padding/布局用这个 */
+/* ══ Top title bar ══ */
+/* .story-header = the whole title bar including the safe area — change the background here */
+/* .story-header-content = the row holding the buttons and title — change padding or layout here */
 .story-header {
   /* background: linear-gradient(180deg, var(--c-story-bg-top) 60%, transparent); */
 }
@@ -1260,8 +1260,8 @@ export const STORY_CSS_EXAMPLE = `/* ═══ 剧情模式样式示例 ══�
   /* border-radius: 10px; */
 }
 
-/* ══ 可选：悬浮透明标题栏模板 ══ */
-/* 使用时取消下面整段注释。不要覆盖 .story-app-shell 的 position。 */
+/* ══ Optional: floating transparent title bar template ══ */
+/* To use it, uncomment the whole block below. Do not override .story-app-shell's position. */
 /*
 :root {
   --story-floating-header-height: 102px;
@@ -1306,7 +1306,7 @@ export const STORY_CSS_EXAMPLE = `/* ═══ 剧情模式样式示例 ══�
 }
 */
 
-/* ══ 消息行 ══ */
+/* ══ Message rows ══ */
 .story-row {
   /* padding: 4px 16px; */
 }
@@ -1321,19 +1321,19 @@ export const STORY_CSS_EXAMPLE = `/* ═══ 剧情模式样式示例 ══�
   /* color: var(--c-story-text-user); */
 }
 
-/* ══ 气泡头部 (角色名 + 时间) ══ */
+/* ══ Bubble header (character name + time) ══ */
 .story-bubble-head {
   /* font-size: calc(11px*var(--app-text-scale,1)); */
   /* color: var(--c-story-sub); */
 }
 
-/* ══ 头像 ══ */
+/* ══ Avatars ══ */
 .story-avatar-wrap {
   /* width: 36px; height: 36px; */
   /* border-radius: 50%; */
 }
 
-/* ══ 富文本内容 ══ */
+/* ══ Rich text content ══ */
 .story-richtext {
   /* font-family: var(--story-font); */
   /* font-size: calc(15px*var(--app-text-scale,1)); */
@@ -1358,7 +1358,7 @@ export const STORY_CSS_EXAMPLE = `/* ═══ 剧情模式样式示例 ══�
   /* color: var(--c-story-heading); */
 }
 .story-richtext h2 {
-  /* text-align: center; */  /* 章节标题居中 */
+  /* text-align: center; */  /* centre chapter headings */
 }
 .story-richtext hr {
   /* border-color: var(--c-story-ornament); */
@@ -1379,7 +1379,7 @@ export const STORY_CSS_EXAMPLE = `/* ═══ 剧情模式样式示例 ══�
   /* border-color: var(--c-story-ornament); */
 }
 
-/* ══ 折叠块 (thinking/summary) ══ */
+/* ══ Folded blocks (thinking / summary) ══ */
 .story-fold-block {
   /* background: var(--c-story-fold-bg); */
   /* border-radius: 8px; */
@@ -1389,16 +1389,16 @@ export const STORY_CSS_EXAMPLE = `/* ═══ 剧情模式样式示例 ══�
   /* border-radius: 8px; */
 }
 
-/* ══ 底部输入区：外框 + 内层输入框 + 发送按钮 ══ */
+/* ══ Bottom input area: outer frame + inner field + send button ══ */
 .story-composer {
-  /* background: var(--c-story-input-bar); */       /* 外层框背景 */
-  /* border-color: var(--c-story-input-border); */  /* 外层框边缘 */
+  /* background: var(--c-story-input-bar); */       /* outer frame background */
+  /* border-color: var(--c-story-input-border); */  /* outer frame edge */
   /* border-radius: 18px; */
   /* padding: 6px; */
   /* box-shadow: 0 3px 8px rgba(0,0,0,0.02); */
 }
 .story-composer textarea {
-  /* background: var(--c-story-input-inner); */      /* 内层文字框背景 */
+  /* background: var(--c-story-input-inner); */      /* inner text field background */
   /* color: var(--c-story-text); */
   /* border-radius: 13px; */
   /* box-shadow: none; */
@@ -1412,7 +1412,7 @@ export const STORY_CSS_EXAMPLE = `/* ═══ 剧情模式样式示例 ══�
   /* border-radius: 12px; */
 }
 
-/* ══ 侧栏抽屉 (角色选择/设置) ══ */
+/* ══ Side drawer (character picker / settings) ══ */
 .story-drawer {
   /* background: linear-gradient(var(--c-story-drawer-top), var(--c-story-drawer-bottom)); */
 }
@@ -1431,7 +1431,7 @@ export const STORY_CSS_EXAMPLE = `/* ═══ 剧情模式样式示例 ══�
   /* background: var(--c-story-panel); */
 }
 
-/* ══ 元数据卡片 (封面/简介) ══ */
+/* ══ Metadata card (cover / blurb) ══ */
 .story-meta {
   /* background: var(--c-story-meta-bg); */
   /* border: 1px solid var(--c-story-meta-border); */
@@ -1453,12 +1453,12 @@ export const STORY_CSS_EXAMPLE = `/* ═══ 剧情模式样式示例 ══�
   /* gap: 6px; */
 }
 
-/* ══ 空状态 ══ */
+/* ══ Empty states ══ */
 .story-empty {
   /* color: var(--c-story-placeholder); */
 }
 
-/* ══ 右键菜单 ══ */
+/* ══ Context menu ══ */
 .story-ctx-menu {
   /* background: var(--c-story-panel); */
   /* border-radius: 10px; */
@@ -1470,7 +1470,7 @@ export const STORY_CSS_EXAMPLE = `/* ═══ 剧情模式样式示例 ══�
   /* color: var(--c-danger); */
 }
 
-/* ══ 内联编辑 ══ */
+/* ══ Inline editing ══ */
 .story-inline-edit {
   /* background: var(--c-story-input-bar); */
   /* border-radius: 8px; */
@@ -1480,12 +1480,12 @@ export const STORY_CSS_EXAMPLE = `/* ═══ 剧情模式样式示例 ══�
   /* color: white; */
 }
 
-/* ══ 设置行 ══ */
+/* ══ Settings rows ══ */
 .story-pref-row {
   /* padding: 10px 0; */
 }
 
-/* ══ CSS 编辑框 ══ */
+/* ══ CSS editor ══ */
 .story-css-box {
   /* font-family: monospace; */
   /* background: var(--c-story-code-bg); */
@@ -1493,65 +1493,65 @@ export const STORY_CSS_EXAMPLE = `/* ═══ 剧情模式样式示例 ══�
 `;
 
 
-export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ═══ */
-/* 所有颜色已变量化，改变量即可全局换色 */
-/* 变量定义在 [data-vn-theme] 中，这里覆盖即可 */
+export const VN_CSS_EXAMPLE = `/* ═══ Visual novel styling example ═══ */
+/* Every colour is a variable, so changing a variable recolours everything */
+/* The variables are defined on [data-vn-theme]; just override them here */
 
-/* ══ 全部颜色变量（覆盖当前主题） ══ */
+/* ══ All colour variables (overriding the current theme) ══ */
 [data-vn-theme] {
-  /* ── 页面 ── */
-  /* --vn-bg: #08060e; */                          /* 页面背景 */
-  /* --vn-font: "PingFang SC", system-ui; */       /* 字体 */
+  /* ── Page ── */
+  /* --vn-bg: #08060e; */                          /* page background */
+  /* --vn-font: "PingFang SC", system-ui; */       /* font */
 
-  /* ── 对话框 ── */
-  /* --vn-box-bg: rgba(10, 8, 20, 0.75); */       /* 对话框背景 */
-  /* --vn-box-border: rgba(255, 255, 255, 0.15); */ /* 对话框边框 */
-  /* --vn-box-radius: 2px; */                      /* 对话框圆角 */
-  /* --vn-box-glow: 0 0 20px rgba(180,160,220,0.1); */ /* 对话框光晕 */
+  /* ── Dialogue box ── */
+  /* --vn-box-bg: rgba(10, 8, 20, 0.75); */       /* dialogue box background */
+  /* --vn-box-border: rgba(255, 255, 255, 0.15); */ /* dialogue box border */
+  /* --vn-box-radius: 2px; */                      /* dialogue box corner radius */
+  /* --vn-box-glow: 0 0 20px rgba(180,160,220,0.1); */ /* dialogue box glow */
 
-  /* ── 名牌 ── */
-  /* --vn-name-bg: rgba(10, 8, 20, 0.75); */      /* 名牌背景 */
-  /* --vn-name-color: #ddd6e8; */                  /* 名牌文字 */
-  /* --vn-name-border: rgba(255, 255, 255, 0.1); */ /* 名牌边框 */
+  /* ── Name plate ── */
+  /* --vn-name-bg: rgba(10, 8, 20, 0.75); */      /* name plate background */
+  /* --vn-name-color: #ddd6e8; */                  /* name plate text */
+  /* --vn-name-border: rgba(255, 255, 255, 0.1); */ /* name plate border */
 
-  /* ── 对话文字 ── */
-  /* --vn-text-color: rgba(255, 255, 255, 0.9); */ /* 对话文字 */
-  /* --vn-text-shadow: 0 1px 3px rgba(0,0,0,0.5); */ /* 文字阴影 */
-  /* --vn-text-size: 15px; */                      /* 对话字号 */
-  /* --vn-narration-color: rgba(200,190,220,0.8); */ /* 旁白色 */
+  /* ── Dialogue text ── */
+  /* --vn-text-color: rgba(255, 255, 255, 0.9); */ /* dialogue text */
+  /* --vn-text-shadow: 0 1px 3px rgba(0,0,0,0.5); */ /* text shadow */
+  /* --vn-text-size: 15px; */                      /* dialogue font size */
+  /* --vn-narration-color: rgba(200,190,220,0.8); */ /* narration colour */
 
-  /* ── 控制按钮 ── */
-  /* --vn-control-bg: rgba(0, 0, 0, 0.3); */      /* 按钮背景 */
-  /* --vn-control-color: rgba(255,255,255,0.6); */ /* 按钮图标 */
-  /* --vn-control-active: rgba(255,255,255,0.9); */ /* 按钮激活 */
+  /* ── Control buttons ── */
+  /* --vn-control-bg: rgba(0, 0, 0, 0.3); */      /* button background */
+  /* --vn-control-color: rgba(255,255,255,0.6); */ /* button icon */
+  /* --vn-control-active: rgba(255,255,255,0.9); */ /* button, active */
 
-  /* ── UI面板/弹窗 ── */
-  /* --vn-ui-panel: rgba(10, 8, 20, 0.88); */     /* 面板背景 */
-  /* --vn-ui-border: rgba(255,255,255,0.08); */    /* 边框 */
-  /* --vn-ui-text: rgba(255,255,255,0.65); */      /* 主文字 */
+  /* ── UI panels and dialogs ── */
+  /* --vn-ui-panel: rgba(10, 8, 20, 0.88); */     /* panel background */
+  /* --vn-ui-border: rgba(255,255,255,0.08); */    /* border */
+  /* --vn-ui-text: rgba(255,255,255,0.65); */      /* primary text */
   /* --vn-ui-text-dim: rgba(255,255,255,0.3); */   /* secondary text */
-  /* --vn-ui-text-bright: rgba(255,255,255,0.85); */ /* 高亮文字 */
+  /* --vn-ui-text-bright: rgba(255,255,255,0.85); */ /* highlighted text */
   /* --vn-ui-accent: rgba(180,165,220,0.85); */    /* accent */
-  /* --vn-ui-accent-dim: rgba(180,165,220,0.25); */ /* 淡强调 */
-  /* --vn-ui-accent-bg: rgba(180,165,220,0.06); */ /* 强调背景 */
-  /* --vn-ui-input: rgba(255,255,255,0.04); */     /* 输入框背景 */
-  /* --vn-ui-input-border: rgba(255,255,255,0.1); */ /* 输入框边框 */
-  /* --vn-ui-input-text: rgba(255,255,255,0.8); */ /* 输入框文字 */
+  /* --vn-ui-accent-dim: rgba(180,165,220,0.25); */ /* faint accent */
+  /* --vn-ui-accent-bg: rgba(180,165,220,0.06); */ /* accent background */
+  /* --vn-ui-input: rgba(255,255,255,0.04); */     /* input background */
+  /* --vn-ui-input-border: rgba(255,255,255,0.1); */ /* input border */
+  /* --vn-ui-input-text: rgba(255,255,255,0.8); */ /* input text */
   /* --vn-ui-overlay: rgba(0, 0, 0, 0.35); */     /* overlay */
-  /* --vn-ui-danger: rgba(220,90,75,0.8); */       /* 危险色 */
-  /* --vn-ui-success: rgba(90,180,130,0.7); */     /* 成功色 */
+  /* --vn-ui-danger: rgba(220,90,75,0.8); */       /* danger colour */
+  /* --vn-ui-success: rgba(90,180,130,0.7); */     /* success colour */
 
-  /* ── 标签 ── */
-  /* --vn-tag-dialogue: rgba(130,190,160,0.65); */ /* 对话标签 */
-  /* --vn-tag-narration: rgba(180,165,220,0.65); */ /* 旁白标签 */
-  /* --vn-tag-scene: rgba(150,175,210,0.65); */    /* 场景标签 */
+  /* ── Tags ── */
+  /* --vn-tag-dialogue: rgba(130,190,160,0.65); */ /* dialogue tag */
+  /* --vn-tag-narration: rgba(180,165,220,0.65); */ /* narration tag */
+  /* --vn-tag-scene: rgba(150,175,210,0.65); */    /* scene tag */
 
-  /* ── 滑动条 ── */
-  /* --vn-slider-track: rgba(255,255,255,0.12); */ /* 滑轨 */
-  /* --vn-slider-thumb: rgba(180,165,220,0.85); */ /* 滑块 */
+  /* ── Sliders ── */
+  /* --vn-slider-track: rgba(255,255,255,0.12); */ /* slider track */
+  /* --vn-slider-thumb: rgba(180,165,220,0.85); */ /* slider thumb */
 }
 
-/* ══ 对话框 ══ */
+/* ══ Dialogue box ══ */
 .vn-dialogue-inner {
   /* background: var(--vn-box-bg); */
   /* border: 1px solid var(--vn-box-border); */
@@ -1559,14 +1559,14 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
   /* backdrop-filter: blur(10px); */
 }
 
-/* ══ 名牌 ══ */
+/* ══ Name plate ══ */
 .vn-name {
   /* background: var(--vn-name-bg); */
   /* color: var(--vn-name-color); */
   /* letter-spacing: 0.1em; */
 }
 
-/* ══ 对话文字 ══ */
+/* ══ Dialogue text ══ */
 .vn-text {
   /* font-size: var(--vn-text-size); */
   /* color: var(--vn-text-color); */
@@ -1576,7 +1576,7 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
   /* color: var(--vn-narration-color); */
 }
 
-/* ══ 控制按钮 ══ */
+/* ══ Control buttons ══ */
 .vn-ctrl-btn {
   /* background: var(--vn-control-bg); */
   /* color: var(--vn-control-color); */
@@ -1585,7 +1585,7 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
   /* color: var(--vn-control-color); */
 }
 
-/* ══ 输入区 ══ */
+/* ══ Input area ══ */
 .vn-input-field {
   /* background: var(--vn-ui-input); */
   /* border: 1px solid var(--vn-ui-input-border); */
@@ -1600,14 +1600,14 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
   /* color: var(--vn-ui-text-dim); */
 }
 
-/* ══ 选项（选择肢） ══ */
+/* ══ Choices ══ */
 .vn-option-btn {
   /* border: 1px solid var(--vn-ui-input-border); */
   /* background: var(--vn-ui-input); */
   /* color: var(--vn-text-color); */
 }
 
-/* ══ 面板（历史/节拍/场景） ══ */
+/* ══ Panels (history / beats / scenes) ══ */
 .vn-history-panel,
 .vn-beats-panel,
 .vn-scene-picker {
@@ -1617,7 +1617,7 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
 .vn-history-speaker { /* color: var(--vn-ui-accent); */ }
 .vn-history-text { /* color: var(--vn-ui-text); */ }
 
-/* ══ 节拍 ══ */
+/* ══ Story beats ══ */
 .vn-beat-item {
   /* border: 1px solid var(--vn-ui-input); */
 }
@@ -1627,14 +1627,14 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
 }
 .vn-beat-name { /* color: var(--vn-ui-text); */ }
 
-/* ══ 右键菜单 ══ */
+/* ══ Context menu ══ */
 .vn-ctx-menu {
   /* background: var(--vn-ui-panel); */
 }
 .vn-ctx-btn { /* color: var(--vn-ui-text); */ }
 .vn-ctx-btn-danger { /* color: var(--vn-ui-danger); */ }
 
-/* ══ 结局画面 ══ */
+/* ══ Ending screen ══ */
 .vn-end {
   /* background: var(--vn-ui-overlay); */
 }
@@ -1644,7 +1644,7 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
   /* color: var(--vn-ui-text); */
 }
 
-/* ══ 滑动条（布局面板中） ══ */
+/* ══ Sliders (in the layout panel) ══ */
 .vn-shell .ui-slider {
   /* background: var(--vn-slider-track); */
 }
@@ -1659,15 +1659,15 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
 }
 
 /* ═══════════════════════════════
-   选人页面 (.vns-*)
+   Character select page (.vns-*)
    ═══════════════════════════════ */
 
-/* ══ 选人页整体 ══ */
+/* ══ Character select page overall ══ */
 .vns-shell {
   /* background: var(--vn-bg); */
 }
 
-/* ══ 顶栏 ══ */
+/* ══ Top bar ══ */
 .vns-topbar {
   /* padding: 52px 16px 12px; */
 }
@@ -1679,7 +1679,7 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
   /* letter-spacing: 0.25em; */
 }
 
-/* ══ 角色卡片条 ══ */
+/* ══ Character card strip ══ */
 .vns-strips {
   /* gap: 4px; */
   /* padding: 80px 16px 20px; */
@@ -1695,17 +1695,17 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
   /* box-shadow: 0 0 20px var(--vn-ui-accent-bg); */
 }
 
-/* ══ 角色卡片背景滤镜 ══ */
+/* ══ Character card background filter ══ */
 .vns-strip:not([data-active="true"]) .vns-strip-bg {
-  /* filter: brightness(0.4) saturate(0.6); */  /* 深色主题 */
-  /* filter: brightness(0.85) saturate(0.8); */ /* 浅色主题 */
+  /* filter: brightness(0.4) saturate(0.6); */  /* dark theme */
+  /* filter: brightness(0.85) saturate(0.8); */ /* light theme */
 }
 .vns-strip[data-active="true"] .vns-strip-bg {
-  /* filter: brightness(0.7) saturate(0.9); */  /* 深色主题 */
-  /* filter: brightness(1) saturate(1); */      /* 浅色主题 */
+  /* filter: brightness(0.7) saturate(0.9); */  /* dark theme */
+  /* filter: brightness(1) saturate(1); */      /* light theme */
 }
 
-/* ══ 角色名/副标题 ══ */
+/* ══ Character name and subtitle ══ */
 .vns-strip-name {
   /* color: rgba(255,255,255,0.9); */
   /* font-size: calc(16px*var(--app-text-scale,1)); */
@@ -1714,7 +1714,7 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
   /* color: rgba(255,255,255,0.45); */
 }
 
-/* ══ 进入按钮 ══ */
+/* ══ Enter button ══ */
 .vns-enter {
   /* border: 1px solid var(--vn-ui-accent-dim); */
   /* background: var(--vn-ui-accent-bg); */
@@ -1722,27 +1722,27 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
   /* border-radius: 24px; */
 }
 
-/* ══ 空状态 ══ */
+/* ══ Empty states ══ */
 .vns-empty {
   /* color: var(--vn-ui-text-dim); */
 }
 
-/* ══ 装饰光晕 ══ */
+/* ══ Decorative halo ══ */
 .vns-shell::before,
 .vns-shell::after {
-  /* opacity: 0; */  /* 隐藏装饰 */
+  /* opacity: 0; */  /* hide the decoration */
 }
 
 /* ═══════════════════════════════
-   星图页面 (.vnc-*)
+   Star chart page (.vnc-*)
    ═══════════════════════════════ */
 
-/* ══ 星图页整体 ══ */
+/* ══ Star chart page overall ══ */
 .vnc-shell {
   /* background: var(--vn-bg); */
 }
 
-/* ══ 顶栏 ══ */
+/* ══ Top bar ══ */
 .vnc-btn {
   /* color: var(--vn-control-color); */
 }
@@ -1754,7 +1754,7 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
   /* color: var(--vn-ui-text-dim); */
 }
 
-/* ══ 星图路径 ══ */
+/* ══ Star chart paths ══ */
 .vnc-path {
   /* stroke: var(--vn-ui-accent-dim); */
 }
@@ -1762,7 +1762,7 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
   /* stroke: var(--vn-ui-border); */
 }
 
-/* ══ 星点节点 ══ */
+/* ══ Star nodes ══ */
 .vnc-star-ring {
   /* border: 1px solid var(--vn-ui-border); */
 }
@@ -1770,7 +1770,7 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
   /* background: linear-gradient(90deg, transparent, var(--vn-ui-accent-dim), transparent); */
 }
 
-/* ══ 章节标题 ══ */
+/* ══ Chapter titles ══ */
 .vnc-chapter-title {
   /* color: var(--vn-ui-text-bright); */
   /* letter-spacing: 0.1em; */
@@ -1779,14 +1779,14 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
   /* color: var(--vn-ui-text-dim); */
 }
 
-/* ══ 操作按钮（播放/归档） ══ */
+/* ══ Action buttons (play / archive) ══ */
 .vnc-action-btn {
   /* border: 1px solid var(--vn-ui-border); */
   /* background: var(--vn-ui-input); */
   /* color: var(--vn-ui-text-dim); */
 }
 
-/* ══ 新建章节 ══ */
+/* ══ New chapter ══ */
 .vnc-new {
   /* color: var(--vn-ui-text-dim); */
 }
@@ -1794,10 +1794,10 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
   /* border: 1px dashed var(--vn-ui-border); */
 }
 
-/* ══ 星图装饰（星空粒子/星云） ══ */
+/* ══ Star chart decoration (particles and nebulae) ══ */
 .vnc-shell::before,
 .vnc-shell::after {
-  /* opacity: 0; */  /* 隐藏星空装饰 */
+  /* opacity: 0; */  /* hide the starfield decoration */
 }
 `;
 
