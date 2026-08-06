@@ -740,10 +740,43 @@ Every engine was checked for its **own** Chinese-literal parsing, since `moments
 Order to work in: the zero-parser files first (pure prose, no lockstep), then medium, then `checkphone-engine.ts` alone at the end.
 
 ### Remaining work before Phase D can be called done
-- **D1b**: `builtin-preset.ts` prose — ~2296 lines.
+- **D1b**: `builtin-preset.ts` prose — see the scope correction below; the honest figure is **~400 safe lines + ~172 xiaohongshu teaching**, not ~2000.
 - **D2**: `mascot-prompts.ts` 532 + `mascot-tools.ts` 463.
 - **D3 (new)**: the ~25 files above — **~4200 Chinese lines**, of which `checkphone-engine.ts` alone is 1166.
 Roughly **~7500 Chinese lines total**, i.e. Phase D is only ~5% done, not nearly finished. Each engine needs the same treatment as `moments-engine.ts` did: check for a feature-local parser before touching its taught formats.
+
+## PHASE D1b (started 2026-08-06) — `builtin-preset.ts` prose
+
+### 🚨 Scope correction: "~1980 lines, no protocol risk, safe for parallel sub-agents" was wrong on all three counts
+A per-entry CJK count (script below) breaks the 1977 remaining lines down as:
+
+| group | CJK lines | verdict |
+|---|---|---|
+| `checkphone_*` (26 entries) | **1406 (71%)** | **NOT D1b.** This is the teaching side of `checkphone-engine.ts` — 456 local-parser hits, explicitly last in the queue. Flipping the teaching while the engine still parses Chinese desyncs the biggest engine in the repo from its own prompt. Must move together with that engine. |
+| `xiaohongshu_*` (5 entries) | 172 | Ready, but it is a **protocol flip**, not prose: `xiaohongshu-engine.ts`'s six parsers were already made bilingual (2026-08-02), and the teaching flip is the documented remaining half. Needs a fixture, not a prose pass. |
+| `adventure_react` | 29 | Deferred with `map-rpg-engine.ts` (user does not use Adventure). |
+| marker entries (`personaDescription`, `charDescription`, …) | 1 each | **Never translate** — `◇ 用户人设` family, matched by `preset-manager.tsx:64-70` `matchMarkerByName()`. |
+| state value names in `chat_*`/`group_chat_*` | 1-3 each | **Never rename** — `mergeStateValues` merges by name. |
+| everything else | **~400** | the genuine D1b prose. |
+
+**Parallel sub-agents are also not usable here**, for a plain mechanical reason: every batch edits *the same file*. The standing rule "never let two agents touch the same file concurrently" applies, and concurrent `Edit` calls on one file either fail the stale-read check or clobber each other. D1b runs sequentially — batch, fixture, `tsc`, commit, next batch.
+
+Re-derive the breakdown any time:
+```
+node -e "const fs=require('fs');const L=fs.readFileSync('lib/builtin-preset.ts','utf8').split(/\r?\n/);const d=[];L.forEach((l,i)=>{const m=l.match(/^\s{16}identifier:\s*\"([a-z_0-9]+)\"/i);if(m)d.push({id:m[1],start:i})});d.forEach((x,k)=>x.end=k+1<d.length?d[k+1].start:L.length);const c=/[一-鿿]/;d.forEach(x=>{let n=0;for(let i=x.start;i<x.end;i++)if(c.test(L[i]))n++;if(n)console.log(String(n).padStart(5),(x.start+1)+'-'+x.end,x.id)})"
+```
+
+### D1b batch 1 — call / offline / spectator surfaces: **DONE** (2026-08-06)
+73/73 fixture, `npx tsc --noEmit` exit 0, `BUILTIN_PRESET_VERSION` → **269**.
+
+Entries: `chat_offline_format`, `chat_voice_format`, `chat_video_format`, `group_voice_call_format`, `group_video_call_format`, `group_chat_offline_format`, `group_spectator_context` (~122 CJK lines).
+
+Protocol audit done first, and it came back clean:
+- **`[角色名]:` → `[CharacterName]:`** — the group call screens call `generateGroupChatCompletion` (`group-call-screen.tsx:215`, `appTags: ["group_chat", isVideo ? "video" : "voice"]`), i.e. the **same** `parseGroupChatResponse` that already serves the English `group_chat_format`. The parser matches `/^\[([^\]\n]{1,32})\]:\s*/` and then checks the name against the roster, so the taught token is a placeholder, not a literal. Example speakers aligned to `Xiao Qi` / `Bai Yu`, matching `group_chat_optional_actions`.
+- **Offline XML is ASCII already** — `parseOfflineResponse` (`chat-offline-storage.ts:210`) only ever reads `content` / `summary` / the configured `summaryTag`. Nothing Chinese to migrate.
+- **Kept Chinese on purpose**: `[好感度:X]` in the two "do not output these tags" lists. The other tags in those lists were moved to the English names the parsers already accept (`[InnerThoughts]`, `[Sticker:…]`), so the prohibition names what is actually taught elsewhere.
+
+**Fixture (73/73, `_fx-d1b1.mjs`, deleted — recreate from this)**: entry definitions located **structurally** (the `indexOf('identifier: "x"')` trap hits the `prompt_order` toggle list, which makes "legacy string is gone" pass vacuously); no CJK beyond the state names, per entry; no stray full-width punctuation outside the deliberate `【…】` markers; the worked example is **extracted out of each group-call entry and run through the real `parseGroupChatResponse`**, asserting 3 turns and correct roster resolution, with the deliberate "wrong example" line dropped as a negative sample; the offline example is extracted, has `{{offlineSummaryTag}}` resolved the way the assembler would, and is run through the real `parseOfflineResponse`; plus an unknown-speaker negative control, the version bump, and — importantly — that all 7 entries keep their exact `tags` arrays, since these surfaces are selected by tag and a wrong tag silently swaps which format a call screen gets. **Verified non-vacuous**: putting one Chinese example line back gives 72/73 with exactly the CJK assertion failing.
 
 ### Track 1 progress
 `lib/custom-app-creator-guide.ts` — **done**, ~520 strings translated, `npm run build` passes, zero smart quotes / zero CJK escapes. (Agent hit a session usage limit mid-file at ~26%; resumed via `SendMessage` after verifying no smart-quote damage — the completed portion was intact.) Notes:
@@ -888,6 +921,7 @@ User-reported: change a character's persona (friendly + emoji → fierce, curt, 
 **Unrelated finding, NOT fixed (out of this task's scope):** the assembled chat prompt still carries Chinese from `lib/macro-engine.ts:247` and `lib/chat-time.ts:1` — `const weekdays = ["星期日", …]`, producing `当前系统时间：2026年8月5日10:12，星期三` inside `<chat_output_format>` on **every** chat prompt. Two more `.ts` files the `.tsx`-only Phase 1 sweep never covered. Pure display strings fed to the model; worth a look when the queue reaches them.
 
 ## Still open / not yet done
+- **`[系统指令]` / `[事件 …]` short-term timeline labels** (found 2026-08-06 during the offline/online research). Sites: `lib/short-term-assembler.ts:222,313`, `lib/chat-storage.ts:286,318`, `lib/chat-offline-storage.ts:178`. **These are read by the model** — they label system-instruction and offline-event entries inside the short-term event stream — so treat them as protocol, not as UI text: **make every consumer bilingual first (accept the legacy Chinese label AND the new English one), then flip the producers**, same dual-recognition pattern as the rest of this migration. Do not translate them in place; grep for every producer *and* every consumer of each label before touching either side (the `tool-executor` / `FETCH_RESULT_HEADER` / `prompt-sanitizer` regressions were all "one side moved, one consumer left behind").
 - `lib/macro-engine.ts:247` + `lib/chat-time.ts:1` Chinese weekday/date formatting reaching every chat prompt (found 2026-08-05, see above).
 - `notifyMascotPageContext` label in `components/chat/phone-chat-app.tsx` (2 call sites) — flagged since round 2, needs revisiting per the standing-rule note above.
 - `app/api/**/route.ts` — ~420 Chinese occurrences across 43 files, scope not yet decided (see "Scope note" above) — ask the user before starting.
