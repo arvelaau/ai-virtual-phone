@@ -2,7 +2,7 @@
 // Mascot (Scroll) LLM engine: dual protocol (native tools + text protocol). The agent
 // loop is driven by the UI layer.
 
-import { resolveAuxiliaryApiConfig } from "./settings-storage";
+import { resolveAuxiliaryApiConfig, resolveUserIdentity } from "./settings-storage";
 import { getMascotPersonaPrompt } from "./mascot-settings";
 import type { MascotPageContext } from "./mascot-context";
 import {
@@ -100,6 +100,47 @@ const MASCOT_OUTPUT_LANGUAGE_RULE = [
   "Always reply in English, regardless of the language of your persona description, the page context, or any tool result.",
   "Those are information about who you are and what is on screen — never a reference for which language to write in.",
 ].join("\n");
+
+/**
+ * How the mascot should address the user, derived from the identity configured in
+ * Settings -> User Identity.
+ *
+ * Built at prompt time rather than baked into MASCOT_PERSONA, because the persona is
+ * STORED (mascot-settings.ts writes it into KV as personaPrompt). Editing the constant
+ * would reach nobody who has ever opened the mascot settings, and would be silently
+ * overwritten for everyone else on the next persona edit.
+ *
+ * "保密" is the undisclosed sentinel — it must stay that exact Chinese string, since
+ * llm-prompt-assembler.ts, calendar-engine.ts and custom-app-host-api.ts all compare
+ * against it. A missing identity, an empty gender and "保密" are treated alike: say
+ * nothing about gender and do not let the model guess.
+ */
+export function buildMascotUserIdentityRule(): string {
+    return formatMascotUserIdentityRule(resolveUserIdentity(undefined, "mascot")?.gender);
+}
+
+/**
+ * The pure half of the rule above, split out so it can be exercised directly — the
+ * resolver reads kv-backed storage that a fixture cannot drive without standing up the
+ * whole persistence layer.
+ */
+export function formatMascotUserIdentityRule(rawGender: string | undefined | null): string {
+    const gender = (rawGender ?? "").trim();
+    const undisclosed = !gender || gender === "保密";
+
+    if (undisclosed) {
+        return [
+            "## How to address the user",
+            "The user has not said what gender they are. Do not assume one, do not infer it from their name, their persona or anything they have written, and never use gendered forms of address or gendered pronouns for them. Use their name, or a neutral form of address, and they/them if you need a pronoun.",
+        ].join("\n");
+    }
+
+    return [
+        "## How to address the user",
+        `The user's gender is set to "${gender}" in their identity settings. Address them in a way that fits, and use pronouns consistent with it.`,
+        "This comes from their own settings — treat it as fact, and never contradict or second-guess it.",
+    ].join("\n");
+}
 
 // -- Message construction ------------------------------------
 
@@ -556,6 +597,7 @@ async function callMascotText(
     // ends up resident in context anyway.
     const systemPrompt = [
         getMascotPersonaPrompt(),
+        buildMascotUserIdentityRule(),
         `Current page: ${context.label} (${context.mode})`,
         buildMascotToolsListPrompt(),
         MASCOT_OUTPUT_LANGUAGE_RULE,
@@ -632,6 +674,7 @@ async function callMascotNative(
 
     const systemPrompt = [
         getMascotPersonaPrompt(),
+        buildMascotUserIdentityRule(),
         `Current page: ${context.label} (${context.mode})`,
         "You have tools available. Each package must be expanded before you can see its detailed actions; the navigation tool is usable directly. Expand at most 2 packages at a time.",
         "Important: when calling a tool, do **not** restate the tool arguments in your reply text (for example, do not write the full persona text out again). Keep the reply to one or two short sentences saying what you are doing; the detail travels in the tool arguments.",
