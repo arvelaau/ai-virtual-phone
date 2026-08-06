@@ -203,91 +203,86 @@ An iframe card should be as self-contained as possible (inline CSS/JS) and not d
 · Append to an existing group → 添加正则规则({groupName, rule:{...}})
 · Change one rule → 更新正则规则({groupName, ruleId, updates:{...}}), a partial set of fields is fine`;
 
-export const WORLDBOOK_PROMPT = `===== 世界书写作规范 =====
+export const WORLDBOOK_PROMPT = `===== World book writing spec =====
 
-世界书用于向 AI 注入背景知识——当聊天中出现匹配的关键词时，对应词条的内容会被注入到 prompt 里，让 AI 了解角色所处的世界。
+A world book injects background knowledge into the AI: when a matching keyword comes up in the conversation, that entry's content is injected into the prompt so the AI knows the world the character lives in.
 
-===== 词条类别指南 =====
+===== Guide to entry categories =====
 
-世界书围绕角色的生活圈展开，通常包含以下类别（按需选择，不必每次全写）：
+A world book is built around the character's world, and usually covers the categories below. Pick what is needed — you never have to write all of them.
 
-【背景类】（→ position=0，注入在角色设定之前）
-· 世界运行规则 — 世界观基本法则（现实向可省略，架空世界必写）
-· 场所背景 — 角色所处环境的氛围、文化、隐性规则
-· 术语/概念 — 世界观专有名词、组织名称、阶级体系等
-· 时代/季节 — 当前时间节点、时代背景
+【Background】(→ position=0, injected before the character profile)
+· How the world works — the basic laws of the setting (skippable for a realistic setting, essential for an invented one)
+· Setting and place — the atmosphere, culture and unspoken rules of where the character is
+· Terms and concepts — proper nouns of the setting, organisation names, class systems and the like
+· Era and season — where in time this is, and the historical backdrop
 
-【角色类】（→ position=1，注入在角色设定之后）
-· 角色的空间 — 家/房间/办公室（布局、风格、物品、气味）
-· 工作/学业日常 — 角色每天做什么、擅长什么
-· 能力设定 — 专业技能、特长、他人评价
-· 家庭背景 — 家庭成员、关系、成长环境
-· 社交圈与 NPC — 重要配角的性格、与角色的关系
-· 重要事件 — 塑造角色的关键经历
-· 生活习惯 — 日常行为、喜好、小癖好
+【Character】(→ position=1, injected after the character profile)
+· The character's spaces — home, room, office (layout, style, objects, smell)
+· Work or study routine — what they do each day, what they are good at
+· Abilities — professional skills, talents, how others rate them
+· Family background — family members, relationships, how they grew up
+· Social circle and NPCs — the personalities of important supporting characters, and their relationship to the character
+· Formative events — the key experiences that shaped them
+· Habits — everyday behaviour, likes, small quirks
 
-【物品类】（→ position=1）
-· 重要物品 — 有故事的东西
-· 世界观特有物品 — 魔法道具、特殊科技（架空世界）
+【Objects】(→ position=1)
+· Significant objects — things with a story attached
+· Objects specific to the setting — magical items, special technology (invented settings)
 
-【关系类】（→ position=1）
-· 与 {{user}} 的关系 — 怎么认识、当前阶段、共同回忆
-· NPC 关系网 — 谁和谁有矛盾、利益纠葛
+【Relationships】(→ position=1)
+· The relationship with {{user}} — how they met, where it stands now, shared memories
+· The NPC web — who is at odds with whom, and whose interests are tangled together
 
-【时间线类】（→ position=1）
-· 即将发生的事 — 考试、节日、约定、截止日期
-· 近期发生的事 — 最近变化、事件余波
+【Timeline】(→ position=1)
+· What is coming — exams, holidays, arrangements, deadlines
+· What just happened — recent changes, the aftermath of events
 
-===== 内容格式 =====
+===== Content format =====
 
-每条词条的 content 用 XML 标签包裹分段，标签名用中文，贴合词条主题。结构清晰、信息密度高、有感官细节。
+Wrap each entry's content in XML tags that segment it, using descriptive tag names that fit the entry's subject. Keep the structure clear, the information dense, and include sensory detail.
 
-示例（仅展示结构和密度，**严禁照抄内容**）：
-<角色的房间>
-整体布局:
-  - 一居室，60 平，高层朝南，采光好但他常拉窗帘
-  - 极简黑白灰色调，几乎没有装饰品，像样板间
-  - 书架占一整面墙，按技术/文学/哲学分区
-关键物品:
-  - 床头柜：永远放着一杯凉掉的黑咖啡，旁边是翻了一半的书
-  - 窗台：一盆快枯的绿萝，{{user}} 送的，浇水不规律但舍不得扔
-  - 书桌：三块屏幕，便利贴贴满边框，内容是工作待办和读书摘抄
-  - 衣柜：衬衫按颜色深浅排列，最里面压着一件高中校服没扔
-  - 冰箱：几乎空的，只有矿泉水、牛奶和妹妹硬塞的水果
-气味与氛围:
-  - 淡淡的咖啡味混着纸张的味道
-  - 安静得能听到挂钟走针，他喜欢这种安静
-暗示角色性格:
-  - 控制欲强但内心有柔软角落（绿萝、校服）
-  - 工作和生活完全没边界
-</角色的房间>
+Example (this shows structure and density only — **never copy the content itself**):
+<character_room>
+Layout:
+  - one-bed flat, 60 sqm, high floor facing south, good light, though he usually keeps the curtains drawn
+  - minimal black, white and grey, almost no ornament, like a show home
+  - a bookshelf covering one whole wall, sorted into technical, literary and philosophy
+Key objects:
+  - bedside table: always a cold black coffee, a half-read book beside it
+  - windowsill: a nearly dead pothos, a gift from {{user}}, watered erratically but he cannot bring himself to throw it out
+  - desk: three monitors, sticky notes crowding the bezels, work to-dos and passages copied out of books
+  - wardrobe: shirts arranged from light to dark, a high-school uniform pressed at the very back, still not thrown away
+  - fridge: nearly empty — bottled water, milk, and fruit his sister forced on him
+Smell and atmosphere:
+  - a faint smell of coffee mixed with paper
+  - quiet enough to hear the wall clock tick, and he likes it that way
+What it says about him:
+  - controlling, but with a soft corner (the pothos, the uniform)
+  - no boundary at all between work and life
+</character_room>
 
-===== 字段含义 =====
+===== What each field means =====
 
-· comment — 词条备注（简短可读，如"角色的房间"）
-· key — 触发关键词，逗号分隔，覆盖多种说法（地名/别称/人物名/动作词）
-· content — 词条正文，XML 标签包裹
-· constant — true=常驻（每次都注入，用于核心世界观）；false=关键词触发（场景/NPC）
-· position — 0=角色设定前（背景类）；1=角色设定后（角色相关）
+· comment — the entry's remark, short and readable (e.g. "the character's room")
+· key — trigger keywords, comma-separated, covering several ways of saying it (place names, nicknames, character names, verbs)
+· content — the entry body, wrapped in XML tags
+· constant — true = always active (injected every time, for the core setting); false = keyword-triggered (scenes, NPCs)
+· position — 0 = before the character profile (background); 1 = after it (character-related)
 
-===== 工具调用 =====
+===== Absolute writing rules =====
+1. One entry, one concept. Do not stuff several things into it
+2. Write with sensory detail and a picture in mind, not hollow summary
+3. When an entry is bound to a character, write it from that character's angle ("he is always in here", "this is the place she hates most")
+4. Cover several phrasings in the keywords
+5. Core setting → constant=true; scenes and NPCs → constant=false
+6. Background → position=0; character-related → position=1
+7. Wrap the content in XML tags
+8. Write it from the bound character's actual profile. Never copy the example
 
-· 创建词条 → 创建词条({worldbook, comment, key, content, constant, position})。如果 worldbook 不存在会自动建
-· 改词条 → 先用「列出世界书(name)」拿词条 uid 列表，再用「更新词条({worldbook, entryUid, field, value})」改单字段
-· 删词条 → 删除词条({worldbook, entryUid})
-
-===== 写作铁律 =====
-1. 一条词条只聚焦一个概念，不要塞太多东西
-2. 内容要有感官细节和画面感，不写空洞概括
-3. 绑定了角色时，内容融入角色视角（"他常来这里""这是她最讨厌的地方"）
-4. 关键词覆盖多种说法
-5. 核心世界观 → constant=true；场景/NPC → constant=false
-6. 背景类 → position=0；角色相关 → position=1
-7. content 内用中文 XML 标签包裹
-8. 必须根据绑定角色的实际人设原创，禁止照抄示例
-===== 输出格式示例 =====
-生成 2 条词条时的完整 JSON 结构（所有 value 都是普通字符串，换行用 \\n）：
-{"reply":"吐槽1|||吐槽2","actions":[{"field":"entry_new_0_comment","value":"词条名"},{"field":"entry_new_0_key","value":"关键词1,关键词2"},{"field":"entry_new_0_content","value":"<标签>\\n内容\\n</标签>"},{"field":"entry_new_0_constant","value":"false"},{"field":"entry_new_0_position","value":"1"},{"field":"entry_new_1_comment","value":"词条名"},{"field":"entry_new_1_key","value":"关键词1,关键词2"},{"field":"entry_new_1_content","value":"<标签>\\n内容\\n</标签>"},{"field":"entry_new_1_constant","value":"false"},{"field":"entry_new_1_position","value":"0"}]}
+===== Output format example =====
+The complete JSON when creating 2 entries (every value is a plain string; use \\n for line breaks):
+{"reply":"quip 1|||quip 2","actions":[{"field":"entry_new_0_comment","value":"entry name"},{"field":"entry_new_0_key","value":"keyword1,keyword2"},{"field":"entry_new_0_content","value":"<tag>\\ncontent\\n</tag>"},{"field":"entry_new_0_constant","value":"false"},{"field":"entry_new_0_position","value":"1"},{"field":"entry_new_1_comment","value":"entry name"},{"field":"entry_new_1_key","value":"keyword1,keyword2"},{"field":"entry_new_1_content","value":"<tag>\\ncontent\\n</tag>"},{"field":"entry_new_1_constant","value":"false"},{"field":"entry_new_1_position","value":"0"}]}
 `;
 
 export const PRESET_PROMPT = `===== 剧情预设写作规范 =====
