@@ -166,8 +166,11 @@ export class MacroEngine {
         if (body === "musicCloud") return this.musicCloud || "无";
         if (body === "musicOnlineHint") return this.musicOnlineHint;
         if (body === "currentSchedule" || body === "当前日程") return this.currentSchedule || "无";
-        if (body === "vnScenes") return this.vnScenes || "暂无";
-        if (body === "vnSprites") return this.vnSprites || "暂无";
+        // Prompt-facing fallbacks, compared nowhere (verified repo-wide). Translated with
+        // vn_output_format so the VN prompt is not half English. The other "暂无" defaults
+        // further down are the same category and are still pending.
+        if (body === "vnScenes") return this.vnScenes || "none yet";
+        if (body === "vnSprites") return this.vnSprites || "none yet";
         if (body === "vnBeats") return this.vnBeats || "\x00TRIM\x00";
         if (body === "vnCurrentBeat") return this.vnCurrentBeat || "\x00TRIM\x00";
 
