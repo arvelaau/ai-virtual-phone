@@ -83,11 +83,11 @@ export type NineSliceCalibrationEventDetail = {
 export const NINE_SLICE_CALIBRATION_EVENT = "mascot:nine-slice-calibration";
 
 const KIND_LABELS: Record<CssAssetKind, string> = {
-    bubble: "气泡",
-    icon: "图标",
-    texture: "纹理",
-    background: "背景",
-    misc: "其他",
+    bubble: "chat bubble",
+    icon: "icon",
+    texture: "texture",
+    background: "background",
+    misc: "other",
 };
 
 const FORMAT_MIME: Record<ConvertFormat, string> = {
@@ -98,7 +98,7 @@ const FORMAT_MIME: Record<ConvertFormat, string> = {
 
 function ensureBrowserCanvas(): void {
     if (typeof window === "undefined" || typeof document === "undefined") {
-        throw new Error("图像素材工具只能在浏览器里使用。");
+        throw new Error("The image asset tools only work in the browser.");
     }
 }
 
@@ -177,12 +177,12 @@ async function loadImageFromBlob(blob: Blob): Promise<LoadedImage> {
         const image = await new Promise<HTMLImageElement>((resolve, reject) => {
             const img = new Image();
             img.onload = () => resolve(img);
-            img.onerror = () => reject(new Error("图片解码失败"));
+            img.onerror = () => reject(new Error("Failed to decode the image"));
             img.src = url;
         });
         const width = image.naturalWidth || image.width;
         const height = image.naturalHeight || image.height;
-        if (!width || !height) throw new Error("无法读取图片尺寸。");
+        if (!width || !height) throw new Error("Could not read the image dimensions.");
         return { image, width, height };
     } finally {
         URL.revokeObjectURL(url);
@@ -193,7 +193,7 @@ function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality?: num
     return new Promise((resolve, reject) => {
         canvas.toBlob((blob) => {
             if (!blob) {
-                reject(new Error("图片导出失败。"));
+                reject(new Error("Failed to export the image."));
                 return;
             }
             resolve(blob);
@@ -212,7 +212,7 @@ async function drawBlobToCanvas(blob: Blob): Promise<{ canvas: HTMLCanvasElement
     canvas.width = loaded.width;
     canvas.height = loaded.height;
     const context = canvas.getContext("2d", { willReadFrequently: true });
-    if (!context) throw new Error("无法创建图片画布。");
+    if (!context) throw new Error("Could not create the image canvas.");
     context.drawImage(loaded.image, 0, 0, loaded.width, loaded.height);
     return { canvas, width: loaded.width, height: loaded.height };
 }
@@ -252,7 +252,7 @@ function averageCornerColor(data: Uint8ClampedArray, width: number, height: numb
 
 function detectTrimBox(canvas: HTMLCanvasElement, tolerance: number): BoundingBox {
     const context = canvas.getContext("2d", { willReadFrequently: true });
-    if (!context) throw new Error("无法读取图片像素。");
+    if (!context) throw new Error("Could not read the image pixels.");
     const { width, height } = canvas;
     const imageData = context.getImageData(0, 0, width, height);
     const { data } = imageData;
@@ -302,7 +302,7 @@ function removeConnectedEdgeBackground(canvas: HTMLCanvasElement, options: {
     feather: number;
 }): { removedPixels: number; color: [number, number, number, number] } {
     const context = canvas.getContext("2d", { willReadFrequently: true });
-    if (!context) throw new Error("无法读取图片像素。");
+    if (!context) throw new Error("Could not read the image pixels.");
     const { width, height } = canvas;
     const imageData = context.getImageData(0, 0, width, height);
     const { data } = imageData;
@@ -400,20 +400,20 @@ function cropBoxFromArgs(args: {
 }
 
 function sizeLine(record: Pick<CssAssetRecord, "width" | "height" | "size" | "mimeType">): string {
-    const dimensions = record.width && record.height ? `${record.width}x${record.height}` : "未知尺寸";
-    const kb = record.size ? `${Math.max(1, Math.round(record.size / 1024))}KB` : "未知大小";
+    const dimensions = record.width && record.height ? `${record.width}x${record.height}` : "unknown dimensions";
+    const kb = record.size ? `${Math.max(1, Math.round(record.size / 1024))}KB` : "unknown size";
     return `${dimensions} / ${record.mimeType} / ${kb}`;
 }
 
 export function formatCssAssetRecord(record: CssAssetRecord): string {
     const parts = [
         `id: ${record.id}`,
-        `名称: ${record.label}`,
-        `类型: ${KIND_LABELS[record.kind]}`,
-        `规格: ${sizeLine(record)}`,
+        `Name: ${record.label}`,
+        `Kind: ${KIND_LABELS[record.kind]}`,
+        `Spec: ${sizeLine(record)}`,
     ];
-    if (record.publicUrl) parts.push(`图床URL: ${record.publicUrl}`);
-    if (record.prompt) parts.push(`提示词: ${record.prompt.slice(0, 240)}${record.prompt.length > 240 ? "..." : ""}`);
+    if (record.publicUrl) parts.push(`Host URL: ${record.publicUrl}`);
+    if (record.prompt) parts.push(`Prompt: ${record.prompt.slice(0, 240)}${record.prompt.length > 240 ? "..." : ""}`);
     return parts.join("\n");
 }
 
@@ -459,7 +459,7 @@ function buildNineSliceSnippet(options: {
         typeof minHeight === "number" && minHeight > 0 ? `  min-height: ${Math.round(minHeight)}px;` : "",
     ].filter(Boolean);
     return [
-        `/* slice 是源图切片像素；border-width 是图片保护区显示宽度；padding 只控制文字留白，可进入保护区。 */`,
+        `/* slice is the source-image slice in pixels; border-width is the rendered width of the protected zone; padding only controls the text inset and may reach into that zone. */`,
         `${targetSelector} {`,
         `  position: relative;`,
         `  isolation: isolate;`,
@@ -580,7 +580,7 @@ function requestNineSliceCalibration(request: NineSliceCalibrationRequest): Prom
         };
         window.dispatchEvent(new CustomEvent<NineSliceCalibrationEventDetail>(NINE_SLICE_CALIBRATION_EVENT, { detail }));
         if (!detail.handled) {
-            reject(new Error("九宫格校准弹窗没有可用的前端处理器。"));
+            reject(new Error("No front-end handler is mounted for the nine-slice calibration dialog."));
         }
     });
 }
@@ -624,19 +624,19 @@ function collectUserImageEntries(history: CssAssetUserImageHistoryMessage[] | un
 async function resolveUserImageBlob(ref: string): Promise<{ blob: Blob; mimeType: string }> {
     if (ref.startsWith("data:")) {
         const converted = dataUrlToBlob(ref);
-        if (!converted) throw new Error("用户图片 data URL 格式无效。");
+        if (!converted) throw new Error("That user image has an invalid data URL.");
         return converted;
     }
     const media = await loadMediaBlob(ref);
-    if (!media || media.category !== "image") throw new Error("找不到这张用户图片，可能历史已被清理。");
+    if (!media || media.category !== "image") throw new Error("That user image could not be found; the history may have been cleared.");
     return { blob: media.blob, mimeType: media.mimeType };
 }
 
 function summarizeUserImageEntry(entry: UserImageEntry): string {
     const summary = entry.messageText
         ? entry.messageText.replace(/\s+/g, " ").slice(0, 48)
-        : "（该消息没有文字）";
-    return `· ${entry.sourceImageId} — 第 ${entry.messageOffset + 1} 条带图用户消息 / 第 ${entry.imageIndex + 1} 张 / ${summary}`;
+        : "(that message has no text)";
+    return `· ${entry.sourceImageId} — user message ${entry.messageOffset + 1} with an image / image ${entry.imageIndex + 1} / ${summary}`;
 }
 
 export async function listUserUploadedImages(args: {
@@ -652,10 +652,10 @@ export async function listUserUploadedImages(args: {
         name: "列出用户图片",
         success: true,
         data: [
-            `找到 ${entries.length} 张最近用户图片：`,
+            `Found ${entries.length} recent user image(s):`,
             ...entries.map(summarizeUserImageEntry),
             "",
-            "需要加工哪张图时，把 sourceImageId 传给「导入用户图片为素材」。不传 sourceImageId 默认导入 user_image_1。",
+            "To work on one, pass its sourceImageId to 导入用户图片为素材. With no sourceImageId, user_image_1 is imported.",
         ].join("\n"),
         mediaAttachments: entries.slice(0, 4).map(entry => ({ type: "image", url: entry.ref, title: entry.sourceImageId })),
     };
@@ -683,7 +683,7 @@ export async function importUserImageAsCssAsset(args: {
         return {
             name: "导入用户图片为素材",
             success: false,
-            error: `找不到用户图片：${sourceImageId || `messageOffset=${args.messageOffset}, imageIndex=${args.imageIndex || 0}`}。请先调用「列出用户图片」。`,
+            error: `No such user image: ${sourceImageId || `messageOffset=${args.messageOffset}, imageIndex=${args.imageIndex || 0}`}. Call 列出用户图片 first.`,
         };
     }
 
@@ -691,7 +691,7 @@ export async function importUserImageAsCssAsset(args: {
     const dimensions = await readDimensions(media.blob).catch(() => ({ width: undefined, height: undefined }));
     const mediaRef = await storeMediaBlob(media.blob, media.mimeType || media.blob.type || "image/png", "image");
     const kind = normalizeKind(args.kind);
-    const label = args.label?.trim() || `${entry.sourceImageId}-用户素材`;
+    const label = args.label?.trim() || `${entry.sourceImageId}-user-asset`;
     const record = saveCssAssetRecord({
         label,
         kind,
@@ -700,13 +700,13 @@ export async function importUserImageAsCssAsset(args: {
         size: media.blob.size,
         width: dimensions.width,
         height: dimensions.height,
-        prompt: `用户上传图片：${entry.messageText || entry.sourceImageId}`,
+        prompt: `User-uploaded image: ${entry.messageText || entry.sourceImageId}`,
     });
     const data = [
-        "已把用户上传图片导入 CSS 素材库。",
-        `来源: ${summarizeUserImageEntry(entry).replace(/^· /, "")}`,
+        "Imported the user-uploaded image into the CSS asset library.",
+        `Source: ${summarizeUserImageEntry(entry).replace(/^· /, "")}`,
         formatCssAssetRecord(record),
-        "后续可以继续调用「去底透明」「裁切素材」「压缩转换素材」「上传图床」或「生成九宫格CSS」。",
+        "From here you can call 去底透明, 裁切素材, 压缩转换素材, 上传图床 or 生成九宫格CSS.",
     ].join("\n");
     return resultWithPreview("导入用户图片为素材", data, record);
 }
@@ -719,7 +719,7 @@ export async function createCssAssetFromGeneratedImage(args: {
     useReferenceImage?: boolean;
 }): Promise<ToolResult> {
     const description = args.description.trim();
-    if (!description) return { name: "生成图像素材", success: false, error: "description 不能为空。" };
+    if (!description) return { name: "生成图像素材", success: false, error: "description must not be empty." };
 
     const settings = loadImageGenerationSettings();
     const result = await generateImageFromConfiguredApi({
@@ -729,7 +729,7 @@ export async function createCssAssetFromGeneratedImage(args: {
         settings: { ...settings, enabled: true, extraPrompt: "" },
     });
     if (!result) {
-        return { name: "生成图像素材", success: false, error: "生图配置不完整，请先在 Image Generation 里填写 API、Base URL 和模型名。" };
+        return { name: "生成图像素材", success: false, error: "The image generation config is incomplete. Fill in the API, base URL and model name under Settings -> Image Generation first." };
     }
     const dimensions = await readDimensions(result.blob).catch(() => ({ width: undefined, height: undefined }));
     const kind = normalizeKind(args.kind);
@@ -745,10 +745,10 @@ export async function createCssAssetFromGeneratedImage(args: {
         prompt: result.prompt,
     });
     const data = [
-        "已生成图像素材。",
+        "Image asset generated.",
         formatCssAssetRecord(record),
-        result.revisedPrompt ? `模型改写提示词: ${result.revisedPrompt}` : "",
-        "下一步可以用「裁切素材」自动裁边，或用「压缩转换素材」转成 WebP，再用「上传图床」拿 CSS URL。",
+        result.revisedPrompt ? `Model-revised prompt: ${result.revisedPrompt}` : "",
+        "Next you can auto-trim the edges with 裁切素材, convert it to WebP with 压缩转换素材, and get a CSS URL with 上传图床.",
     ].filter(Boolean).join("\n");
     return resultWithPreview("生成图像素材", data, record);
 }
@@ -769,9 +769,9 @@ export async function cropCssAsset(args: {
 }): Promise<ToolResult> {
     ensureBrowserCanvas();
     const source = getCssAssetRecord(args.assetId);
-    if (!source) return { name: "裁切素材", success: false, error: `找不到素材：${args.assetId}` };
+    if (!source) return { name: "裁切素材", success: false, error: `No such asset: ${args.assetId}` };
     const media = await loadMediaBlob(source.mediaRef);
-    if (!media) return { name: "裁切素材", success: false, error: `素材图片丢失：${args.assetId}` };
+    if (!media) return { name: "裁切素材", success: false, error: `The asset image is missing: ${args.assetId}` };
 
     const { canvas, width: imageWidth, height: imageHeight } = await drawBlobToCanvas(media.blob);
     const mode = args.cropMode === "auto_trim" ? "auto_trim" : "coordinates";
@@ -800,7 +800,7 @@ export async function cropCssAsset(args: {
     output.width = outputWidth;
     output.height = outputHeight;
     const context = output.getContext("2d");
-    if (!context) throw new Error("无法创建裁剪画布。");
+    if (!context) throw new Error("Could not create the crop canvas.");
     context.drawImage(
         canvas,
         cropBox.x,
@@ -821,7 +821,7 @@ export async function cropCssAsset(args: {
     const blob = await canvasToBlob(output, outputMimeType, outputMimeType === "image/png" ? undefined : 0.92);
     const mediaRef = await storeMediaBlob(blob, blob.type || "image/png", "image");
     const record = saveCssAssetRecord({
-        label: args.label?.trim() || `${source.label}-裁切`,
+        label: args.label?.trim() || `${source.label}-cropped`,
         kind: source.kind,
         mediaRef,
         mimeType: blob.type || "image/png",
@@ -832,9 +832,9 @@ export async function cropCssAsset(args: {
         sourceAssetId: source.id,
     });
     const data = [
-        mode === "auto_trim" ? "已自动裁掉透明/近似纯色边缘。" : "已按坐标裁切素材。",
-        `原图: ${source.id} (${imageWidth}x${imageHeight})`,
-        `裁剪框: x=${cropBox.x}, y=${cropBox.y}, width=${cropBox.width}, height=${cropBox.height}`,
+        mode === "auto_trim" ? "Automatically trimmed the transparent or near-flat edges." : "Cropped the asset by coordinates.",
+        `Source: ${source.id} (${imageWidth}x${imageHeight})`,
+        `Crop box: x=${cropBox.x}, y=${cropBox.y}, width=${cropBox.width}, height=${cropBox.height}`,
         formatCssAssetRecord(record),
     ].join("\n");
     return resultWithPreview("裁切素材", data, record);
@@ -850,9 +850,9 @@ export async function removeCssAssetBackground(args: {
 }): Promise<ToolResult> {
     ensureBrowserCanvas();
     const source = getCssAssetRecord(args.assetId);
-    if (!source) return { name: "去底透明", success: false, error: `找不到素材：${args.assetId}` };
+    if (!source) return { name: "去底透明", success: false, error: `No such asset: ${args.assetId}` };
     const media = await loadMediaBlob(source.mediaRef);
-    if (!media) return { name: "去底透明", success: false, error: `素材图片丢失：${args.assetId}` };
+    if (!media) return { name: "去底透明", success: false, error: `The asset image is missing: ${args.assetId}` };
 
     const { canvas, width, height } = await drawBlobToCanvas(media.blob);
     const backgroundColor = parseHexColor(args.backgroundColor);
@@ -866,7 +866,7 @@ export async function removeCssAssetBackground(args: {
     const blob = await canvasToBlob(canvas, mimeType, format === "webp" ? 0.9 : undefined);
     const mediaRef = await storeMediaBlob(blob, blob.type || mimeType, "image");
     const record = saveCssAssetRecord({
-        label: args.label?.trim() || `${source.label}-透明底`,
+        label: args.label?.trim() || `${source.label}-transparent`,
         kind: source.kind,
         mediaRef,
         mimeType: blob.type || mimeType,
@@ -877,10 +877,10 @@ export async function removeCssAssetBackground(args: {
         sourceAssetId: source.id,
     });
     const data = [
-        "已把与图片外缘连通的白底/纯色底转为透明。",
-        `背景采样色: rgba(${removed.color.join(", ")})`,
-        `处理像素: ${removed.removedPixels}`,
-        "说明: 只删除从边缘连通进来的底色，气泡内部封闭区域会保留；如果边缘仍有白边，可提高 tolerance 或 feather 后再试。",
+        "Turned the white or flat-colour background connected to the image edge transparent.",
+        `Sampled background colour: rgba(${removed.color.join(", ")})`,
+        `Pixels affected: ${removed.removedPixels}`,
+        "Note: only background reachable from the edge is removed, so enclosed areas inside the bubble are kept. If a white fringe remains, raise tolerance or feather and try again.",
         formatCssAssetRecord(record),
     ].join("\n");
     return resultWithPreview("去底透明", data, record);
@@ -896,9 +896,9 @@ export async function convertCssAsset(args: {
 }): Promise<ToolResult> {
     ensureBrowserCanvas();
     const source = getCssAssetRecord(args.assetId);
-    if (!source) return { name: "压缩转换素材", success: false, error: `找不到素材：${args.assetId}` };
+    if (!source) return { name: "压缩转换素材", success: false, error: `No such asset: ${args.assetId}` };
     const media = await loadMediaBlob(source.mediaRef);
-    if (!media) return { name: "压缩转换素材", success: false, error: `素材图片丢失：${args.assetId}` };
+    if (!media) return { name: "压缩转换素材", success: false, error: `The asset image is missing: ${args.assetId}` };
 
     const loaded = await loadImageFromBlob(media.blob);
     const maxWidth = args.maxWidth && args.maxWidth > 0 ? args.maxWidth : loaded.width;
@@ -910,7 +910,7 @@ export async function convertCssAsset(args: {
     canvas.width = width;
     canvas.height = height;
     const context = canvas.getContext("2d");
-    if (!context) throw new Error("无法创建转换画布。");
+    if (!context) throw new Error("Could not create the conversion canvas.");
     context.drawImage(loaded.image, 0, 0, width, height);
 
     const format = args.format === "png" || args.format === "jpeg" || args.format === "webp" ? args.format : "webp";
@@ -932,9 +932,9 @@ export async function convertCssAsset(args: {
     const beforeKb = Math.max(1, Math.round(source.size / 1024));
     const afterKb = Math.max(1, Math.round(blob.size / 1024));
     const data = [
-        `已转换为 ${format.toUpperCase()}。`,
-        `体积: ${beforeKb}KB -> ${afterKb}KB`,
-        `尺寸: ${loaded.width}x${loaded.height} -> ${width}x${height}`,
+        `Converted to ${format.toUpperCase()}.`,
+        `Size: ${beforeKb}KB -> ${afterKb}KB`,
+        `Dimensions: ${loaded.width}x${loaded.height} -> ${width}x${height}`,
         formatCssAssetRecord(record),
     ].join("\n");
     return resultWithPreview("压缩转换素材", data, record);
@@ -944,20 +944,20 @@ export async function listOrReadCssAssets(args: { assetId?: string }): Promise<T
     const assetId = args.assetId?.trim();
     if (assetId) {
         const record = getCssAssetRecord(assetId);
-        if (!record) return { name: "列出读取素材", success: false, error: `找不到素材：${assetId}` };
+        if (!record) return { name: "列出读取素材", success: false, error: `No such asset: ${assetId}` };
         return resultWithPreview("列出读取素材", formatCssAssetRecord(record), record);
     }
 
     const records = loadCssAssetRecords().slice(0, 20);
     if (records.length === 0) {
-        return { name: "列出读取素材", success: true, data: "还没有 CSS 图片素材。可以先调用「生成图像素材」。" };
+        return { name: "列出读取素材", success: true, data: "There are no CSS image assets yet. Start with 生成图像素材." };
     }
     const lines = records.map(record => [
         `· ${record.id}`,
-        `  名称: ${record.label}`,
-        `  类型: ${KIND_LABELS[record.kind]} / ${sizeLine(record)}${record.publicUrl ? " / 已上传" : ""}`,
+        `  Name: ${record.label}`,
+        `  Kind: ${KIND_LABELS[record.kind]} / ${sizeLine(record)}${record.publicUrl ? " / uploaded" : ""}`,
     ].join("\n"));
-    return { name: "列出读取素材", success: true, data: `最近 ${records.length} 个素材：\n${lines.join("\n")}` };
+    return { name: "列出读取素材", success: true, data: `${records.length} recent asset(s):\n${lines.join("\n")}` };
 }
 
 export function buildCssAssetNineSliceCss(args: {
@@ -982,7 +982,7 @@ export function buildCssAssetNineSliceCss(args: {
     const record = args.assetId ? getCssAssetRecord(args.assetId) : null;
     const url = args.url || record?.publicUrl || "";
     if (!url) {
-        return { name: "生成九宫格CSS", success: false, error: "请先上传素材拿到 publicUrl，或直接传 url 参数。" };
+        return { name: "生成九宫格CSS", success: false, error: "Upload the asset to get a publicUrl first, or pass the url parameter directly." };
     }
     const required: Array<keyof Omit<NineSliceValues, "selector">> = [
         "sliceTop",
@@ -1003,7 +1003,7 @@ export function buildCssAssetNineSliceCss(args: {
         return {
             name: "生成九宫格CSS",
             success: false,
-            error: `缺少九宫格参数：${missing.join(", ")}。请先调用「校准九宫格」让用户手动确认切线和显示尺寸，不要自动猜参数。`,
+            error: `Missing nine-slice values: ${missing.join(", ")}. Call 校准九宫格 first so the user can confirm the guides and the rendered size by hand — never guess them.`,
         };
     }
     const values: NineSliceValues = {
@@ -1025,8 +1025,8 @@ export function buildCssAssetNineSliceCss(args: {
     };
     const snippet = nineSliceCssFromValues(values, url);
     const data = [
-        "已生成伪元素九宫格 CSS。把这段写入 CSS，不要再给同一气泡叠加 background-size: 100% 100% 或 background-size: cover。",
-        "这些参数来自用户校准；不要用系统自动猜的参数覆盖它们。",
+        "Generated pseudo-element nine-slice CSS. Write this into the CSS, and do not also stack background-size: 100% 100% or background-size: cover on the same bubble.",
+        "These values came from the user's calibration; never overwrite them with guessed ones.",
         "",
         snippet,
     ].join("\n");
@@ -1039,9 +1039,9 @@ export async function calibrateCssAssetNineSlice(args: {
 }): Promise<ToolResult> {
     ensureBrowserCanvas();
     const record = getCssAssetRecord(args.assetId);
-    if (!record) return { name: "校准九宫格", success: false, error: `找不到素材：${args.assetId}` };
+    if (!record) return { name: "校准九宫格", success: false, error: `No such asset: ${args.assetId}` };
     const media = await loadMediaBlob(record.mediaRef);
-    if (!media) return { name: "校准九宫格", success: false, error: `素材图片丢失：${args.assetId}` };
+    if (!media) return { name: "校准九宫格", success: false, error: `The asset image is missing: ${args.assetId}` };
     const dimensions = record.width && record.height
         ? { width: record.width, height: record.height }
         : await readDimensions(media.blob);
@@ -1057,12 +1057,12 @@ export async function calibrateCssAssetNineSlice(args: {
     });
     const css = record.publicUrl ? nineSliceCssFromValues(values, record.publicUrl) : "";
     const data = [
-        "九宫格校准完成。",
+        "Nine-slice calibration complete.",
         formatNineSliceValues(values),
         "",
         css
             ? `CSS:\n${css}`
-            : "该素材还没有图床URL。请先调用「上传图床」，再用以上参数调用「生成九宫格CSS」。",
+            : "This asset has no host URL yet. Call 上传图床 first, then call 生成九宫格CSS with the values above.",
     ].join("\n");
     return { name: "校准九宫格", success: true, data };
 }
@@ -1099,16 +1099,16 @@ export async function uploadCssAssetToImageHost(args: {
         return { name: "上传图床", success: false, error: "Scroll is not currently allowed to upload to image hosting. Turn on \"Allow the mascot to upload to image hosting\" in Settings -> Image Generation." };
     }
     if (hosting.provider !== "imgbb") {
-        return { name: "上传图床", success: false, error: "图床提供方还没有选择 ImgBB。" };
+        return { name: "上传图床", success: false, error: "The image host provider is not set to ImgBB." };
     }
     if (!hosting.imgbbApiKey.trim()) {
-        return { name: "上传图床", success: false, error: "请先填写 ImgBB API Key。" };
+        return { name: "上传图床", success: false, error: "Fill in the ImgBB API key first." };
     }
 
     const record = getCssAssetRecord(args.assetId);
-    if (!record) return { name: "上传图床", success: false, error: `找不到素材：${args.assetId}` };
+    if (!record) return { name: "上传图床", success: false, error: `No such asset: ${args.assetId}` };
     const media = await loadMediaBlob(record.mediaRef);
-    if (!media) return { name: "上传图床", success: false, error: `素材图片丢失：${args.assetId}` };
+    if (!media) return { name: "上传图床", success: false, error: `The asset image is missing: ${args.assetId}` };
     const prepared = await convertBlobForUpload(record, media.blob, media.mimeType);
     if (prepared.blob.size > hosting.maxUploadBytes) {
         const currentKb = Math.round(prepared.blob.size / 1024);
@@ -1116,7 +1116,7 @@ export async function uploadCssAssetToImageHost(args: {
         return {
             name: "上传图床",
             success: false,
-            error: `素材仍然太大：${currentKb}KB，当前上限 ${maxKb}KB。请先用「压缩转换素材」缩小尺寸或降低质量。`,
+            error: `The asset is still too large: ${currentKb}KB against a ${maxKb}KB limit. Shrink it or lower the quality with 压缩转换素材 first.`,
         };
     }
 
@@ -1145,7 +1145,7 @@ export async function uploadCssAssetToImageHost(args: {
         error?: string;
     };
     if (!response.ok || data.error || !data.url) {
-        return { name: "上传图床", success: false, error: data.error || `ImgBB 上传失败 ${response.status}` };
+        return { name: "上传图床", success: false, error: data.error || `ImgBB upload failed with ${response.status}` };
     }
 
     const updated = updateCssAssetRecord(record.id, {
@@ -1155,8 +1155,8 @@ export async function uploadCssAssetToImageHost(args: {
         height: data.height || record.height,
     }) || record;
     const resultData = [
-        "已上传图床。",
-        prepared.converted ? "上传前已自动转为 WebP 副本。" : "",
+        "Uploaded to the image host.",
+        prepared.converted ? "A WebP copy was made automatically before uploading." : "",
         formatCssAssetRecord(updated),
     ].filter(Boolean).join("\n");
     return { name: "上传图床", success: true, data: resultData };
