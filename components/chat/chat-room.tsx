@@ -1445,7 +1445,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         };
     }, [session.id, syncMessagesFromStorage]);
 
-    // Listen for live CSS updates from 小卷
+    // Listen for live CSS updates from Scroll
     useEffect(() => {
         const onCSSUpdate = (e: Event) => {
             const detail = (e as CustomEvent).detail;

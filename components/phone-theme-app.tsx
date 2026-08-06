@@ -911,7 +911,7 @@ function GlobalCSSPage({
   onNotice: (text: string) => void;
 }) {
   const [localCSS, setLocalCSS] = useState(() => {
-    // Read latest from storage in case 小卷 updated it
+    // Read latest from storage in case Scroll updated it
     try {
       const { readThemeProfile } = require("@/lib/theme-storage");
       return readThemeProfile().globalCustomCSS || draft.globalCustomCSS;

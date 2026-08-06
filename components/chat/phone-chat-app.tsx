@@ -121,7 +121,7 @@ export const PhoneChatApp = memo(function PhoneChatApp({ onClose, initialSession
                 next.set(activeSession.id, activeSession);
                 return next;
             });
-            // Push session info to mascot context so 小卷 can access sessionId
+            // Push session info to mascot context so Scroll can access sessionId
             const chars = loadCharacters();
             const char = chars.find(c => c.id === activeSession.contactId);
             notifyMascotPageContext({

@@ -1,5 +1,5 @@
 // lib/mascot-tools.ts
-// 小卷工具系统：7 个套件 + 36 个细粒度工具，支持文本协议和原生协议双轨。
+// Scroll工具系统：7 个套件 + 36 个细粒度工具，支持文本协议和原生协议双轨。
 //
 // 套件设计（默认只暴露 loader，按需展开）：
 //   - 角色卡套件 (character_pack)     — 3 个子工具
@@ -534,7 +534,7 @@ export const MASCOT_TOOL_PACKAGES: MascotToolPackage[] = [
         description: "查看 / 覆写 / 清除 各页面的自定义 CSS。工作流：先 读取CSS 拿到当前内容和可用选择器，再把（要保留的旧内容 + 要修改的部分）拼成完整新内容，最后 覆写CSS 写回。",
         subTools: [
             { name: "读取CSS", description: "读取指定位置的当前 CSS 内容 + 该位置可用的选择器/变量参考。修改前必读。不传 location 时返回 5 个位置的状态概览。", parameterSchema: READ_CSS_SCHEMA },
-            { name: "覆写CSS", description: "用新内容替换该位置的全部 CSS。需要小卷自己把（保留的旧规则 + 改动）拼成完整内容再写入。", parameterSchema: OVERWRITE_CSS_SCHEMA },
+            { name: "覆写CSS", description: "用新内容替换该位置的全部 CSS。需要Scroll自己把（保留的旧规则 + 改动）拼成完整内容再写入。", parameterSchema: OVERWRITE_CSS_SCHEMA },
             { name: "清除CSS", description: "清空指定位置的所有自定义 CSS。", parameterSchema: CLEAR_CSS_SCHEMA },
         ],
         usageGuide: CSS_PROMPT,
@@ -545,8 +545,8 @@ export const MASCOT_TOOL_PACKAGES: MascotToolPackage[] = [
         description: "生成、导入用户图、去底透明、裁切、压缩转换、列出读取、上传和生成九宫格 CSS。适合制作聊天气泡、图标、背景纹理等主题素材。",
         subTools: [
             { name: "生成图像素材", description: "调用已配置的图像生成接口，生成一张可用于 CSS 的素材并保存到本地素材库，返回素材 id 和预览。", parameterSchema: GENERATE_IMAGE_ASSET_SCHEMA },
-            { name: "列出用户图片", description: "列出最近小卷对话里用户上传的图片，返回 sourceImageId 和预览，用于选择要导入的素材。", parameterSchema: LIST_USER_IMAGES_SCHEMA },
-            { name: "导入用户图片为素材", description: "把用户上传给小卷的图片导入 CSS 素材库，返回 assetId，后续可继续裁切、去底、上传和写 CSS。", parameterSchema: IMPORT_USER_IMAGE_ASSET_SCHEMA },
+            { name: "列出用户图片", description: "列出最近Scroll对话里用户上传的图片，返回 sourceImageId 和预览，用于选择要导入的素材。", parameterSchema: LIST_USER_IMAGES_SCHEMA },
+            { name: "导入用户图片为素材", description: "把用户上传给Scroll的图片导入 CSS 素材库，返回 assetId，后续可继续裁切、去底、上传和写 CSS。", parameterSchema: IMPORT_USER_IMAGE_ASSET_SCHEMA },
             { name: "去底透明", description: "把与图片外缘连通的白底/纯色底转成透明，适合处理 Image 2 生成的白底气泡/图标。", parameterSchema: REMOVE_IMAGE_BACKGROUND_SCHEMA },
             { name: "裁切素材", description: "基于素材 id 生成裁切后的新素材。支持坐标裁切，也支持自动裁掉透明/近似纯色边缘。", parameterSchema: CROP_IMAGE_ASSET_SCHEMA },
             { name: "压缩转换素材", description: "把素材转换成 WebP/PNG/JPEG，可限制最大宽高和压缩质量，生成新的素材 id。", parameterSchema: CONVERT_IMAGE_ASSET_SCHEMA },
@@ -832,7 +832,7 @@ export type MascotToolContext = {
     history?: CssAssetUserImageHistoryMessage[];
 };
 
-/** 执行小卷工具调用 */
+/** 执行Scroll工具调用 */
 export async function executeMascotToolCall(call: ToolCall, ctx: MascotToolContext): Promise<ToolResult> {
     try {
         switch (call.name) {

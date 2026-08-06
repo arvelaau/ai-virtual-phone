@@ -223,7 +223,7 @@ export type CharacterAgent = {
   stats: CharStats;
 };
 
-// ── Agent Skill System (like 小卷's skills) ──
+// ── Agent Skill System (like Scroll's skills) ──
 export type AgentAction =
   | { type: "move"; targetNodeId: string }
   | { type: "search" }

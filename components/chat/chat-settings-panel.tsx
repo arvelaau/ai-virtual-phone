@@ -178,7 +178,7 @@ export function ChatSettingsPanel({
     const [offlineBilingualTranslationPrompt, setOfflineBilingualTranslationPrompt] = useState(session.offlineBilingualTranslationPrompt || defaultOfflineBilingualPrompt);
     const [offlineBilingualPromptDraft, setOfflineBilingualPromptDraft] = useState(session.offlineBilingualTranslationPrompt || defaultOfflineBilingualPrompt);
     const [customCSS, setCustomCSS] = useState(() => {
-        // Read latest CSS from storage (in case 小卷 updated it)
+        // Read latest CSS from storage (in case Scroll updated it)
         const sessions = loadChatSessions();
         const latest = sessions.find(s => s.id === session.id);
         return (latest as Record<string, unknown>)?.customCSS as string || session.customCSS || "";

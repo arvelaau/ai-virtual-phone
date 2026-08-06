@@ -1,5 +1,5 @@
 // lib/mascot-engine.ts
-// Mascot (小卷) LLM engine: dual protocol (native tools + text protocol). The agent
+// Mascot (Scroll) LLM engine: dual protocol (native tools + text protocol). The agent
 // loop is driven by the UI layer.
 
 import { resolveAuxiliaryApiConfig } from "./settings-storage";
@@ -652,7 +652,7 @@ async function callMascotNative(
                 messages,
                 tools,
                 [],
-                { characterName: "小卷", userName: "User" },
+                { characterName: "Scroll", userName: "User" },
                 { appId: "mascot", signal: options?.signal },
                 {
                     async onDelta(delta) {

@@ -180,7 +180,7 @@ export function PhoneCalendarApp({
     setAppliedCalendarCss(trimmed);
     window.dispatchEvent(new CustomEvent("calendar-css-updated", { detail: trimmed }));
   };
-  // Listen for live CSS updates from 小卷
+  // Listen for live CSS updates from Scroll
   useEffect(() => {
     const onCSSUpdate = (e: Event) => {
       const css = (e as CustomEvent).detail || "";

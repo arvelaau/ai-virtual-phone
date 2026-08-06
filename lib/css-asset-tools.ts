@@ -646,7 +646,7 @@ export async function listUserUploadedImages(args: {
     const limit = Math.max(1, Math.min(20, Math.round(args.limit || 12)));
     const entries = collectUserImageEntries(args.history, limit);
     if (entries.length === 0) {
-        return { name: "列出用户图片", success: true, data: "最近的小卷对话里没有用户上传图片。" };
+        return { name: "列出用户图片", success: true, data: "No user-uploaded images in the recent Scroll conversation." };
     }
     return {
         name: "列出用户图片",
@@ -671,7 +671,7 @@ export async function importUserImageAsCssAsset(args: {
 }): Promise<ToolResult> {
     const entries = collectUserImageEntries(args.history, 40);
     if (entries.length === 0) {
-        return { name: "导入用户图片为素材", success: false, error: "最近的小卷对话里没有可导入的用户图片。" };
+        return { name: "导入用户图片为素材", success: false, error: "No importable user images in the recent Scroll conversation." };
     }
     const sourceImageId = args.sourceImageId?.trim();
     const entry = sourceImageId
@@ -1096,7 +1096,7 @@ export async function uploadCssAssetToImageHost(args: {
     const settings = loadImageGenerationSettings();
     const hosting = settings.imageHosting;
     if (!hosting.allowMascotUpload) {
-        return { name: "上传图床", success: false, error: "当前未允许小卷上传图床。请到 Image Generation 设置里开启「允许小卷上传图床」。" };
+        return { name: "上传图床", success: false, error: "Scroll is not currently allowed to upload to image hosting. Turn on \"Allow the mascot to upload to image hosting\" in Settings -> Image Generation." };
     }
     if (hosting.provider !== "imgbb") {
         return { name: "上传图床", success: false, error: "图床提供方还没有选择 ImgBB。" };

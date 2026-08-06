@@ -1,5 +1,5 @@
 // lib/css-examples.ts
-// Shared CSS examples — used by CSS editors AND 小卷's CSS skill.
+// Shared CSS examples — used by CSS editors AND Scroll's CSS skill.
 // Curated top 30-50 most impactful selectors per location, with clear comments.
 
 export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例 ═══ */
