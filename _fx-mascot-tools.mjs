@@ -34,6 +34,10 @@ const STATE_AND_TAGS = ["好感度", "占有欲", "焦虑值", "状态栏", "内
 const MARKER_NAMES = [
     "◇ 用户人设", "◇ 世界书（角色前）", "◇ 角色描述", "◇ 角色性格", "◇ 角色关系",
     "◇ 世界书（角色后）", "◇ 日程", "◇ 核心记忆", "◇ 长期记忆", "◇ [短期记忆]",
+    // GENERAL_PRESET_PROMPT describes several of them in the combined shorthand the
+    // original used ("◇ 世界书（角色前/后）", "◇ 核心记忆 / 长期记忆 / [短期记忆]"),
+    // so the bare tails have to be allowed too.
+    "◇ 世界书（角色前/后）", "长期记忆", "[短期记忆]",
 ];
 // LONGEST FIRST — otherwise a shorter tool name eats a prefix of a longer one and
 // leaves a fragment that looks like untranslated text.
@@ -117,8 +121,8 @@ const GUIDE_STATE = [
     ["WIDGET_PROMPT", P.WIDGET_PROMPT, false],
     ["WORLDBOOK_PROMPT", P.WORLDBOOK_PROMPT, false],
     ["PRESET_PROMPT", P.PRESET_PROMPT, false],
+    ["GENERAL_PRESET_PROMPT", P.GENERAL_PRESET_PROMPT, false],
     ["CSS_PROMPT", P.CSS_PROMPT, true],
-    ["GENERAL_PRESET_PROMPT", P.GENERAL_PRESET_PROMPT, true],
 ];
 // PRESET_PROMPT keeps the 10 ◇ marker names and 5 tool names by design, so it is
 // checked against the same allow-list as everything else rather than a bare CJK test.

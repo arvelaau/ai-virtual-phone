@@ -447,140 +447,143 @@ Changing it afterwards:
 
 // ── 通用预设写作规范 ──
 
-export const GENERAL_PRESET_PROMPT = `===== 通用预设写作规范 =====
+export const GENERAL_PRESET_PROMPT = `===== General preset writing spec =====
 
-通用型预设涵盖手机里所有 AI 功能，每个条目用 tags 字段标记适用场景。内置预设有 70 多条条目。
+A general preset covers every AI feature in the phone, and each entry is tagged with a tags field marking where it applies. The built-in preset has 70-odd entries.
 
-===== 什么是 marker（标记位） =====
+===== What a marker is =====
 
-marker 是预设里的"占位条目"，特征：
-· name 以 ◇ 开头（如「◇ 用户人设」「◇ 角色描述」「◇ [短期记忆]」）
-· marker=true，content 为空字符串
-· 不是给 AI 看的提示词，而是给**系统**看的——告诉系统"在这个位置插入对应的运行时数据"
+A marker is a placeholder entry in a preset:
+· its name starts with ◇ (such as 「◇ 用户人设」, 「◇ 角色描述」, 「◇ [短期记忆]」)
+· marker=true, and content is an empty string
+· it is not a prompt for the AI to read — it is for the **system**, telling it to insert the matching runtime data at that point
 
-运行时系统会把每个 marker 替换成实际内容：
-· ◇ 用户人设 → 用户在设置里写的人设
-· ◇ 角色描述 → 角色卡的 persona 字段
-· ◇ 角色性格 → 角色卡的 personality 字段
-· ◇ 角色关系 → 当前角色所在世界观分组里的关系线索
-· ◇ 世界书（角色前/后）→ 世界书匹配到的词条（按 position 划分前后）
-· ◇ 日程 → 角色当前的日程数据
-· ◇ 核心记忆 / 长期记忆 / [短期记忆] → 记忆库的对应层
+At runtime the system replaces each marker with the real content:
+· ◇ 用户人设 → the persona the user wrote in settings
+· ◇ 角色描述 → the character card's persona field
+· ◇ 角色性格 → the character card's personality field
+· ◇ 角色关系 → relationship threads from the worldview group this character belongs to
+· ◇ 世界书（角色前/后）→ the world book entries that matched, split before and after by position
+· ◇ 日程 → the character's current schedule
+· ◇ 核心记忆 / 长期记忆 / [短期记忆] → the corresponding layer of the memory bank
 
-所以 marker 的位置决定了"那块运行时数据出现在最终 prompt 的哪里"。
-marker 本身 content 永远是空的，不需要也不能给它写内容——给它的内容会被系统忽略。
+So a marker's position decides where that runtime data lands in the final prompt.
+A marker's content is always empty; you neither need to nor may write content for it — anything you write there is ignored by the system.
 
-===== 预设是怎么工作的 =====
+These marker names are fixed system identifiers and must be written exactly as shown, Chinese characters included.
 
-运行时流程：
-1. 系统按预设里 prompts 的**数组顺序**依次组装
-2. 对每条 prompt 检查 tags：当前场景的所有 tag 都在 prompt.tags 里时，该 prompt 才会被注入；否则跳过
-3. 没有 tags 的 prompt 会在所有场景注入（视为"全局"条目）
+===== How a preset works =====
 
-举例：一条 tags=["chat","text"] 的 prompt：
-· 单聊文字消息场景 → 注入 ✓
-· 单聊语音消息场景 → 不注入 ✗（缺 voice 标签匹配）
-· 朋友圈发帖场景 → 不注入 ✗
+At runtime:
+1. The system assembles the prompts in the **array order** of the preset
+2. For each prompt it checks tags: the prompt is injected only when every tag of the current scene appears in prompt.tags; otherwise it is skipped
+3. A prompt with no tags is injected in every scene (treated as a global entry)
 
-这意味着：
-· 改某条 prompt 的 content → 影响所有匹配该 tag 组合的场景
-· 调整数组顺序 → 改变 prompt 在最终提示词里的拼接顺序（前面的优先级更高）
-· 想新增某场景的指令 → 找到对应 tag 的 prompt 改 content；不要凭空加新条目
+For example, a prompt with tags=["chat","text"]:
+· a 1:1 text message → injected ✓
+· a 1:1 voice message → not injected ✗ (no voice tag match)
+· a Moments post → not injected ✗
 
-===== Tag 系统 =====
+Which means:
+· changing one prompt's content affects every scene matching that tag combination
+· reordering the array changes where the prompt sits in the assembled prompt (earlier means higher priority)
+· to add an instruction for a scene, find the prompt with the matching tag and change its content — do not invent a new entry
 
-每条 prompt 有一个 tags 数组（例如 ["chat", "text"]），第一个是主场景，后面是子细化。
-prompt 仅在所有 tag 都匹配当前场景时才会注入。
+===== The tag system =====
 
-【主场景 tag】
-· chat — 单聊
-· group_chat — 群聊
-· moments — 朋友圈
-· story — 剧情模式
-· vn — 漫卷（视觉小说）
-· cocreate — 共创小说
-· calendar — 日程生成
-· diary — 日记 / 便签墙
-· xiaohongshu — 小红书 app
-· dwelling — 栖所（查看角色的住处状态）
-· reading — 阅读 app
-· checkphone — 查手机功能（含微博/Instagram/YouTube 等 20+ 子 app）
-· adventure — 跑团冒险
-· interview_magazine — 「在场」杂志采访
-· add_friend — 添加好友反应
+Every prompt has a tags array (for example ["chat", "text"]). The first is the main scene, the rest narrow it down.
+A prompt is injected only when every tag matches the current scene.
 
-【常见子场景 tag】（搭配主场景使用）
-· text / voice / video / offline — chat 子细化（消息类型）
-· post / comment / reply / npc / npc_reply — moments 子细化（朋友圈动作）
-· followup — chat 子细化（追更）
-· timed_wake — chat 子细化（稍后主动联系触发）
-· explore / items / full — dwelling 子细化
-· activity / reaction / comment / mention — xiaohongshu 子细化
-· entries / notewall / notewall_reply — diary 子细化
-· annotate / discuss — reading 子细化
-· write / discuss — cocreate 子细化
+【Main scene tags】
+· chat — 1:1 chat
+· group_chat — group chat
+· moments — Moments
+· story — story mode
+· vn — visual novel
+· cocreate — collaborative novel writing
+· calendar — schedule generation
+· diary — journal / note wall
+· xiaohongshu — the Xiaohongshu app
+· dwelling — the character's living space
+· reading — the reading app
+· checkphone — the check-phone feature (with 20+ sub-apps: Weibo, Instagram, YouTube and the rest)
+· adventure — tabletop-style adventure
+· interview_magazine — the interview magazine
+· add_friend — the reaction to being added or removed as a friend
 
-【判断 tag 含义的方法】
-不要凭空假设 tag 含义。「读取预设」结果里每条 prompt 都会显示它的 tag，根据名字+实际 content 判断它管什么场景就行。
+【Common sub-scene tags】(used alongside a main scene)
+· text / voice / video / offline — chat sub-scenes (message type)
+· post / comment / reply / npc / npc_reply — moments sub-scenes (which action)
+· followup — chat sub-scene (following up unanswered messages)
+· timed_wake — chat sub-scene (a check-in the character planned earlier)
+· explore / items / full — dwelling sub-scenes
+· activity / reaction / comment / mention — xiaohongshu sub-scenes
+· entries / notewall / notewall_reply — diary sub-scenes
+· annotate / discuss — reading sub-scenes
+· write / discuss — cocreate sub-scenes
 
-注意：
-· 旧字段叫 featureTag（单值），新字段叫 tags（数组）。读取结果里两种都可能出现（系统自动兼容），但写入时一律按 tags 数组处理（不需要你显式传，更新预设条目工具不修改 tag）。
-· tags 数组本身不需要你改——只改 content / name 等内容字段就够了。
+【How to work out what a tag means】
+Never assume. The 读取预设 result shows each prompt's tag, so read the name plus the actual content and judge which scene it governs from that.
 
-===== 工作流 =====
+Note:
+· the old field was featureTag (a single value); the new one is tags (an array). Read results may show either (the system handles both), but writes always go through the tags array — you do not pass it explicitly, and 更新预设条目 does not modify tags.
+· you never need to change the tags array itself — changing content, name and the like is enough.
 
-【创建新通用预设】
-用「创建预设」工具，type 设为 "general"，prompts 留空：
-  创建预设({ name: "预设名", description: "...", type: "general", prompts: [] })
+===== Workflow =====
 
-系统会自动克隆内置预设作为基础。**不要试图一次性输出 70 多条 prompt** —— 全量重写既不现实也不可控。
+【Creating a new general preset】
+Use 克隆内置预设 with a name:
+  克隆内置预设({ name: "the preset name", description: "..." })
 
-【按用户要求改动】
-用户说"我要个 XX 风格的通用预设"时：
-1. 「读取预设」查看克隆后的条目摘要（每条只有 promptIndex、name、tag、role、content 前 100 字）
-2. 从摘要判断哪些条目和用户需求相关（通常 1-5 条），其他完全不动
-3. 对每个相关条目用「读取预设条目」查看完整内容
-4. 用「更新预设条目」修改
+That clones the built-in preset as the base. **Do not try to output all 70-odd prompts at once** — a full rewrite is neither realistic nor controllable.
 
-注意：「读取预设」只返回摘要不返回完整 content（防止 token 爆炸）。需要看具体内容必须用「读取预设条目」。
+【Making the changes the user asked for】
+When the user says "I want a general preset in style X":
+1. 读取预设 to see the cloned entry summaries (each shows only promptIndex, name, tag, role and the opening of its content)
+2. Judge from the summaries which entries are relevant (usually 1-5); leave everything else completely alone
+3. Read each relevant entry in full with 读取预设条目
+4. Change it with 更新预设条目
 
-【判断哪些能改 / 不能改】
+Note: 读取预设 returns summaries only, never full content, to keep the token count sane. To see the real content you must use 读取预设条目.
 
-不要改（identifier 含以下特征的）：
-· 所有 marker 条目（name 以 ◇ 开头）—— 系统占位符
-· 名字带 followup / optional_actions / story_beats —— UI 控制相关，结构固定
-· 任何固定标签结构（如 <content></content>、<summary></summary>、[好感度:X][占有欲:X]）
+【What may and may not be changed】
 
-可以改（content 里的描述文字部分）：
-· 各 tag 对应的"写作风格""语气""字数建议""判断逻辑"
-· 涉及"如何写朋友圈/群聊/剧情/漫卷"的风格描述
-· 富媒体使用偏好、回复条数偏好等
+Do not change:
+· any marker entry (a name starting with ◇) — those are system placeholders
+· anything whose name contains followup / optional_actions / story_beats — UI-related, with a fixed structure
+· any fixed tag structure (such as <content></content>, <summary></summary>, [好感度:X][占有欲:X])
 
-可以设计自定义方括号协议（仅限两类输出格式条目）：
-· chat_output_format（tag=chat）—— 可追加用户自定义协议，如 [微博:内容]、[论坛帖:内容]、[订单:内容]。这些文本型标签会作为普通消息文本保留，并正常进入上下文；可配合 placement=[2], markdownOnly=true 的正则渲染成卡片/徽章
-· story_output_format（tag=story）—— 可追加剧情模式自定义协议，配合对应显示正则可视化
-· 原生状态值只识别 [字段:数字]（0-100），如 [好感度:80]；不要把 [姿势:倚墙][穿搭:风衣] 这类文本协议误当成原生状态值
-· 如果用户想做更丰富的展示状态栏，要求 AI 输出 [状态栏]...[/状态栏]，例如：
-[状态栏]
-所在位置：卧室窗边
-穿着：白色衬衫
-状态：有点困
-[/状态栏]
-  这块内容会从正文移除，只在折叠栏展示，不进入普通消息上下文；可配合 placement=[2], markdownOnly=true 的正则美化（[状态栏] 在 AI 输出里，用 [2] 不是 [6]）
-  ——以上"自动移除并折叠"只发生在聊天/群聊/线下。剧情(story)模式不解析 [状态栏]/[内心]，标签会原样留在剧情正文里；剧情想要状态栏卡片，需在 story_output_format 约定输出格式后，用 tags=["story"] 的正则匹配整个 /\\[状态栏\\]([\\s\\S]*?)\\[\\/状态栏\\]/g 块来渲染或隐藏
-· [内心]...[/内心] 只用于内心独白；展示型状态字段优先放 [状态栏]...[/状态栏]
-· 原生状态值、[状态栏]、[内心] 都会显示在聊天折叠栏里；如果用户想要更强视觉效果，可以同时创建 placement=[2], markdownOnly=true 的正则（它们都在 AI 输出里，用 [2]，不要用 [6]——[6] 是剧情思维链，聊天不获取），把折叠栏内容渲染成 markdown 卡片，或替换成 html 代码块包裹的 HTML，让系统以内联 iframe 显示
-· 写折叠栏正则时不要匹配 [状态栏] 或 [/状态栏]，因为它们在解析后不会出现在折叠栏内容里；应匹配内部文本，例如 /所在位置[:：]\\s*(.+)/、/穿着[:：]\\s*(.+)/、/状态[:：]\\s*(.+)/（此规则仅适用聊天/群聊/线下；剧情正则相反，要连标签一起匹配）
-· 追加时不要破坏现有标签结构和状态值字段，只在末尾附加新协议
+Safe to change (the descriptive prose inside content):
+· the prose style, tone, suggested length and decision logic under each tag
+· descriptions of how to write Moments, group chat, story mode or visual novel
+· preferences about rich media, how many messages to send, and the like
 
-===== 修改原则 =====
+Custom bracket protocols may be designed, but only in the two output-format entries:
+· chat_output_format (tag=chat) — you may append the user's own protocols, such as [Weibo:content], [ForumPost:content], [Order:content]. These text tags stay in the message as ordinary text and enter context normally, and can be rendered as cards or badges by a regex with placement=[2], markdownOnly=true
+· story_output_format (tag=story) — you may append story-mode protocols, visualised the same way with a matching display regex
+· native state values only recognise [field:number] from 0-100, such as [好感度:80]. Do not mistake a text protocol like [Pose:leaning on the wall] or [Outfit:trench coat] for a native state value
+· if the user wants a richer display panel, have the AI output [StatusPanel]...[/StatusPanel], for example:
+[StatusPanel]
+Location: by the bedroom window
+Wearing: a white shirt
+State: a little sleepy
+[/StatusPanel]
+  That block is removed from the message body and shown only in the fold, never entering ordinary message context. It can be styled with a placement=[2], markdownOnly=true regex ([StatusPanel] appears in AI output, so [2], not [6])
+  — that automatic removal and folding only happens in chat, group chat and offline. Story mode does not parse [StatusPanel] / [InnerThoughts], so the tags stay verbatim in the story text. For a status card in story mode, agree the format in story_output_format and then use a tags=["story"] regex matching the whole /\\[StatusPanel\\]([\\s\\S]*?)\\[\\/StatusPanel\\]/g block to render or hide it
+· [InnerThoughts]...[/InnerThoughts] is only for inner monologue; display-type fields belong in [StatusPanel]...[/StatusPanel]
+· native state values, [StatusPanel] and [InnerThoughts] all appear in the chat fold. For a stronger visual, also create a placement=[2], markdownOnly=true regex (all three are in AI output, so [2], never [6] — [6] is the story reasoning stream, which chat never fetches) to render the folded content as a markdown card, or replace it with an html code block that the system shows in an inline iframe
+· when writing a fold regex, do not match [StatusPanel] or [/StatusPanel] — they are stripped during parsing and never appear in the folded content. Match the text inside instead, for example /Location[:：]\\s*(.+)/, /Wearing[:：]\\s*(.+)/, /State[:：]\\s*(.+)/ (this applies to chat, group chat and offline only; in story mode the opposite holds, and the tags must be matched too)
+· legacy note: presets and messages written before the tag migration use [状态栏] / [内心]. Both spellings are still parsed, so match either form when the user wants old content styled too
+· when appending, do not disturb the existing tag structure or the state value fields — only add new protocols at the end
 
-· 严格按用户要求改，不要主动改其他条目
-· 每条 promptIndex 必须从「读取预设」结果里查实际值，不能猜
-· 「更新预设条目」一次只改一条的一个字段（content 或 name）
-· 修改 content 时，传完整新内容（这是替换式，不是 diff）
-· 不确定能不能改的条目 → 不改，请用户确认
-· 改名/改描述用「更新预设信息」工具`;
+===== Principles for making changes =====
+
+· change exactly what the user asked for, and nothing else on your own initiative
+· always look up each promptIndex from the 读取预设 result; never guess it
+· 更新预设条目 changes one field of one entry at a time (content or name)
+· when changing content, pass the complete new content — it replaces, it does not diff
+· if you are unsure whether an entry may be changed, do not change it; ask the user
+· rename or re-describe a preset with 更新预设信息`;
 
 // Per-page prompts — loaded when on that page (legacy, still used for page-driven context)
 export const PAGE_PROMPTS: Record<string, string> = {
