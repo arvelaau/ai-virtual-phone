@@ -928,6 +928,19 @@ Kept Chinese, each verified load-bearing: every parser alias list and regex alte
 
 Translating the producer alone breaks notification counts and previews **silently**. Make the three consumers bilingual first, then flip. Its own change.
 
+### `[系统指令]` / `[事件 …]` timeline labels — **DONE** (`995e606`)
+7 sites across 5 files: `chat-storage.ts` (preview map + preview builder), `short-term-assembler.ts` (the `sender` field and the timeline entry), and the three `[事件 …]` projection builders in `chat-offline-storage.ts`, `story-storage.ts` and `vn-storage.ts`.
+
+**⚠️ CORRECTION to how this item was queued.** It was recorded as needing dual recognition — consumers bilingual first, then flip producers — because the labels are "read by the model". They are, but **that is not the same as being parsed**, and the queue note conflated the two. Two greps settle it:
+- **No consumer matches either label.** Searching `match|test|replace|includes|startsWith|indexOf|split` against `系统指令` or `[事件` returns nothing.
+- **Neither label is persisted.** Both are rebuilt at prompt-assembly time from stored source data (`msg.content`, `turn.summary`) inside the loader and assembler functions, so no saved history carries the old spelling.
+
+With no parser and no stored data, dual recognition would have added an alias list nothing could ever consult. Straight translation was correct.
+
+**Generalises, and worth keeping**: *"the model reads it"* justifies **translating** a string; only *"code matches it"* justifies **dual recognition**. Check for a parser before assuming the heavier treatment.
+
+Left alone: two CSS comments in `css-examples.ts` (its own item, 360 CJK lines) and one code comment in `llm-provider-adapter.ts`.
+
 ### ✅ PHASE D2 IS COMPLETE (2026-08-06)
 Both files done, `npx tsc --noEmit` exit 0 at every step, and a **permanent fixture is committed**: `_fx-mascot-tools.mjs` (202/202) — the first fixture in this project kept in the repo rather than deleted. Run it with `node _fx-mascot-tools.mjs`.
 
