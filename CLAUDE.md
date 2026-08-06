@@ -954,6 +954,23 @@ With no parser and no stored data, dual recognition would have added an alias li
 
 Left alone: two CSS comments in `css-examples.ts` (its own item, 360 CJK lines) and one code comment in `llm-provider-adapter.ts`.
 
+### `lib/macro-engine.ts` — **DONE** (`9acae21`)
+21 strings. This is the one found while debugging Bug 2: `{{time}}` and `{{weekday}}` expanded to `2026年8月5日10:12` / `星期三` inside `<chat_output_format>` on **every** chat prompt. Now "7 August 2026 05:55" and "Friday". Verified nothing parses either back — they expand into prompt text only.
+
+`{{currentSchedule}}`'s fallback moved `无` → `none`, which is consistent rather than a guess: `calendar-storage` already returns `"none"`, `group-chat-engine.ts:78` defines `NO_SCHEDULE = "none"` and its filter at `:430` accepts that **and** the legacy `"无"`, and `calendar-engine.ts:107` accepts `无|none|n/a|-|—`.
+
+**`当前日程` stays as a macro ALIAS forever** — presets saved before the migration may still contain `{{当前日程}}`. Verified it still resolves.
+
+### 🚨 `lib/chat-time.ts` is NOT independent — it moves with checkphone
+Queued alongside `macro-engine.ts` as a small 4-line item. It is not: **`checkphone-assets-page.tsx:104` parses `formatChatUiTime`'s output** —
+```
+if (label.startsWith("昨天 ") || label.includes("月") || label.includes("年") || label.startsWith("星期"))
+```
+`formatChatUiTime` is imported by five checkphone pages plus `checkphone-engine.ts`. Translating its `WEEKDAY_NAMES` or its `M月D日` / `Y年M月D日` formats would silently break that classifier. **It must move in the same change as `checkphone_*` + `checkphone-engine.ts`.** Moved to the checkphone bundle.
+
+### `lib/css-examples.ts` — **AUDITED, not started**
+359 CJK lines. Audit result: **zero protocol risk.** The corrected detector finds **0 local parsers**, there is no "output in Chinese" order, and — checked line by line — **every Chinese string sits inside a CSS comment**; no selector, property or value is affected. Seven exported templates (`CHAT_SESSION_`, `CHAT_APP_`, `STORY_`, `VN_`, `CALENDAR_`, `MUSIC_`, `GLOBAL_CSS_EXAMPLE`) consumed by `mascot-tools.ts` (the 读取CSS reference) and six UI components. Safe for a straight mechanical pass whenever there is budget for 359 lines.
+
 ### ✅ PHASE D2 IS COMPLETE (2026-08-06)
 Both files done, `npx tsc --noEmit` exit 0 at every step, and a **permanent fixture is committed**: `_fx-mascot-tools.mjs` (202/202) — the first fixture in this project kept in the repo rather than deleted. Run it with `node _fx-mascot-tools.mjs`.
 
