@@ -2,19 +2,19 @@
 // Shared CSS examples — used by CSS editors AND Scroll's CSS skill.
 // Curated top 30-50 most impactful selectors per location, with clear comments.
 
-export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例 ═══ */
-/* 作用范围：只影响当前聊天室，不影响其他页面。 */
+export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ Individual chat room CSS example ═══ */
+/* Scope: affects only this chat room, nothing else. */
 
-/* ── 颜色变量 ── */
+/* ── Colour variables ── */
 :root {
-  --c-header-bg: #FFFFFF;         /* 标题栏底色 */
-  --c-page-body-bg: #FAFAFA;      /* 消息区底色 */
+  --c-header-bg: #FFFFFF;         /* title bar background */
+  --c-page-body-bg: #FAFAFA;      /* message area background */
 
-  --c-bubble-self: var(--c-action-blue, #246bfd); /* 我的气泡 */
-  --c-bubble-other: #FFFFFF;      /* 对方气泡 */
-  --c-text-title: #2C3440;        /* 主要文字 */
-  --c-text: #797E85;              /* 次要文字 */
-  --c-icon: #A0A3A8;              /* 普通图标 */
+  --c-bubble-self: var(--c-action-blue, #246bfd); /* my bubble */
+  --c-bubble-other: #FFFFFF;      /* their bubble */
+  --c-text-title: #2C3440;        /* primary text */
+  --c-text: #797E85;              /* secondary text */
+  --c-icon: #A0A3A8;              /* ordinary icons */
   --c-icon-active: #4A4A4A;       /* accent */
 
   --c-input: #EBEBEB;
@@ -23,19 +23,19 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   --c-card-border: #E0E0E0;
 }
 
-/* ── 聊天室背景 ── */
+/* ── Chat room background ── */
 .chat-room-wrapper {
   background: var(--c-page-body-bg);
-  /* background: url("图片链接") center/cover no-repeat; */
+  /* background: url("image-url") center/cover no-repeat; */
 }
 
-/* ── 标题栏 ── */
-/* .page-header = 整个标题栏（含安全区），改背景/毛玻璃用这个 */
-/* .page-header-content = 按钮+标题那一行，改 padding/布局用这个 */
+/* ── Title bar ── */
+/* .page-header = the whole title bar including the safe area — change background or blur here */
+/* .page-header-content = the row holding the buttons and title — change padding or layout here */
 .page-header {
   background: color-mix(in srgb, var(--c-header-bg) 75%, transparent);
   backdrop-filter: blur(20px);
-  /* 关闭毛玻璃：backdrop-filter: none; background: var(--c-header-bg); */
+  /* to turn the blur off: backdrop-filter: none; background: var(--c-header-bg); */
 }
 
 .page-header-content {
@@ -48,7 +48,7 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   color: var(--c-text-title);
 }
 
-/* ── 消息列表 ── */
+/* ── Message list ── */
 .chat-scroll-anchored {
   padding: 16px 16px 24px;
 }
@@ -61,7 +61,7 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   color: var(--c-text);
 }
 
-/* 系统指令注入卡片 */
+/* injected system-instruction card */
 .chat-system-instruction-card {
   background: var(--c-card);
   border: 1px solid var(--c-card-border);
@@ -79,13 +79,13 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   text-indent: 2em;
 }
 
-/* 连续同一人发言：收紧间距（可选项） */
+/* consecutive messages from the same person: tighten the spacing (optional) */
 /*
 .chat-msg-wrapper[data-consecutive] {
   margin-top: -12px !important;
 }
 */
-/* 连续同一人发言：隐藏头像（可选项） */
+/* consecutive messages from the same person: hide the avatar (optional) */
 /*
 .chat-msg-wrapper[data-consecutive] .chat-msg-avatar {
   opacity: 0;
@@ -93,7 +93,7 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
 }
 */
 
-/* ── 气泡 ── */
+/* ── Bubbles ── */
 .chat-bubble-role-user {
   background: var(--c-bubble-self);
   color: #fff;
@@ -114,7 +114,7 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   line-height: 1.7;
 }
 
-/* 控制段落间距离 */
+/* spacing between paragraphs */
 .chat-markdown p + p,
 .chat-markdown-paragraph + .chat-markdown-paragraph {
   margin-top: 6px;
@@ -125,7 +125,7 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   overflow: visible;
 }
 
-/* ── 引用、编辑、长按菜单 ── */
+/* ── Quote, edit and long-press menu ── */
 .chat-quote-bar,
 .chat-inline-edit-textarea {
   background: var(--c-input);
@@ -151,7 +151,7 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   color: #ff6b6b;
 }
 
-/* ── 输入栏 ── */
+/* ── Input bar ── */
 .chat-input-bar {
   background: color-mix(in srgb, var(--c-input) 55%, transparent);
   backdrop-filter: blur(20px) saturate(180%);
@@ -170,7 +170,7 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   justify-content: center;
 }
 
-/* ── 线下模式 ── */
+/* ── Offline mode ── */
 .chat-offline-toggle.chat-offline-active {
   color: var(--c-text-title);
 }
@@ -255,15 +255,15 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   line-height: 1.8;
 }
 
-/* ── + 号菜单和表情面板（现在作为内部悬浮层） ── */
+/* ── The plus menu and emoji panel (now rendered as an internal overlay) ── */
 /* 
 .chat-plus-menu,
 .chat-emoji-panel-wrap {
-  内联控制，如需调节高度可直接去调整。
+  controlled inline; adjust the height directly if you need to.
 }
 */
 
-/* ── 语音条 ── */
+/* ── Voice bar ── */
 .voice-msg-bubble {
   border-radius: 12px;
 }
@@ -284,7 +284,7 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   color: var(--c-text);
 }
 
-/* ── 内心独白 ── */
+/* ── Inner monologue ── */
 .chat-thought-card {
   background: linear-gradient(135deg, #fef9ef, #fdf3e0);
   border: 1px solid rgba(222,184,135,0.30);
@@ -304,7 +304,7 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   color: #e74c5e;
 }
 
-/* ── 卡片消息 ── */
+/* ── Card messages ── */
 .chat-red-packet-card,
 .chat-transfer-card,
 .chat-html-inline,
@@ -340,7 +340,7 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
 }
 
 .chat-msg-content-wrap[data-html="true"] {
-  /* 需要让 HTML 消息更宽时可改为：max-width: 100% !important; */
+  /* to let an HTML message run wider: max-width: 100% !important; */
 }
 
 .chat-music-share-title {
@@ -351,7 +351,7 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   color: var(--c-text);
 }
 
-/* 位置卡片 */
+/* location card */
 .chat-location-card {
   border-radius: 14px;
   overflow: hidden;
@@ -366,7 +366,7 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   color: var(--c-text);
 }
 
-/* 表情包 */
+/* sticker */
 .chat-sticker {
   border-radius: 12px;
 }
@@ -381,14 +381,14 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   color: var(--c-text);
 }
 
-/* 引用消息 */
+/* quoted message */
 .chat-quote-preview {
   background: color-mix(in srgb, var(--c-icon) 10%, transparent);
   border-left-color: color-mix(in srgb, var(--c-icon) 35%, transparent);
   color: var(--c-icon);
 }
 
-/* 文件、图片、音频、视频附件 */
+/* file, image, audio and video attachments */
 .chat-media-file-card {
   background: var(--c-card);
   border: 1px solid var(--c-card-border);
@@ -409,13 +409,13 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   background: var(--c-icon-active);
 }
 
-/* 礼物卡片 */
+/* gift card */
 .chat-gift-card {
   background: #ffffff;
   border: none;
   border-radius: 0;
   overflow: visible;
-  /* 不需要阴影可改为：box-shadow: none; */
+  /* no shadow wanted? box-shadow: none; */
   box-shadow: 0 1px 4px rgba(0,0,0,0.025);
   margin: 2px 0 4px;
 }
@@ -455,13 +455,13 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   color: var(--c-text);
 }
 
-/* 文字照片卡片 */
+/* text photo card */
 .chat-photo-card {
   background: #ffffff;
   border: none;
   border-radius: 0;
   overflow: visible;
-  /* 不需要阴影可改为：box-shadow: none; */
+  /* no shadow wanted? box-shadow: none; */
   box-shadow: 0 1px 4px rgba(0,0,0,0.025);
   margin: 2px 0 4px;
 }
@@ -483,8 +483,8 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   background: #ffffff;
 }
 
-/* 真实用户上传的图片走 .chat-photo-card--image 修饰类，
-   容器自适应图片大小，图片保持原比例不裁切 */
+/* Real user-uploaded images use the .chat-photo-card--image modifier;
+   the container sizes itself to the image, which keeps its aspect ratio uncropped */
 .chat-photo-card--image {
   background: transparent;
   box-shadow: none;
@@ -494,7 +494,7 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   object-fit: contain;
 }
 
-/* 小红书分享卡片 */
+/* Xiaohongshu share card */
 .chat-xhs-share-card {
   background: #ffffff;
   border: none;
@@ -526,7 +526,7 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   background: #fff0f3;
 }
 
-/* 支付卡片（微信扫码付 / 支付宝等） */
+/* payment card (WeChat scan-to-pay, Alipay and the like) */
 .scan-pay-card {
   background: var(--c-card);
   border: 1px solid var(--c-card-border);
@@ -545,27 +545,27 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   border-radius: 999px;
 }
 .scan-pay-btn-primary {
-  background: #07c160; /* 打开微信按钮（默认微信绿） */
+  background: #07c160; /* the open-WeChat button (WeChat green by default) */
   color: #ffffff;
 }
 
-/* 自定义 App 卡片（角色用富媒体指令生成的卡片，黑白档案风） */
-/* 想整体换个墨色：只改 --cac-ink 一处，标题/数值/黑标签/主按钮会一起变 */
+/* Custom app card (generated by a character via a rich-media directive; black-and-white dossier look) */
+/* To change the ink colour throughout, edit --cac-ink alone — headings, figures, black tags and the primary button all follow */
 .chat-app-card {
-  --cac-ink: #141414;             /* 主墨色：标题 / 数值 / 黑标签 / 主按钮 */
-  --cac-ink-soft: #3b3b3b;        /* 正文、过程块文字 */
-  --cac-ink-mute: #8c8c8c;        /* App名、副标题等弱化文字 */
-  --cac-line: rgba(0,0,0,0.12);   /* 分隔线 / 小标签边框 */
-  --cac-dash: rgba(0,0,0,0.30);   /* 区块之间的虚线 */
-  background: #ffffff;            /* 卡片底色 */
-  border-color: rgba(0,0,0,0.06); /* 卡片描边（想更清晰就把 0.06 调大） */
-  /* 想要圆角：加 border-radius: 12px; */
+  --cac-ink: #141414;             /* primary ink: headings / figures / black tags / primary button */
+  --cac-ink-soft: #3b3b3b;        /* body text and process blocks */
+  --cac-ink-mute: #8c8c8c;        /* de-emphasised text: app name, subtitles */
+  --cac-line: rgba(0,0,0,0.12);   /* dividers and small tag borders */
+  --cac-dash: rgba(0,0,0,0.30);   /* dashed rule between blocks */
+  background: #ffffff;            /* card background */
+  border-color: rgba(0,0,0,0.06); /* card outline — raise 0.06 to make it crisper */
+  /* want rounded corners? add border-radius: 12px; */
 }
-/* 标题默认居中大写；不想大写就解开下面这行 */
+/* Headings are centred and uppercased by default; uncomment the line below to drop the uppercasing */
 .chat-app-card-title {
   /* text-transform: none; */
 }
-/* 只想给「黑标签 + 主按钮」单独换个彩色（正文仍保持墨色）就改这两处 */
+/* To colour just the black tags and the primary button while the body stays ink, change these two */
 .chat-app-card-section-title {
   background: var(--cac-ink);
   color: #ffffff;
@@ -575,7 +575,7 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   color: #ffffff;
 }
 
-/* ── 状态值面板 ── */
+/* ── State value panel ── */
 .state-panel {
   background: color-mix(in srgb, var(--c-card) 70%, transparent);
   border-radius: 6px;
@@ -586,45 +586,45 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ 单独聊天室 CSS 示例
   border-radius: 3px;
 }
 
-/* ── 高级：自定义字体 ── */
+/* ── Advanced: custom fonts ── */
 /* @import url("https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap"); */
 /* * { font-family: "ZCOOL KuaiLe", sans-serif; } */
 `;
 
-export const CHAT_APP_CSS_EXAMPLE = `/* ═══ 聊天应用 CSS 示例 ═══ */
-/* 作用范围：聊天 app 所有页面（消息、联系人、动态、个人主页、聊天室）。 */
-/* 单独聊天室 CSS 优先级更高，可覆盖这里的样式。 */
+export const CHAT_APP_CSS_EXAMPLE = `/* ═══ Chat application CSS example ═══ */
+/* Scope: every page of the chat app — messages, contacts, Moments, profile and the chat rooms. */
+/* An individual chat room's CSS outranks this and can override anything here. */
 
 
 /* ══════════════════════════
-   1. 颜色变量
+   1. Colour variables
    ══════════════════════════ */
 .chat-app {
-  --c-header-bg: #FFFFFF;         /* 标题栏底色 */
-  --c-page-body-bg: #FAFAFA;      /* 内容区底色 */
+  --c-header-bg: #FFFFFF;         /* title bar background */
+  --c-page-body-bg: #FAFAFA;      /* content area background */
 
-  --c-bubble-self: var(--c-action-blue, #246bfd); /* 我的气泡 */
-  --c-bubble-other: #FFFFFF;      /* 对方气泡 */
-  --c-card: #FFFFFF;              /* 卡片底色 */
-  --c-card-border: #E0E0E0;       /* 卡片边框/分割线 */
-  --c-input: #EBEBEB;             /* 输入框底色 */
-  --c-input-border: #DADBDF;      /* 输入框边框 */
-  --c-text-title: #2C3440;        /* 主要文字 */
-  --c-text: #797E85;              /* 次要文字 */
-  --c-icon: #A0A3A8;              /* 普通图标 */
+  --c-bubble-self: var(--c-action-blue, #246bfd); /* my bubble */
+  --c-bubble-other: #FFFFFF;      /* their bubble */
+  --c-card: #FFFFFF;              /* card background */
+  --c-card-border: #E0E0E0;       /* card border and dividers */
+  --c-input: #EBEBEB;             /* input background */
+  --c-input-border: #DADBDF;      /* input border */
+  --c-text-title: #2C3440;        /* primary text */
+  --c-text: #797E85;              /* secondary text */
+  --c-icon: #A0A3A8;              /* ordinary icons */
   --c-icon-active: #4A4A4A;       /* accent */
 }
 
 
 /* ══════════════════════════
-   2. 标题栏（所有页面共享，默认毛玻璃）
+   2. Title bar (shared by every page, blurred by default)
    ══════════════════════════ */
-/* .page-header = 整个标题栏（含安全区），改背景/毛玻璃用这个 */
-/* .page-header-content = 按钮+标题那一行，改 padding/布局用这个 */
+/* .page-header = the whole title bar including the safe area — change background or blur here */
+/* .page-header-content = the row holding the buttons and title — change padding or layout here */
 .page-header {
   background: color-mix(in srgb, var(--c-header-bg) 75%, transparent);
   backdrop-filter: blur(20px);
-  /* 关闭毛玻璃：backdrop-filter: none; background: var(--c-header-bg); */
+  /* to turn the blur off: backdrop-filter: none; background: var(--c-header-bg); */
 }
 
 .page-header-content {
@@ -643,7 +643,7 @@ export const CHAT_APP_CSS_EXAMPLE = `/* ═══ 聊天应用 CSS 示例 ══
 
 
 /* ══════════════════════════
-   3. 消息列表页
+   3. Message list page
    ══════════════════════════ */
 .chat-search-bar {
   background: var(--c-input);
@@ -664,14 +664,14 @@ export const CHAT_APP_CSS_EXAMPLE = `/* ═══ 聊天应用 CSS 示例 ══
   font-weight: 600;
 }
 
-/* 消息列表现已采用无边界结构，可调整联系人/对话项 */
+/* The message list is now borderless; adjust the contact and conversation rows here */
 .contact-item {
   border-bottom: 0.5px solid var(--c-card-border);
 }
 
 
 /* ══════════════════════════
-   4. 联系人页
+   4. Contacts page
    ══════════════════════════ */
 .chat-contact-name,
 .contact-name {
@@ -688,19 +688,19 @@ export const CHAT_APP_CSS_EXAMPLE = `/* ═══ 聊天应用 CSS 示例 ══
 
 
 /* ══════════════════════════
-   5. 全局交互元件 (按钮、胶囊、卡片)
+   5. Shared interactive elements (buttons, pills, cards)
    ══════════════════════════ */
 .ui-btn {
   /* box-shadow: 0 4px 14px ...; */
   /* border-radius: 12px; */
 }
 
-/* 无边框胶囊 */
+/* borderless pill */
 .ui-chip {
   /* background: color-mix(in srgb, var(--c-icon) 15%, transparent); */
 }
 
-/* 底部标签栏 */
+/* bottom tab bar */
 .chat-tab-bar {
   background: color-mix(in srgb, var(--c-card) 55%, transparent);
   backdrop-filter: blur(20px) saturate(180%);
@@ -725,25 +725,25 @@ export const CHAT_APP_CSS_EXAMPLE = `/* ═══ 聊天应用 CSS 示例 ══
 
 
 /* ══════════════════════════
-   6. 聊天室（默认样式，可被单独聊天室 CSS 覆盖）
+   6. Chat rooms (the default style; an individual room's CSS can override it)
    ══════════════════════════ */
 .chat-room-wrapper {
   background: var(--c-page-body-bg);
 }
 
-/* 只改聊天室的标题栏（不影响消息列表、联系人等页面） */
+/* Change only the chat room's title bar, leaving the message list, contacts and other pages alone */
 .chat-room-wrapper .page-header {
   /* background: rgba(0,0,0,0.3); */
   /* backdrop-filter: blur(30px); */
 }
 
-/* 连续同一人发言：收紧间距（可选项） */
+/* consecutive messages from the same person: tighten the spacing (optional) */
 /*
 .chat-msg-wrapper[data-consecutive] {
   margin-top: -12px !important;
 }
 */
-/* 连续同一人发言：隐藏头像（可选项） */
+/* consecutive messages from the same person: hide the avatar (optional) */
 /*
 .chat-msg-wrapper[data-consecutive] .chat-msg-avatar {
   opacity: 0;
@@ -767,7 +767,7 @@ export const CHAT_APP_CSS_EXAMPLE = `/* ═══ 聊天应用 CSS 示例 ══
   overflow: visible;
 }
 
-/* 系统指令注入卡片 */
+/* injected system-instruction card */
 .chat-system-instruction-card {
   background: var(--c-card);
   border: 1px solid var(--c-card-border);
@@ -835,7 +835,7 @@ export const CHAT_APP_CSS_EXAMPLE = `/* ═══ 聊天应用 CSS 示例 ══
 
 
 /* ══════════════════════════
-   7. 聊天卡片消息
+   7. Chat card messages
    ══════════════════════════ */
 .chat-html-inline,
 .chat-music-share-card {
@@ -852,13 +852,13 @@ export const CHAT_APP_CSS_EXAMPLE = `/* ═══ 聊天应用 CSS 示例 ══
   max-height: min(52vh, 420px);
 }
 
-/* 礼物卡片 */
+/* gift card */
 .chat-gift-card {
   background: #ffffff;
   border: none;
   border-radius: 0;
   overflow: visible;
-  /* 不需要阴影可改为：box-shadow: none; */
+  /* no shadow wanted? box-shadow: none; */
   box-shadow: 0 1px 4px rgba(0,0,0,0.025);
   margin: 2px 0 4px;
 }
@@ -898,13 +898,13 @@ export const CHAT_APP_CSS_EXAMPLE = `/* ═══ 聊天应用 CSS 示例 ══
   color: var(--c-text);
 }
 
-/* 文字照片卡片 */
+/* text photo card */
 .chat-photo-card {
   background: #ffffff;
   border: none;
   border-radius: 0;
   overflow: visible;
-  /* 不需要阴影可改为：box-shadow: none; */
+  /* no shadow wanted? box-shadow: none; */
   box-shadow: 0 1px 4px rgba(0,0,0,0.025);
   margin: 2px 0 4px;
 }
@@ -926,8 +926,8 @@ export const CHAT_APP_CSS_EXAMPLE = `/* ═══ 聊天应用 CSS 示例 ══
   background: #ffffff;
 }
 
-/* 真实用户上传的图片走 .chat-photo-card--image 修饰类，
-   容器自适应图片大小，图片保持原比例不裁切 */
+/* Real user-uploaded images use the .chat-photo-card--image modifier;
+   the container sizes itself to the image, which keeps its aspect ratio uncropped */
 .chat-photo-card--image {
   background: transparent;
   box-shadow: none;
@@ -937,7 +937,7 @@ export const CHAT_APP_CSS_EXAMPLE = `/* ═══ 聊天应用 CSS 示例 ══
   object-fit: contain;
 }
 
-/* 小红书分享卡片 */
+/* Xiaohongshu share card */
 .chat-xhs-share-card {
   background: #ffffff;
   border: none;
@@ -969,7 +969,7 @@ export const CHAT_APP_CSS_EXAMPLE = `/* ═══ 聊天应用 CSS 示例 ══
   background: #fff0f3;
 }
 
-/* 支付卡片（微信扫码付 / 支付宝等） */
+/* payment card (WeChat scan-to-pay, Alipay and the like) */
 .scan-pay-card {
   background: var(--c-card);
   border: 1px solid var(--c-card-border);
@@ -988,27 +988,27 @@ export const CHAT_APP_CSS_EXAMPLE = `/* ═══ 聊天应用 CSS 示例 ══
   border-radius: 999px;
 }
 .scan-pay-btn-primary {
-  background: #07c160; /* 打开微信按钮（默认微信绿） */
+  background: #07c160; /* the open-WeChat button (WeChat green by default) */
   color: #ffffff;
 }
 
-/* 自定义 App 卡片（角色用富媒体指令生成的卡片，黑白档案风） */
-/* 想整体换个墨色：只改 --cac-ink 一处，标题/数值/黑标签/主按钮会一起变 */
+/* Custom app card (generated by a character via a rich-media directive; black-and-white dossier look) */
+/* To change the ink colour throughout, edit --cac-ink alone — headings, figures, black tags and the primary button all follow */
 .chat-app-card {
-  --cac-ink: #141414;             /* 主墨色：标题 / 数值 / 黑标签 / 主按钮 */
-  --cac-ink-soft: #3b3b3b;        /* 正文、过程块文字 */
-  --cac-ink-mute: #8c8c8c;        /* App名、副标题等弱化文字 */
-  --cac-line: rgba(0,0,0,0.12);   /* 分隔线 / 小标签边框 */
-  --cac-dash: rgba(0,0,0,0.30);   /* 区块之间的虚线 */
-  background: #ffffff;            /* 卡片底色 */
-  border-color: rgba(0,0,0,0.06); /* 卡片描边（想更清晰就把 0.06 调大） */
-  /* 想要圆角：加 border-radius: 12px; */
+  --cac-ink: #141414;             /* primary ink: headings / figures / black tags / primary button */
+  --cac-ink-soft: #3b3b3b;        /* body text and process blocks */
+  --cac-ink-mute: #8c8c8c;        /* de-emphasised text: app name, subtitles */
+  --cac-line: rgba(0,0,0,0.12);   /* dividers and small tag borders */
+  --cac-dash: rgba(0,0,0,0.30);   /* dashed rule between blocks */
+  background: #ffffff;            /* card background */
+  border-color: rgba(0,0,0,0.06); /* card outline — raise 0.06 to make it crisper */
+  /* want rounded corners? add border-radius: 12px; */
 }
-/* 标题默认居中大写；不想大写就解开下面这行 */
+/* Headings are centred and uppercased by default; uncomment the line below to drop the uppercasing */
 .chat-app-card-title {
   /* text-transform: none; */
 }
-/* 只想给「黑标签 + 主按钮」单独换个彩色（正文仍保持墨色）就改这两处 */
+/* To colour just the black tags and the primary button while the body stays ink, change these two */
 .chat-app-card-section-title {
   background: var(--cac-ink);
   color: #ffffff;
@@ -1020,7 +1020,7 @@ export const CHAT_APP_CSS_EXAMPLE = `/* ═══ 聊天应用 CSS 示例 ══
 
 
 /* ══════════════════════════
-   8. 动态页（朋友圈）
+   8. Moments page
    ══════════════════════════ */
 .chat-app .moments-feed-page > .page-body {
   background: var(--c-page-body-bg);
@@ -1045,7 +1045,7 @@ export const CHAT_APP_CSS_EXAMPLE = `/* ═══ 聊天应用 CSS 示例 ══
 }
 
 .feed-profile {
-  /* padding-top 控制头像与封面顶部距离，通常需要保留标题栏安全区 */
+  /* padding-top sets the gap between the avatar and the top of the cover; usually keep room for the title bar safe area */
 }
 
 .feed-profile-avatar {
@@ -1156,7 +1156,7 @@ export const CHAT_APP_CSS_EXAMPLE = `/* ═══ 聊天应用 CSS 示例 ══
 
 
 /* ══════════════════════════
-   9. 高级：自定义字体
+   9. Advanced: custom fonts
    ══════════════════════════ */
 /* @import url("https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap"); */
 /* .chat-app { font-family: "ZCOOL KuaiLe", sans-serif; } */
@@ -1172,11 +1172,11 @@ export const STORY_CSS_EXAMPLE = `/* ═══ 剧情模式样式示例 ══�
   --c-story-bg-mid: #f5f5f5;         /* 中间渐变色 */
   --c-story-bg-bottom: #f0f0f0;      /* 底部渐变色 */
   --c-story-text: #3a3b3c;           /* 正文颜色 */
-  --c-story-text-light: #64748b;     /* 次要文字 */
+  --c-story-text-light: #64748b;     /* secondary text */
   --c-story-heading: #1e293b;        /* 标题颜色 */
   --c-story-sub: #94a3b8;            /* 辅助文字 */
 
-  /* ── 气泡 ── */
+  /* ── Bubbles ── */
   --c-story-bubble-bg: rgba(255,255,255,0.8);   /* AI气泡背景 */
   --c-story-bubble-border: rgba(0,0,0,0.06);    /* AI气泡边框 */
   --c-story-bubble-user: rgba(0,0,0,0.04);      /* 用户气泡背景 */
@@ -1529,7 +1529,7 @@ export const VN_CSS_EXAMPLE = `/* ═══ 漫卷模式(VN)样式示例 ══�
   /* --vn-ui-panel: rgba(10, 8, 20, 0.88); */     /* 面板背景 */
   /* --vn-ui-border: rgba(255,255,255,0.08); */    /* 边框 */
   /* --vn-ui-text: rgba(255,255,255,0.65); */      /* 主文字 */
-  /* --vn-ui-text-dim: rgba(255,255,255,0.3); */   /* 次要文字 */
+  /* --vn-ui-text-dim: rgba(255,255,255,0.3); */   /* secondary text */
   /* --vn-ui-text-bright: rgba(255,255,255,0.85); */ /* 高亮文字 */
   /* --vn-ui-accent: rgba(180,165,220,0.85); */    /* accent */
   /* --vn-ui-accent-dim: rgba(180,165,220,0.25); */ /* 淡强调 */
