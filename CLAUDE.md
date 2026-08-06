@@ -740,9 +740,11 @@ Every engine was checked for its **own** Chinese-literal parsing, since `moments
 Order to work in: the zero-parser files first (pure prose, no lockstep), then medium, then `checkphone-engine.ts` alone at the end.
 
 ### Remaining work before Phase D can be called done
-- **D1b**: `builtin-preset.ts` prose — see the scope correction below; the honest figure is **~400 safe lines + ~172 xiaohongshu teaching**, not ~2000.
-- **D2**: `mascot-prompts.ts` 532 + `mascot-tools.ts` 463.
-- **D3 (new)**: the ~25 files above — **~4200 Chinese lines**, of which `checkphone-engine.ts` alone is 1166.
+- **D1b**: ✅ **DONE** (6 batches, 2026-08-06).
+- **D2**: ✅ **DONE** (2026-08-06) — `mascot-prompts.ts` + `mascot-tools.ts` + the `小卷` rename.
+- **D3**: the ~25 engine files — the big one left. `checkphone-engine.ts` alone is 1166 lines and stays last.
+
+**Next up, in order:** `checkphone_*` (26 preset entries, 1406 lines) must move together with `checkphone-engine.ts`; the `map-rpg-engine.ts` remainder (~258, deferred — user does not use Adventure); the `xiaohongshu-engine.ts` prose (~230, its parsers and teaching are already done); `css-asset-tools.ts` (~92, never on any list); `lib/macro-engine.ts:247` + `lib/chat-time.ts:1` Chinese weekday formatting; and the `[系统指令]` / `[事件 …]` short-term labels, which need dual recognition rather than a straight translation.
 Roughly **~7500 Chinese lines total**, i.e. Phase D is only ~5% done, not nearly finished. Each engine needs the same treatment as `moments-engine.ts` did: check for a feature-local parser before touching its taught formats.
 
 ## PHASE D1b (started 2026-08-06) — `builtin-preset.ts` prose
@@ -884,6 +886,61 @@ It had to move as one change: the name reaches the model through the **persona p
 
 **Stale cross-reference fixed on the way**: `css-asset-tools.ts:1099` told the user to enable a setting spelled `「允许小卷上传图床」`, but the UI has read **"Allow the mascot to upload to image hosting"** since the Phase 1 sweep — so the instruction pointed at a label that does not exist. All three `css-asset-tools` messages naming the mascot are now English and point at the real label. Their `name:` fields stay Chinese (tool identifiers matched by `mascot-tools.ts`). Note `css-asset-tools.ts` still has ~92 Chinese lines and was never on any list — **add it to the queue**.
 
+### ✅ PHASE D2 IS COMPLETE (2026-08-06)
+Both files done, `npx tsc --noEmit` exit 0 at every step, and a **permanent fixture is committed**: `_fx-mascot-tools.mjs` (202/202) — the first fixture in this project kept in the repo rather than deleted. Run it with `node _fx-mascot-tools.mjs`.
+
+| commit | what |
+|---|---|
+| `f6f6df0` | the `小卷` → **Scroll** rename, 18 sites / 11 files, one change |
+| `abc9d7a` | `mascot-prompts.ts` — persona, character card, regex spec |
+| `28bc439` | `mascot-tools.ts` — pack surface + bilingual pack labels |
+| `7337598` | `mascot-tools.ts` — the rest (291 strings), file done |
+| `0d101bb` | `WORLDBOOK_PROMPT` |
+| `726c452` | `PRESET_PROMPT` |
+| `4ecaba0` | `GENERAL_PRESET_PROMPT` |
+| `fe1e5b3` | `CSS_PROMPT` + `PAGE_GREETINGS`, file done |
+
+#### What still contains Chinese, and why — do NOT "finish the job"
+`mascot-prompts.ts` is at **68 CJK lines**, `mascot-tools.ts` at ~55, and every one is load-bearing:
+- **The 43 mascot tool names** — the identifiers `executeMascotTool` switches on, and `preset-manager.tsx:86-93` `MASCOT_PRESET_STORAGE_TOOL_NAMES` matches 6 of them.
+- **The 10 `◇` marker names** — matched by `preset-manager.tsx:64-70` `matchMarkerByName()`, and written verbatim by the mascot when it creates a preset marker entry. They appear twice in `PRESET_PROMPT` (list + worked example) and in shorthand in `GENERAL_PRESET_PROMPT` (`◇ 世界书（角色前/后）`, `◇ 核心记忆 / 长期记忆 / [短期记忆]` — the original's own combined form, confirmed against git HEAD).
+- **The 7 `legacyLabel` values** — pack labels are a live protocol token (see below).
+- **State value names** (`好感度`/`占有欲`/`焦虑值`) — `mergeStateValues` merges by name.
+- **Two legacy-tag notes** — `REGEX_PROMPT` and `GENERAL_PRESET_PROMPT` tell the user that `[状态栏]`/`[内心]` are still parsed, so old content can be styled.
+- **Two `[^\w一-鿿]` character classes** — they *permit* CJK in generated identifiers.
+- **`resolveRegexTags`' `has("群聊")` / `has("剧情")` / `has("故事")` / `has("线下")`** — they accept Chinese input typed by the user.
+
+#### The pack `label` was a live protocol token, not a display string
+Nearly missed. The model types it in `[FetchTool:<label>]` and `mascot-chat-store.ts:450` resolves it via `findPackageByLabel`. Labels got the standard dual-recognition treatment — a new `legacyLabel` field on `MascotToolPackage`, and a lookup accepting either, case-insensitively and trim-tolerantly (the model types these by hand), returning `undefined` for a non-string since the value comes straight from model output.
+
+**And a second consumer was about to be left behind** — the recurring failure of this project. `buildMascotPackageSchemaPrompt` ran its **own** `p.label === packageLabel` comparison instead of calling the helper, so a legacy fetch would have silently returned "no such pack". Now routed through `findPackageByLabel`.
+
+#### 🚨 Three invented tool names, all pre-existing, all fixed
+These prompts told the model to call tools that **do not exist**. Any model following them literally would have called nothing:
+
+| prompt | taught | actually registered |
+|---|---|---|
+| `PRESET_PROMPT` | `创建预设(...)` | `创建剧情预设` (`mascot-tools.ts:679`) |
+| `GENERAL_PRESET_PROMPT` | `创建预设({type:"general", prompts:[]})` | `克隆内置预设`, which takes only name + description (`:389`) |
+| `CSS_PROMPT` | `追加CSS(...)` | **nothing** — and the same block's own workflow says "there are only 3 tools: 读取CSS / 覆写CSS / 清除CSS" |
+
+None was introduced by the translation. Worth a standing habit: **when translating a prompt that names a tool, check the name against the registry** — a bogus one is invisible until a user reports "the mascot said it did it but nothing happened".
+
+#### The `标签名用中文` trap — 5th engine, handled differently
+`WORLDBOOK_PROMPT` ordered the model to use **Chinese XML tag names** inside world book entry content. Same family as the `vn-engine` / `interview-magazine` / `calendar` / `map-rpg` traps, but it constrained *structure*, not prose.
+
+Verified first that **nothing parses world book content** — the assembler only macro-expands it, runs the user's own regexes over it, and joins it in (`llm-prompt-assembler.ts:459,893,1051,2020`). So the constraint had no technical basis.
+
+**User decision: removed rather than inverted.** The spec now asks for "descriptive tag names that fit the entry's subject", naming no language at all, so the model follows `output_language_rule` without locking the file to English forever. Existing Chinese world books keep rendering — their content is only ever text.
+
+#### Method note that cost a restore
+The first attempt at `WORLDBOOK_PROMPT` generated the replacement through a script with **nested template literals**. The escaping layers collided and turned the literal `\n` inside the JSON output example into real newlines, splitting a single-line JSON example across lines. Restored from backup and redone by writing the block as a **plain text file** and splicing it in — no escaping layers at all. Every subsequent block used that method. **`PRESET_PROMPT` has literal `\n` in its CoT template entries too**, so this is not a one-off hazard.
+
+#### Behaviour changes worth knowing
+- `<!-- 思考开始 -->` / `<!-- 思考结束 -->` → `<!-- thinking start -->` / `<!-- thinking end -->`. Verified parsed nowhere — HTML comments the model writes as a visual boundary. Presets already created keep whatever they stored.
+- `GENERAL_PRESET_PROMPT` now teaches `[StatusPanel]` / `[InnerThoughts]` with a legacy note, and its fold-regex examples use English field names (`Location` / `Wearing` / `State`) to match what the model now writes.
+- `MASCOT_PERSONA` hardcoded `用户是女性` and prescribed feminine endearments, contradicting `user-identity.tsx` where gender is configurable and includes `保密`. Translated behaviour-preservingly ("address the user warmly and affectionately; never use blokey forms of address"), which drops the gender assertion while keeping the register. **Making the persona actually read the configured identity is a separate change, not done.**
+
 ### D2 batch 8 — `mascot-prompts.ts`, first half: **PARTIAL, and deliberately so**
 532 → **394** CJK lines. Done: `MASCOT_PERSONA`, `CHARACTER_CARD_PROMPT` (0 left), `REGEX_PROMPT` (10 left, all deliberate). 31/31 fixture, `tsc` exit 0.
 
@@ -922,6 +979,8 @@ Real divergence from our baseline: **129 files, +23024 / −5191**, 149 commits,
 | **Zero-width chars saved as empty bubbles** | `f61f34c` | `isInvisibleOrWhitespaceOnly()` in `rich-message-parser.ts`. Zero-width chars are **not** deleted (U+200D joins composite emoji) — they only count as blank when deciding emptiness. |
 | **3 Moments anti-hallucination rules** | `f5860a4` | Written into our English entries. Version bump deferred at the time; **activated in `275`**. |
 | **Store the post first, attach the photo after** | `1976054` | `attachMomentPhotoInBackground`. **Architecture check done first, as asked:** our UI needed no change — `moment-post-card`'s retry affordance keys off `photoDescription && !photoUrl`, not the status field, so a `"pending"` post already renders a working retry button. The only required change was widening the type union, which had only `"failed" | "generated"`. |
+
+**`BUILTIN_PRESET_VERSION` is now 275**, bumped to activate the three Moments rules. Bumped ahead of "after D2" deliberately: nothing left in D2 touched `builtin-preset.ts` (`mascot-tools.ts` and `mascot-prompts.ts` are not part of the preset), so no second bump was coming from that work.
 
 ### Not ported (decide per feature; each is a Chinese-language feature port that would then need translating)
 `工坊` / Workshop app (12 `lib/qa-*.ts` + `phone-qa-app.tsx` + docs — docs Q&A plus a **GitHub agent that reads and edits code**), the WeChat cloud assistant (Supabase edge function + local scripts + a polling-traffic fix), the `夜光 Lumen` music overhaul (~40 commits), local test modes for Game Hall and Black Market theater, and a run of story-mode polish fixes.
