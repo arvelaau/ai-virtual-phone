@@ -1010,8 +1010,12 @@ Each needs the null-preset check before any teaching flip, per the standing rule
 
 Step 1 alone is the largest single mechanical change in this project. It should be its own commit with its own fixture, and the fixture must drive real payloads through the exported parsers in both languages before step 2 begins.
 
-### `lib/css-examples.ts` — **PARTIAL** (`6f322ba`), 3 of 7 constants
-96 strings; 359 → 263 CJK. `GLOBAL_CSS_EXAMPLE`, `CALENDAR_CSS_EXAMPLE` and `MUSIC_CSS_EXAMPLE` are now 0 CJK. Remaining: `CHAT_SESSION` (58), `CHAT_APP` (55), `STORY` (70), `VN` (80) — each an independent constant, pick up one at a time. Partial by budget, not by design.
+### ✅ `lib/css-examples.ts` — **DONE** (`6f322ba`, `ce91260`, `39c0d42`)
+359 CJK → **0**. All seven exported templates translated across three commits: GLOBAL + CALENDAR + MUSIC, then CHAT_SESSION + CHAT_APP, then STORY + VN.
+
+Purely CSS comments throughout, exactly as the audit predicted — no selector, property or value was touched, and the CSS is byte-identical apart from comment text. These templates are what the user sees in the six CSS editors and what the mascot reads as the `读取CSS` selector reference.
+
+Worth knowing for similar files: CHAT_SESSION and CHAT_APP share a lot of comment vocabulary, so finishing the first took the second from 55 down to 22 for free.
 
 ### `lib/css-examples.ts` — audit (kept for reference)
 359 CJK lines. Audit result: **zero protocol risk.** The corrected detector finds **0 local parsers**, there is no "output in Chinese" order, and — checked line by line — **every Chinese string sits inside a CSS comment**; no selector, property or value is affected. Seven exported templates (`CHAT_SESSION_`, `CHAT_APP_`, `STORY_`, `VN_`, `CALENDAR_`, `MUSIC_`, `GLOBAL_CSS_EXAMPLE`) consumed by `mascot-tools.ts` (the 读取CSS reference) and six UI components. Safe for a straight mechanical pass whenever there is budget for 359 lines.
