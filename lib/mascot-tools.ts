@@ -14,7 +14,7 @@ import type { LlmToolDefinition } from "./llm-provider-adapter";
 import type { ToolCall, ToolResult } from "./tool-executor";
 import type { MascotPageContext } from "./mascot-context";
 import type { Prompt } from "./settings-types";
-import { CHARACTER_CARD_PROMPT, WORLDBOOK_PROMPT, PRESET_PROMPT, GENERAL_PRESET_PROMPT, REGEX_PROMPT, CSS_PROMPT } from "./mascot-prompts";
+import { CHARACTER_CARD_PROMPT, WORLDBOOK_PROMPT, PRESET_PROMPT, GENERAL_PRESET_PROMPT, REGEX_PROMPT, CSS_PROMPT, WIDGET_PROMPT } from "./mascot-prompts";
 import {
     buildCssAssetNineSliceCss,
     calibrateCssAssetNineSlice,
@@ -527,6 +527,81 @@ const IMAGE_ASSET_USAGE_GUIDE = [
 
 // ── 套件定义 ────────────────────────────────────────────
 
+// ── Desktop widget tools ──
+// Ported from upstream b41da23. Tool NAMES stay Chinese, matching every other tool in
+// this file: they are identifiers matched by name in executeMascotTool's switch and in
+// preset-manager.tsx. Renaming them is the separate tool-name track.
+const WIDGET_SIZE_ENUM = ["1x1", "1x2", "1x4", "2x1", "2x2", "2x3", "2x4", "3x2", "3x3", "3x4", "4x2", "4x3", "4x4", "5x4", "6x4"];
+
+const LIST_WIDGET_CATALOG_SCHEMA = {
+    type: "object",
+    properties: {},
+    additionalProperties: false,
+};
+
+const READ_DESKTOP_LAYOUT_SCHEMA = {
+    type: "object",
+    properties: {
+        page: { type: "number", description: "Desktop page number (1-based), default 1" },
+    },
+    additionalProperties: false,
+};
+
+const CREATE_DIY_WIDGET_SCHEMA = {
+    type: "object",
+    properties: {
+        name: { type: "string", description: "Widget name (shown in the widget picker)" },
+        size: { type: "string", enum: WIDGET_SIZE_ENUM, description: "Size, rows x columns" },
+        htmlString: { type: "string", description: "A complete self-contained HTML document (all CSS/JS inline)" },
+        autoPlace: { type: "boolean", description: "Place it on a free desktop slot after creating, default true" },
+        page: { type: "number", description: "Target page for auto-placement (1-based), default 1" },
+    },
+    required: ["name", "size", "htmlString"],
+    additionalProperties: false,
+};
+
+const UPDATE_DIY_WIDGET_SCHEMA = {
+    type: "object",
+    properties: {
+        templateId: { type: "string", description: "DIY template id (starts with diy-)" },
+        name: { type: "string", description: "New widget name" },
+        size: { type: "string", enum: WIDGET_SIZE_ENUM, description: "New size; any desktop instance whose slot cannot fit the new size is taken off the desktop" },
+        htmlString: { type: "string", description: "New complete HTML document; desktop instances hot-reload immediately" },
+    },
+    required: ["templateId"],
+    additionalProperties: false,
+};
+
+const PREVIEW_DIY_WIDGET_SCHEMA = {
+    type: "object",
+    properties: {
+        templateId: { type: "string", description: "Id of the DIY template to preview" },
+    },
+    required: ["templateId"],
+    additionalProperties: false,
+};
+
+const PLACE_WIDGET_SCHEMA = {
+    type: "object",
+    properties: {
+        type: { type: "string", description: "Widget type: a DIY template id (starts with diy-) or a built-in widget type name (see the widget catalog)" },
+        page: { type: "number", description: "Target page (1-based), default 1" },
+        row: { type: "number", description: "Starting row (1-6); pass together with col to place exactly, otherwise a free slot is found automatically" },
+        col: { type: "number", description: "Starting column (1-4)" },
+    },
+    required: ["type"],
+    additionalProperties: false,
+};
+
+const REMOVE_DIY_WIDGET_SCHEMA = {
+    type: "object",
+    properties: {
+        widgetId: { type: "string", description: "Id of the widget instance to take off the desktop (from 查看桌面布局; DIY instances only)" },
+        templateId: { type: "string", description: "Id of the DIY template to delete; removes all of its desktop instances too" },
+    },
+    additionalProperties: false,
+};
+
 export const MASCOT_TOOL_PACKAGES: MascotToolPackage[] = [
     {
         id: "css_pack",
@@ -610,6 +685,21 @@ export const MASCOT_TOOL_PACKAGES: MascotToolPackage[] = [
             { name: "更新正则规则", description: "修改某规则的字段（updates 里传部分字段即可）。", parameterSchema: UPDATE_REGEX_RULE_SCHEMA },
         ],
         usageGuide: REGEX_PROMPT,
+    },
+    {
+        id: "widget_pack",
+        label: "桌面组件套件",
+        description: "Create / update / preview / place DIY desktop widgets (self-contained HTML, rendered in a sandbox). Desktop instances hot-reload after an update, which suits small iterative steps.",
+        subTools: [
+            { name: "列出组件目录", description: "List the built-in widgets and the DIY widget templates (with templateId, size and mode).", parameterSchema: LIST_WIDGET_CATALOG_SCHEMA },
+            { name: "查看桌面布局", description: "Show which cells of one page's 6x4 grid are occupied, plus that page's widget instances (with instance ids).", parameterSchema: READ_DESKTOP_LAYOUT_SCHEMA },
+            { name: "创建DIY组件", description: "Create a new DIY widget template from a complete HTML document; placed on a free desktop slot by default.", parameterSchema: CREATE_DIY_WIDGET_SCHEMA },
+            { name: "更新DIY组件", description: "Change a DIY template's name, size or HTML; desktop instances hot-reload immediately.", parameterSchema: UPDATE_DIY_WIDGET_SCHEMA },
+            { name: "预览DIY组件", description: "Pop up a preview of a DIY template's current look inside the conversation, without leaving the chat.", parameterSchema: PREVIEW_DIY_WIDGET_SCHEMA },
+            { name: "摆放组件", description: "Place a DIY template or a built-in widget on the desktop; finds a free slot when row/col are omitted.", parameterSchema: PLACE_WIDGET_SCHEMA },
+            { name: "移除DIY组件", description: "Take a DIY instance off the desktop, or delete a DIY template along with all of its desktop instances.", parameterSchema: REMOVE_DIY_WIDGET_SCHEMA },
+        ],
+        usageGuide: WIDGET_PROMPT,
     },
 ];
 
@@ -747,9 +837,17 @@ const MASCOT_NATIVE_TOOL_NAMES: Record<string, string> = {
     "创建正则组": "mascot_create_regex_group",
     "添加正则规则": "mascot_add_regex_rule",
     "更新正则规则": "mascot_update_regex_rule",
+    "列出组件目录": "mascot_list_widget_catalog",
+    "查看桌面布局": "mascot_read_desktop_layout",
+    "创建DIY组件": "mascot_create_diy_widget",
+    "更新DIY组件": "mascot_update_diy_widget",
+    "预览DIY组件": "mascot_preview_diy_widget",
+    "摆放组件": "mascot_place_widget",
+    "移除DIY组件": "mascot_remove_diy_widget",
 };
 
 const MASCOT_NATIVE_LOADER_NAMES: Record<string, string> = {
+    widget_pack: "mascot_load_widget_pack",
     css_pack: "mascot_load_css_pack",
     image_pack: "mascot_load_image_pack",
     character_pack: "mascot_load_character_pack",
@@ -852,6 +950,15 @@ export async function executeMascotToolCall(call: ToolCall, ctx: MascotToolConte
             case "上传图床": return await handleUploadCssAsset(call.args);
             case "校准九宫格": return await handleCalibrateNineSlice(call.args);
             case "生成九宫格CSS": return await handleBuildNineSliceCss(call.args);
+
+            // ─── Desktop widgets ───
+            case "列出组件目录": return await handleListWidgetCatalog();
+            case "查看桌面布局": return await handleReadDesktopLayout(call.args);
+            case "创建DIY组件": return await handleCreateDiyWidget(call.args);
+            case "更新DIY组件": return await handleUpdateDiyWidget(call.args);
+            case "预览DIY组件": return await handlePreviewDiyWidget(call.args);
+            case "摆放组件": return await handlePlaceWidget(call.args);
+            case "移除DIY组件": return await handleRemoveDiyWidget(call.args);
 
             // ─── 角色 ───
             case "读取角色": return await handleReadCharacter(call.args);
@@ -1885,4 +1992,279 @@ export function touchExpandedPackage(currentIds: string[], packageId: string): s
 /** 套件 label → packageId */
 export function findPackageByLabel(label: string): MascotToolPackage | undefined {
     return MASCOT_TOOL_PACKAGES.find((p) => p.label === label);
+}
+
+// ── Desktop widget handlers ─────────────────────────
+// Ported from upstream b41da23. Behaviour is unchanged; all user-visible strings and
+// schema descriptions are translated. Tool names stay Chinese, like every other tool
+// in this file — they are the identifiers the dispatcher switches on.
+
+const DIY_HTML_MAX_LENGTH = 300_000;
+
+async function widgetToolDeps() {
+    const storage = await import("./widget-storage");
+    const types = await import("./widget-types");
+    const layoutStore = await import("./desktop-layout-storage");
+    const { kvGet } = await import("./kv-db");
+    const events = await import("./mascot-events");
+    return { storage, types, layoutStore, kvGet, events };
+}
+
+type WidgetToolDeps = Awaited<ReturnType<typeof widgetToolDeps>>;
+
+function readDesktopIconLayout(deps: WidgetToolDeps) {
+    try {
+        const raw = deps.kvGet(deps.layoutStore.ICON_LAYOUT_STORAGE_KEY);
+        return deps.layoutStore.normalizeDesktopIconLayout(raw ? JSON.parse(raw) : null);
+    } catch {
+        return deps.layoutStore.normalizeDesktopIconLayout(null);
+    }
+}
+
+function desktopPageIcons(deps: WidgetToolDeps, page: number) {
+    const layout = readDesktopIconLayout(deps);
+    const pageKey = deps.layoutStore.getDesktopPageKey(page);
+    return layout[pageKey] ?? [];
+}
+
+/** Find a slot for `size` on the given page: validate row/col if supplied, otherwise scan for the first free spot. */
+function resolveWidgetSpot(
+    deps: WidgetToolDeps,
+    size: string,
+    page: number,
+    row?: number,
+    col?: number,
+): { ok: true; row: number; col: number } | { ok: false; error: string } {
+    const { GRID_ROWS, GRID_COLS } = deps.types;
+    const widgets = deps.storage.loadWidgets();
+    const grid = deps.storage.buildOccupancyGrid(desktopPageIcons(deps, page), widgets, page);
+    const sizeKey = size as keyof typeof deps.types.WIDGET_SIZE_CELLS;
+    if (typeof row === "number" && typeof col === "number") {
+        if (!deps.storage.canPlaceWidget(grid, sizeKey, row, col)) {
+            return { ok: false, error: `A ${size} widget does not fit at row ${row}, column ${col} on page ${page} (out of bounds or already occupied). Use the desktop layout tool to find a free slot.` };
+        }
+        return { ok: true, row, col };
+    }
+    for (let r = 1; r <= GRID_ROWS; r++) {
+        for (let c = 1; c <= GRID_COLS; c++) {
+            if (deps.storage.canPlaceWidget(grid, sizeKey, r, c)) return { ok: true, row: r, col: c };
+        }
+    }
+    return { ok: false, error: `Page ${page} has no free slot big enough for ${size}. Try another page, or remove or move something first.` };
+}
+
+function diyTemplateDisplay(t: { id: string; name: string; size: string; mode: string }): string {
+    return `· [DIY] ${t.name} (${t.size}, ${t.mode === "code" ? "code" : "image"} mode) [templateId: ${t.id}]`;
+}
+
+async function handleListWidgetCatalog(): Promise<ToolResult> {
+    const deps = await widgetToolDeps();
+    const lines: string[] = [];
+    lines.push("Built-in widgets (type → name/size):");
+    for (const entry of deps.types.WIDGET_CATALOG) {
+        lines.push(`· ${entry.type} — ${entry.name} (${entry.size}${entry.track === "freestyle" ? ", freestyle" : ""})`);
+    }
+    const templates = deps.storage.loadDIYTemplates();
+    lines.push("");
+    if (templates.length === 0) {
+        lines.push("DIY widget templates: (none yet)");
+    } else {
+        lines.push("DIY widget templates:");
+        for (const t of templates) lines.push(diyTemplateDisplay(t));
+    }
+    return { name: "列出组件目录", success: true, data: lines.join("\n") };
+}
+
+async function handleReadDesktopLayout(args: Record<string, unknown>): Promise<ToolResult> {
+    const deps = await widgetToolDeps();
+    const page = numberOption(args.page, 1);
+    if (page < 1 || page > 9) return { name: "查看桌面布局", success: false, error: `Invalid page number: ${page}` };
+    const widgets = deps.storage.loadWidgets();
+    const grid = deps.storage.buildOccupancyGrid(desktopPageIcons(deps, page), widgets, page);
+    const lines: string[] = [];
+    lines.push(`Page ${page}, 6x4 occupancy (W = widget, I = icon, · = free):`);
+    grid.forEach((rowCells, r) => {
+        const cells = rowCells.map((cell) => (cell === null ? "·" : cell.startsWith("widget:") ? "W" : "I"));
+        lines.push(`row ${r + 1}  ${cells.join(" ")}`);
+    });
+    const pageWidgets = widgets.filter((w) => w.page === page);
+    lines.push("");
+    if (pageWidgets.length === 0) {
+        lines.push("Widget instances on this page: (none)");
+    } else {
+        const templates = deps.storage.loadDIYTemplates();
+        lines.push("Widget instances on this page:");
+        for (const w of pageWidgets) {
+            const diy = templates.find((t) => t.id === w.type);
+            const builtin = deps.types.WIDGET_CATALOG.find((e) => e.type === w.type);
+            const label = diy ? `${diy.name} (DIY)` : builtin ? builtin.name : w.type;
+            lines.push(`· ${label} ${w.size} @ row ${w.row}, column ${w.col} [instance id: ${w.id}]`);
+        }
+    }
+    const otherPages = Array.from(new Set(widgets.map((w) => w.page))).filter((p) => p !== page).sort();
+    if (otherPages.length > 0) lines.push(`(Other pages also hold widgets: page ${otherPages.join(", ")})`);
+    return { name: "查看桌面布局", success: true, data: lines.join("\n") };
+}
+
+async function handleCreateDiyWidget(args: Record<string, unknown>): Promise<ToolResult> {
+    const name = typeof args.name === "string" ? args.name.trim() : "";
+    const size = typeof args.size === "string" ? args.size : "";
+    const htmlString = typeof args.htmlString === "string" ? args.htmlString : "";
+    if (!name) return { name: "创建DIY组件", success: false, error: "name must not be empty" };
+    if (!WIDGET_SIZE_ENUM.includes(size)) return { name: "创建DIY组件", success: false, error: `Invalid size: ${size}. Available: ${WIDGET_SIZE_ENUM.join("/")}` };
+    if (!htmlString.trim()) return { name: "创建DIY组件", success: false, error: "htmlString must not be empty" };
+    if (htmlString.length > DIY_HTML_MAX_LENGTH) return { name: "创建DIY组件", success: false, error: `htmlString is too long (${htmlString.length} characters, limit ${DIY_HTML_MAX_LENGTH})` };
+
+    const deps = await widgetToolDeps();
+    const templates = deps.storage.loadDIYTemplates();
+    const id = `diy-${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+    templates.push({ id, name, size: size as never, mode: "code", htmlString });
+    deps.storage.saveDIYTemplates(templates);
+
+    const autoPlace = args.autoPlace !== false;
+    let placement = "Not placed on the desktop (autoPlace=false). Use the place-widget tool to put it there later.";
+    if (autoPlace) {
+        const page = numberOption(args.page, 1);
+        const spot = resolveWidgetSpot(deps, size, page);
+        if (spot.ok) {
+            const widgets = deps.storage.placeWidget(deps.storage.loadWidgets(), {
+                type: id, size: size as never, page, row: spot.row, col: spot.col,
+            });
+            deps.storage.saveWidgets(widgets);
+            placement = `Placed automatically on page ${page} at row ${spot.row}, column ${spot.col}; the desktop has refreshed.`;
+        } else {
+            placement = `The template was created, but ${spot.error}`;
+        }
+    }
+    deps.events.notifyDesktopWidgetsChanged();
+    return { name: "创建DIY组件", success: true, data: `DIY widget "${name}" created [templateId: ${id}]. ${placement}` };
+}
+
+async function handleUpdateDiyWidget(args: Record<string, unknown>): Promise<ToolResult> {
+    const templateId = typeof args.templateId === "string" ? args.templateId : "";
+    if (!templateId) return { name: "更新DIY组件", success: false, error: "templateId is missing" };
+    const deps = await widgetToolDeps();
+    const templates = deps.storage.loadDIYTemplates();
+    const idx = templates.findIndex((t) => t.id === templateId);
+    if (idx < 0) return { name: "更新DIY组件", success: false, error: `Template not found: ${templateId}. List the widget catalog to check the id.` };
+
+    const target = { ...templates[idx] };
+    const changed: string[] = [];
+    if (typeof args.name === "string" && args.name.trim()) { target.name = args.name.trim(); changed.push("name"); }
+    if (typeof args.htmlString === "string" && args.htmlString.trim()) {
+        if (args.htmlString.length > DIY_HTML_MAX_LENGTH) return { name: "更新DIY组件", success: false, error: `htmlString is too long (limit ${DIY_HTML_MAX_LENGTH})` };
+        target.htmlString = args.htmlString;
+        changed.push("HTML");
+    }
+    const newSize = typeof args.size === "string" ? args.size : "";
+    const sizeChanged = Boolean(newSize && newSize !== target.size);
+    if (newSize && !WIDGET_SIZE_ENUM.includes(newSize)) return { name: "更新DIY组件", success: false, error: `Invalid size: ${newSize}` };
+    if (sizeChanged) { target.size = newSize as never; changed.push("size"); }
+    if (changed.length === 0) return { name: "更新DIY组件", success: false, error: "Nothing to update (pass at least one of name / size / htmlString)" };
+
+    templates[idx] = target;
+    deps.storage.saveDIYTemplates(templates);
+
+    let instanceNote = "";
+    if (sizeChanged) {
+        const widgets = deps.storage.loadWidgets();
+        const kept: typeof widgets = [];
+        let dropped = 0;
+        for (const w of widgets) {
+            if (w.type !== templateId) { kept.push(w); continue; }
+            const others = widgets.filter((o) => o.id !== w.id);
+            const grid = deps.storage.buildOccupancyGrid(desktopPageIcons(deps, w.page), others, w.page);
+            if (deps.storage.canPlaceWidget(grid, newSize as never, w.row, w.col)) {
+                kept.push({ ...w, size: newSize as never });
+            } else {
+                dropped += 1;
+            }
+        }
+        deps.storage.saveWidgets(kept);
+        instanceNote = dropped > 0
+            ? ` ${dropped} desktop instance(s) could not fit the new size in place and were taken off the desktop (the template remains; place it again when you want it back).`
+            : " Desktop instances were resized in place.";
+    }
+    deps.events.notifyDesktopWidgetsChanged();
+    return { name: "更新DIY组件", success: true, data: `Template "${target.name}" updated (${changed.join("/")}); the desktop reflects it immediately.${instanceNote}` };
+}
+
+async function handlePreviewDiyWidget(args: Record<string, unknown>): Promise<ToolResult> {
+    const templateId = typeof args.templateId === "string" ? args.templateId : "";
+    if (!templateId) return { name: "预览DIY组件", success: false, error: "templateId is missing" };
+    const deps = await widgetToolDeps();
+    const template = deps.storage.loadDIYTemplates().find((t) => t.id === templateId);
+    if (!template) return { name: "预览DIY组件", success: false, error: `Template not found: ${templateId}` };
+    if (template.mode !== "code" || !template.htmlString) return { name: "预览DIY组件", success: false, error: "That template is not in code mode, so it cannot be previewed in a dialog yet" };
+    const handled = deps.events.requestDiyWidgetPreview({
+        templateId: template.id,
+        name: template.name,
+        size: template.size,
+        htmlString: template.htmlString,
+    });
+    if (!handled) return { name: "预览DIY组件", success: false, error: "The preview dialog is not available right now (the mascot UI is not mounted)" };
+    return { name: "预览DIY组件", success: true, data: `Opened a preview of "${template.name}" so the user can see it directly.` };
+}
+
+async function handlePlaceWidget(args: Record<string, unknown>): Promise<ToolResult> {
+    const type = typeof args.type === "string" ? args.type.trim() : "";
+    if (!type) return { name: "摆放组件", success: false, error: "type is missing" };
+    const deps = await widgetToolDeps();
+
+    let size: string | null = null;
+    let label = type;
+    if (type.startsWith("diy-")) {
+        const template = deps.storage.loadDIYTemplates().find((t) => t.id === type);
+        if (!template) return { name: "摆放组件", success: false, error: `DIY template not found: ${type}` };
+        size = template.size;
+        label = template.name;
+    } else {
+        const entry = deps.types.WIDGET_CATALOG.find((e) => e.type === type);
+        if (!entry) return { name: "摆放组件", success: false, error: `Unknown widget type: ${type}. List the widget catalog to see the available types.` };
+        size = entry.size;
+        label = entry.name;
+    }
+
+    const page = numberOption(args.page, 1);
+    const row = typeof args.row === "number" ? args.row : undefined;
+    const col = typeof args.col === "number" ? args.col : undefined;
+    const spot = resolveWidgetSpot(deps, size, page, row, col);
+    if (!spot.ok) return { name: "摆放组件", success: false, error: spot.error };
+
+    const widgets = deps.storage.placeWidget(deps.storage.loadWidgets(), {
+        type, size: size as never, page, row: spot.row, col: spot.col,
+    });
+    deps.storage.saveWidgets(widgets);
+    deps.events.notifyDesktopWidgetsChanged();
+    return { name: "摆放组件", success: true, data: `"${label}" placed on page ${page} at row ${spot.row}, column ${spot.col}; the desktop has refreshed.` };
+}
+
+async function handleRemoveDiyWidget(args: Record<string, unknown>): Promise<ToolResult> {
+    const widgetId = typeof args.widgetId === "string" ? args.widgetId.trim() : "";
+    const templateId = typeof args.templateId === "string" ? args.templateId.trim() : "";
+    if (!widgetId && !templateId) return { name: "移除DIY组件", success: false, error: "Pass at least one of widgetId or templateId" };
+    const deps = await widgetToolDeps();
+
+    if (widgetId) {
+        const widgets = deps.storage.loadWidgets();
+        const target = widgets.find((w) => w.id === widgetId);
+        if (!target) return { name: "移除DIY组件", success: false, error: `Widget instance not found: ${widgetId}` };
+        if (!target.type.startsWith("diy-")) return { name: "移除DIY组件", success: false, error: "Only DIY widget instances may be removed; ask the user to rearrange built-in widgets themselves with a long press." };
+        deps.storage.saveWidgets(deps.storage.removeWidget(widgets, widgetId));
+        deps.events.notifyDesktopWidgetsChanged();
+        return { name: "移除DIY组件", success: true, data: `Instance ${widgetId} was taken off the desktop (the template is kept).` };
+    }
+
+    if (!templateId.startsWith("diy-")) return { name: "移除DIY组件", success: false, error: "templateId must be a DIY template id starting with diy-" };
+    const templates = deps.storage.loadDIYTemplates();
+    const idx = templates.findIndex((t) => t.id === templateId);
+    if (idx < 0) return { name: "移除DIY组件", success: false, error: `Template not found: ${templateId}` };
+    const [removed] = templates.splice(idx, 1);
+    deps.storage.saveDIYTemplates(templates);
+    const widgets = deps.storage.loadWidgets();
+    const remaining = widgets.filter((w) => w.type !== templateId);
+    const removedInstances = widgets.length - remaining.length;
+    deps.storage.saveWidgets(remaining);
+    deps.events.notifyDesktopWidgetsChanged();
+    return { name: "移除DIY组件", success: true, data: `Template "${removed.name}" deleted, along with ${removedInstances} desktop instance(s).` };
 }

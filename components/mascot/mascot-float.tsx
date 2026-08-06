@@ -13,7 +13,7 @@ import {
   deactivateMascot,
 } from "@/lib/mascot-state";
 import { getMascotContext, subscribeMascotContext } from "@/lib/mascot-context";
-import { mascotNavigate } from "@/lib/mascot-events";
+import { mascotNavigate, DIY_WIDGET_PREVIEW_EVENT, type DiyWidgetPreviewEventDetail, type DiyWidgetPreviewRequest } from "@/lib/mascot-events";
 import {
   clearMascotToolHistoryMessages,
   deleteMascotMessageWithLinkedTools,
@@ -117,6 +117,58 @@ function normalizeInitial(v: NineSliceValues): NineSliceValues {
     displayBottom: apply(v.sliceBottom),
     displayLeft: apply(v.sliceLeft),
   };
+}
+
+/** DIY widget preview sizes (the same pixel figures the widget picker previews use) */
+const DIY_PREVIEW_SIZE_PX: Record<string, [number, number]> = {
+  "1x1": [70, 62], "1x2": [148, 62], "1x4": [320, 58],
+  "2x1": [70, 160], "2x2": [148, 160], "2x3": [234, 160], "2x4": [320, 160],
+  "3x2": [148, 258], "3x3": [234, 258], "3x4": [320, 258],
+  "4x2": [148, 356], "4x3": [234, 356], "4x4": [320, 356],
+  "5x4": [320, 454], "6x4": [320, 552],
+};
+
+function DiyWidgetPreviewDialog({ request, onClose }: { request: DiyWidgetPreviewRequest; onClose: () => void }) {
+  const [w, h] = DIY_PREVIEW_SIZE_PX[request.size] || [320, 258];
+  const scale = Math.min(1, 300 / w, 430 / h);
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 4000, background: "rgba(10,10,14,0.55)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={onClose}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <div
+        style={{ background: "#1c1d24", borderRadius: 18, padding: "14px 16px 16px", maxWidth: "88vw", boxShadow: "0 18px 48px rgba(0,0,0,0.45)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 12 }}>
+          <span style={{ color: "#f2f2f5", fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            Widget preview · {request.name} ({request.size})
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ border: 0, background: "rgba(255,255,255,0.12)", color: "#fff", borderRadius: 10, padding: "4px 12px", fontSize: "calc(12px*var(--app-text-scale,1))", cursor: "pointer", flex: "0 0 auto" }}
+          >
+            Close
+          </button>
+        </div>
+        <div style={{ width: w * scale, height: h * scale, margin: "0 auto", borderRadius: 18, overflow: "hidden", background: "rgba(255,255,255,0.06)" }}>
+          <div style={{ width: w, height: h, transform: `scale(${scale})`, transformOrigin: "top left" }}>
+            <iframe
+              srcDoc={request.htmlString}
+              sandbox="allow-scripts"
+              style={{ width: "100%", height: "100%", border: "none", display: "block", background: "transparent" }}
+              title="DIY widget preview"
+            />
+          </div>
+        </div>
+        <div style={{ color: "rgba(255,255,255,0.45)", fontSize: "calc(10.5px*var(--app-text-scale,1))", textAlign: "center", marginTop: 8 }}>
+          This is a sandboxed preview; nothing you set here is saved
+        </div>
+      </div>
+    </div>
+  );
 }
 
 type NineSliceSliderKey =
@@ -440,6 +492,7 @@ export function MascotFloat() {
   const widgetRect = useSyncExternalStore(subscribeMascot, getMascotWidgetRect, () => null);
   const context = useSyncExternalStore(subscribeMascotContext, getMascotContext, () => getMascotContext());
 
+  const [diyWidgetPreview, setDiyWidgetPreview] = useState<DiyWidgetPreviewRequest | null>(null);
   const [floatPos, setFloatPos] = useState<{ left: number; top: number } | null>(null);
   const floatPosRef = useRef<{ left: number; top: number } | null>(null);
   const dragState = useRef<{ startX: number; startY: number; startLeft: number; startTop: number; moved: boolean } | null>(null);
@@ -727,6 +780,20 @@ export function MascotFloat() {
     if (activeMascotMessageIndex === null) return;
     if (!mascotMessages[activeMascotMessageIndex]) setActiveMascotMessageIndex(null);
   }, [activeMascotMessageIndex, mascotMessages]);
+
+  // The preview tool dispatches a synchronous event and reads `handled` straight back,
+  // so this listener must set it before returning — that is how the tool tells the model
+  // "no dialog host is mounted" instead of silently doing nothing.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<DiyWidgetPreviewEventDetail>).detail;
+      if (!detail?.request) return;
+      detail.handled = true;
+      setDiyWidgetPreview(detail.request);
+    };
+    window.addEventListener(DIY_WIDGET_PREVIEW_EVENT, handler);
+    return () => window.removeEventListener(DIY_WIDGET_PREVIEW_EVENT, handler);
+  }, []);
 
   useEffect(() => {
     if (!isThinking) return;
@@ -2312,6 +2379,13 @@ export function MascotFloat() {
             );
           })()}
         </>
+      )}
+
+      {diyWidgetPreview && (
+        <DiyWidgetPreviewDialog
+          request={diyWidgetPreview}
+          onClose={() => setDiyWidgetPreview(null)}
+        />
       )}
 
     </>

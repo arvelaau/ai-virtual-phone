@@ -692,3 +692,40 @@ export const PAGE_GREETINGS: Record<string, string> = {
   vn: "剧情不错嘛~ 需要帮你想台词吗？",
   desktop: "随时待命~ 角色卡、预设、世界书、正则、CSS，你说了算",
 };
+
+// ── Desktop widget writing spec ──
+// Ported from upstream b41da23 and translated. Consumed as the widget_pack usageGuide
+// in lib/mascot-tools.ts. The pixel figures and the size list must stay in step with
+// WIDGET_SIZE_CELLS / GRID_ROWS / GRID_COLS in lib/widget-types.ts.
+export const WIDGET_PROMPT = `===== Desktop widget writing spec =====
+
+You can create DIY desktop widgets: one complete, self-contained HTML document (all CSS/JS inline), rendered in a sandboxed iframe inside a desktop widget cell.
+
+===== Grid and sizes =====
+· The desktop is a 6-row x 4-column grid. Sizes are written rows x columns, so 2x2 covers 2 rows and 2 columns
+· Available sizes: 1x1 / 1x2 / 1x4 / 2x1 / 2x2 / 2x3 / 2x4 / 3x2 / 3x3 / 3x4 / 4x2 / 4x3 / 4x4 / 5x4 / 6x4
+· Rough pixel sizes (width x height; the real device adjusts slightly, so write a flexible layout): 1x1 approx 70x62, 2x2 approx 148x160, 2x4 approx 320x160, 3x4 approx 320x258, 4x4 approx 320x356, 6x4 approx 320x552
+· The iframe fills the cell, and the host container already clips it with an 18px radius, so the HTML does not need its own outer rounding
+· Opening line: html,body{margin:0;width:100%;height:100%;overflow:hidden}
+· No external JS/CSS libraries and no web fonts (there may be no network). Prefer CSS, emoji, inline SVG and data URLs for graphics
+
+===== Sandbox and persistence =====
+· The widget runs in a sandboxed iframe with no same-origin access: it cannot reach the host page, host storage or cookies, and the iframe's own localStorage is unavailable
+· Persistence must go through the host-injected window.AiPhoneWidget API (each desktop instance has its own config):
+  - AiPhoneWidget.getConfig(key, fallback) / setConfig(key, value) / saveConfig({key: value, ...})
+  - Images: getImage(key) / setImage(key, dataUrl)
+  - An <input type="file" accept="image/*"> in the page is wired up automatically: once the user picks an image it is compressed, stored in the config, and written back into the nearest <img> or background element. The config key comes from the input's data-config-key / name / id
+  - The config is already injected by the time the iframe loads, so a script can read it synchronously
+· Clicks, animation and timers all work. Prefer CSS for animation, and keep power use in mind
+
+===== Workflow =====
+1. Creating a DIY widget places it on the first free slot of the target page by default (pass autoPlace=false to create the template without putting it on the desktop)
+2. The desktop hot-reloads: once an update writes a new htmlString, instances on the desktop switch to it immediately, which suits small iterative steps
+3. Previewing opens a dialog inside the conversation, so the user does not have to leave the chat
+4. When nothing fits, read the desktop layout to find a free slot, or ask the user which page they want
+5. DIY template ids start with diy-. The place-widget tool can also place built-in widgets (pass a built-in type name from the catalog as type)
+
+===== Cautions =====
+· Removal only applies to DIY widgets; never touch built-in widgets the user placed themselves
+· htmlString is the whole HTML document passed in one go. Under the text protocol, escape it properly for JSON (quotes, newlines, backslashes)
+· List the widget catalog before editing so you have the right templateId, rather than guessing an id from memory`;

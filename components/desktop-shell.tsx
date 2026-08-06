@@ -113,6 +113,7 @@ import { resolveUserIdentity } from "@/lib/settings-storage";
 import { loadCharacters } from "@/lib/character-storage";
 import { generateChatCompletion, flattenCompletionResult } from "@/lib/chat-engine";
 import { parseAIResponse } from "@/lib/rich-message-parser";
+import { DESKTOP_WIDGETS_CHANGED_EVENT } from "@/lib/mascot-events";
 import { requestBackgroundChatReply, scheduleFollowUp } from "@/lib/follow-up-service";
 import { CHAT_MESSAGE_NOTICE_EVENT, CHAT_OPEN_SESSION_EVENT, type ChatMessageNoticeDetail } from "@/lib/chat-notification-events";
 import { setMascotContext } from "@/lib/mascot-context";
@@ -2891,6 +2892,29 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     }
     return map;
   }, [activeIconSkins, layout, dock, themeAssets]);
+
+  // Scroll (the built-in assistant) writes widgets / DIY templates straight to kv, then
+  // tells the desktop to re-hydrate so the change shows up live. Swapping the underlying
+  // array mid-drag would break the FLIP animation and the drop-target maths, so a drag
+  // in progress defers the reload until edit mode exits.
+  const mascotWidgetsDirtyRef = useRef(false);
+  useEffect(() => {
+    const reload = () => {
+      if (editDragRef.current?.active || editDragRef.current?.pending) {
+        mascotWidgetsDirtyRef.current = true;
+        return;
+      }
+      setWidgets(loadWidgets());
+    };
+    window.addEventListener(DESKTOP_WIDGETS_CHANGED_EVENT, reload);
+    return () => window.removeEventListener(DESKTOP_WIDGETS_CHANGED_EVENT, reload);
+  }, []);
+  useEffect(() => {
+    if (!editMode && mascotWidgetsDirtyRef.current) {
+      mascotWidgetsDirtyRef.current = false;
+      setWidgets(loadWidgets());
+    }
+  }, [editMode]);
 
   useEffect(() => {
     if (activeApp) {
