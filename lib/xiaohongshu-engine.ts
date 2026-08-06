@@ -113,7 +113,7 @@ function collectXiaohongshuReservedNames(context: XiaohongshuNpcMacroContext = {
 
 function formatXiaohongshuReservedNames(context: XiaohongshuNpcMacroContext = {}): string {
   const names = collectXiaohongshuReservedNames(context);
-  return names.length > 0 ? names.map(name => `- ${name}`).join("\n") : "- 暂无";
+  return names.length > 0 ? names.map(name => `- ${name}`).join("\n") : "- none";
 }
 
 function buildDefaultXiaohongshuNpcIdentityGuard(context: XiaohongshuNpcMacroContext = {}): string {
@@ -363,7 +363,7 @@ function parseBlocks(text: string): ParsedBlock[] {
       continue;
     }
     if (!current) {
-      current = { title: "全局", number: 1, fields: {} };
+      current = { title: "global", number: 1, fields: {} };
     }
     const fieldMatch = /^\[([^\]]+)]\s*(.*)$/.exec(line);
     if (fieldMatch) {
@@ -399,9 +399,10 @@ function parseBlockComments(fields: Record<string, string>, noteId: string, sour
 }
 
 /**
- * 解析 [延伸N作者/回复对象/内容] 字段族为角色侧 thread 数组。
- * - 字段名兼容 "延伸N作者"/"延伸N回复对象"/"延伸N内容"
- * - 没有任何延伸字段时返回空数组（apply 端据此回退到"只保留主评论"）
+ * Parse the [ExtraN Author/ReplyTo/Text] field family into the character-side thread array.
+ * - Field names accept both the English and the legacy Chinese spellings
+ * - With no Extra fields at all this returns an empty array, and the apply side falls
+ *   back to keeping just the main comment
  */
 function parseCharacterThreadFields(fields: Record<string, string>): ParsedXiaohongshuCharacterThreadItem[] {
   const numbers = Object.keys(fields)
@@ -428,10 +429,11 @@ function isCharacterXiaohongshuAuthor(authorName: string, characterDisplayName: 
 }
 
 /**
- * 把角色侧 thread 评论按顺序追加到 note 上：
- * - "主评论" 或缺省 → replyToCommentId = mainCommentId
- * - "延伸N" → replyToCommentId 指向前面已生成的 thread comment
- * - 作者名匹配 character.name 或小红书显示名 → authorType="character"，否则 "npc"
+ * Append the character-side thread comments to the note in order:
+ * - MainComment, or nothing at all → replyToCommentId = mainCommentId
+ * - ExtraN → replyToCommentId points at a thread comment generated earlier
+ * - an author name matching character.name or the Xiaohongshu display name →
+ *   authorType="character", otherwise "npc"
  */
 // Exported for the protocol fixture: this is where the MainComment / ExtraN reply
 // sentinels are resolved into real comment ids, and it is otherwise only reachable
@@ -754,17 +756,17 @@ function formatFollowedAccountsForPrompt(accounts: XiaohongshuAccount[] = []): s
     .slice(0, 12);
   if (names.length === 0) return "";
   return [
-    "用户当前关注的小红书账号：",
+    "Xiaohongshu accounts the user currently follows:",
     ...names.map(name => `- ${name}`),
-    "生成内容流时，可以适当提高这些账号再次出现的概率，但不要强行全部出现。",
+    "When generating the feed you may raise how often these accounts appear, but do not force every one of them in.",
   ].join("\n");
 }
 
 function formatNpcFeedUserContext(userIpLocation?: string): string {
-  const ipLocation = cleanText(userIpLocation, 60) || "未知";
+  const ipLocation = cleanText(userIpLocation, 60) || "unknown";
   return [
-    "用户资料上下文：",
-    `[用户IP属地]${ipLocation}`,
+    "User profile context:",
+    `[UserIpLocation]${ipLocation}`,
   ].join("\n");
 }
 
@@ -782,7 +784,7 @@ function getXiaohongshuUserProfileName(): string {
   return cleanText(state.profile.nickname, 80)
     || cleanText(resolveUserIdentity(undefined, "xiaohongshu")?.name, 80)
     || cleanText(resolveUserIdentity()?.name, 80)
-    || "小红书用户";
+    || "Xiaohongshu user";
 }
 
 function hasCharacterFollowedUser(characterId: string): boolean {
@@ -800,24 +802,24 @@ function buildXiaohongshuUserIdentityHint(input: {
   const userName = cleanText(input.userName, 80)
     || cleanText(resolveUserIdentity(input.characterId, "chat")?.name, 80)
     || cleanText(resolveUserIdentity()?.name, 80)
-    || "用户";
+    || "User";
   const names = collectCleanNames([
     ...(input.xiaohongshuNames ?? []),
     getXiaohongshuUserProfileName(),
   ]);
-  const xiaohongshuNameText = names.length > 0 ? names.join("、") : "未知";
+  const xiaohongshuNameText = names.length > 0 ? names.join(", ") : "unknown";
   const followed = hasCharacterFollowedUser(input.characterId);
   const body = followed
     ? [
-        "你已关注用户的小红书账号，可以明确识别该账号与用户本人的关系。",
-        `用户真实身份：${userName}`,
-        `用户小红书昵称/马甲：${xiaohongshuNameText}`,
-        "当作者或评论者显示为上述昵称时，按用户本人处理；回复时保持自然，不要生硬暴露系统说明。",
+        "You already follow the user's Xiaohongshu account, so you can positively identify that account as the user themselves.",
+        `The user's real identity: ${userName}`,
+        `The user's Xiaohongshu handles: ${xiaohongshuNameText}`,
+        "When an author or commenter shows up under one of those handles, treat them as the user. Reply naturally and never blurt out the system explanation.",
       ]
     : [
-        "你当前没有关注该小红书账号。",
-        "当前作者或评论者只对你显示为公开小红书昵称；可以根据公开内容、语气、昵称、图片和已有记忆自行判断作者是否熟悉。",
-        "不要直接断定对方的现实身份；如果判断不出熟悉关系，就按陌生小红书用户自然回应。",
+        "You do not currently follow that Xiaohongshu account.",
+        "This author or commenter appears to you only as a public Xiaohongshu handle. Judge from the public content, the tone, the handle, the images and what you already remember whether you know them.",
+        "Never assert who they are in real life. If you cannot tell, respond naturally as you would to a stranger on Xiaohongshu.",
       ];
   return [
     "<xiaohongshu_user_identity_hint>",
@@ -851,7 +853,7 @@ function stripVisionParts(messages: LLMMessage[]): LLMMessage[] {
       .map(part => part.text)
       .filter(Boolean)
       .join("\n\n");
-    return { ...message, content: text || "[图片已省略：当前模型不支持多模态输入]" };
+    return { ...message, content: text || "[Image omitted: this model does not accept multimodal input]" };
   });
 }
 
@@ -949,32 +951,32 @@ async function resolveNoteImageDataUrl(note: XiaohongshuNote): Promise<string | 
 }
 
 export function formatXiaohongshuFeedContext(notes: XiaohongshuNote[]): string {
-  if (notes.length === 0) return "暂无小红书笔记。";
+  if (notes.length === 0) return "No Xiaohongshu notes yet.";
   return notes
     .slice(0, 30)
     .map((note) => {
       const comments = note.comments.slice(0, 8).map((comment, index) => {
         const reply = comment.replyToCommentId
-          ? ` 回复${comment.replyToCommentId.replace(/^.*_comment_/, "评论")}`
+          ? ` replying to ${comment.replyToCommentId.replace(/^.*_comment_/, "Comment")}`
           : comment.replyTo
-            ? ` 回复${comment.replyTo}`
+            ? ` replying to ${comment.replyTo}`
             : "";
-        return `  [评论${index + 1}] ${comment.authorName}${reply}：${comment.text}`;
+        return `  [Comment${index + 1}] ${comment.authorName}${reply}: ${comment.text}`;
       });
       return [
-        `#笔记`,
-        `[笔记ID]${note.id}`,
-        `[类型]${note.type === "video" ? "视频" : "图文"}`,
-        `[作者]${note.authorName}`,
-        `[标题]${note.title}`,
-        `[正文]${note.body}`,
-        note.imageDescription ? `[图片内容]${note.imageDescription}` : note.imageAssetId ? "[图片内容]有真实图片" : "",
-        `[TAG]${note.tags.join("、") || "无"}`,
-        `[点赞]${note.likeCount}`,
-        `[收藏]${note.saveCount}`,
-        `[评论数]${note.commentCount}`,
-        "已有评论：",
-        comments.length ? comments.join("\n") : "  暂无评论",
+        `#Note`,
+        `[NoteId]${note.id}`,
+        `[Type]${note.type === "video" ? "Video" : "Note"}`,
+        `[Author]${note.authorName}`,
+        `[Title]${note.title}`,
+        `[Body]${note.body}`,
+        note.imageDescription ? `[ImageContent]${note.imageDescription}` : note.imageAssetId ? "[ImageContent]a real image is attached" : "",
+        `[Tags]${note.tags.join(", ") || "none"}`,
+        `[Likes]${note.likeCount}`,
+        `[Saves]${note.saveCount}`,
+        `[CommentCount]${note.commentCount}`,
+        "Existing comments:",
+        comments.length ? comments.join("\n") : "  no comments yet",
       ].filter(Boolean).join("\n");
     })
     .join("\n\n");
@@ -988,8 +990,8 @@ function formatCommentLine(comment: XiaohongshuComment, comments: XiaohongshuCom
   const targetName = comment.replyToCommentId
     ? comments.find(item => item.id === comment.replyToCommentId)?.authorName
     : comment.replyTo;
-  const reply = targetName ? ` 回复${targetName}` : "";
-  return `[评论ID]${comment.id} [作者]${comment.authorName}${reply}：[内容]${comment.text}`;
+  const reply = targetName ? ` replying to ${targetName}` : "";
+  return `[CommentId]${comment.id} [Author]${comment.authorName}${reply}: [Text]${comment.text}`;
 }
 
 export function formatXiaohongshuCommentContext(
@@ -1001,26 +1003,26 @@ export function formatXiaohongshuCommentContext(
     .slice(-16)
     .map(comment => formatCommentLine(comment, note.comments));
   return [
-    "#笔记",
-    `[笔记ID]${note.id}`,
-    `[类型]${note.type === "video" ? "视频" : "图文"}`,
-    `[作者]${note.authorName}`,
-    `[标题]${note.title}`,
-    `[正文]${note.body}`,
-    note.imageDescription ? `[图片内容]${note.imageDescription}` : note.imageAssetId ? "[图片内容]有真实图片" : "",
-    `[TAG]${note.tags.join("、") || "无"}`,
-    `[点赞]${note.likeCount}`,
-    `[收藏]${note.saveCount}`,
-    `[评论数]${note.commentCount}`,
+    "#Note",
+    `[NoteId]${note.id}`,
+    `[Type]${note.type === "video" ? "Video" : "Note"}`,
+    `[Author]${note.authorName}`,
+    `[Title]${note.title}`,
+    `[Body]${note.body}`,
+    note.imageDescription ? `[ImageContent]${note.imageDescription}` : note.imageAssetId ? "[ImageContent]a real image is attached" : "",
+    `[Tags]${note.tags.join(", ") || "none"}`,
+    `[Likes]${note.likeCount}`,
+    `[Saves]${note.saveCount}`,
+    `[CommentCount]${note.commentCount}`,
     "",
-    targetComment ? "#被回复评论" : "",
+    targetComment ? "#CommentBeingRepliedTo" : "",
     targetComment ? formatCommentLine(targetComment, note.comments) : "",
     "",
-    "#当前触发的评论",
+    "#TriggeringComment",
     formatCommentLine(userComment, note.comments),
     "",
-    "#已有评论",
-    recentComments.length ? recentComments.join("\n") : "暂无评论",
+    "#ExistingComments",
+    recentComments.length ? recentComments.join("\n") : "no comments yet",
   ].filter(Boolean).join("\n");
 }
 
@@ -1031,7 +1033,7 @@ export function formatXiaohongshuMentionContext(
   targetComment?: XiaohongshuComment,
 ): string {
   return [
-    `[被@角色]${resolveCharacterXiaohongshuDisplayName(mentionedCharacter)}`,
+    `[MentionedCharacter]${resolveCharacterXiaohongshuDisplayName(mentionedCharacter)}`,
     "",
     formatXiaohongshuCommentContext(note, userComment, targetComment),
   ].filter(Boolean).join("\n");
@@ -1042,22 +1044,22 @@ export function formatXiaohongshuNoteCommentContext(note: XiaohongshuNote): stri
     .slice(-30)
     .map(comment => formatCommentLine(comment, note.comments));
   return [
-    "#笔记",
-    `[笔记ID]${note.id}`,
-    `[类型]${note.type === "video" ? "视频" : "图文"}`,
-    `[来源]${note.source === "user" ? "用户笔记" : note.source === "character" ? "角色笔记" : "NPC笔记"}`,
-    `[作者]${note.authorName}`,
-    `[标题]${note.title}`,
-    `[正文]${note.body}`,
-    note.videoDescription ? `[视频内容]${note.videoDescription}` : "",
-    note.imageDescription ? `[图片内容]${note.imageDescription}` : note.imageAssetId ? "[图片内容]有真实图片" : "",
-    `[TAG]${note.tags.join("、") || "无"}`,
-    `[点赞]${note.likeCount}`,
-    `[收藏]${note.saveCount}`,
-    `[评论数]${note.commentCount}`,
+    "#Note",
+    `[NoteId]${note.id}`,
+    `[Type]${note.type === "video" ? "Video" : "Note"}`,
+    `[Source]${note.source === "user" ? "the user's note" : note.source === "character" ? "a character's note" : "an NPC's note"}`,
+    `[Author]${note.authorName}`,
+    `[Title]${note.title}`,
+    `[Body]${note.body}`,
+    note.videoDescription ? `[VideoContent]${note.videoDescription}` : "",
+    note.imageDescription ? `[ImageContent]${note.imageDescription}` : note.imageAssetId ? "[ImageContent]a real image is attached" : "",
+    `[Tags]${note.tags.join(", ") || "none"}`,
+    `[Likes]${note.likeCount}`,
+    `[Saves]${note.saveCount}`,
+    `[CommentCount]${note.commentCount}`,
     "",
-    "#已有评论",
-    comments.length ? comments.join("\n") : "暂无评论",
+    "#ExistingComments",
+    comments.length ? comments.join("\n") : "no comments yet",
   ].filter(Boolean).join("\n");
 }
 
@@ -1074,14 +1076,14 @@ export function formatXiaohongshuDmContext(input: {
       return `[${speaker}] ${message.text}`;
     });
   return [
-    `[对话对象]${input.threadName}`,
-    `[用户昵称]${input.userName}`,
+    `[ConversationWith]${input.threadName}`,
+    `[UserHandle]${input.userName}`,
     "",
-    "#用户刚发送的私信",
+    "#DirectMessageJustSentByTheUser",
     input.latestUserText,
     "",
-    "#历史私信",
-    history.length ? history.join("\n") : "暂无历史私信",
+    "#EarlierDirectMessages",
+    history.length ? history.join("\n") : "no earlier direct messages",
   ].join("\n");
 }
 
@@ -1149,7 +1151,7 @@ export async function generateXiaohongshuNpcFeed(
   userXiaohongshuName = "",
 ): Promise<XiaohongshuNote[]> {
   const apiConfig = resolveGlobalApiConfig();
-  if (!apiConfig) throw new ChatEngineError("未配置全局默认 API。");
+  if (!apiConfig) throw new ChatEngineError("No global default API is configured.");
   const prompt = [
     buildXiaohongshuNpcPrompt(
       settings,
@@ -1164,12 +1166,12 @@ export async function generateXiaohongshuNpcFeed(
     null,
     [{ role: "user", content: prompt, _debugMeta: { marker: "xiaohongshu_npc_feed" } }],
     [],
-    { characterName: "小红书NPC内容流" },
+    { characterName: "Xiaohongshu NPC feed" },
     { appId: "xiaohongshu", appTags: ["xiaohongshu", "npc_feed"], skipOutputRegex: true },
   );
-  const parsed = parseWithDebug(raw, parseXiaohongshuNpcFeed, "无法解析小红书内容");
+  const parsed = parseWithDebug(raw, parseXiaohongshuNpcFeed, "Could not parse the Xiaohongshu content");
   const notes = [...parsed.homeNotes, ...parsed.videoNotes, ...parsed.nearbyNotes];
-  if (notes.length === 0) throw new XiaohongshuGenerationError("没有解析到小红书笔记。", raw);
+  if (notes.length === 0) throw new XiaohongshuGenerationError("No Xiaohongshu notes were parsed.", raw);
   return notes;
 }
 
@@ -1178,7 +1180,7 @@ export async function generateXiaohongshuNpcReactionForUserPost(
   settings: XiaohongshuSettings,
 ): Promise<ParsedXiaohongshuNpcReaction> {
   const apiConfig = resolveGlobalApiConfig();
-  if (!apiConfig) throw new ChatEngineError("未配置全局默认 API。");
+  if (!apiConfig) throw new ChatEngineError("No global default API is configured.");
   const userNames = getUserXiaohongshuNamesFromNote(note);
   const context = [
     buildXiaohongshuNpcPrompt(
@@ -1190,7 +1192,7 @@ export async function generateXiaohongshuNpcReactionForUserPost(
     "<user_xiaohongshu_post>",
     formatXiaohongshuUserPostContext(note),
     "</user_xiaohongshu_post>",
-    note.imageAssetId && !note.imageDescription ? "该笔记有真实图片；如果你无法看到图片，请只根据标题、正文、TAG 与已有评论生成互动。" : "",
+    note.imageAssetId && !note.imageDescription ? "This note has a real image. If you cannot see it, base your interaction on the title, body, tags and existing comments alone." : "",
   ].filter(Boolean).join("\n");
   const imageDataUrl = apiConfig.enableImageRecognition ? await resolveNoteImageDataUrl(note) : null;
   const raw = await sendWithOptionalVisionFallback(
@@ -1198,10 +1200,10 @@ export async function generateXiaohongshuNpcReactionForUserPost(
     null,
     [makeVisionMessage(context, imageDataUrl)],
     [],
-    { characterName: "小红书NPC互动" },
+    { characterName: "Xiaohongshu NPC interaction" },
     { appId: "xiaohongshu", appTags: ["xiaohongshu", "npc_user_post"], skipOutputRegex: true },
   );
-  return parseWithDebug(raw, output => parseXiaohongshuNpcReaction(output, note.id), "无法解析小红书互动内容");
+  return parseWithDebug(raw, output => parseXiaohongshuNpcReaction(output, note.id), "Could not parse the Xiaohongshu interaction");
 }
 
 export async function generateXiaohongshuCharacterActivity(
@@ -1226,10 +1228,10 @@ export async function generateXiaohongshuCharacterActivity(
     resolved.preset,
     messages,
     resolved.regexes,
-    { characterName: `小红书:${resolved.character.name}`, userName: resolved.input.userIdentity?.name },
+    { characterName: `Xiaohongshu: ${resolved.character.name}`, userName: resolved.input.userIdentity?.name },
     { appId: "xiaohongshu", appTags: ["xiaohongshu", "activity"] },
   );
-  return parseWithDebug(raw, output => parseXiaohongshuCharacterActivity(output, notes.map(note => note.id)), "无法解析小红书角色互动内容");
+  return parseWithDebug(raw, output => parseXiaohongshuCharacterActivity(output, notes.map(note => note.id)), "Could not parse the Xiaohongshu character interaction");
 }
 
 export async function generateXiaohongshuCharacterReactionToUserPost(
@@ -1248,17 +1250,17 @@ export async function generateXiaohongshuCharacterReactionToUserPost(
   const messages = assemblePromptPayload(resolved.input);
   const imageDataUrl = resolved.apiConfig.enableImageRecognition ? await resolveNoteImageDataUrl(note) : null;
   if (imageDataUrl) {
-    messages.push(makeVisionMessage("这是当前小红书笔记配图。请结合预设中的 {{xiaohongshuUserPostContext}} 判断如何评论。", imageDataUrl));
+    messages.push(makeVisionMessage("This is the image attached to the current Xiaohongshu note. Decide how to comment using it together with {{xiaohongshuUserPostContext}} from the preset.", imageDataUrl));
   }
   const raw = await sendWithOptionalVisionFallback(
     resolved.apiConfig,
     resolved.preset,
     messages,
     resolved.regexes,
-    { characterName: `小红书:${resolved.character.name}`, userName: resolved.input.userIdentity?.name },
+    { characterName: `Xiaohongshu: ${resolved.character.name}`, userName: resolved.input.userIdentity?.name },
     { appId: "xiaohongshu", appTags: ["xiaohongshu", "reaction"] },
   );
-  return parseWithDebug(raw, parseXiaohongshuCharacterReaction, "无法解析小红书角色互动内容");
+  return parseWithDebug(raw, parseXiaohongshuCharacterReaction, "Could not parse the Xiaohongshu character interaction");
 }
 
 export async function generateXiaohongshuNpcReplyToUserComment(
@@ -1268,7 +1270,7 @@ export async function generateXiaohongshuNpcReplyToUserComment(
   targetComment?: XiaohongshuComment,
 ): Promise<ParsedXiaohongshuNpcCommentReply> {
   const apiConfig = resolveGlobalApiConfig();
-  if (!apiConfig) throw new ChatEngineError("未配置全局默认 API。");
+  if (!apiConfig) throw new ChatEngineError("No global default API is configured.");
   const commentContext = formatXiaohongshuCommentContext(note, userComment, targetComment);
   const userNames = Array.from(new Set([
     ...getUserXiaohongshuNamesFromNote(note),
@@ -1285,7 +1287,7 @@ export async function generateXiaohongshuNpcReplyToUserComment(
     "<xiaohongshu_comment_context>",
     commentContext,
     "</xiaohongshu_comment_context>",
-    note.imageAssetId && !note.imageDescription ? "该笔记有真实图片；如果你无法看到图片，请只根据标题、正文、TAG 与评论区上下文生成回复。" : "",
+    note.imageAssetId && !note.imageDescription ? "This note has a real image. If you cannot see it, base your reply on the title, body, tags and the comment context alone." : "",
   ].filter(Boolean).join("\n");
   const imageDataUrl = apiConfig.enableImageRecognition ? await resolveNoteImageDataUrl(note) : null;
   const raw = await sendWithOptionalVisionFallback(
@@ -1293,10 +1295,10 @@ export async function generateXiaohongshuNpcReplyToUserComment(
     null,
     [makeVisionMessage(prompt, imageDataUrl)],
     [],
-    { characterName: "小红书NPC评论回复" },
+    { characterName: "Xiaohongshu NPC comment reply" },
     { appId: "xiaohongshu", appTags: ["xiaohongshu", "npc_comment_reply"], skipOutputRegex: true },
   );
-  return parseWithDebug(raw, output => parseXiaohongshuNpcCommentReply(output, note.id, userComment.id), "无法解析小红书评论回复");
+  return parseWithDebug(raw, output => parseXiaohongshuNpcCommentReply(output, note.id, userComment.id), "Could not parse the Xiaohongshu comment reply");
 }
 
 export async function generateXiaohongshuNpcMoreComments(
@@ -1304,7 +1306,7 @@ export async function generateXiaohongshuNpcMoreComments(
   settings: XiaohongshuSettings,
 ): Promise<ParsedXiaohongshuNpcCommentReply> {
   const apiConfig = resolveGlobalApiConfig();
-  if (!apiConfig) throw new ChatEngineError("未配置全局默认 API。");
+  if (!apiConfig) throw new ChatEngineError("No global default API is configured.");
   const commentContext = formatXiaohongshuNoteCommentContext(note);
   const userNames = getUserXiaohongshuNamesFromNote(note);
   const prompt = [
@@ -1317,7 +1319,7 @@ export async function generateXiaohongshuNpcMoreComments(
     "<xiaohongshu_note_comment_context>",
     commentContext,
     "</xiaohongshu_note_comment_context>",
-    note.imageAssetId && !note.imageDescription ? "该笔记有真实图片；如果你无法看到图片，请只根据标题、正文、TAG 与评论区上下文生成更多评论。" : "",
+    note.imageAssetId && !note.imageDescription ? "This note has a real image. If you cannot see it, base the extra comments on the title, body, tags and the comment context alone." : "",
   ].filter(Boolean).join("\n");
   const imageDataUrl = apiConfig.enableImageRecognition ? await resolveNoteImageDataUrl(note) : null;
   const raw = await sendWithOptionalVisionFallback(
@@ -1325,10 +1327,10 @@ export async function generateXiaohongshuNpcMoreComments(
     null,
     [makeVisionMessage(prompt, imageDataUrl)],
     [],
-    { characterName: "小红书NPC更多评论" },
+    { characterName: "Xiaohongshu NPC extra comments" },
     { appId: "xiaohongshu", appTags: ["xiaohongshu", "npc_more_comments"], skipOutputRegex: true },
   );
-  return parseWithDebug(raw, parseXiaohongshuNpcMoreComments, "无法解析小红书评论内容");
+  return parseWithDebug(raw, parseXiaohongshuNpcMoreComments, "Could not parse the Xiaohongshu comments");
 }
 
 export async function generateXiaohongshuNpcDmReply(input: {
@@ -1339,7 +1341,7 @@ export async function generateXiaohongshuNpcDmReply(input: {
   settings: XiaohongshuSettings;
 }): Promise<ParsedXiaohongshuNpcDmReply> {
   const apiConfig = resolveGlobalApiConfig();
-  if (!apiConfig) throw new ChatEngineError("未配置全局默认 API。");
+  if (!apiConfig) throw new ChatEngineError("No global default API is configured.");
   const prompt = [
     buildXiaohongshuNpcPrompt(
       input.settings,
@@ -1356,10 +1358,10 @@ export async function generateXiaohongshuNpcDmReply(input: {
     null,
     [{ role: "user", content: prompt, _debugMeta: { marker: "xiaohongshu_npc_dm_reply" } }],
     [],
-    { characterName: "小红书NPC私信回复", userName: input.userName },
+    { characterName: "Xiaohongshu NPC DM reply", userName: input.userName },
     { appId: "xiaohongshu", appTags: ["xiaohongshu", "npc_dm_reply"], skipOutputRegex: true },
   );
-  return parseWithDebug(raw, parseXiaohongshuNpcDmReply, "无法解析小红书私信回复");
+  return parseWithDebug(raw, parseXiaohongshuNpcDmReply, "Could not parse the Xiaohongshu direct-message reply");
 }
 
 export async function generateXiaohongshuCharacterReplyToUserComment(
@@ -1385,17 +1387,17 @@ export async function generateXiaohongshuCharacterReplyToUserComment(
   const messages = assemblePromptPayload(resolved.input);
   const imageDataUrl = resolved.apiConfig.enableImageRecognition ? await resolveNoteImageDataUrl(note) : null;
   if (imageDataUrl) {
-    messages.push(makeVisionMessage("这是当前小红书笔记的配图。请结合预设中的 {{xiaohongshuCommentContext}} 回复用户评论。", imageDataUrl));
+    messages.push(makeVisionMessage("This is the image attached to the current Xiaohongshu note. Reply to the user's comment using it together with {{xiaohongshuCommentContext}} from the preset.", imageDataUrl));
   }
   const raw = await sendWithOptionalVisionFallback(
     resolved.apiConfig,
     resolved.preset,
     messages,
     resolved.regexes,
-    { characterName: `小红书:${resolved.character.name}`, userName: resolved.input.userIdentity?.name },
+    { characterName: `Xiaohongshu: ${resolved.character.name}`, userName: resolved.input.userIdentity?.name },
     { appId: "xiaohongshu", appTags: ["xiaohongshu", "comment"] },
   );
-  return parseWithDebug(raw, parseXiaohongshuCharacterReaction, "无法解析小红书角色回复");
+  return parseWithDebug(raw, parseXiaohongshuCharacterReaction, "Could not parse the Xiaohongshu character reply");
 }
 
 export async function generateXiaohongshuCharacterMentionReply(
@@ -1423,17 +1425,17 @@ export async function generateXiaohongshuCharacterMentionReply(
   const messages = assemblePromptPayload(resolved.input);
   const imageDataUrl = resolved.apiConfig.enableImageRecognition ? await resolveNoteImageDataUrl(note) : null;
   if (imageDataUrl) {
-    messages.push(makeVisionMessage("这是当前小红书笔记的配图。请结合预设中的 {{xiaohongshuMentionContext}} 回复 @ 评论。", imageDataUrl));
+    messages.push(makeVisionMessage("This is the image attached to the current Xiaohongshu note. Reply to the @ mention using it together with {{xiaohongshuMentionContext}} from the preset.", imageDataUrl));
   }
   const raw = await sendWithOptionalVisionFallback(
     resolved.apiConfig,
     resolved.preset,
     messages,
     resolved.regexes,
-    { characterName: `小红书:${resolved.character.name}`, userName: resolved.input.userIdentity?.name },
+    { characterName: `Xiaohongshu: ${resolved.character.name}`, userName: resolved.input.userIdentity?.name },
     { appId: "xiaohongshu", appTags: ["xiaohongshu", "mention"] },
   );
-  return parseWithDebug(raw, parseXiaohongshuCharacterMentionReply, "无法解析小红书@回复");
+  return parseWithDebug(raw, parseXiaohongshuCharacterMentionReply, "Could not parse the Xiaohongshu @ mention reply");
 }
 
 export async function previewXiaohongshuPromptPayload(
@@ -1464,7 +1466,7 @@ export async function previewXiaohongshuPromptPayload(
                   ...getUserXiaohongshuNamesFromNote(firstNote),
                   latestComment.authorType === "user" ? latestComment.authorName : "",
                 ]))
-              : "暂无可回复的 @ 评论。",
+              : "No @ mention available to reply to.",
           }
         : {
             commentContext: firstNote && latestComment
@@ -1472,7 +1474,7 @@ export async function previewXiaohongshuPromptPayload(
                   ...getUserXiaohongshuNamesFromNote(firstNote),
                   latestComment.authorType === "user" ? latestComment.authorName : "",
                 ]))
-              : "暂无可回复的小红书评论。",
+              : "No Xiaohongshu comment available to reply to.",
           };
   const resolved = await resolveCharacterAssemblerInput(
     characterId,
@@ -1480,19 +1482,19 @@ export async function previewXiaohongshuPromptPayload(
     context,
     settings,
   );
-  if (!resolved?.apiConfig) throw new ChatEngineError("未配置小红书 API。");
+  if (!resolved?.apiConfig) throw new ChatEngineError("No Xiaohongshu API is configured.");
   const messages = assemblePromptPayload(resolved.input);
   if (firstNote && mode !== "activity") {
     const imageDataUrl = resolved.apiConfig.enableImageRecognition ? await resolveNoteImageDataUrl(firstNote) : null;
     if (imageDataUrl) {
-      messages.push(makeVisionMessage("这是当前小红书笔记配图。请结合预设中的小红书上下文判断如何回应。", imageDataUrl));
+      messages.push(makeVisionMessage("This is the image attached to the current Xiaohongshu note. Decide how to respond using it together with the Xiaohongshu context from the preset.", imageDataUrl));
     }
   }
   return {
     messages: previewMessagesForApi(resolved.apiConfig, resolved.preset, messages),
-    characterName: `小红书:${resolved.character.name}`,
+    characterName: `Xiaohongshu: ${resolved.character.name}`,
     model: resolved.apiConfig.defaultModel,
-    presetName: resolved.preset?.name ?? "默认预设",
+    presetName: resolved.preset?.name ?? "Default preset",
   };
 }
 
@@ -1537,7 +1539,7 @@ export function applyNpcReaction(note: XiaohongshuNote, reaction: ParsedXiaohong
     reaction.likeCount > 0 ? makeXiaohongshuNotification({
       type: "like",
       noteId: note.id,
-      actorName: reaction.recentLikeNames[0] || "小红书用户",
+      actorName: reaction.recentLikeNames[0] || "Xiaohongshu user",
       text: `${reaction.recentLikeNames.join("、") || "有人"}等${reaction.likeCount}人赞了你的笔记`,
       count: reaction.likeCount,
       thumbnailText: note.title,
@@ -1546,7 +1548,7 @@ export function applyNpcReaction(note: XiaohongshuNote, reaction: ParsedXiaohong
     reaction.saveCount > 0 ? makeXiaohongshuNotification({
       type: "save",
       noteId: note.id,
-      actorName: reaction.recentSaveNames[0] || "小红书用户",
+      actorName: reaction.recentSaveNames[0] || "Xiaohongshu user",
       text: `${reaction.recentSaveNames.join("、") || "有人"}等${reaction.saveCount}人收藏了你的笔记`,
       count: reaction.saveCount,
       thumbnailText: note.title,
