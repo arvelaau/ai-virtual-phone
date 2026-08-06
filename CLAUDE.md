@@ -968,7 +968,52 @@ if (label.startsWith("昨天 ") || label.includes("月") || label.includes("年"
 ```
 `formatChatUiTime` is imported by five checkphone pages plus `checkphone-engine.ts`. Translating its `WEEKDAY_NAMES` or its `M月D日` / `Y年M月D日` formats would silently break that classifier. **It must move in the same change as `checkphone_*` + `checkphone-engine.ts`.** Moved to the checkphone bundle.
 
-### `lib/css-examples.ts` — **AUDITED, not started**
+## 🔍 CHECKPHONE BUNDLE — FULL AUDIT (2026-08-07), execution NOT started
+Requested before any translation, given the size. **Read this before touching anything in the bundle.**
+
+### Scope: ~2603 CJK lines across 5 files, plus 11 UI pages
+| file | CJK | total |
+|---|---|---|
+| `builtin-preset.ts` `checkphone_*` (26 entries) | **1406** | — |
+| `lib/checkphone-engine.ts` | **1166** | 8096 |
+| `lib/checkphone-config.ts` | 24 | 1317 |
+| `lib/chat-time.ts` | 4 | 34 |
+| `lib/checkphone-storage.ts` | 3 | 235 |
+| 11 `components/checkphone/*.tsx` | 65 | — |
+
+### Finding 1 — 482 detector hits, the highest in the project by a wide margin
+For comparison: `xiaohongshu-engine` had 38, `map-rpg-engine` 20, `shopping-engine` 15. **Of the 482, 398 are direct `fields["中文"]` / `profileFields["中文"]` index reads, across 154 distinct Chinese field names.** The most-used: `时间` (27), `图标` (20), `标题` (19), `正文` (15), `类型` (11), `名称` (11), `感受` (10), `昵称` (9).
+
+### Finding 2 — there is NO alias mechanism to extend
+This is the crucial difference from every engine done so far. `xiaohongshu-engine` already had `metricField` / `textField`, so making it bilingual meant *extending* a helper. `checkphone-engine` has **zero** such helpers (`grep 'function (textField|metricField|pickField)'` → 0) and indexes `fields` directly at all 398 sites.
+
+**So this is not a translation job — it is a parser architecture change**, and it must be treated as one.
+
+### Finding 3 — the good news
+- **Zero "output in Chinese" orders** (`grep 中文` → 0). No `vn-engine` / `interview-magazine` / `calendar` / `map-rpg` trap here.
+- `checkphone-config.ts` and `checkphone-storage.ts` have **0 local parsers**; their handful of CJK lines are safe prose.
+- `checkphone-json-repair.ts` is already clean.
+
+### Finding 4 — cross-file consumers that must move in lockstep
+- **`chat-time.ts`** — `checkphone-assets-page.tsx:104` parses `formatChatUiTime`'s output (`startsWith("昨天 ")`, `includes("月")`, `startsWith("星期")`). Already documented above.
+- **11 checkphone UI pages** still hold Chinese, and per the Phase 1 log these are *deliberate* producer/consumer exceptions, not misses: `checkphone-chat-page.tsx` (38 — date/sticker/count parsing, `真实会话`), `takeout-page` (9 — `TAKEOUT_TABS` mirroring `CHECKPHONE_TAKEOUT_CATEGORIES`, `已完成`/`已取消` status), `youtube` (4), `x` (3), `music` (3 — `分钟`/`最近偏爱` regexes), `bilibili` (2 — `看到哪了`), `assets` (2), `weibo` (1 — `身份`/`本人`), `shopping` (1), `email` (1 — date regex), `douyin` (1 — `抖音号`).
+- **`CHECKPHONE_APP_SPECS[app].label`** is the checkphone AI's own vocabulary — interpolated into prompts at `checkphone-engine.ts:426-430,1214` and parsed back. The scope-label work already routed the UI to `englishLabel` instead precisely to avoid touching it. `formatCheckPhoneOptionalPoolText()` also reads `.label`.
+
+### Finding 5 — 24 `simpleLLMCall` / `sendLLMRequest` call sites
+Each needs the null-preset check before any teaching flip, per the standing rule.
+
+### Recommended order — do NOT translate first
+1. **Build the alias mechanism.** Add a `pickField(fields, names[])` helper with a case-insensitive second pass, exactly like `xiaohongshu-engine`'s. Convert all 398 index reads to bilingual lookups. **No teaching change, zero user-visible change** — this is the safety net everything else stands on.
+2. **Flip the 26 preset entries.** Only after step 1 is proven, since the parsers must accept English before the model is told to write it.
+3. **The 11 UI pages + `chat-time.ts`**, in one lockstep change with their engine-side producers.
+4. **Engine prose** (errors, context builders, comments) — safe once 1-3 land.
+
+Step 1 alone is the largest single mechanical change in this project. It should be its own commit with its own fixture, and the fixture must drive real payloads through the exported parsers in both languages before step 2 begins.
+
+### `lib/css-examples.ts` — **PARTIAL** (`6f322ba`), 3 of 7 constants
+96 strings; 359 → 263 CJK. `GLOBAL_CSS_EXAMPLE`, `CALENDAR_CSS_EXAMPLE` and `MUSIC_CSS_EXAMPLE` are now 0 CJK. Remaining: `CHAT_SESSION` (58), `CHAT_APP` (55), `STORY` (70), `VN` (80) — each an independent constant, pick up one at a time. Partial by budget, not by design.
+
+### `lib/css-examples.ts` — audit (kept for reference)
 359 CJK lines. Audit result: **zero protocol risk.** The corrected detector finds **0 local parsers**, there is no "output in Chinese" order, and — checked line by line — **every Chinese string sits inside a CSS comment**; no selector, property or value is affected. Seven exported templates (`CHAT_SESSION_`, `CHAT_APP_`, `STORY_`, `VN_`, `CALENDAR_`, `MUSIC_`, `GLOBAL_CSS_EXAMPLE`) consumed by `mascot-tools.ts` (the 读取CSS reference) and six UI components. Safe for a straight mechanical pass whenever there is budget for 359 lines.
 
 ### ✅ PHASE D2 IS COMPLETE (2026-08-06)
