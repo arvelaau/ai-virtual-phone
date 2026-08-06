@@ -178,8 +178,19 @@ function parseCompactCountLabel(value: string): number {
   return Math.max(1, Math.round(amount));
 }
 
+// Notification texts are produced by lib/xiaohongshu-engine.ts. These three readers are
+// bilingual: the engine now writes the English form, but notifications already stored
+// carry the legacy Chinese one, and nothing rewrites them.
+//   legacy:  {names}等{count}人赞了你的笔记
+//   current: {names} and {count} people liked your note
+// The count is the TOTAL in both forms (it includes the named actors), which is why the
+// English wording is "and N people" rather than "and N others" — "others" would have
+// quietly shifted the number by the number of names shown.
+const NOTIFICATION_COUNT_RE = /(?:等\s*|\s+and\s+)([0-9][\d.,，]*(?:\.\d+)?\s*(?:[kKwW万千])?)\s*(?:人|people)/i;
+const NOTIFICATION_ACTOR_RE = /^(.+?)(?:等\s*|\s+and\s+)[0-9][\d.,，]*(?:\.\d+)?\s*(?:[kKwW万千])?\s*(?:人|people)/i;
+
 function parseNotificationCountFromText(text: string): number {
-  const match = text.match(/等\s*([0-9][\d.,，]*(?:\.\d+)?\s*(?:[kKwW万千])?)\s*人/);
+  const match = text.match(NOTIFICATION_COUNT_RE);
   return match ? parseCompactCountLabel(match[1]) : 1;
 }
 
@@ -940,7 +951,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
 
   function notificationActorLabel(notice: XiaohongshuNotification) {
     if (notice.type === "like" || notice.type === "save") {
-      const match = notice.text.match(/^(.+?)等\s*[0-9][\d.,，]*(?:\.\d+)?\s*(?:[kKwW万千])?\s*人/);
+      const match = notice.text.match(NOTIFICATION_ACTOR_RE);
       return match?.[1]?.trim() || notice.actorName;
     }
     return notice.actorName;
@@ -962,8 +973,11 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
 
   function formatNotificationPreview(notice: XiaohongshuNotification) {
     if (notice.type !== "comment") return "";
+    // actorName is user/AI-authored, so it must be escaped before going into a regex —
+    // a name containing "(" or "+" would otherwise throw or match the wrong thing.
+    const actor = notice.actorName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     return notice.text
-      .replace(new RegExp(`^${notice.actorName}\\s*(评论了你的笔记|回复了你)[:：]?\\s*`), "")
+      .replace(new RegExp(`^${actor}\\s*(评论了你的笔记|回复了你|commented on your note|replied to you)[:：]?\\s*`, "i"), "")
       .trim();
   }
 
