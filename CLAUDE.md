@@ -886,6 +886,31 @@ It had to move as one change: the name reaches the model through the **persona p
 
 **Stale cross-reference fixed on the way**: `css-asset-tools.ts:1099` told the user to enable a setting spelled `「允许小卷上传图床」`, but the UI has read **"Allow the mascot to upload to image hosting"** since the Phase 1 sweep — so the instruction pointed at a label that does not exist. All three `css-asset-tools` messages naming the mascot are now English and point at the real label. Their `name:` fields stay Chinese (tool identifiers matched by `mascot-tools.ts`). Note `css-asset-tools.ts` still has ~92 Chinese lines and was never on any list — **add it to the queue**.
 
+## Mascot now reads the user's configured gender (2026-08-07) — behaviour change, not translation
+`de9a75c`. 48/48 fixture, **`_fx-mascot-identity.mjs` kept in the repo**.
+
+**Before**: `MASCOT_PERSONA` hardcoded `用户是女性`, prescribed feminine endearments and forbade masculine forms of address. D2 translated that away behaviour-preservingly, which left the mascot merely *neutral* — it still ignored the gender the user had actually configured.
+
+**After**: a rule appended to **both** mascot system prompts (text and native), right after the persona, derived from Settings → User Identity:
+- `Male` / `Female` / `Other` → states it, tells the model to address the user accordingly and treat it as fact from their own settings
+- `保密`, empty, whitespace, or **no identity at all** → says the user has not disclosed it, forbids assuming or inferring one (including from their name), and offers they/them
+
+**Built at prompt time, deliberately NOT baked into `MASCOT_PERSONA`.** The persona is **stored in kv** as `mascot-settings.personaPrompt`, so editing the constant reaches nobody who has ever opened the mascot settings, and is overwritten on the next persona edit. Same reasoning and same placement as `MASCOT_OUTPUT_LANGUAGE_RULE` — after the persona, because a custom persona could otherwise contradict it.
+
+Split into a pure `formatMascotUserIdentityRule(gender)` plus a thin resolver, because the resolver reads kv-backed storage a fixture cannot drive without standing up the whole persistence layer. The first attempt tried to shim `localStorage` and silently fell through to the undisclosed branch for every case — the split is what made the behaviour testable.
+
+**⚠️ CORRECTION to a long-standing note in this file**: it claimed `custom-app-host-api.ts` compares against the `保密` sentinel. **It does not.** A repo-wide grep finds the sentinel only in `llm-prompt-assembler.ts`, `calendar-engine.ts`, `components/settings/user-identity.tsx`, and now `mascot-engine.ts`.
+
+## PHASE D3 (started 2026-08-07)
+Items are independent, so each gets its own commit and its own CLAUDE.md entry as it lands.
+
+### `lib/css-asset-tools.ts` — **DONE** (`981d452`)
+80 strings; 95 CJK lines → 0 beyond deliberate keeps. `tsc` clean.
+
+Audit first, and it was the cleanest file in a long while: **zero local parsers** by the corrected detector, and **no "output in Chinese" order** — the first D3 file in a run of five engines without that trap.
+
+Kept Chinese and **verified rather than assumed**: the 10 `ToolResult` `name:` fields, which echo mascot tool identifiers. Each was checked against `mascot-tools.ts` — all 10 registered, 0 unregistered. `KIND_LABELS` values *were* safe to translate, because the schema enum keys are ASCII (`bubble`/`icon`/`texture`/`background`/`misc`) and only the display labels were Chinese.
+
 ### ✅ PHASE D2 IS COMPLETE (2026-08-06)
 Both files done, `npx tsc --noEmit` exit 0 at every step, and a **permanent fixture is committed**: `_fx-mascot-tools.mjs` (202/202) — the first fixture in this project kept in the repo rather than deleted. Run it with `node _fx-mascot-tools.mjs`.
 
