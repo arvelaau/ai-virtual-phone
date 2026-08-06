@@ -852,6 +852,29 @@ Field names flipped to the aliases the parsers already accept: `[NoteId] [Text] 
 
 **Still Chinese in this feature** (unchanged by this batch): ~230 lines of prose inside `xiaohongshu-engine.ts` itself — the context builders (`formatNpcFeedUserContext`, the feed/DM context formatters, `[类型]视频/图文` producers at `:943,982,1023`) and the `DEFAULT_XIAOHONGSHU_*` prompt constants. Those are context *sent* to the model, not parsed back, so they are safe to leave for now — but the model does mimic the shapes it is shown, so they belong in the same follow-up.
 
+### D1b batch 6 — follow-up surfaces, and a live surface-consistency conflict: **DONE** (2026-08-06)
+45/45 fixture, `npx tsc --noEmit` exit 0, `BUILTIN_PRESET_VERSION` → **274**. Entries: `chat_followup`, `chat_timed_wake`, `chat_period_care`, plus the `chat_tools` / `group_chat_tools` display names (~15 CJK lines). These were missed in the earlier passes because their line counts are tiny.
+
+**They were not merely untranslated — they were contradicting the spec.** `chat_followup` and `chat_timed_wake` each end with a worked "if you stay quiet, output exactly this" block that taught `[内心]…[/内心]`, while `chat_output_format` teaches `[InnerThoughts]`. Their tags differ (`["chat","followup"]` vs `["chat","text"]`), which is why an entry-by-entry scan misses it — but **`follow-up-service.ts:329` sends `appTags: ["chat","text","followup"]`**, so both are active on the same surface. That is exactly the spec-vs-worked-example conflict documented above as the cause of the original 1:1 `[InnerThoughts]` leak: models weight the concrete example heavily, and when the two disagree some output comes back untagged and renders as a stray bubble. Same for `["chat","text","timed_wake"]` (`:384`) and `["chat","text","period_care"]` (`:443`).
+
+Not *broken* before this (the parsers are bilingual, so `[内心]` still parsed) — but it was the known precondition for the leak.
+
+**Fixture (45/45, `_fx-d1b6.mjs`, deleted — recreate from this)**: reconstructs each of the three real surfaces the way the assembler does — every enabled entry whose `tags` are a subset of the surface's `appTags`, plus untagged entries like `output_language_rule` and `persona_style_authority` — and asserts the surface teaches `[InnerThoughts]`, **never `[内心]` alongside it**, and still carries the state value names. Then the taught silence block is extracted from the entry and run through the real `parseAIResponse`, asserting it leaves **no visible bubble text**, that the monologue is extracted rather than leaked, and that all three state values parse; the legacy Chinese form is asserted to still parse. Plus a negative control that the follow-up entry does not bleed into the plain `["chat","text"]` surface, and unchanged `tags` and `role: "user"`. **Verified non-vacuous**: restoring the `[内心]` worked example gives 40/45, failing the surface-consistency assertion by name.
+
+### D1b is COMPLETE (2026-08-06)
+Remaining Chinese in `lib/builtin-preset.ts` is **1481 lines, and every line of it is deliberate**:
+
+| what | lines | why it stays |
+|---|---|---|
+| `checkphone_*` (26 entries) | **1406** | teaching side of `checkphone-engine.ts`; moves with that engine, last in the queue |
+| `adventure_react` | 29 | deferred with `map-rpg-engine.ts` (user does not use Adventure) |
+| state value names | ~12 | `mergeStateValues` merges by name — renaming forks every character's stored state |
+| marker entry names (`◇ 用户人设` family) | 11 | matched by `preset-manager.tsx:64-70` `matchMarkerByName()` |
+| tool names (`发送便签`, `追加`/`编辑`/`删除`/`查看`) | 6 | registered identifiers, matched exactly; separate rename track |
+| one explanatory code comment | 1 | mine, in `xiaohongshu_comment_reply` |
+
+Re-verify with the per-entry script above; anything appearing outside those six rows is new work.
+
 ### Track 1 progress
 `lib/custom-app-creator-guide.ts` — **done**, ~520 strings translated, `npm run build` passes, zero smart quotes / zero CJK escapes. (Agent hit a session usage limit mid-file at ~26%; resumed via `SendMessage` after verifying no smart-quote damage — the completed portion was intact.) Notes:
 - **4 markdown anchor links** re-derived in lockstep with their retitled headings; all 4 verified to resolve to a heading that still exists.

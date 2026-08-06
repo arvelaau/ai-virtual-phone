@@ -49,7 +49,12 @@ export const BUILTIN_PRESET_ID = "builtin_default_v1";
 //                   bilingual on 2026-08-02; this is the other half. Two more
 //                   Chinese-only reads were fixed first (the MainComment/Extra
 //                   thread sentinels, and a direct fields["内容"] index).
-export const BUILTIN_PRESET_VERSION = 273;
+// 274 (2026-08-06): D1b batch 6 — chat_followup, chat_timed_wake, chat_period_care
+//                   and the two toolbox entry names. The first two taught
+//                   [内心] while chat_output_format taught [InnerThoughts], and
+//                   follow-up-service sends BOTH tag sets — a live surface
+//                   self-consistency conflict, the same shape as the 1:1 leak.
+export const BUILTIN_PRESET_VERSION = 274;
 
 export function createBuiltinPreset(): PresetConfig {
     const now = Date.now();
@@ -583,16 +588,16 @@ export function createBuiltinPreset(): PresetConfig {
             },
             {
                 identifier: "chat_followup",
-                name: "▸ 追发提示",
+                name: "▸ Follow-up Prompt",
                 role: "user",
                 content: [
                     "<follow_up_instruction>",
                     "{{timeContext}}",
-                    "你已经在未收到{{user}}回复的情况下主动发送了{{count}}条消息。距你上次发消息已过{{delay}}秒。请根据{{char}}的性格决定是静默还是继续发消息。",
-                    "如果继续发消息，内容应该自然，遵循chat_output_format的格式，不要重复之前说过的话。",
-                    "如果决定静默，按照以下格式输出：",
+                    "You have already sent {{count}} messages without a reply from {{user}}. It has been {{delay}} seconds since your last one. Decide, from {{char}}'s personality, whether to stay quiet or keep going.",
+                    "If you keep going, it must read naturally, follow the chat_output_format format, and not repeat what you have already said.",
+                    "If you decide to stay quiet, output exactly this:",
                     "[好感度:X][占有欲:X][焦虑值:X]",
-                    "[内心]你的所有内心想法写在这里。[/内心]",
+                    "[InnerThoughts]all of your inner thoughts go here.[/InnerThoughts]",
                     "</follow_up_instruction>",
                 ].join("\n"),
                 injection_position: 0,
@@ -602,16 +607,16 @@ export function createBuiltinPreset(): PresetConfig {
             },
             {
                 identifier: "chat_timed_wake",
-                name: "▸ 稍后主动联系",
+                name: "▸ Timed Check-in",
                 role: "user",
                 content: [
                     "<timed_wake_instruction>",
                     "{{timeContext}}",
-                    "到了你之前打算主动找 {{user}} 的时间点（约 {{timedWakeElapsedMinutes}} 分钟前你这么决定的）——你当时想着：“{{timedWakeIntent}}”。这不是睡醒，而是你之前约好这会儿主动联系。现在你可以主动发消息，或先按住不发。",
-                    "如果发送消息，内容必须自然，遵循chat_output_format的格式，不要机械复述当时的想法。",
-                    "如果决定静默，按照以下格式输出：",
+                    "It is the moment you had meant to reach out to {{user}} (you decided that about {{timedWakeElapsedMinutes}} minutes ago), and what you were thinking at the time was: \"{{timedWakeIntent}}\". You have not just woken up — you arranged with yourself to make contact now. You may send a message, or hold off for the moment.",
+                    "If you do send one, it must read naturally, follow the chat_output_format format, and not mechanically restate what you were thinking back then.",
+                    "If you decide to stay quiet, output exactly this:",
                     "[好感度:X][占有欲:X][焦虑值:X]",
-                    "[内心]你的所有内心想法写在这里。[/内心]",
+                    "[InnerThoughts]all of your inner thoughts go here.[/InnerThoughts]",
                     "</timed_wake_instruction>",
                 ].join("\n"),
                 injection_position: 0,
@@ -621,15 +626,15 @@ export function createBuiltinPreset(): PresetConfig {
             },
             {
                 identifier: "chat_period_care",
-                name: "▸ 经期关心",
+                name: "▸ Period Check-in",
                 role: "user",
                 content: [
                     "<period_care_instruction>",
                     "{{timeContext}}",
                     "{{periodCareContext}}",
                     "",
-                    "现在触发一次经期关心。请根据{{char}}的性格、你和{{user}}的关系、最近聊天上下文，直接发送一条自然的消息。",
-                    "内容必须遵循chat_output_format，不要说“系统提醒我”“我看到日历”，不要机械复述日期；可以轻一点地关心休息、安排、情绪、饮食或是否需要减少负担。不要爹味说教，不要医疗诊断，不要夸张恐吓。",
+                    "A period check-in has been triggered. Drawing on {{char}}'s personality, your relationship with {{user}} and the recent conversation, simply send one natural message.",
+                    "It must follow chat_output_format. Never say \"the system reminded me\" or \"I saw it on the calendar\", and do not recite the dates. Keep it light: rest, plans, how they are feeling, food, or whether anything could be taken off their plate. No lecturing, no medical diagnosis, and nothing alarmist.",
                     "</period_care_instruction>",
                 ].join("\n"),
                 injection_position: 0,
@@ -4163,7 +4168,7 @@ export function createBuiltinPreset(): PresetConfig {
             },
             {
                 identifier: "chat_tools",
-                name: "▸ 聊天工具箱",
+                name: "▸ Chat Toolbox",
                 role: "system",
                 content: "{{tools}}",
                 injection_position: 0,
@@ -4173,7 +4178,7 @@ export function createBuiltinPreset(): PresetConfig {
             },
             {
                 identifier: "group_chat_tools",
-                name: "▸ 群聊工具箱",
+                name: "▸ Group Chat Toolbox",
                 role: "system",
                 content: "{{groupTools}}",
                 injection_position: 0,
