@@ -1015,6 +1015,37 @@ Each needs the null-preset check before any teaching flip, per the standing rule
 
 **The fixture asserts Step 2 has NOT happened**, so it fails if the teaching is flipped without updating it. Non-vacuity both ways: dropping the Chinese alias from `标题` → 28/31; dropping the English alias from `名称` → 29/31.
 
+### 🚨 STEP 1 WAS INCOMPLETE — Step 1b is required before ANY teaching flip
+Found while opening `checkphone_browser` to translate it. **Step 1 made *field* reads bilingual but not *block headings*.** The taught format has two protocol layers:
+```
+#历史记录          <- block heading  (NOT covered by Step 1)
+##记录1            <- sub-block      (NOT covered by Step 1)
+[标题]... [网址]...  <- fields         (covered by Step 1 ✅)
+```
+Flipping a heading to `#History` today makes block extraction stop matching — **silently**, yielding an empty list rather than an error.
+
+**Corrected scope (my first count of "28 in 3 extractors" was wrong):**
+- **3 parameterised extractors**, identical shape `^#\s*${label}(\d+)\s*$` — `extractTopLevelTaggedBlocks` (`:1648`), `extractShoppingTopLevelBlocks` (`:6117`), `extractMusicBlocks` (`:6382`). 27 distinct labels passed in as string literals.
+- **26 inline block regexes** with the label baked into the pattern. These are the ones the first count missed.
+- **35 block-regex sites, ~55 distinct labels** once deduped.
+
+**Labels appearing in BOTH layers — they must share one alias or the two layers contradict each other:** `订单`, `收藏`, `帖子`, `视频`, `喜欢`, `动态`.
+
+**The 26 inline sites** (line numbers as of `8cf829f`): `1465 备忘录`, `1546 邮件`, `1674 (美食|饮品|商超|药品|其他)`, `1688 ##订单`, `1907 (最近在玩|愿望单|游戏库)`, `1923 ##游戏`, `2154 (观看记录|收藏)`, `2166 ##视频`, `2347 (Posts|Comments|发帖|评论)`, `2612 (帖子|回复|媒体|喜欢)`, `2636 ##(帖子|回复|媒体|喜欢)`, `2901 ##(视频|频道)`, `2918 (观看记录|稍后观看|赞过的视频|赞过视频|订阅)`, `3167 ##精选(?:动态)?`, `3197 #帖子`, `3201 #精选动态`, `3224 ##帖子`, `3588 (作品|喜欢|收藏)`, `3712 ##帖子`, `4078 会话`, `4944 相簿`, `4972 ##相簿`, `5593 账户`, `5594 流水`, `5829 (最近通话|联系人|常用联系人|语音信箱)`, `5888 ##线程`.
+
+**Plan** (mirror Step 1, which worked):
+1. `CHECKPHONE_BLOCK_ALIASES` keyed by the legacy Chinese label, English first — same shape as `CHECKPHONE_FIELD_ALIASES`.
+2. `blockLabelPattern(legacy)` returning an escaped alternation. Drop it into all 3 parameterised extractors — **and note two of the three do not escape the label today** (`extractShoppingTopLevelBlocks`, `extractMusicBlocks` interpolate `${label}` raw, unlike `extractTopLevelTaggedBlocks` which escapes). The helper fixes that for free; do not lose it.
+3. Convert the 26 inline sites individually — they cannot take one global regex like Step 1 did, because their alternation shapes vary.
+4. Fixture: both languages for all ~55 labels through the real exported parsers, plus non-vacuity both ways.
+
+**Why this must be complete before Step 2**: a half-bilingual block layer means blocks reached through the un-converted path stop parsing the moment the teaching flips, with no error. Same failure class as the `tool-executor` / `FETCH_RESULT_HEADER` / `prompt-sanitizer` regressions.
+
+### Step 2 progress — 1 of 26 entries (`8cf829f`)
+`checkphone_manifest` only, flipped ahead of Step 1b because it is **the one checkphone entry parsed as JSON** (`normalizeManifest` reads `record.optionalAppIds` / `record.topAppIds`, both ASCII) rather than through the block-and-field format. Everything it names — the app ids — was already ASCII; the Chinese was a parenthetical gloss.
+
+**`BUILTIN_PRESET_VERSION` deliberately still 275.** It waits until all 26 entries are done so the app never sees a half-flipped preset. Per-entry status tracking in `_fx-checkphone-fields.mjs`, and flipping its "Step 2 not started" assertion, both belong to the final batch.
+
 ### Remaining order — do NOT translate first
 1. **Build the alias mechanism.** Add a `pickField(fields, names[])` helper with a case-insensitive second pass, exactly like `xiaohongshu-engine`'s. Convert all 398 index reads to bilingual lookups. **No teaching change, zero user-visible change** — this is the safety net everything else stands on.
 2. **Flip the 26 preset entries.** Only after step 1 is proven, since the parsers must accept English before the model is told to write it.
