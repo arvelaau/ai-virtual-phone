@@ -241,12 +241,26 @@ interface HtmlPageProps {
     html: string;
     onOptionSelect?: (text: string) => void;
     htmlPageMode: "auto" | "contained";
+    serifIframeFallback?: boolean;
 }
 
-function HtmlPageSegment({ html, onOptionSelect, htmlPageMode }: HtmlPageProps) {
+function HtmlPageSegment({ html, onOptionSelect, htmlPageMode, serifIframeFallback }: HtmlPageProps) {
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const [height, setHeight] = useState(0);
     const contained = htmlPageMode === "contained";
+    // Height feedback-loop detection. A generated page containing 100vh (or
+    // calc(100vh ± x)) elements grows WITH the iframe, because vh resolves against the
+    // iframe's own viewport: measure → grow → measure again, without limit. The page
+    // then reflows every frame, and while pinned to the bottom the stick-to-bottom logic
+    // re-scrolls every frame with it.
+    //
+    // This is a DIFFERENT failure from the ratchet fixed in the bridge above: that one
+    // came from our own measurement including documentElement.scrollHeight, whereas this
+    // one originates in the generated page's CSS and cannot be measured away. Several
+    // consecutive small, evenly-sized increases are treated as a loop and the height is
+    // locked; it unlocks when the content genuinely gets shorter.
+    const recentHeightsRef = useRef<{ h: number; t: number }[]>([]);
+    const feedbackLockRef = useRef<number | null>(null);
 
     const srcDoc = useMemo(() => {
         // Height bridging: reuses the "stable-by-construction" approach from the black-market
@@ -269,6 +283,11 @@ function HtmlPageSegment({ html, onOptionSelect, htmlPageMode }: HtmlPageProps) 
         //  - a zero-width frame (display:none, or not laid out yet) measures garbage, so both
         //    measure() and send() bail out instead of reporting it.
         const bridge = `<style>html,body{overflow:hidden!important;height:auto!important;min-height:0!important}</style><script>(function(){function measure(){var b=document.body;if(!b)return 0;if(window.innerWidth<50)return 0;var br=b.getBoundingClientRect();var h=Math.max(br.height,b.scrollHeight||0);for(var i=0;i<b.children.length;i++){var c=b.children[i];var r=c.getBoundingClientRect();if(r.width||r.height)h=Math.max(h,r.bottom-br.top,c.scrollHeight||0)}return Math.ceil(h)}function send(){var h=measure();if(!h)return;window.parent.postMessage({type:"_rhr",h:h},"*")}function schedule(){requestAnimationFrame(function(){send();requestAnimationFrame(send)})}window.addEventListener("load",schedule);window.addEventListener("resize",schedule);document.addEventListener("click",function(e){var t=e.target&&e.target.closest&&e.target.closest("[data-action]");if(t){var a=t.getAttribute("data-action");if(a){e.preventDefault();e.stopPropagation();window.parent.postMessage({type:"_rhr_opt",text:a},"*")}}schedule()},true);document.addEventListener("toggle",schedule,true);document.addEventListener("transitionend",schedule,true);document.addEventListener("animationend",schedule,true);if(window.MutationObserver)new MutationObserver(schedule).observe(document.documentElement,{attributes:true,childList:true,subtree:true,characterData:true});if(window.ResizeObserver){var ro=new ResizeObserver(schedule);ro.observe(document.documentElement);if(document.body)ro.observe(document.body)}setTimeout(send,80);setTimeout(send,500);setTimeout(send,1600)})();<\/script>`;
+        // Default-font fallback: an iframe is its own document, so it cannot inherit the
+        // story page's serif (--story-font) and falls back to the UA sans-serif. Injecting
+        // a serif default at the very front of the document means a generated page's own
+        // font-family still wins — this only fills the gap, it does not override.
+        const fontFallback = `<style>@font-face{font-family:"Noto Serif SC";src:url("/fonts/interview/noto-serif-sc.woff2") format("woff2");font-weight:300 900;font-display:swap}body{font-family:"Noto Serif SC","Source Han Serif SC","Songti SC","STSong",Georgia,serif}</style>`;
         let h = html;
         // Convert basic markdown inside hidden data divs
         h = h.replace(
@@ -280,6 +299,9 @@ function HtmlPageSegment({ html, onOptionSelect, htmlPageMode }: HtmlPageProps) 
         );
         // Patch template JS: .textContent → .innerHTML so <strong>/<em> tags are preserved
         h = h.replace(/\.textContent\.trim\(\)/g, ".innerHTML.trim()");
+        // Font fallback goes at the very front so the generated page's own styles override
+        // it. Story mode only — other hosts of this renderer keep the UA default.
+        if (serifIframeFallback) h = fontFallback + h;
         if (h.includes("</body>")) h = h.replace("</body>", bridge + "</body>");
         else h = h + bridge;
         return h;
@@ -290,7 +312,43 @@ function HtmlPageSegment({ html, onOptionSelect, htmlPageMode }: HtmlPageProps) 
             if (!e.data || typeof e.data !== "object") return;
             if (iframeRef.current && e.source !== iframeRef.current.contentWindow) return;
             if (e.data.type === "_rhr" && typeof e.data.h === "number") {
-                setHeight(Math.max(e.data.h, 50));
+                const next = Math.max(e.data.h, 50);
+                const lock = feedbackLockRef.current;
+                if (lock !== null) {
+                    if (next <= lock - 8) {
+                        feedbackLockRef.current = null;
+                        recentHeightsRef.current = [];
+                    } else {
+                        return; // while locked, ignore measurements that keep growing
+                    }
+                }
+                const recent = recentHeightsRef.current;
+                // The bridge fires several identical messages per change; dedupe before
+                // they enter the window, or the run-away test trips on repeats.
+                if (recent.length === 0 || recent[recent.length - 1].h !== next) {
+                    recent.push({ h: next, t: Date.now() });
+                    if (recent.length > 6) recent.shift();
+                }
+                // Six consecutive small increases inside 1.2s reads as a vh feedback loop.
+                // Genuine growth — images loading in one by one — is never that rapid.
+                const isRunaway = recent.length === 6
+                    && recent[5].t - recent[0].t < 1200
+                    && recent.every((v, i) => {
+                        if (i === 0) return true;
+                        const step = v.h - recent[i - 1].h;
+                        return step > 0 && step < 400;
+                    });
+                if (isRunaway) {
+                    // The vh content wants to fill the viewport, so lock a near-full-screen
+                    // height rather than whatever small value it started from.
+                    const viewport = iframeRef.current?.closest(".story-stage")?.clientHeight
+                        || (typeof window !== "undefined" ? window.innerHeight : 600);
+                    const locked = Math.max(recent[0].h, Math.round(viewport * 0.68));
+                    feedbackLockRef.current = locked;
+                    setHeight(locked);
+                    return;
+                }
+                setHeight(next);
             }
             if (e.data.type === "_rhr_opt" && typeof e.data.text === "string") {
                 onOptionSelect?.(e.data.text);
@@ -340,9 +398,11 @@ export interface StoryHtmlRendererProps {
     messageId: string;
     onOptionSelect?: (text: string) => void;
     htmlPageMode?: "auto" | "contained";
+    /** Story mode only: inject a serif default into generated-page iframes. */
+    serifIframeFallback?: boolean;
 }
 
-function StoryHtmlRendererInner({ content, messageId, onOptionSelect, htmlPageMode = "auto" }: StoryHtmlRendererProps) {
+function StoryHtmlRendererInner({ content, messageId, onOptionSelect, htmlPageMode = "auto", serifIframeFallback }: StoryHtmlRendererProps) {
     const segments = useMemo(() => splitContent(content), [content]);
     const scopeClass = `smsg-${messageId.slice(-8)}`;
     const containerRef = useRef<HTMLDivElement>(null);
@@ -352,14 +412,14 @@ function StoryHtmlRendererInner({ content, messageId, onOptionSelect, htmlPageMo
         <div className="story-richtext" ref={containerRef}>
             {segments.map((seg, i) => {
                 if (seg.type === "html-page") {
-                    return <HtmlPageSegment key={`hp-${i}`} html={seg.content} onOptionSelect={onOptionSelect} htmlPageMode={htmlPageMode} />;
+                    return <HtmlPageSegment key={`hp-${i}`} html={seg.content} onOptionSelect={onOptionSelect} htmlPageMode={htmlPageMode} serifIframeFallback={serifIframeFallback} />;
                 }
                 if (seg.type === "fold") {
                     return (
                         <StoryFoldBlock key={`fold-${i}`} label={seg.label} content={seg.content} scopeClass={scopeClass}>
                             {splitContent(seg.content).map((innerSeg, innerIndex) => {
                                 if (innerSeg.type === "html-page") {
-                                    return <HtmlPageSegment key={`fold-hp-${i}-${innerIndex}`} html={innerSeg.content} onOptionSelect={onOptionSelect} htmlPageMode={htmlPageMode} />;
+                                    return <HtmlPageSegment key={`fold-hp-${i}-${innerIndex}`} html={innerSeg.content} onOptionSelect={onOptionSelect} htmlPageMode={htmlPageMode} serifIframeFallback={serifIframeFallback} />;
                                 }
                                 if (innerSeg.type === "fold") {
                                     return (

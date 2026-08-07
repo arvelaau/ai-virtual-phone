@@ -1149,6 +1149,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
                               content={message.renderedContent || message.rawContent}
                               messageId={message.id}
                               onOptionSelect={handleOptionSelect}
+                              serifIframeFallback
                             />
                           )}
                         </div>
