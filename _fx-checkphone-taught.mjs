@@ -81,14 +81,10 @@ export const DELIBERATE_CJK = {
   // takeout's five CATEGORY values never needed an entry: the category comes from the
   // block-heading capture, which canonicalBlockLabel normalises back to Chinese, so
   // order.category stays 美食 whether the model writes #美食1 or #Food1.
-  checkphone_chat: [{
-    // The entry's prose refers to the [真实会话] / [真实群聊] / [真实朋友圈] / [真实评论]
-    // blocks that the ENGINE injects into this prompt (checkphone-engine.ts:1553). Those
-    // headers are engine prose -- Step 4 -- so the reference has to keep naming them
-    // exactly as the model will see them, or the instruction points at nothing.
-    pattern: /真实会话|真实群聊|真实朋友圈|真实评论/,
-    why: "names the [真实会话] blocks the engine injects at checkphone-engine.ts:1553",
-  }],
+  // checkphone_chat's entry is gone too: Step 4 translated formatRealChatSnapshotForPrompt
+  // and the entry's prose in one change, so it now names [RealConversations] and friends.
+  // That also corrected a pre-existing inaccuracy -- the prose claimed a [真实评论] block
+  // that the engine never emitted, while the [真实联系人] block it DID emit went unnamed.
   // checkphone_music deliberately has NO entry, though checkphone-music-page.tsx:133,138
   // does parse 分钟 and 最近偏爱. Checked against the entry rather than assumed: it teaches
   // [ThisMonthDuration] as a bare number and [FavouriteArtist] as a plain name, so neither
@@ -200,7 +196,10 @@ export const NON_ALIASED_FIELD_TOKENS = new Set([
   "吃瓜", "popcorn",
   // Not field tags at all: the section headers the ENGINE injects into the chat prompt
   // (checkphone-engine.ts:1553). checkphone_chat names them so its instruction points at
-  // something the model can actually see. They move when the engine prose does, in Step 4.
+  // something the model can actually see, so the two move together — Step 4 translated
+  // the builder and the entry's prose in one change. The legacy names are kept here
+  // because a stored prompt-preview or an old debug snapshot may still show them.
+  "RealConversations", "RealGroupChats", "RealMoments", "RealContacts",
   "真实会话", "真实群聊", "真实朋友圈", "真实评论",
 ]);
 

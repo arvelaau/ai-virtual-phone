@@ -1545,22 +1545,25 @@ function buildRealCheckPhoneChatPayload(characterId: string): CheckPhoneChatPayl
 }
 
 function formatRealChatSnapshotForPrompt(realPayload: CheckPhoneChatPayload): string {
-  const conversationLines = realPayload.conversations.map((item) => `- 会话 ${item.name}｜${item.preview}`);
-  const groupLines = realPayload.groups.map((item) => `- 群聊 ${item.name}｜${item.preview}`);
-  const momentLines = realPayload.momentsFeed.map((item) => `- 朋友圈 ${item.authorLabel}｜${item.body}`);
-  const contactLines = realPayload.contacts.map((item) => `- 联系人 ${item.name}｜${item.tagLabel}｜${item.note}`);
+  // Write-only context: this block is injected into the checkphone_chat prompt and is
+  // never parsed back (verified repo-wide). The block NAMES are quoted in that entry's
+  // prose, so the two move together — see the lockstep note there.
+  const conversationLines = realPayload.conversations.map((item) => `- Chat ${item.name} | ${item.preview}`);
+  const groupLines = realPayload.groups.map((item) => `- Group ${item.name} | ${item.preview}`);
+  const momentLines = realPayload.momentsFeed.map((item) => `- Moments ${item.authorLabel} | ${item.body}`);
+  const contactLines = realPayload.contacts.map((item) => `- Contact ${item.name} | ${item.tagLabel} | ${item.note}`);
   return [
-    "[真实会话]",
-    conversationLines.length > 0 ? conversationLines.join("\n") : "- 无",
+    "[RealConversations]",
+    conversationLines.length > 0 ? conversationLines.join("\n") : "- none",
     "",
-    "[真实群聊]",
-    groupLines.length > 0 ? groupLines.join("\n") : "- 无",
+    "[RealGroupChats]",
+    groupLines.length > 0 ? groupLines.join("\n") : "- none",
     "",
-    "[真实朋友圈]",
-    momentLines.length > 0 ? momentLines.join("\n") : "- 无",
+    "[RealMoments]",
+    momentLines.length > 0 ? momentLines.join("\n") : "- none",
     "",
-    "[真实联系人]",
-    contactLines.length > 0 ? contactLines.join("\n") : "- 无",
+    "[RealContacts]",
+    contactLines.length > 0 ? contactLines.join("\n") : "- none",
   ].join("\n");
 }
 

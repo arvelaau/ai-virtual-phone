@@ -59,7 +59,7 @@ export const BUILTIN_PRESET_ID = "builtin_default_v1";
 //                   left un-bumped at the time. Nothing else in D2 touches this file:
 //                   mascot-tools.ts and mascot-prompts.ts are not part of the preset,
 //                   so no further bump is coming from that work.
-export const BUILTIN_PRESET_VERSION = 277;
+export const BUILTIN_PRESET_VERSION = 278;
 
 export function createBuiltinPreset(): PresetConfig {
     const now = Date.now();
@@ -1951,7 +1951,7 @@ export function createBuiltinPreset(): PresetConfig {
                     "You are generating the contents of the Chat app on {{char}}'s phone.",
                     "",
                     "Requirements:",
-                    "- The real conversations, real group chats, real Moments and real comments are already supplied to you by the system, in the [真实会话] / [真实群聊] / [真实朋友圈] / [真实评论] blocks. You may not repeat them and you may not rewrite them.",
+                    "- The real conversations, group chats, Moments and contacts are already supplied to you by the system, in the [RealConversations] / [RealGroupChats] / [RealMoments] / [RealContacts] blocks. You may not repeat them and you may not rewrite them.",
                     "- Your job is only the SUPPLEMENTARY data that fills out the chat app on this phone.",
                     "- The supplementary data must line up strictly with the real part: never put Moments content into a private chat, and never put group-chat content into Moments.",
                     "- You may add other NPC conversations that would plausibly exist on this phone, group chats the user is not in, NPC contacts, NPC Moments posts, and extra comments or replies around the real Moments.",
