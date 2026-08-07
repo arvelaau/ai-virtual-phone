@@ -246,6 +246,17 @@ export const CHECKPHONE_BLOCK_ALIASES: Record<string, readonly string[]> = {
   "常用联系人": ["FavouriteContacts", "常用联系人"],
   "语音信箱": ["Voicemail", "语音信箱"],
   "线程": ["Threads", "线程"],
+
+  // Found by auditing the TEACHING rather than the source: these are taught as headings
+  // but reach a match site the first sweep missed — extractBrowserSection takes its label
+  // in a parameter named `heading`, not `label`, so the conversion regex skipped it.
+  "历史记录": ["History", "历史记录"],
+  "收藏夹": ["Bookmarks", "收藏夹"],
+  "记录": ["Entry", "记录"],
+  "照片": ["Photo", "照片"],
+  // sub-block under #语音信箱, whose own English name is already "Voicemail"
+  "留言": ["VoicemailEntry", "留言"],
+  "通话": ["Call", "通话"],
 };
 
 function escapeForRegex(value: string): string {
@@ -426,6 +437,7 @@ export const CHECKPHONE_FIELD_ALIASES: Record<string, readonly string[]> = {
   "转写": ["Transcript", "转写"],
   "线程ID": ["ThreadId", "线程ID"],
   "发送人": ["Sender", "发送人"],
+  "发送方": ["SentBy", "发送方"],
   "数量": ["Quantity", "数量"],
   "总价": ["TotalPrice", "总价"],
   "歌名": ["TrackName", "歌名"],
@@ -465,6 +477,33 @@ export const CHECKPHONE_FIELD_ALIASES: Record<string, readonly string[]> = {
   "注记": ["Annotation", "注记"],
   "阅读状态": ["ReadingStatus", "阅读状态"],
   "落款时间": ["SignedAt", "落款时间"],
+
+  // ── Suffixes that only ever occur in an INDEXED field name ─────────────────
+  // A second family of field names is built at runtime rather than written as a literal:
+  // `[消息1正文]`, `[评论2作者]`, `[商品3图标]`, `[歌曲1]`. Step 1 converted the 423 STATIC
+  // reads and could not see these, because they are template literals rather than string
+  // literals. pickIndexedField below assembles them from a prefix alias, the index and a
+  // suffix alias — so every suffix must be in this table, including these five, which
+  // never appear on their own and so were missing.
+  "回复": ["InReplyTo", "回复"], // distinct from 回复对象 -> ReplyTo; two apps, same concept
+  "引用标题": ["QuotedTitle", "引用标题"],
+  "引用正文": ["QuotedBody", "引用正文"],
+  "语音时长": ["VoiceDuration", "语音时长"],
+  "语音转写": ["VoiceTranscript", "语音转写"],
+};
+
+/**
+ * The four prefixes that take a 1-based index. Keyed by the legacy Chinese prefix, which
+ * is the internal identifier, exactly like the tables above.
+ *
+ * `评论` is its own standalone field name elsewhere, so its aliases live under the
+ * synthetic key `评论N` to avoid the two meanings colliding in one table entry.
+ */
+const CHECKPHONE_INDEX_PREFIX_ALIASES: Record<string, readonly string[]> = {
+  "消息": ["Message", "消息"],
+  "评论": ["Comment", "评论"],
+  "商品": ["Item", "商品"],
+  "歌曲": ["Track", "歌曲"],
 };
 
 /**
@@ -491,6 +530,80 @@ export function pickField(fields: Record<string, string> | undefined, legacyName
     if (lowered.includes(key.toLowerCase())) return fields[key];
   }
   return undefined;
+}
+
+/** Every accepted spelling of one indexed field name, e.g. 消息/1/正文 -> Message1Body, 消息1正文. */
+function indexedFieldNames(legacyPrefix: string, index: number | string, legacySuffix: string): string[] {
+  const prefixes = CHECKPHONE_INDEX_PREFIX_ALIASES[legacyPrefix] ?? [legacyPrefix];
+  const suffixes = legacySuffix ? (CHECKPHONE_FIELD_ALIASES[legacySuffix] ?? [legacySuffix]) : [""];
+  const out: string[] = [];
+  for (const p of prefixes) for (const s of suffixes) out.push(`${p}${index}${s}`);
+  return out;
+}
+
+/**
+ * Read an indexed field — the runtime-assembled counterpart to pickField.
+ *
+ * `pickField(fields, "标题")` covers names written as literals. This covers the ones built
+ * per row: `pickIndexedField(fields, "消息", n, "正文")` becomes `pickIndexedField(fields, "消息", n, "正文")`,
+ * which accepts `Message1Body` and `消息1正文` (and, on the second pass, `message1body`).
+ *
+ * Pass an empty suffix for the bare `商品1` / `歌曲1` forms.
+ */
+export function pickIndexedField(
+  fields: Record<string, string> | undefined,
+  legacyPrefix: string,
+  index: number | string,
+  legacySuffix = "",
+): string | undefined {
+  if (!fields) return undefined;
+  const names = indexedFieldNames(legacyPrefix, index, legacySuffix);
+  for (const name of names) {
+    const value = fields[name];
+    if (value !== undefined) return value;
+  }
+  const lowered = names.map((n) => n.toLowerCase());
+  for (const key of Object.keys(fields)) {
+    if (lowered.includes(key.toLowerCase())) return fields[key];
+  }
+  return undefined;
+}
+
+/**
+ * The indexes actually present for one indexed family, ascending.
+ *
+ * Replaces the hand-written scanners (`key.match(/^评论(\d+)作者$/)`), which were
+ * Chinese-only and would therefore have returned an EMPTY list — not an error — the
+ * moment the model started writing `[Comment1Author]`. Every row would silently vanish.
+ *
+ * `legacySuffixes` is the set of suffixes any one of which marks a row as present; pass
+ * `[""]` for the bare `商品1` / `歌曲1` forms. A row counts if it matches in either
+ * language, so a half-migrated reply still yields all of its rows.
+ */
+export function indexedFieldNumbers(
+  fields: Record<string, string> | undefined,
+  legacyPrefix: string,
+  legacySuffixes: readonly string[],
+): number[] {
+  if (!fields) return [];
+  const prefixes = (CHECKPHONE_INDEX_PREFIX_ALIASES[legacyPrefix] ?? [legacyPrefix]).map((p) => p.toLowerCase());
+  const suffixes = legacySuffixes.flatMap((s) =>
+    s ? (CHECKPHONE_FIELD_ALIASES[s] ?? [s]).map((v) => v.toLowerCase()) : [""],
+  );
+  const found = new Set<number>();
+  for (const key of Object.keys(fields)) {
+    const lowered = key.toLowerCase();
+    for (const prefix of prefixes) {
+      if (!lowered.startsWith(prefix)) continue;
+      const rest = lowered.slice(prefix.length);
+      const m = rest.match(/^(\d+)(.*)$/);
+      if (!m) continue;
+      if (!suffixes.includes(m[2])) continue;
+      const n = Number(m[1]);
+      if (Number.isFinite(n)) found.add(n);
+    }
+  }
+  return [...found].sort((a, b) => a - b);
 }
 
 const CHECKPHONE_COMMON_TEXT_FIELD_KEYS = [
@@ -1830,19 +1943,12 @@ function parseTakeoutBlockPayload(text: string): {
       const block = sectionBody.slice(start, end).trim();
       const fields = parseTakeoutTaggedFields(block);
 
-      const itemIndexes = [...new Set(
-        Object.keys(fields)
-          .map((key) => key.match(/^商品(\d+)(?:图标)?$/)?.[1] ?? "")
-          .filter(Boolean),
-      )]
-        .map((value) => Number(value))
-        .filter((value) => Number.isFinite(value))
-        .sort((a, b) => a - b);
+      const itemIndexes = indexedFieldNumbers(fields, "商品", ["", "图标"]);
 
       const items = itemIndexes
         .map((itemIndex) => {
-          const name = fields[`商品${itemIndex}`]?.trim() || "";
-          const icon = fields[`商品${itemIndex}图标`]?.trim() || "";
+          const name = pickIndexedField(fields, "商品", itemIndex, "")?.trim() || "";
+          const icon = pickIndexedField(fields, "商品", itemIndex, "图标")?.trim() || "";
           if (!name || !icon) return null;
           return { name, icon };
         })
@@ -3274,27 +3380,20 @@ function parseInstagramComments(
   fields: Record<string, string>,
   postNumber: number,
 ): CheckPhoneInstagramPayload["posts"][number]["comments"] {
-  const indexes = [...new Set(
-    Object.keys(fields)
-      .map((key) => key.match(/^评论(\d+)(用户名|内容|时间)$/)?.[1] ?? "")
-      .filter(Boolean),
-  )]
-    .map((value) => Number(value))
-    .filter((value) => Number.isFinite(value))
-    .sort((a, b) => a - b);
+  const indexes = indexedFieldNumbers(fields, "评论", ["用户名", "内容", "时间"]);
 
   const comments: CheckPhoneInstagramPayload["posts"][number]["comments"] = [];
   for (const index of indexes) {
-    const authorName = fields[`评论${index}用户名`]?.trim() || "";
-    const text = fields[`评论${index}内容`]?.trim() || "";
-    const createdAt = fields[`评论${index}时间`]?.trim() || "";
+    const authorName = pickIndexedField(fields, "评论", index, "用户名")?.trim() || "";
+    const text = pickIndexedField(fields, "评论", index, "内容")?.trim() || "";
+    const createdAt = pickIndexedField(fields, "评论", index, "时间")?.trim() || "";
     if (!authorName || !text || !createdAt) continue;
     comments.push({
       id: `ig_post_${postNumber}_comment_${index}`,
       authorName,
       text,
       createdAt,
-      likeCount: parseInstagramNumericField(fields[`评论${index}点赞量`]),
+      likeCount: parseInstagramNumericField(pickIndexedField(fields, "评论", index, "点赞量")),
     });
   }
   return comments;
@@ -3895,26 +3994,19 @@ function parseDouyinBlockComments(
   fields: Record<string, string>,
   prefix: string,
 ): CheckPhoneDouyinComment[] {
-  const commentIndexes = [...new Set(
-    Object.keys(fields)
-      .map((key) => key.match(/^评论(\d+)(用户名|内容|时间)$/)?.[1] ?? "")
-      .filter(Boolean),
-  )]
-    .map((value) => Number(value))
-    .filter((value) => Number.isFinite(value))
-    .sort((a, b) => a - b);
+  const commentIndexes = indexedFieldNumbers(fields, "评论", ["用户名", "内容", "时间"]);
   const authorByIndex = new Map(
-    commentIndexes.map((index) => [index, fields[`评论${index}用户名`]?.trim() || ""]),
+    commentIndexes.map((index) => [index, pickIndexedField(fields, "评论", index, "用户名")?.trim() || ""]),
   );
   const availableIndexes = new Set(commentIndexes);
 
   const comments: CheckPhoneDouyinComment[] = [];
   for (const index of commentIndexes) {
-    const authorName = fields[`评论${index}用户名`]?.trim() || "";
-    const text = fields[`评论${index}内容`]?.trim() || "";
-    const createdAt = fields[`评论${index}时间`]?.trim() || "";
+    const authorName = pickIndexedField(fields, "评论", index, "用户名")?.trim() || "";
+    const text = pickIndexedField(fields, "评论", index, "内容")?.trim() || "";
+    const createdAt = pickIndexedField(fields, "评论", index, "时间")?.trim() || "";
     if (!authorName || !text || !createdAt) continue;
-    const replyTarget = fields[`评论${index}回复对象`]?.trim() || "";
+    const replyTarget = pickIndexedField(fields, "评论", index, "回复对象")?.trim() || "";
     const replyTargetIndex = Number(
       replyTarget.match(/^评论\s*(\d+)$/)?.[1] ?? replyTarget.match(/^(\d+)$/)?.[1] ?? NaN,
     );
@@ -4208,7 +4300,7 @@ function parseTelegramDirection(value: string | undefined): CheckPhoneTelegramPa
   return value?.trim() === "outgoing" ? "outgoing" : "incoming";
 }
 
-function parseTelegramBlockPayload(text: string): PhoneBlockParseResult {
+export function parseTelegramBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
 
@@ -4222,11 +4314,7 @@ function parseTelegramBlockPayload(text: string): PhoneBlockParseResult {
     const start = (current.index ?? 0) + current[0].length;
     const end = next?.index ?? source.length;
     const fields = parseTakeoutTaggedFields(source.slice(start, end).trim());
-    const messageNumbers = Object.keys(fields)
-      .map((key) => key.match(/^消息(\d+)正文$/)?.[1])
-      .filter(Boolean)
-      .map(Number)
-      .sort((a, b) => a - b);
+    const messageNumbers = indexedFieldNumbers(fields, "消息", ["正文"]);
     const threadId = `tg_thread_${index + 1}`;
     return {
       id: threadId,
@@ -4244,15 +4332,15 @@ function parseTelegramBlockPayload(text: string): PhoneBlockParseResult {
       muted: parseBlockBoolean(pickField(fields, "静音")),
       messages: messageNumbers.map((number) => ({
         id: `${threadId}_msg_${number}`,
-        authorName: fields[`消息${number}作者`] || "",
-        messageType: parseTelegramMessageType(fields[`消息${number}类型`]),
-        direction: parseTelegramDirection(fields[`消息${number}方向`]),
-        createdAt: fields[`消息${number}时间`] || "",
-        text: fields[`消息${number}正文`] || "",
-        replyTitle: fields[`消息${number}引用标题`] || undefined,
-        replyText: fields[`消息${number}引用正文`] || undefined,
-        voiceDuration: fields[`消息${number}语音时长`] || undefined,
-        voiceTranscript: fields[`消息${number}语音转写`] || undefined,
+        authorName: pickIndexedField(fields, "消息", number, "作者") || "",
+        messageType: parseTelegramMessageType(pickIndexedField(fields, "消息", number, "类型")),
+        direction: parseTelegramDirection(pickIndexedField(fields, "消息", number, "方向")),
+        createdAt: pickIndexedField(fields, "消息", number, "时间") || "",
+        text: pickIndexedField(fields, "消息", number, "正文") || "",
+        replyTitle: pickIndexedField(fields, "消息", number, "引用标题") || undefined,
+        replyText: pickIndexedField(fields, "消息", number, "引用正文") || undefined,
+        voiceDuration: pickIndexedField(fields, "消息", number, "语音时长") || undefined,
+        voiceTranscript: pickIndexedField(fields, "消息", number, "语音转写") || undefined,
       })),
     };
   });
@@ -4902,8 +4990,7 @@ function normalizeBrowserPayload(payload: unknown): CheckPhoneBrowserPayload | n
 }
 
 function extractBrowserSection(source: string, heading: string): string {
-  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = source.match(new RegExp(`^#\\s*${escaped}\\s*$`, "m"));
+  const match = source.match(new RegExp(`^#\\s*(?:${blockLabelPattern(heading)})\\s*$`, "m"));
   if (!match || match.index === undefined) return "";
   const start = match.index + match[0].length;
   const next = source.slice(start).match(/^#(?!#)\s*\S.*$/m);
@@ -4924,7 +5011,7 @@ function parseBrowserEntryBlocks(section: string, label: string): Array<{ order:
   });
 }
 
-function parseBrowserBlockPayload(text: string): PhoneBlockParseResult {
+export function parseBrowserBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
   const historySection = extractBrowserSection(source, "历史记录");
@@ -5094,7 +5181,7 @@ function parsePhotoAlbumBlocks(section: string): Array<{ order: string; fields: 
   });
 }
 
-function parsePhotosBlockPayload(text: string): PhoneBlockParseResult {
+export function parsePhotosBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
   let albumEntries = parsePhotoAlbumBlocks(source);
@@ -5265,18 +5352,14 @@ function parseChatSupplementalMessages(
   prefix: string,
   allowAuthor: boolean,
 ): Array<{ id: string; text: string; timeLabel: string; direction: "incoming" | "outgoing"; authorLabel?: string }> {
-  return Object.keys(fields)
-    .map((key) => key.match(/^消息(\d+)正文$/)?.[1])
-    .filter(Boolean)
-    .map(Number)
-    .sort((a, b) => a - b)
+  return indexedFieldNumbers(fields, "消息", ["正文"])
     .map((number) => {
-      const direction = fields[`消息${number}方向`] === "outgoing" ? "outgoing" : "incoming";
-      const authorLabel = allowAuthor ? fields[`消息${number}作者`] || undefined : undefined;
+      const direction = pickIndexedField(fields, "消息", number, "方向") === "outgoing" ? "outgoing" : "incoming";
+      const authorLabel = allowAuthor ? pickIndexedField(fields, "消息", number, "作者") || undefined : undefined;
       return {
         id: `${prefix}_message_${number}`,
-        text: fields[`消息${number}正文`] || "",
-        timeLabel: fields[`消息${number}时间`] || "",
+        text: pickIndexedField(fields, "消息", number, "正文") || "",
+        timeLabel: pickIndexedField(fields, "消息", number, "时间") || "",
         direction,
         authorLabel,
       };
@@ -5287,17 +5370,13 @@ function parseChatMomentComments(
   fields: Record<string, string>,
   prefix: string,
 ): CheckPhoneChatPayload["momentsFeed"][number]["comments"] {
-  const commentNumbers = Object.keys(fields)
-    .map((key) => key.match(/^评论(\d+)作者$/)?.[1])
-    .filter(Boolean)
-    .map(Number)
-    .sort((a, b) => a - b);
+  const commentNumbers = indexedFieldNumbers(fields, "评论", ["作者"]);
   const authorByNumber = new Map(
-    commentNumbers.map((number) => [number, fields[`评论${number}作者`] || ""]),
+    commentNumbers.map((number) => [number, pickIndexedField(fields, "评论", number, "作者") || ""]),
   );
 
   return commentNumbers.map((number) => {
-    const replyTarget = fields[`评论${number}回复对象`]?.trim() || "";
+    const replyTarget = pickIndexedField(fields, "评论", number, "回复对象")?.trim() || "";
     const replyTargetNumber = Number(replyTarget.match(/^评论(\d+)$/)?.[1] || 0);
     const replyToLabel =
       replyTargetNumber > 0 && replyTargetNumber < number
@@ -5306,9 +5385,9 @@ function parseChatMomentComments(
 
     return {
       id: `${prefix}_comment_${number}`,
-      authorLabel: fields[`评论${number}作者`] || "",
-      timeLabel: fields[`评论${number}时间`] || "",
-      text: fields[`评论${number}内容`] || "",
+      authorLabel: pickIndexedField(fields, "评论", number, "作者") || "",
+      timeLabel: pickIndexedField(fields, "评论", number, "时间") || "",
+      text: pickIndexedField(fields, "评论", number, "内容") || "",
       replyToLabel,
     };
   });
@@ -5959,7 +6038,7 @@ function parsePhoneSectionBlocks(
   });
 }
 
-function parsePhoneBlockPayload(text: string): PhoneBlockParseResult {
+export function parsePhoneBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
 
@@ -6018,7 +6097,7 @@ function parseMessagesDirection(value: string | undefined): "incoming" | "outgoi
   return null;
 }
 
-function parseMessagesBlockPayload(text: string): PhoneBlockParseResult {
+export function parseMessagesBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
   const body = source.replace(/^#\s*线程\s*$/m, "").trim();
@@ -6031,21 +6110,18 @@ function parseMessagesBlockPayload(text: string): PhoneBlockParseResult {
     const start = (currentMatch.index ?? 0) + currentMatch[0].length;
     const end = next?.index ?? body.length;
     const fields = parseTakeoutTaggedFields(body.slice(start, end).trim());
-    const messageEntries: Record<number, Record<string, string>> = {};
-    for (const key of Object.keys(fields)) {
-      const match = key.match(/^消息(\d+)(.+)$/);
-      if (!match) continue;
-      const idx = Number(match[1]);
-      const fieldName = match[2];
-      if (!messageEntries[idx]) messageEntries[idx] = {};
-      messageEntries[idx][fieldName] = fields[key];
-    }
-    const messages = Object.entries(messageEntries)
-      .sort(([a], [b]) => Number(a) - Number(b))
-      .map(([idx, entry]) => {
-        const text = entry["正文"] || entry["text"] || "";
-        const timeLabel = entry["时间"] || "";
-        const direction = parseMessagesDirection(entry["发送方"] || entry["方向"] || entry["direction"]) ?? "incoming";
+    // Was a hand-rolled `/^消息(\d+)(.+)$/` bucket-by-index scan. indexedFieldNumbers does
+    // the same job bilingually; the `text` / `direction` spellings below are kept because
+    // this parser accepted them before the migration and they are not in the alias table.
+    const messages = indexedFieldNumbers(fields, "消息", ["正文", "时间", "发送方", "方向"])
+      .map((idx) => {
+        const text = pickIndexedField(fields, "消息", idx, "正文") || fields[`消息${idx}text`] || "";
+        const timeLabel = pickIndexedField(fields, "消息", idx, "时间") || "";
+        const direction = parseMessagesDirection(
+          pickIndexedField(fields, "消息", idx, "发送方")
+          || pickIndexedField(fields, "消息", idx, "方向")
+          || fields[`消息${idx}direction`],
+        ) ?? "incoming";
         return {
           id: `${currentMatch[1] || index + 1}-msg${idx}`,
           text,
@@ -6271,25 +6347,20 @@ function parseShoppingOrderItems(
   merchantLabel: string,
   statusLabel: string,
 ): CheckPhoneShoppingPayload["orders"][number]["items"] {
-  const itemNumbers = Object.keys(fields)
-    .map((key) => key.match(/^商品(\d+)名称$/)?.[1])
-    .filter(Boolean)
-    .map(Number)
-    .sort((a, b) => a - b);
+  const itemNumbers = indexedFieldNumbers(fields, "商品", ["名称"]);
 
   return itemNumbers.map((number, index) => {
-    const prefix = `商品${number}`;
-    const title = fields[`${prefix}名称`] || "";
-    const subtitle = fields[`${prefix}说明`] || fields[`${prefix}详情`] || title;
+    const title = pickIndexedField(fields, "商品", number, "名称") || "";
+    const subtitle = pickIndexedField(fields, "商品", number, "说明") || pickIndexedField(fields, "商品", number, "详情") || title;
     return {
       id: `${orderId}_item_${number}`,
       title,
       merchantLabel,
-      priceLabel: fields[`${prefix}价格`] || "",
-      quantityLabel: fields[`${prefix}数量`] || "× 1",
+      priceLabel: pickIndexedField(fields, "商品", number, "价格") || "",
+      quantityLabel: pickIndexedField(fields, "商品", number, "数量") || "× 1",
       subtitle,
-      detail: fields[`${prefix}详情`] || subtitle,
-      previewIcon: fields[`${prefix}图标`] || "",
+      detail: pickIndexedField(fields, "商品", number, "详情") || subtitle,
+      previewIcon: pickIndexedField(fields, "商品", number, "图标") || "",
       tone: deriveShoppingTone(index),
     };
   });
@@ -6566,12 +6637,8 @@ function parseMusicBlockPayload(text: string): PhoneBlockParseResult {
     if (track.title && !trackTitleToId.has(track.title)) trackTitleToId.set(track.title, track.id);
   }
   const playlists = extractMusicBlocks(source, "歌单").map((entry, index) => {
-    const trackIds = Object.keys(entry.fields)
-      .map((key) => key.match(/^歌曲(\d+)$/)?.[1])
-      .filter(Boolean)
-      .map(Number)
-      .sort((a, b) => a - b)
-      .map((number) => trackTitleToId.get(entry.fields[`歌曲${number}`] || ""))
+    const trackIds = indexedFieldNumbers(entry.fields, "歌曲", [""])
+      .map((number) => trackTitleToId.get(pickIndexedField(entry.fields, "歌曲", number, "") || ""))
       .filter(Boolean) as string[];
     return {
       id: `playlist_${entry.order}`,
@@ -6816,17 +6883,13 @@ function parseDoubanTopicComments(
   fields: Record<string, string>,
   topicId: string,
 ): NonNullable<CheckPhoneDoubanPayload["repliedTopics"]>[number]["comments"] {
-  return Object.keys(fields)
-    .map((key) => key.match(/^评论(\d+)作者$/)?.[1])
-    .filter(Boolean)
-    .map(Number)
-    .sort((a, b) => a - b)
+  return indexedFieldNumbers(fields, "评论", ["作者"])
     .map((number) => ({
       id: `${topicId}_comment_${number}`,
-      authorName: fields[`评论${number}作者`] || "",
-      text: fields[`评论${number}内容`] || "",
-      createdAt: fields[`评论${number}时间`] || "",
-      replyTo: fields[`评论${number}回复`] || undefined,
+      authorName: pickIndexedField(fields, "评论", number, "作者") || "",
+      text: pickIndexedField(fields, "评论", number, "内容") || "",
+      createdAt: pickIndexedField(fields, "评论", number, "时间") || "",
+      replyTo: pickIndexedField(fields, "评论", number, "回复") || undefined,
     }));
 }
 
@@ -7342,14 +7405,10 @@ function deriveXiaohongshuTone(index: number): CheckPhoneXiaohongshuPayload["hom
 }
 
 function parseSocialComments(fields: Record<string, string>, itemId: string): Array<{ id: string; authorName: string; text: string; replyTo?: string; replyToCommentId?: string }> {
-  const commentNumbers = Object.keys(fields)
-    .map((key) => key.match(/^评论(\d+)作者$/)?.[1])
-    .filter(Boolean)
-    .map(Number)
-    .sort((a, b) => a - b);
+  const commentNumbers = indexedFieldNumbers(fields, "评论", ["作者"]);
   const availableNumbers = new Set(commentNumbers);
   return commentNumbers.map((number) => {
-    const replyTarget = (fields[`评论${number}回复对象`] || "").trim();
+    const replyTarget = (pickIndexedField(fields, "评论", number, "回复对象") || "").trim();
     const replyTargetNumber = Number(replyTarget.match(/^评论\s*(\d+)$/)?.[1] ?? replyTarget.match(/^(\d+)$/)?.[1] ?? NaN);
     const replyToCommentId =
       Number.isFinite(replyTargetNumber) && replyTargetNumber > 0 && replyTargetNumber < number && availableNumbers.has(replyTargetNumber)
@@ -7357,9 +7416,9 @@ function parseSocialComments(fields: Record<string, string>, itemId: string): Ar
         : undefined;
     return {
       id: `${itemId}_comment_${number}`,
-      authorName: fields[`评论${number}作者`] || "",
-      text: fields[`评论${number}内容`] || "",
-      replyTo: fields[`评论${number}回复`] || undefined,
+      authorName: pickIndexedField(fields, "评论", number, "作者") || "",
+      text: pickIndexedField(fields, "评论", number, "内容") || "",
+      replyTo: pickIndexedField(fields, "评论", number, "回复") || undefined,
       replyToCommentId,
     };
   });
@@ -7369,18 +7428,14 @@ function parseSocialThreadMessages(
   fields: Record<string, string>,
   threadId: string,
 ): Array<{ id: string; authorName: string; text: string; timeLabel: string; direction: "incoming" | "outgoing" }> {
-  return Object.keys(fields)
-    .map((key) => key.match(/^消息(\d+)作者$/)?.[1])
-    .filter(Boolean)
-    .map(Number)
-    .sort((a, b) => a - b)
+  return indexedFieldNumbers(fields, "消息", ["作者"])
     .map((number) => {
-      const direction = fields[`消息${number}方向`] === "outgoing" ? "outgoing" : "incoming";
+      const direction = pickIndexedField(fields, "消息", number, "方向") === "outgoing" ? "outgoing" : "incoming";
       return {
         id: `${threadId}_message_${number}`,
-        authorName: fields[`消息${number}作者`] || "",
-        text: fields[`消息${number}正文`] || "",
-        timeLabel: fields[`消息${number}时间`] || "",
+        authorName: pickIndexedField(fields, "消息", number, "作者") || "",
+        text: pickIndexedField(fields, "消息", number, "正文") || "",
+        timeLabel: pickIndexedField(fields, "消息", number, "时间") || "",
         direction,
       };
     });

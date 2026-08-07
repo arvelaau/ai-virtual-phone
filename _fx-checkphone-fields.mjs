@@ -5,6 +5,14 @@
 // English name the model will be taught in Step 2 AND the legacy Chinese one it is
 // taught today. NOTHING is taught differently yet, so this change must be invisible to
 // the user — that is what the "legacy still wins" assertions below pin down.
+//
+// Step 1c added the INDEXED field layer (`[消息1正文]`, `[评论2作者]`, `[商品3图标]`,
+// `[歌曲1]`), which Step 1 could not see because those names are template literals rather
+// than string literals.
+//
+// Non-vacuity control (verified 2026-08-07): dropping the English alias from the 消息 and
+// 评论 index prefixes takes this from 50/50 to 44/50, failing exactly the indexed English
+// and half-migrated assertions.
 import { createJiti } from "jiti";
 import fs from "node:fs";
 import path from "node:path";
@@ -20,14 +28,16 @@ const ok = (n, c, x) => {
 
 // The REAL module, not a copy of its regexes.
 const E = await jiti.import("./lib/checkphone-engine.ts");
-const { pickField, CHECKPHONE_FIELD_ALIASES, parseShoppingBlockPayload } = E;
+const { pickField, pickIndexedField, indexedFieldNumbers, CHECKPHONE_FIELD_ALIASES, parseShoppingBlockPayload } = E;
 const src = fs.readFileSync(path.join(ROOT, "lib/checkphone-engine.ts"), "utf8");
 
 ok("pickField is exported", typeof pickField === "function");
 ok("the alias table is exported", !!CHECKPHONE_FIELD_ALIASES);
 
 const names = Object.keys(CHECKPHONE_FIELD_ALIASES ?? {});
-ok(`alias table covers 154 field names (found ${names.length})`, names.length === 154, String(names.length));
+// 154 after Step 1; +6 in Step 1c for suffixes that only ever occur inside an INDEXED
+// field name (回复, 引用标题, 引用正文, 语音时长, 语音转写) plus 发送方.
+ok(`alias table covers 160 field names (found ${names.length})`, names.length === 160, String(names.length));
 
 // ── 1. Every one of the 154 names resolves in BOTH languages ───────────────
 {
@@ -116,12 +126,69 @@ ok(`alias table covers 154 field names (found ${names.length})`, names.length ==
     }
 }
 
+// ── 4b. INDEXED field names (Step 1c) ─────────────────────────────────────
+// A second family of names is assembled per row rather than written as a literal:
+// [消息1正文], [评论2作者], [商品3图标], [歌曲1]. Step 1's static conversion could not see
+// these — they are template literals — so they were still Chinese-only until Step 1c.
+{
+    const zh = { "消息1正文": "hello", "消息1时间": "09:00", "消息2正文": "hi", "评论1作者": "Ana", "商品1名称": "Mug", "歌曲1": "Song A" };
+    const en = { "Message1Body": "hello", "Message1Time": "09:00", "Message2Body": "hi", "Comment1Author": "Ana", "Item1Name": "Mug", "Track1": "Song A" };
+
+    ok("indexed read: legacy Chinese", pickIndexedField(zh, "消息", 1, "正文") === "hello");
+    ok("indexed read: English", pickIndexedField(en, "消息", 1, "正文") === "hello");
+    ok("indexed read: case-insensitive", pickIndexedField({ "message1body": "x" }, "消息", 1, "正文") === "x");
+    ok("indexed read: bare prefix+index (歌曲1 / Track1)",
+        pickIndexedField(zh, "歌曲", 1) === "Song A" && pickIndexedField(en, "歌曲", 1) === "Song A");
+    ok("indexed read: a different index is not picked up", pickIndexedField(zh, "消息", 3, "正文") === undefined);
+    ok("indexed read: a different suffix is not picked up", pickIndexedField(zh, "消息", 1, "作者") === undefined);
+    ok("indexed read: a different prefix is not picked up", pickIndexedField(zh, "评论", 1, "正文") === undefined);
+
+    // the scanners — a Chinese-only scanner returns an EMPTY list once the model writes
+    // English, so every row silently vanishes with no error anywhere
+    const nZh = indexedFieldNumbers(zh, "消息", ["正文"]);
+    const nEn = indexedFieldNumbers(en, "消息", ["正文"]);
+    ok("scanner: legacy Chinese finds both rows", JSON.stringify(nZh) === "[1,2]", JSON.stringify(nZh));
+    ok("scanner: English finds both rows", JSON.stringify(nEn) === "[1,2]", JSON.stringify(nEn));
+    ok("scanner: ascending order", JSON.stringify(indexedFieldNumbers({ "消息3正文": "c", "消息1正文": "a" }, "消息", ["正文"])) === "[1,3]");
+    ok("scanner: any listed suffix marks a row present",
+        JSON.stringify(indexedFieldNumbers({ "Comment1Username": "u", "评论2内容": "t" }, "评论", ["用户名", "内容", "时间"])) === "[1,2]",
+        JSON.stringify(indexedFieldNumbers({ "Comment1Username": "u", "评论2内容": "t" }, "评论", ["用户名", "内容", "时间"])));
+    ok("scanner: bare form (歌曲N / TrackN)",
+        JSON.stringify(indexedFieldNumbers({ "歌曲1": "a", "Track2": "b" }, "歌曲", [""])) === "[1,2]");
+    ok("scanner: an unlisted suffix does not mark a row present",
+        JSON.stringify(indexedFieldNumbers({ "消息1作者": "a" }, "消息", ["正文"])) === "[]");
+    ok("scanner: a bare-form scan does not swallow suffixed keys",
+        JSON.stringify(indexedFieldNumbers({ "歌曲1名称": "a" }, "歌曲", [""])) === "[]");
+
+    // half-migrated: the model flips some names before others
+    const mixed = { "Message1Body": "a", "消息2正文": "b", "消息1时间": "t" };
+    ok("a half-migrated reply still yields every row",
+        JSON.stringify(indexedFieldNumbers(mixed, "消息", ["正文"])) === "[1,2]",
+        JSON.stringify(indexedFieldNumbers(mixed, "消息", ["正文"])));
+    ok("a half-migrated row reads both of its fields",
+        pickIndexedField(mixed, "消息", 1, "正文") === "a" && pickIndexedField(mixed, "消息", 1, "时间") === "t");
+}
+
 // ── 5. The conversion is complete ─────────────────────────────────────────
 {
     const rawReads = (src.match(/(fields|profileFields)\[\s*"[^"]*[一-鿿]/g) || []).length;
     ok("no raw Chinese-keyed field reads remain", rawReads === 0, `found ${rawReads}`);
     const calls = (src.match(/pickField\(/g) || []).length;
     ok(`pickField is used at 400+ sites (found ${calls})`, calls >= 400, String(calls));
+
+    // Step 1c: no template-literal read and no hand-written index scanner may remain.
+    // The `消息${idx}text` / `消息${idx}direction` pair is a deliberate pre-migration
+    // tolerance in the messages thread parser, so it is excluded by name.
+    const tplReads = (src.match(/\w+\[`[^`]*[一-鿿][^`]*`\]/g) || [])
+        .filter((s) => !/(text|direction)`\]$/.test(s));
+    ok("no indexed field is still read through a raw template literal", tplReads.length === 0, tplReads.slice(0, 6).join("  "));
+    // strip comments first — the helpers' own docs quote the scanner they replaced
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const scanners = (code.match(/key\.match\(\/\^[^/]*[一-鿿][^/]*\/\)/g) || []);
+    ok("no hand-written Chinese-only index scanner remains", scanners.length === 0, scanners.join("  "));
+    ok("indexedFieldNumbers is used at every former scanner site",
+        (src.match(/indexedFieldNumbers\(/g) || []).length >= 9,
+        String((src.match(/indexedFieldNumbers\(/g) || []).length));
 }
 
 // ── 6. Step 2 has NOT happened ────────────────────────────────────────────
