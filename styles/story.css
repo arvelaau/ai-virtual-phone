@@ -482,22 +482,20 @@
         }
         
         /* 气泡卡片：不再像传统的微信气泡，而是像拍立得、剪贴报 */
+        /* Body text: transparent, dissolved into the long card — just words on paper. */
         .story-bubble {
-          border-radius: 8px; /* 极简的微圆角 */
-          padding: 20px 24px;
-          line-height: 1.95;
-          font-size: calc(15px*var(--app-text-scale,1));
+          border-radius: 0;
+          padding: 0;
+          line-height: 1.78;
+          font-size: calc(14px*var(--app-text-scale,1));
           white-space: pre-wrap;
           word-break: break-word;
+          text-align: justify;
           position: relative;
           color: var(--c-story-text, #334155);
-          /* 核心审美：高级纸白，带微妙内发光和弥散外阴影 */
-          background: var(--c-story-bubble-bg, #ffffff);
-          border: 1px solid var(--c-story-bubble-border, rgba(0,0,0,0.03));
-          box-shadow: 
-            0 2px 8px rgba(0,0,0,0.03),
-            0 14px 28px rgba(0,0,0,0.02),
-            inset 0 1px 0 rgba(255,255,255,1);
+          background: transparent;
+          border: none;
+          box-shadow: none;
         }
         
         .story-row[data-role="assistant"] .story-bubble {
@@ -524,30 +522,34 @@
           text-align: center;
           font-style: italic;
         }
+        /* NOTE: with the bubble flattened above, this sets what the base rule already
+           does, so the "hide bubble" toggle in the drawer is currently a no-op. Upstream
+           deleted that toggle outright; it is kept here pending a decision, rather than
+           removing a control users may rely on. See lib/story-storage.ts hideBubble. */
         .story-row[data-hide-bubble="true"] .story-bubble {
           padding: 0; border: none; background: transparent; box-shadow: none;
         }
         /* === 底部输入框 === */
+        /* Composer sits flush to the bottom edge, rounded on its top corners only,
+           echoing the header. */
         .story-composer {
           position: absolute;
-          left: 16px;
-          right: 16px;
-          bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+          left: 0;
+          right: 0;
+          bottom: 0;
           z-index: 9;
-          max-width: 680px;
-          margin: 0 auto;
           background: var(--c-story-input-bar, var(--c-story-meta-bg, #ffffff));
-          border: 1px solid var(--c-story-input-border, var(--c-story-meta-border, #f0f0f0));
+          border: none;
           min-height: 52px;
-          border-radius: 18px;
-          box-shadow: 
-            0 1px 1px rgba(0,0,0,0.02),
-            0 3px 8px rgba(0,0,0,0.016),
-            1px 6px 12px rgba(0,0,0,0.018);
-          padding: 6px;
+          border-radius: 14px 14px 0 0;
+          /* Soft shadow cast upwards. */
+          box-shadow:
+            0 -2px 8px rgba(0, 0, 0, 0.022),
+            0 -8px 20px rgba(0, 0, 0, 0.014);
+          padding: 8px 12px calc(env(safe-area-inset-bottom, 0px) + 8px);
           display: flex;
           align-items: flex-end;
-          gap: 7px;
+          gap: 8px;
           transition: none;
         }
         .story-composer:focus-within {
@@ -819,49 +821,57 @@
         }
         
         /* === 折叠块 (思维链等) === */
+        /* Fold blocks read as a footnote on the page rather than a boxed panel. */
         .story-fold-block,
         .story-summary-fold {
-          margin-top: 1em;
-          border: 1px solid rgba(0,0,0,0.04);
-          border-radius: 8px;
-          background: var(--c-story-fold-bg, #fcfcfc);
-          overflow: hidden;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.01);
+          margin: 2.2em 0;
+          border: none;
+          border-radius: 0;
+          background: transparent;
+          overflow: visible;
+          box-shadow: none;
         }
         .story-fold-block > summary,
         .story-summary-fold > summary {
           cursor: pointer;
           list-style: none;
-          padding: 12px 16px;
-          font-size: calc(11px*var(--app-text-scale,1));
-          letter-spacing: 0.12em;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 0;
+          font-size: calc(10px*var(--app-text-scale,1));
+          letter-spacing: 0.24em;
           text-transform: uppercase;
           color: var(--c-story-sub, #94a3b8);
           user-select: none;
-          display: flex;
-          align-items: center;
-          gap: 6px;
         }
+        /* Fine dotted rules either side of the label, replacing the old ▸ marker. */
         .story-fold-block > summary::before,
-        .story-summary-fold > summary::before {
-          content: "▸";
-          display: inline-block;
-          transition: transform 0.2s ease;
-        }
-        .story-fold-block[open] > summary::before,
-        .story-summary-fold[open] > summary::before {
-          transform: rotate(90deg);
+        .story-fold-block > summary::after,
+        .story-summary-fold > summary::before,
+        .story-summary-fold > summary::after {
+          content: "";
+          flex: 1;
+          border-top: 1px dotted color-mix(in srgb, var(--c-story-sub, #94a3b8) 45%, transparent);
         }
         .story-fold-block > summary::-webkit-details-marker,
         .story-summary-fold > summary::-webkit-details-marker {
           display: none;
         }
+        /* Once open, a second dotted rule below, so the content sits between two lines. */
+        .story-fold-block[open]::after,
+        .story-summary-fold[open]::after {
+          content: "";
+          display: block;
+          border-top: 1px dotted color-mix(in srgb, var(--c-story-sub, #94a3b8) 45%, transparent);
+          margin-top: 16px;
+        }
         .story-fold-block__content,
         .story-summary-fold__content {
-          padding: 0 16px 16px;
+          padding: 14px 6px 0;
           color: var(--c-story-sub, #64748b);
-          line-height: 1.8;
-          font-size: calc(13px*var(--app-text-scale,1));
+          line-height: 1.75;
+          font-size: calc(12px*var(--app-text-scale,1));
         }
         .story-fold-translate-btn {
           float: right;
@@ -923,9 +933,9 @@
             padding: 18px 16px;
           }
           .story-composer {
-            left: 20px;
-            right: 20px;
-            bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+            left: 0;
+            right: 0;
+            bottom: 0;
           }
         }
         .story-ctx-menu {
