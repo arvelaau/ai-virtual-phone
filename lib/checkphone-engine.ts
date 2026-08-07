@@ -158,6 +158,144 @@ async function buildCheckPhoneManifestMessages(
   });
 }
 
+// ── Bilingual block headings ─────────────────────────────────────────────────
+//
+// The taught checkphone format has TWO protocol layers, and Step 1 only covered one:
+//
+//   #历史记录          <- block heading      (this table)
+//   ##记录1            <- sub-block heading  (this table)
+//   [标题]... [网址]...  <- fields             (CHECKPHONE_FIELD_ALIASES)
+//
+// Headings are matched in 35 places: 3 parameterised extractors that take the label as
+// an argument, and 26 regexes with the label baked into the pattern. Until all of them
+// accept English, flipping the teaching makes block extraction stop matching SILENTLY —
+// an empty list, not an error.
+//
+// Legacy Chinese stays the KEY, so it doubles as the canonical internal value. Several
+// labels are read back out of a capture group and compared (`sectionMatch[1] === "帖子"`,
+// or cast to CheckPhoneTakeoutCategory), which is why canonicalBlockLabel below maps any
+// accepted spelling back to the Chinese one — the same "normalise to canonical" trick
+// lib/call-tag-patterns.ts uses, and the reason no downstream comparison had to change.
+export const CHECKPHONE_BLOCK_ALIASES: Record<string, readonly string[]> = {
+  // shared by the parameterised extractors and the inline regexes — these six appear in
+  // BOTH layers, so they must resolve identically on either path
+  "订单": ["Orders", "订单"],
+  "收藏": ["Saved", "收藏"],
+  "帖子": ["Posts", "帖子"],
+  "视频": ["Videos", "视频"],
+  "喜欢": ["Likes", "喜欢"],
+  "动态": ["Feed", "动态"],
+
+  // parameterised extractors
+  "补充会话": ["ExtraConversations", "补充会话"],
+  "补充群聊": ["ExtraGroupChats", "补充群聊"],
+  "补充动态": ["ExtraFeed", "补充动态"],
+  "补充联系人": ["ExtraContacts", "补充联系人"],
+  "最近浏览": ["RecentlyViewed", "最近浏览"],
+  "推荐": ["Recommendations", "推荐"],
+  "购物车": ["Cart", "购物车"],
+  "最近播放": ["RecentlyPlayed", "最近播放"],
+  "收藏歌曲": ["SavedTracks", "收藏歌曲"],
+  "歌单": ["Playlists", "歌单"],
+  "小组": ["Groups", "小组"],
+  "回复帖子": ["RepliedPosts", "回复帖子"],
+  "发布帖子": ["PublishedPosts", "发布帖子"],
+  "首页笔记": ["HomeNotes", "首页笔记"],
+  "视频笔记": ["VideoNotes", "视频笔记"],
+  "我的笔记": ["MyNotes", "我的笔记"],
+  "笔记": ["Notes", "笔记"],
+  "消息": ["Messages", "消息"],
+  "首页微博": ["HomeWeibo", "首页微博"],
+  "热搜": ["Trending", "热搜"],
+  "我的微博": ["MyWeibo", "我的微博"],
+  "在读": ["CurrentlyReading", "在读"],
+  "书架": ["Bookshelf", "书架"],
+  "书摘": ["BookExcerpts", "书摘"],
+
+  // inline regexes
+  "备忘录": ["Notepad", "备忘录"],
+  "邮件": ["Mail", "邮件"],
+  "美食": ["Food", "美食"],
+  "饮品": ["Drinks", "饮品"],
+  "商超": ["Groceries", "商超"],
+  "药品": ["Pharmacy", "药品"],
+  "其他": ["Other", "其他"],
+  "最近在玩": ["RecentlyPlaying", "最近在玩"],
+  "愿望单": ["Wishlist", "愿望单"],
+  "游戏库": ["Library", "游戏库"],
+  "游戏": ["Games", "游戏"],
+  "观看记录": ["WatchHistory", "观看记录"],
+  "发帖": ["Submissions", "发帖"],
+  "评论": ["Comments", "评论"],
+  "回复": ["Replies", "回复"],
+  "媒体": ["Media", "媒体"],
+  "频道": ["Channels", "频道"],
+  "稍后观看": ["WatchLater", "稍后观看"],
+  "赞过的视频": ["LikedVideos", "赞过的视频"],
+  "赞过视频": ["LikedVideosAlt", "赞过视频"],
+  "订阅": ["Subscriptions", "订阅"],
+  "精选动态": ["Highlights", "精选动态"],
+  "精选": ["Featured", "精选"],
+  "作品": ["Works", "作品"],
+  "会话": ["Conversations", "会话"],
+  "相簿": ["Albums", "相簿"],
+  "账户": ["Accounts", "账户"],
+  "流水": ["Transactions", "流水"],
+  "最近通话": ["RecentCalls", "最近通话"],
+  "联系人": ["Contacts", "联系人"],
+  "常用联系人": ["FavouriteContacts", "常用联系人"],
+  "语音信箱": ["Voicemail", "语音信箱"],
+  "线程": ["Threads", "线程"],
+};
+
+function escapeForRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * A regex alternation of every spelling accepted for one block heading.
+ *
+ * Drop-in for the raw `${label}` that used to be interpolated into the heading regexes.
+ * Note it also ESCAPES the label, which two of the three parameterised extractors did
+ * not do before (extractShoppingTopLevelBlocks and extractMusicBlocks interpolated it
+ * raw; only extractTopLevelTaggedBlocks escaped).
+ *
+ * Longest-first so a shorter alias cannot shadow a longer one that starts with it —
+ * without this, "精选" would swallow "精选动态" and the highlights section would be read
+ * as the featured section with a stray "动态" left in the body.
+ */
+export function blockLabelPattern(legacyLabel: string): string {
+  const names = CHECKPHONE_BLOCK_ALIASES[legacyLabel] ?? [legacyLabel];
+  return [...names].sort((a, b) => b.length - a.length).map(escapeForRegex).join("|");
+}
+
+/** The same, for a set of headings matched by one alternation regex. */
+function blockLabelPatternAny(legacyLabels: readonly string[]): string {
+  return legacyLabels
+    .flatMap((legacy) => CHECKPHONE_BLOCK_ALIASES[legacy] ?? [legacy])
+    .sort((a, b) => b.length - a.length)
+    .map(escapeForRegex)
+    .join("|");
+}
+
+/**
+ * Map whatever spelling was matched back to the canonical Chinese label.
+ *
+ * Several call sites read the heading out of a capture group and compare it — as a
+ * CheckPhoneTakeoutCategory cast at the takeout parser, and as `=== "帖子"` in the X
+ * parser. Normalising here means every one of those comparisons keeps working untouched,
+ * whichever language the model wrote.
+ */
+export function canonicalBlockLabel(matched: string): string {
+  const trimmed = matched.trim();
+  if (CHECKPHONE_BLOCK_ALIASES[trimmed]) return trimmed;
+  const lowered = trimmed.toLowerCase();
+  for (const legacy of Object.keys(CHECKPHONE_BLOCK_ALIASES)) {
+    if (CHECKPHONE_BLOCK_ALIASES[legacy].some((name) => name.toLowerCase() === lowered)) return legacy;
+  }
+  return trimmed;
+}
+
 // ── Bilingual field lookup ───────────────────────────────────────────────────
 //
 // The checkphone AI answers in a `[FieldName]value` block format, and every reader in
@@ -1462,7 +1600,7 @@ function parseNotesBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
 
-  const matches = [...source.matchAll(/^#\s*备忘录(\d+)\s*$/gm)];
+  const matches = [...source.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern("备忘录")})(\\d+)\\s*$`, "gm"))];
   if (matches.length === 0) {
     return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 #备忘录N 分区" };
   }
@@ -1543,7 +1681,7 @@ function parseEmailBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
 
-  const matches = [...source.matchAll(/^#\s*邮件(\d+)\s*$/gm)];
+  const matches = [...source.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern("邮件")})(\\d+)\\s*$`, "gm"))];
   if (matches.length === 0) {
     return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 #邮件N 分区" };
   }
@@ -1646,8 +1784,7 @@ function parseBlockList(value: string | undefined): string[] {
 }
 
 function extractTopLevelTaggedBlocks(source: string, label: string): Array<{ order: string; fields: Record<string, string> }> {
-  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const matches = [...source.matchAll(new RegExp(`^#\\s*${escaped}(\\d+)\\s*$`, "gm"))];
+  const matches = [...source.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern(label)})(\\d+)\\s*$`, "gm"))];
   const allHeadings = [...source.matchAll(/^#\s*\S.*$/gm)];
   return matches.map((current, index) => {
     const start = (current.index ?? 0) + current[0].length;
@@ -1671,7 +1808,7 @@ function parseTakeoutBlockPayload(text: string): {
     return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
   }
 
-  const sectionMatches = [...source.matchAll(/^#\s*(美食|饮品|商超|药品|其他)\s*$/gm)];
+  const sectionMatches = [...source.matchAll(new RegExp(`^#\\s*(${blockLabelPattern("美食")}|${blockLabelPattern("饮品")}|${blockLabelPattern("商超")}|${blockLabelPattern("药品")}|${blockLabelPattern("其他")})\\s*$`, "gm"))];
   if (sectionMatches.length === 0) {
     return {
       parsed: null,
@@ -1681,11 +1818,11 @@ function parseTakeoutBlockPayload(text: string): {
     };
   }
   const orders = sectionMatches.flatMap((sectionMatch, sectionIndex) => {
-    const category = (sectionMatch[1] || "").trim() as CheckPhoneTakeoutCategory;
+    const category = canonicalBlockLabel(sectionMatch[1] || "") as CheckPhoneTakeoutCategory;
     const sectionStart = (sectionMatch.index ?? 0) + sectionMatch[0].length;
     const sectionEnd = sectionMatches[sectionIndex + 1]?.index ?? source.length;
     const sectionBody = source.slice(sectionStart, sectionEnd).trim();
-    const postMatches = [...sectionBody.matchAll(/^##\s*订单(\d+)\s*$/gm)];
+    const postMatches = [...sectionBody.matchAll(new RegExp(`^##\\s*(?:${blockLabelPattern("订单")})(\\d+)\\s*$`, "gm"))];
     return postMatches.map((current, index) => {
       const next = postMatches[index + 1];
       const start = (current.index ?? 0) + current[0].length;
@@ -1904,7 +2041,7 @@ function parseSteamBlockPayload(text: string): {
     return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
   }
 
-  const sections = [...source.matchAll(/^#\s*(最近在玩|愿望单|游戏库)\s*$/gm)];
+  const sections = [...source.matchAll(new RegExp(`^#\\s*(${blockLabelPattern("最近在玩")}|${blockLabelPattern("愿望单")}|${blockLabelPattern("游戏库")})\\s*$`, "gm"))];
   if (sections.length === 0) {
     return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到游戏库分区" };
   }
@@ -1914,13 +2051,13 @@ function parseSteamBlockPayload(text: string): {
   const profileFields = parseTakeoutTaggedFields(profileBlock);
 
   const parseSectionGames = (sectionName: "最近在玩" | "愿望单" | "游戏库") => {
-    const sectionIndex = sections.findIndex((match) => (match[1] || "").trim() === sectionName);
+    const sectionIndex = sections.findIndex((match) => canonicalBlockLabel(match[1] || "") === sectionName);
     if (sectionIndex < 0) return [];
     const current = sections[sectionIndex];
     const start = (current.index ?? 0) + current[0].length;
     const end = sections[sectionIndex + 1]?.index ?? source.length;
     const body = source.slice(start, end).trim();
-    const gameMatches = [...body.matchAll(/^##\s*游戏(\d+)\s*$/gm)];
+    const gameMatches = [...body.matchAll(new RegExp(`^##\\s*(?:${blockLabelPattern("游戏")})(\\d+)\\s*$`, "gm"))];
     return gameMatches.map((gameMatch, index) => {
       const next = gameMatches[index + 1];
       const blockStart = (gameMatch.index ?? 0) + gameMatch[0].length;
@@ -2151,19 +2288,19 @@ function parseBilibiliBlockPayload(text: string): {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
 
-  const sections = [...source.matchAll(/^#\s*(观看记录|收藏)\s*$/gm)];
+  const sections = [...source.matchAll(new RegExp(`^#\\s*(${blockLabelPattern("观看记录")}|${blockLabelPattern("收藏")})\\s*$`, "gm"))];
   if (sections.length === 0) {
     return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 B站分区" };
   }
 
   const parseSectionVideos = (sectionName: "观看记录" | "收藏") => {
-    const sectionIndex = sections.findIndex((match) => (match[1] || "").trim() === sectionName);
+    const sectionIndex = sections.findIndex((match) => canonicalBlockLabel(match[1] || "") === sectionName);
     if (sectionIndex < 0) return [];
     const current = sections[sectionIndex];
     const start = (current.index ?? 0) + current[0].length;
     const end = sections[sectionIndex + 1]?.index ?? source.length;
     const body = source.slice(start, end).trim();
-    const matches = [...body.matchAll(/^##\s*视频(\d+)\s*$/gm)];
+    const matches = [...body.matchAll(new RegExp(`^##\\s*(?:${blockLabelPattern("视频")})(\\d+)\\s*$`, "gm"))];
     return matches.map((currentMatch, index) => {
       const next = matches[index + 1];
       const blockStart = (currentMatch.index ?? 0) + currentMatch[0].length;
@@ -2322,7 +2459,7 @@ function normalizeRedditMultilineText(value: string): string {
 }
 
 function parseRedditSectionBlocks(source: string, sectionMatches: RegExpMatchArray[], sectionNames: string[], blockLabel: "帖子" | "评论") {
-  const sectionIndex = sectionMatches.findIndex((match) => sectionNames.includes((match[1] || "").trim()));
+  const sectionIndex = sectionMatches.findIndex((match) => sectionNames.includes(canonicalBlockLabel(match[1] || "")));
   if (sectionIndex < 0) return [];
   const current = sectionMatches[sectionIndex];
   const start = (current.index ?? 0) + current[0].length;
@@ -2344,7 +2481,7 @@ function parseRedditBlockPayload(text: string): RedditBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
 
-  const sectionMatches = [...source.matchAll(/^#\s*(Posts|Comments|发帖|评论)\s*$/gm)];
+  const sectionMatches = [...source.matchAll(new RegExp(`^#\\s*(Posts|${blockLabelPattern("发帖")}|${blockLabelPattern("评论")})\\s*$`, "gm"))];
   if (sectionMatches.length === 0) {
     return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 #Posts / #Comments 分区" };
   }
@@ -2609,7 +2746,7 @@ function parseXBlockPayload(text: string): XBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
 
-  const sectionMatches = [...source.matchAll(/^#\s*(帖子|回复|媒体|喜欢)\s*$/gm)];
+  const sectionMatches = [...source.matchAll(new RegExp(`^#\\s*(${blockLabelPattern("帖子")}|${blockLabelPattern("回复")}|${blockLabelPattern("媒体")}|${blockLabelPattern("喜欢")})\\s*$`, "gm"))];
   if (sectionMatches.length === 0) {
     return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 #帖子 / #回复 / #喜欢 分区" };
   }
@@ -2627,13 +2764,13 @@ function parseXBlockPayload(text: string): XBlockParseResult {
   };
 
   const parseSectionBlocks = (sectionName: "帖子" | "回复" | "媒体" | "喜欢") => {
-    const sectionIndex = sectionMatches.findIndex((match) => (match[1] || "").trim() === sectionName);
+    const sectionIndex = sectionMatches.findIndex((match) => canonicalBlockLabel(match[1] || "") === sectionName);
     if (sectionIndex < 0) return [];
     const current = sectionMatches[sectionIndex];
     const start = (current.index ?? 0) + current[0].length;
     const end = sectionMatches[sectionIndex + 1]?.index ?? source.length;
     const body = source.slice(start, end).trim();
-    const matches = [...body.matchAll(/^##\s*(帖子|回复|媒体|喜欢)(\d+)\s*$/gm)];
+    const matches = [...body.matchAll(new RegExp(`^##\\s*(${blockLabelPattern("帖子")}|${blockLabelPattern("回复")}|${blockLabelPattern("媒体")}|${blockLabelPattern("喜欢")})(\\d+)\\s*$`, "gm"))];
     return matches.map((currentMatch, index) => {
       const next = matches[index + 1];
       const blockStart = (currentMatch.index ?? 0) + currentMatch[0].length;
@@ -2898,13 +3035,13 @@ function parseYoutubeNumericField(value: string | undefined): number {
 }
 
 function parseYoutubeSectionEntries(sectionBody: string) {
-  const matches = [...sectionBody.matchAll(/^##\s*(视频|频道)(\d+)\s*$/gm)];
+  const matches = [...sectionBody.matchAll(new RegExp(`^##\\s*(${blockLabelPattern("视频")}|${blockLabelPattern("频道")})(\\d+)\\s*$`, "gm"))];
   return matches.map((currentMatch, index) => {
     const next = matches[index + 1];
     const blockStart = (currentMatch.index ?? 0) + currentMatch[0].length;
     const blockEnd = next?.index ?? sectionBody.length;
     return {
-      kind: currentMatch[1] === "频道" ? "channel" : "video",
+      kind: canonicalBlockLabel(currentMatch[1] || "") === "频道" ? "channel" : "video",
       number: Number(currentMatch[2] || index + 1),
       fields: parseTakeoutTaggedFields(sectionBody.slice(blockStart, blockEnd).trim()),
     };
@@ -2915,13 +3052,13 @@ function parseYoutubeBlockPayload(text: string): YoutubeBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
 
-  const sections = [...source.matchAll(/^#\s*(观看记录|稍后观看|赞过的视频|赞过视频|订阅)\s*$/gm)];
+  const sections = [...source.matchAll(new RegExp(`^#\\s*(${blockLabelPattern("观看记录")}|${blockLabelPattern("稍后观看")}|${blockLabelPattern("赞过的视频")}|${blockLabelPattern("赞过视频")}|${blockLabelPattern("订阅")})\\s*$`, "gm"))];
   if (sections.length === 0) {
     return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 YouTube 分区" };
   }
 
   const parseSectionBlocks = (...sectionNames: string[]) => {
-    const sectionIndex = sections.findIndex((match) => sectionNames.includes((match[1] || "").trim()));
+    const sectionIndex = sections.findIndex((match) => sectionNames.includes(canonicalBlockLabel(match[1] || "")));
     if (sectionIndex < 0) return [];
     const current = sections[sectionIndex];
     const start = (current.index ?? 0) + current[0].length;
@@ -3164,7 +3301,7 @@ function parseInstagramComments(
 }
 
 function parseInstagramHighlights(sectionBody: string): CheckPhoneInstagramPayload["highlights"] {
-  const highlightMatches = [...sectionBody.matchAll(/^##\s*精选(?:动态)?(\d+)\s*$/gm)];
+  const highlightMatches = [...sectionBody.matchAll(new RegExp(`^##\\s*(?:${blockLabelPattern("精选动态")}|${blockLabelPattern("精选")})(\\d+)\\s*$`, "gm"))];
   const highlights: CheckPhoneInstagramPayload["highlights"] = [];
 
   for (let index = 0; index < highlightMatches.length; index += 1) {
@@ -3194,11 +3331,11 @@ function parseInstagramBlockPayload(text: string): InstagramBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
 
-  const postSectionMatches = [...source.matchAll(/^#\s*帖子\s*$/gm)];
+  const postSectionMatches = [...source.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern("帖子")})\\s*$`, "gm"))];
   if (postSectionMatches.length === 0) {
     return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 #帖子 分区" };
   }
-  const highlightSectionMatches = [...source.matchAll(/^#\s*精选动态\s*$/gm)];
+  const highlightSectionMatches = [...source.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern("精选动态")})\\s*$`, "gm"))];
 
   const postSectionIndex = postSectionMatches[0]?.index ?? 0;
   const highlightSection = highlightSectionMatches[0];
@@ -3221,7 +3358,7 @@ function parseInstagramBlockPayload(text: string): InstagramBlockParseResult {
     ).trim());
 
   const sectionBody = source.slice(postSectionIndex + postSectionMatches[0][0].length).trim();
-  const postMatches = [...sectionBody.matchAll(/^##\s*帖子(\d+)\s*$/gm)];
+  const postMatches = [...sectionBody.matchAll(new RegExp(`^##\\s*(?:${blockLabelPattern("帖子")})(\\d+)\\s*$`, "gm"))];
   const posts: CheckPhoneInstagramPayload["posts"] = [];
 
   for (let index = 0; index < postMatches.length; index += 1) {
@@ -3585,7 +3722,7 @@ function parseDouyinBlockPayload(text: string): DouyinBlockParseResult {
     };
   }
 
-  const sectionMatches = [...source.matchAll(/^#\s*(作品|喜欢|收藏)\s*$/gm)];
+  const sectionMatches = [...source.matchAll(new RegExp(`^#\\s*(${blockLabelPattern("作品")}|${blockLabelPattern("喜欢")}|${blockLabelPattern("收藏")})\\s*$`, "gm"))];
   if (sectionMatches.length === 0) {
     return {
       parsed: null,
@@ -3634,7 +3771,7 @@ function parseDouyinBlockPayload(text: string): DouyinBlockParseResult {
     const current = sectionMatches[sectionIndex];
     const next = sectionMatches[sectionIndex + 1];
     if (!current || current.index === undefined) continue;
-    const sectionName = current[1];
+    const sectionName = canonicalBlockLabel(current[1] || "");
     const targetKey = sectionMap[sectionName];
     if (!targetKey) continue;
     const start = current.index + current[0].length;
@@ -3709,7 +3846,7 @@ function parseDouyinSectionPosts(
   targetKey: "works" | "likedVideos" | "savedVideos",
   tones: CheckPhoneDouyinTone[],
 ): CheckPhoneDouyinPayload["works"] {
-  const matches = [...sectionBody.matchAll(/^##\s*帖子(\d+)\s*$/gm)];
+  const matches = [...sectionBody.matchAll(new RegExp(`^##\\s*(?:${blockLabelPattern("帖子")})(\\d+)\\s*$`, "gm"))];
   if (matches.length === 0) return [];
 
   const items: CheckPhoneDouyinPayload["works"] = [];
@@ -4075,7 +4212,7 @@ function parseTelegramBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
 
-  const matches = [...source.matchAll(/^#\s*会话(\d+)\s*$/gm)];
+  const matches = [...source.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern("会话")})(\\d+)\\s*$`, "gm"))];
   if (matches.length === 0) {
     return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 #会话N 分区" };
   }
@@ -4775,7 +4912,7 @@ function extractBrowserSection(source: string, heading: string): string {
 }
 
 function parseBrowserEntryBlocks(section: string, label: string): Array<{ order: string; fields: Record<string, string> }> {
-  const matches = [...section.matchAll(new RegExp(`^##\\s*${label}(\\d+)\\s*$`, "gm"))];
+  const matches = [...section.matchAll(new RegExp(`^##\\s*(?:${blockLabelPattern(label)})(\\d+)\\s*$`, "gm"))];
   return matches.map((current, index) => {
     const next = matches[index + 1];
     const start = (current.index ?? 0) + current[0].length;
@@ -4941,7 +5078,7 @@ function parsePhotoEntryBlocks(
 }
 
 function parsePhotoAlbumBlocks(section: string): Array<{ order: string; fields: Record<string, string>; photos: Array<{ order: string; fields: Record<string, string> }> }> {
-  const matches = [...section.matchAll(/^#\s*相簿(\d+)\s*$/gm)];
+  const matches = [...section.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern("相簿")})(\\d+)\\s*$`, "gm"))];
   return matches.map((current, index) => {
     const next = matches[index + 1];
     const start = (current.index ?? 0) + current[0].length;
@@ -4969,7 +5106,7 @@ function parsePhotosBlockPayload(text: string): PhoneBlockParseResult {
     if (legacySectionMatch) {
       const start = (legacySectionMatch.index ?? 0) + legacySectionMatch[0].length;
       const legacySection = source.slice(start).trim();
-      const legacyMatches = [...legacySection.matchAll(/^##\s*相簿(\d+)\s*$/gm)];
+      const legacyMatches = [...legacySection.matchAll(new RegExp(`^##\\s*(?:${blockLabelPattern("相簿")})(\\d+)\\s*$`, "gm"))];
       albumEntries = legacyMatches.map((current, index) => {
         const next = legacyMatches[index + 1];
         const blockStart = (current.index ?? 0) + current[0].length;
@@ -5590,8 +5727,8 @@ function parseAssetsBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
 
-  const accountMatches = [...source.matchAll(/^#\s*账户(\d+)\s*$/gm)];
-  const activityMatches = [...source.matchAll(/^#\s*流水(\d+)\s*$/gm)];
+  const accountMatches = [...source.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern("账户")})(\\d+)\\s*$`, "gm"))];
+  const activityMatches = [...source.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern("流水")})(\\d+)\\s*$`, "gm"))];
   if (accountMatches.length === 0 && activityMatches.length === 0) {
     return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 #账户N 或 #流水N 分区" };
   }
@@ -5810,7 +5947,7 @@ function parsePhoneSectionBlocks(
   const end = sectionMatches[sectionIndex + 1]?.index ?? source.length;
   const body = source.slice(start, end).trim();
   const label = sectionName === "最近通话" ? "通话" : sectionName === "联系人" ? "联系人" : "留言";
-  const matches = [...body.matchAll(new RegExp(`^##\\s*${label}(\\d+)\\s*$`, "gm"))];
+  const matches = [...body.matchAll(new RegExp(`^##\\s*(?:${blockLabelPattern(label)})(\\d+)\\s*$`, "gm"))];
   return matches.map((currentMatch, index) => {
     const next = matches[index + 1];
     const blockStart = (currentMatch.index ?? 0) + currentMatch[0].length;
@@ -5826,7 +5963,7 @@ function parsePhoneBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
 
-  const sectionMatches = [...source.matchAll(/^#\s*(最近通话|联系人|常用联系人|语音信箱)\s*$/gm)];
+  const sectionMatches = [...source.matchAll(new RegExp(`^#\\s*(${blockLabelPattern("最近通话")}|${blockLabelPattern("联系人")}|${blockLabelPattern("常用联系人")}|${blockLabelPattern("语音信箱")})\\s*$`, "gm"))];
   if (sectionMatches.length === 0) {
     return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 #最近通话 / #联系人 / #语音信箱 分区" };
   }
@@ -5885,7 +6022,7 @@ function parseMessagesBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
   const body = source.replace(/^#\s*线程\s*$/m, "").trim();
-  const threadMatches = [...body.matchAll(/^##\s*线程(\d+)\s*$/gm)];
+  const threadMatches = [...body.matchAll(new RegExp(`^##\\s*(?:${blockLabelPattern("线程")})(\\d+)\\s*$`, "gm"))];
   if (threadMatches.length === 0) {
     return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 ##线程 分区" };
   }
@@ -6115,7 +6252,7 @@ function parseShoppingProductFields(
 }
 
 function extractShoppingTopLevelBlocks(source: string, label: string): Array<{ order: string; fields: Record<string, string> }> {
-  const matches = [...source.matchAll(new RegExp(`^#\\s*${label}(\\d+)\\s*$`, "gm"))];
+  const matches = [...source.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern(label)})(\\d+)\\s*$`, "gm"))];
   const allHeadings = [...source.matchAll(/^#\s*\S.*$/gm)];
   return matches.map((current, index) => {
     const start = (current.index ?? 0) + current[0].length;
@@ -6380,7 +6517,7 @@ function deriveMusicTone(index: number): CheckPhoneMusicPayload["recentTracks"][
 }
 
 function extractMusicBlocks(source: string, label: string): Array<{ order: string; fields: Record<string, string> }> {
-  const matches = [...source.matchAll(new RegExp(`^#\\s*${label}(\\d+)\\s*$`, "gm"))];
+  const matches = [...source.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern(label)})(\\d+)\\s*$`, "gm"))];
   const allHeadings = [...source.matchAll(/^#\s*\S.*$/gm)];
   return matches.map((current, index) => {
     const start = (current.index ?? 0) + current[0].length;
