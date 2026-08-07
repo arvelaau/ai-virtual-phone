@@ -50,6 +50,8 @@ export const STEP2_FLIPPED = new Set([
   "checkphone_douban",
   "checkphone_takeout",
   "checkphone_music",
+  "checkphone_youtube",
+  "checkphone_reddit",
 ]);
 
 /**

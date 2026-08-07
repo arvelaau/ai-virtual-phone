@@ -533,6 +533,24 @@ export function pickField(fields: Record<string, string> | undefined, legacyName
   return undefined;
 }
 
+/**
+ * The index a comment's reply-target points at, or null.
+ *
+ * A VALUE rather than a field name, so pickIndexedField cannot help: the model writes it
+ * as the content of [CommentNReplyTo]. Three parsers (douyin, chat moments, and the shared
+ * social one) each had their own Chinese-only `/^评论(\d+)$/`, which would have silently
+ * FLATTENED every threaded reply to the top level once the teaching said `Comment1` —
+ * no error, just a wrong-looking thread. Same failure that hit xiaohongshu's ExtraN.
+ */
+export function parseCommentReplyTargetNumber(replyTarget: string | undefined): number | null {
+  const raw = (replyTarget ?? "").trim();
+  if (!raw) return null;
+  const m = raw.match(/^(?:comment|评论)?\s*#?\s*(\d+)$/i);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
 /** Every accepted spelling of one indexed field name, e.g. 消息/1/正文 -> Message1Body, 消息1正文. */
 function indexedFieldNames(legacyPrefix: string, index: number | string, legacySuffix: string): string[] {
   const prefixes = CHECKPHONE_INDEX_PREFIX_ALIASES[legacyPrefix] ?? [legacyPrefix];
@@ -4010,9 +4028,7 @@ function parseDouyinBlockComments(
     const createdAt = pickIndexedField(fields, "评论", index, "时间")?.trim() || "";
     if (!authorName || !text || !createdAt) continue;
     const replyTarget = pickIndexedField(fields, "评论", index, "回复对象")?.trim() || "";
-    const replyTargetIndex = Number(
-      replyTarget.match(/^评论\s*(\d+)$/)?.[1] ?? replyTarget.match(/^(\d+)$/)?.[1] ?? NaN,
-    );
+    const replyTargetIndex = parseCommentReplyTargetNumber(replyTarget) ?? NaN;
     const replyToCommentId =
       Number.isFinite(replyTargetIndex) &&
       replyTargetIndex > 0 &&
@@ -5392,7 +5408,7 @@ function parseChatMomentComments(
 
   return commentNumbers.map((number) => {
     const replyTarget = pickIndexedField(fields, "评论", number, "回复对象")?.trim() || "";
-    const replyTargetNumber = Number(replyTarget.match(/^评论(\d+)$/)?.[1] || 0);
+    const replyTargetNumber = parseCommentReplyTargetNumber(replyTarget) ?? 0;
     const replyToLabel =
       replyTargetNumber > 0 && replyTargetNumber < number
         ? authorByNumber.get(replyTargetNumber) || undefined
@@ -7459,7 +7475,7 @@ function parseSocialComments(fields: Record<string, string>, itemId: string): Ar
   const availableNumbers = new Set(commentNumbers);
   return commentNumbers.map((number) => {
     const replyTarget = (pickIndexedField(fields, "评论", number, "回复对象") || "").trim();
-    const replyTargetNumber = Number(replyTarget.match(/^评论\s*(\d+)$/)?.[1] ?? replyTarget.match(/^(\d+)$/)?.[1] ?? NaN);
+    const replyTargetNumber = parseCommentReplyTargetNumber(replyTarget) ?? NaN;
     const replyToCommentId =
       Number.isFinite(replyTargetNumber) && replyTargetNumber > 0 && replyTargetNumber < number && availableNumbers.has(replyTargetNumber)
         ? `${itemId}_comment_${replyTargetNumber}`
