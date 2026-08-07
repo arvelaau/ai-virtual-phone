@@ -57,6 +57,8 @@ export const STEP2_FLIPPED = new Set([
   "checkphone_x",
   "checkphone_chat",
   "checkphone_weibo",
+  "checkphone_douyin",
+  "checkphone_xiaohongshu",
 ]);
 
 /**
