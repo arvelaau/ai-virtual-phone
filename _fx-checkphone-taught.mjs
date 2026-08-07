@@ -55,6 +55,8 @@ export const STEP2_FLIPPED = new Set([
   "checkphone_instagram",
   "checkphone_shopping",
   "checkphone_x",
+  "checkphone_chat",
+  "checkphone_weibo",
 ]);
 
 /**
@@ -82,6 +84,19 @@ export const DELIBERATE_CJK = {
     // whether the model writes #美食1 or #Food1. The headings are therefore safe to flip.
     pattern: /已送达|已完成|已取消/,
     why: "the order status values, special-cased by checkphone-takeout-page.tsx:382",
+  }],
+  checkphone_chat: [{
+    // The entry's prose refers to the [真实会话] / [真实群聊] / [真实朋友圈] / [真实评论]
+    // blocks that the ENGINE injects into this prompt (checkphone-engine.ts:1553). Those
+    // headers are engine prose -- Step 4 -- so the reference has to keep naming them
+    // exactly as the model will see them, or the instruction points at nothing.
+    pattern: /真实会话|真实群聊|真实朋友圈|真实评论/,
+    why: "names the [真实会话] blocks the engine injects at checkphone-engine.ts:1553",
+  }],
+  checkphone_weibo: [{
+    // checkphone-weibo-page.tsx:250 renders the badge only when authorBadge !== "本人"
+    pattern: /本人/,
+    why: "the 本人 self-identity value, compared by checkphone-weibo-page.tsx:250",
   }],
   // checkphone_music deliberately has NO entry, though checkphone-music-page.tsx:133,138
   // does parse 分钟 and 最近偏爱. Checked against the entry rather than assumed: it teaches
@@ -192,6 +207,10 @@ export function splitIndexed(token) {
 export const NON_ALIASED_FIELD_TOKENS = new Set([
   "Post Karma", "Comment Karma", "Cake Day",
   "吃瓜", "popcorn",
+  // Not field tags at all: the section headers the ENGINE injects into the chat prompt
+  // (checkphone-engine.ts:1553). checkphone_chat names them so its instruction points at
+  // something the model can actually see. They move when the engine prose does, in Step 4.
+  "真实会话", "真实群聊", "真实朋友圈", "真实评论",
 ]);
 
 /** Does the engine resolve this bracket token? */
