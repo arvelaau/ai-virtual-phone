@@ -86,7 +86,13 @@ const CHAT_TABS: Array<{ id: ChatTabId; label: string; title: string; descriptio
     icon: UserCircle,
   },
 ];
-const CHECKPHONE_STICKER_RE = /\[表情包[：:]([^\]]+)\]/g;
+const CHECKPHONE_WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const CHECKPHONE_MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// The sticker tag as it appears inside message text. Both spellings are matched: the
+// chat protocol's own [Sticker:…] / [表情包:…] pair is bilingual in rich-message-parser,
+// and stored snapshots still carry the legacy one.
+const CHECKPHONE_STICKER_RE = /\[(?:表情包|Sticker)[：:]([^\]]+)\]/gi;
 const checkPhoneStickerUrlCache = new Map<string, string>();
 
 function getInitial(name: string): string {
@@ -95,7 +101,9 @@ function getInitial(name: string): string {
 }
 
 function isRealDirectConversation(item: Pick<CheckPhoneChatConversation, "id" | "tagLabel">): boolean {
-  return item.id.startsWith("real_conv_") || item.tagLabel === "真实会话";
+  // checkphone-engine.ts:1432 tags real conversations; the id prefix is the primary
+  // test and the label is a fallback, so both spellings are accepted.
+  return item.id.startsWith("real_conv_") || /^(?:真实会话|Real conversation)$/i.test(item.tagLabel?.trim() ?? "");
 }
 
 function parseCheckPhoneChatText(text: string): ChatTextPart[] {
@@ -127,7 +135,7 @@ function isCheckPhoneImageStickerOnly(text: string, characterId: string): boolea
 }
 
 function formatCheckPhonePreviewText(text: string): string {
-  return text.replace(CHECKPHONE_STICKER_RE, (_, label: string) => `[${label.trim() || "表情包"}]`);
+  return text.replace(CHECKPHONE_STICKER_RE, (_, label: string) => `[${label.trim() || "Sticker"}]`);
 }
 
 function getChatListPlainText(text: string): string {
@@ -147,17 +155,17 @@ function getGroupPreview(item: CheckPhoneChatGroup): string {
 
 function formatGroupMemberCountLabel(label: string): string {
   const compactLabel = label.trim().replace(/\s+/g, "");
-  const numericCount = compactLabel.match(/^(\d+)人$/);
+  const numericCount = compactLabel.match(/^(\d+)(?:人|members?|people)$/i);
   return numericCount ? numericCount[1] : compactLabel;
 }
 
 function formatGroupMemberCountWithUnit(label: string): string {
   const count = formatGroupMemberCountLabel(label);
-  return /^\d+$/.test(count) ? `${count}人` : count;
+  return /^\d+$/.test(count) ? `${count} members` : count;
 }
 
 function formatMomentCountLabel(label: string): string {
-  return label.trim().replace(/\s*(?:赞|评论)\s*$/, "");
+  return label.trim().replace(/\s*(?:赞|评论|likes?|comments?)\s*$/i, "");
 }
 
 const CHECKPHONE_BUBBLE_MERGE_THRESHOLD_MS = 5 * 60_000;
@@ -198,24 +206,24 @@ function parseCheckPhoneTimeRank(timeLabel: string): number {
 
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const minuteAgo = label.match(/^(\d+)\s*(?:分钟|分)前$/);
+  const minuteAgo = label.match(/^(\d+)\s*(?:分钟|分|min(?:ute)?s?)\s*(?:前|ago)$/i);
   if (minuteAgo) return now.getTime() - Number(minuteAgo[1]) * 60_000;
-  const hourAgo = label.match(/^(\d+)\s*小时前$/);
+  const hourAgo = label.match(/^(\d+)\s*(?:小时|hr?s?|hours?)\s*(?:前|ago)$/i);
   if (hourAgo) return now.getTime() - Number(hourAgo[1]) * 3_600_000;
-  const dayAgo = label.match(/^(\d+)\s*天前$/);
+  const dayAgo = label.match(/^(\d+)\s*(?:天|days?)\s*(?:前|ago)$/i);
   if (dayAgo) return now.getTime() - Number(dayAgo[1]) * 86_400_000;
-  if (/^(刚刚|现在)$/.test(label)) return now.getTime();
-  if (label === "今天") return todayStart.getTime();
-  if (label === "昨天") return todayStart.getTime() - 86_400_000;
-  if (label === "前天") return todayStart.getTime() - 2 * 86_400_000;
+  if (/^(?:刚刚|现在|just now|now)$/i.test(label)) return now.getTime();
+  if (/^(?:今天|today)$/i.test(label)) return todayStart.getTime();
+  if (/^(?:昨天|yesterday)$/i.test(label)) return todayStart.getTime() - 86_400_000;
+  if (/^(?:前天|the day before yesterday)$/i.test(label)) return todayStart.getTime() - 2 * 86_400_000;
 
   const makeDate = (base: Date, hour: string, minute: string) =>
     new Date(base.getFullYear(), base.getMonth(), base.getDate(), Number(hour), Number(minute)).getTime();
 
-  const todayTime = label.match(/^(?:今天\s*)?(\d{1,2}):(\d{2})$/);
+  const todayTime = label.match(/^(?:(?:今天|today)\s*)?(\d{1,2}):(\d{2})$/i);
   if (todayTime) return makeDate(todayStart, todayTime[1], todayTime[2]);
 
-  const yesterdayTime = label.match(/^昨天\s*(\d{1,2}):(\d{2})$/);
+  const yesterdayTime = label.match(/^(?:昨天|yesterday)\s*(\d{1,2}):(\d{2})$/i);
   if (yesterdayTime) {
     return makeDate(new Date(todayStart.getTime() - 86_400_000), yesterdayTime[1], yesterdayTime[2]);
   }
@@ -225,20 +233,24 @@ function parseCheckPhoneTimeRank(timeLabel: string): number {
     return makeDate(new Date(todayStart.getTime() - 2 * 86_400_000), beforeYesterdayTime[1], beforeYesterdayTime[2]);
   }
 
-  const weekdayTime = label.match(/^(星期|周)([日一二三四五六])\s*(\d{1,2}):(\d{2})$/);
+  // Weekday, with or without a time. The English names are what lib/chat-time.ts produces
+  // and are therefore what a REAL conversation's timeLabel looks like; the Chinese ones
+  // are kept for snapshots generated before that was translated.
+  const weekdayFor = (raw: string): number | undefined => {
+    const zh: Record<string, number> = { 日: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6 };
+    if (zh[raw] !== undefined) return zh[raw];
+    const i = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+      .indexOf(raw.toLowerCase());
+    return i < 0 ? undefined : i;
+  };
+  const weekdayTime = label.match(/^(?:(?:星期|周)([日一二三四五六])|([A-Za-z]+day))(?:\s*(\d{1,2}):(\d{2}))?$/);
   if (weekdayTime) {
-    const weekdayMap: Record<string, number> = { 日: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6 };
-    const targetDay = weekdayMap[weekdayTime[2]];
-    const diff = (now.getDay() - targetDay + 7) % 7;
-    return makeDate(new Date(todayStart.getTime() - diff * 86_400_000), weekdayTime[3], weekdayTime[4]);
-  }
-
-  const weekdayOnly = label.match(/^(星期|周)([日一二三四五六])$/);
-  if (weekdayOnly) {
-    const weekdayMap: Record<string, number> = { 日: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6 };
-    const targetDay = weekdayMap[weekdayOnly[2]];
-    const diff = (now.getDay() - targetDay + 7) % 7;
-    return todayStart.getTime() - diff * 86_400_000;
+    const targetDay = weekdayFor(weekdayTime[1] ?? weekdayTime[2] ?? "");
+    if (targetDay !== undefined) {
+      const diff = (now.getDay() - targetDay + 7) % 7;
+      const base = new Date(todayStart.getTime() - diff * 86_400_000);
+      return weekdayTime[3] ? makeDate(base, weekdayTime[3], weekdayTime[4]) : base.getTime();
+    }
   }
 
   const dateTime = label.match(/^(?:(\d{4})年)?(\d{1,2})月(\d{1,2})日\s*(\d{1,2}):(\d{2})$/);
@@ -249,6 +261,21 @@ function parseCheckPhoneTimeRank(timeLabel: string): number {
       time = new Date(year - 1, Number(dateTime[2]) - 1, Number(dateTime[3]), Number(dateTime[4]), Number(dateTime[5])).getTime();
     }
     return time;
+  }
+
+  // "7 Aug 14:30" / "7 Aug 2025 14:30" — the other two shapes lib/chat-time.ts emits.
+  const dayMonth = label.match(/^(\d{1,2})\s+([A-Za-z]{3,})\.?(?:\s+(\d{4}))?(?:\s+(\d{1,2}):(\d{2}))?$/);
+  if (dayMonth) {
+    const monthIndex = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+      .indexOf(dayMonth[2].slice(0, 3).toLowerCase());
+    if (monthIndex >= 0) {
+      const year = dayMonth[3] ? Number(dayMonth[3]) : now.getFullYear();
+      let time = new Date(year, monthIndex, Number(dayMonth[1]), Number(dayMonth[4] ?? 0), Number(dayMonth[5] ?? 0)).getTime();
+      if (!dayMonth[3] && time > now.getTime() + 86_400_000) {
+        time = new Date(year - 1, monthIndex, Number(dayMonth[1]), Number(dayMonth[4] ?? 0), Number(dayMonth[5] ?? 0)).getTime();
+      }
+      return time;
+    }
   }
 
   const numericDateTime = label.match(/^(?:(\d{4})[/-])?(\d{1,2})[/-](\d{1,2})\s+(\d{1,2}):(\d{2})$/);
@@ -291,19 +318,21 @@ function formatCheckPhoneDisplayTime(timeLabel: string): string {
   const hhmm = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 
   if (timestamp >= todayStart.getTime()) return hhmm;
-  if (timestamp >= todayStart.getTime() - dayMs) return `昨天 ${hhmm}`;
+  if (timestamp >= todayStart.getTime() - dayMs) return `Yesterday ${hhmm}`;
   if (timestamp >= todayStart.getTime() - 6 * dayMs) {
-    const names = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
-    return `${names[date.getDay()]} ${hhmm}`;
+    return `${CHECKPHONE_WEEKDAY_NAMES[date.getDay()]} ${hhmm}`;
   }
   if (date.getFullYear() === now.getFullYear()) {
-    return `${date.getMonth() + 1}月${date.getDate()}日 ${hhmm}`;
+    return `${date.getDate()} ${CHECKPHONE_MONTH_NAMES[date.getMonth()]} ${hhmm}`;
   }
-  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${hhmm}`;
+  return `${date.getDate()} ${CHECKPHONE_MONTH_NAMES[date.getMonth()]} ${date.getFullYear()} ${hhmm}`;
 }
 
 function formatCheckPhoneRelativeTime(timeLabel: string): string {
-  const label = timeLabel.trim().replace(/^最近活跃\s*/, "");
+  // The engine falls back to 最近活跃 when [Active] is missing (checkphone-engine.ts:5444)
+  // and this file re-adds the prefix at formatCheckPhoneGroupActivityLabel, so both the
+  // legacy and the current wording have to be stripped here.
+  const label = timeLabel.trim().replace(/^(?:最近活跃|Active)\s*/i, "");
   if (!label) return "";
 
   const timestamp = parseCheckPhoneTimeRank(label);
@@ -316,10 +345,12 @@ function formatCheckPhoneRelativeTime(timeLabel: string): string {
   const dayMs = 86_400_000;
 
   if (diffMs < hourMs) {
-    return `${Math.max(1, Math.floor(diffMs / minuteMs))}分钟前`;
+    const mins = Math.max(1, Math.floor(diffMs / minuteMs));
+    return `${mins} min ago`;
   }
   if (diffMs < dayMs) {
-    return `${Math.floor(diffMs / hourMs)}小时前`;
+    const hrs = Math.floor(diffMs / hourMs);
+    return `${hrs} hr${hrs === 1 ? "" : "s"} ago`;
   }
 
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -327,12 +358,12 @@ function formatCheckPhoneRelativeTime(timeLabel: string): string {
   const activeDayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
   const dayDiff = Math.max(1, Math.round((todayStart - activeDayStart) / dayMs));
 
-  return dayDiff === 1 ? "昨天" : `${dayDiff}天前`;
+  return dayDiff === 1 ? "Yesterday" : `${dayDiff} days ago`;
 }
 
 function formatCheckPhoneGroupActivityLabel(activityLabel: string): string {
   const relativeTime = formatCheckPhoneRelativeTime(activityLabel);
-  return relativeTime ? `最近活跃 ${relativeTime}` : "最近活跃";
+  return relativeTime ? `Active ${relativeTime}` : "Active recently";
 }
 
 function formatCheckPhoneDisplayDate(dateLabel: string): string {
@@ -346,10 +377,10 @@ function formatCheckPhoneDisplayDate(dateLabel: string): string {
   const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
   const dayMs = 86_400_000;
 
-  if (dayStart === todayStart.getTime()) return "今天";
-  if (dayStart === todayStart.getTime() - dayMs) return "昨天";
-  if (date.getFullYear() === now.getFullYear()) return `${date.getMonth() + 1}月${date.getDate()}日`;
-  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+  if (dayStart === todayStart.getTime()) return "Today";
+  if (dayStart === todayStart.getTime() - dayMs) return "Yesterday";
+  if (date.getFullYear() === now.getFullYear()) return `${date.getDate()} ${CHECKPHONE_MONTH_NAMES[date.getMonth()]}`;
+  return `${date.getDate()} ${CHECKPHONE_MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
 }
 
 function sortCheckPhoneItemsByRecent<T extends { timeLabel: string }>(items: T[]): T[] {
@@ -426,7 +457,7 @@ function CheckPhoneSticker({
     return (
       <img
         src={resolvedUrl}
-        alt={normalizedLabel || "表情包"}
+        alt={normalizedLabel || "Sticker"}
         style={{
           width: "92px",
           height: "92px",
@@ -452,7 +483,7 @@ function CheckPhoneSticker({
     );
   }
 
-  return <span>{`[${normalizedLabel || "表情包"}]`}</span>;
+  return <span>{`[${normalizedLabel || "Sticker"}]`}</span>;
 }
 
 function CheckPhoneMessageContent({
@@ -494,9 +525,12 @@ function getMomentMediaDescription(item: CheckPhoneChatMomentItem): string {
   if (photoDescription) return photoDescription;
 
   const mediaLabel = item.mediaLabel.trim();
+  // Reject bare category words — the model sometimes fills [Media] with a label rather
+  // than a description, and there is nothing to show for those. Both languages, since
+  // pre-migration snapshots carry the Chinese ones.
   if (
     !mediaLabel ||
-    /^(文字|动态|有图|无图|图片|配图|照片|\d+\s*张图?)$/.test(mediaLabel)
+    /^(?:文字|动态|有图|无图|图片|配图|照片|\d+\s*张图?|text|post|image|images?|photos?|picture|no image|\d+\s*(?:images?|photos?|pics?))$/i.test(mediaLabel)
   ) {
     return "";
   }
@@ -504,7 +538,7 @@ function getMomentMediaDescription(item: CheckPhoneChatMomentItem): string {
   const bracketDescription = mediaLabel.match(/^[^（(]*[（(]([\s\S]+)[）)]$/)?.[1]?.trim();
   if (bracketDescription) return bracketDescription;
 
-  const colonDescription = mediaLabel.match(/^(?:一张图|图片|配图|照片|文字图片|图像|画面)[：:]\s*([\s\S]+)$/)?.[1]?.trim();
+  const colonDescription = mediaLabel.match(/^(?:一张图|图片|配图|照片|文字图片|图像|画面|image|photo|picture|shot)[：:]\s*([\s\S]+)$/i)?.[1]?.trim();
   if (colonDescription) return colonDescription;
 
   return mediaLabel.length > 8 ? mediaLabel : "";
