@@ -1035,7 +1035,11 @@ export function StoryApp({ onClose }: StoryAppProps) {
                   {currentCharacter.avatar ? (
                     <img src={currentCharacter.avatar} alt="cover" />
                   ) : (
-                    <div style={{ width: "100%", height: "100%", background: "var(--c-story-accent, #94a3b8)", opacity: 0.2 }} />
+                    <div className="story-meta-cover-fallback" aria-hidden="true">
+                      <span className="story-meta-cover-char">{currentCharacter.name.trim().charAt(0) || "\u{1F4D6}"}</span>
+                      <span className="story-meta-cover-line" />
+                      <span className="story-meta-cover-sub">STORY</span>
+                    </div>
                   )}
                 </div>
                 <div className="story-meta-body">
