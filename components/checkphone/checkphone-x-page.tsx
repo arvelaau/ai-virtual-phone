@@ -70,7 +70,17 @@ const X_EXAMPLE_HANDLES = new Set([
 ]);
 
 function isXExampleHandle(handle: string): boolean {
-  return X_EXAMPLE_HANDLES.has(handle.toLowerCase()) || /根据角色|示例|专属账号/.test(handle);
+  // Catches a handle the model copied straight out of the placeholder instead of inventing
+  // one. The Chinese patterns match the legacy teaching; the English ones match what
+  // checkphone_x teaches now. Both stay, since old snapshots carry the legacy shapes.
+  //
+  // NOT the Step 3 translation of this page -- this is the guard being kept in step with
+  // the teaching, which would otherwise silently stop protecting anything.
+  return (
+    X_EXAMPLE_HANDLES.has(handle.toLowerCase())
+    || /根据角色|示例|专属账号/.test(handle)
+    || /\b(their own|of their own|handle|username|placeholder|example)\b/i.test(handle)
+  );
 }
 
 function deriveXHandleFromName(name: string): string {
