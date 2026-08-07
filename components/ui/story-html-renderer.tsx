@@ -190,7 +190,13 @@ function MarkdownSegment({ content, scopeClass }: { content: string; scopeClass:
 
         // 2. Strip only <script> tags (security), keep everything else as-is
         //    No DOMPurify — regex-processed HTML is user-configured and trusted
-        const clean = rawHtml.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
+        let clean = rawHtml.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
+
+        // 2.5 Indent the line after a single <br> as well. CSS text-indent only applies to
+        //     a paragraph's first line, and no browser implements the `each-line` keyword,
+        //     so a 2em placeholder is inserted after every <br> to stand in for it. Fold
+        //     blocks and system messages collapse that placeholder to zero width in CSS.
+        clean = clean.replace(/<br\s*\/?>/gi, '<br><span class="story-br-indent"></span>');
 
         // 3. Scope <style> blocks to prevent CSS leaking
         const scoped = scopeStyles(clean, scopeClass);

@@ -614,6 +614,32 @@
         }
         .story-richtext p {
           margin: 0.6em 0;
+          text-indent: 2em; /* first-line indent, book typography */
+        }
+        /* no first-line indent inside quotes or list items */
+        .story-richtext blockquote p,
+        .story-richtext li p {
+          text-indent: 0;
+        }
+        /* Never indent inside a fold block (chain-of-thought and the like): AI thinking
+           text is inconsistent about blank lines, so an indent that comes and goes reads
+           as mess rather than as typography. */
+        .story-fold-block__content p,
+        .story-summary-fold__content p {
+          text-indent: 0;
+        }
+        /* Indent placeholder for the line after a single <br>, injected by the renderer.
+           text-indent only applies to a paragraph's first line, and no browser implements
+           the `each-line` keyword, so a 2em inline-block stands in for it. */
+        .story-richtext .story-br-indent {
+          display: inline-block;
+          width: 2em;
+        }
+        /* Keep fold blocks and system messages flush left; collapse the placeholder. */
+        .story-fold-block__content .story-br-indent,
+        .story-summary-fold__content .story-br-indent,
+        .story-row[data-role="system"] .story-br-indent {
+          width: 0;
         }
         .story-richtext p:first-child {
           margin-top: 0;
