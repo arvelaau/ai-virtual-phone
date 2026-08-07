@@ -39,7 +39,7 @@ const src = fs.readFileSync(path.join(ROOT, "lib/checkphone-engine.ts"), "utf8")
 const {
     CHECKPHONE_BLOCK_ALIASES, blockLabelPattern, canonicalBlockLabel,
     parseShoppingBlockPayload, parseBrowserBlockPayload, parsePhotosBlockPayload,
-    parseTelegramBlockPayload,
+    parseTelegramBlockPayload, parseMessagesBlockPayload, parsePhoneBlockPayload,
 } = E;
 
 ok("blockLabelPattern is exported", typeof blockLabelPattern === "function");
@@ -218,11 +218,50 @@ ok(`block alias table covers 60+ headings (found ${labels.length})`, labels.leng
         blockLabelPattern("a+b(c)") === "a\\+b\\(c\\)", blockLabelPattern("a+b(c)"));
 }
 
+// ── 6b. The taught format, run through the REAL parser ────────────────────
+// The per-entry audit proves each taught token is COMPOSABLE from the alias tables. That
+// is weaker than it looks: [Message1From] composes fine (From is a real field name) but
+// the messages parser reads 发送方/SentBy, so the direction would silently be lost. The
+// only way to catch that is to run the format the entry actually teaches through the
+// parser that actually reads it.
+const entries = readEntries();
+function taughtFormat(entry) {
+    // keep the protocol lines: headings and [Tag]value; drop prose and blank lines
+    return entry.lines
+        .map((l) => l.match(/^\s*"(.*)",?\s*$/)?.[1])
+        .filter((t) => typeof t === "string" && /^(#{1,3}\s*\S|\[)/.test(t))
+        .join("\n");
+}
+{
+    const cases = [
+        ["checkphone_messages", parseMessagesBlockPayload, (p) => p?.threads?.[0]?.messages?.length, 7,
+            (p) => p?.threads?.[0]?.messages?.[2]?.direction, "outgoing"],
+        ["checkphone_phone", parsePhoneBlockPayload, (p) => p?.recents?.length, 2,
+            (p) => p?.recents?.[0]?.direction, "outgoing"],
+        ["checkphone_browser", parseBrowserBlockPayload, (p) => p?.history?.length, 1,
+            (p) => p?.bookmarks?.length, 1],
+        ["checkphone_telegram", parseTelegramBlockPayload, (p) => p?.threads?.length, 2,
+            (p) => p?.threads?.[0]?.messages?.length, 1],
+        ["checkphone_photos", parsePhotosBlockPayload, (p) => p?.albums?.length, 2,
+            (p) => p?.albums?.[0]?.photos?.length, 2],
+    ];
+    for (const [id, parser, countOf, expectCount, secondOf, expectSecond] of cases) {
+        if (!STEP2_FLIPPED.has(id)) continue;
+        const entry = entries.get(id);
+        const r = parser(taughtFormat(entry));
+        ok(`${id}: its own taught format parses`, !!r?.parsed,
+            JSON.stringify({ err: r?.parseError, mode: r?.parseMode }));
+        ok(`${id}: taught format yields ${expectCount} rows`, countOf(r?.parsed) === expectCount,
+            String(countOf(r?.parsed)));
+        ok(`${id}: taught format's second assertion holds`, secondOf(r?.parsed) === expectSecond,
+            JSON.stringify(secondOf(r?.parsed)));
+    }
+}
+
 // ── 7. Step 2 per-entry status: the HEADING side ──────────────────────────
 // Every heading a flipped entry teaches must round-trip: match through the alternation
 // the parsers build, and normalise back to the canonical Chinese the comparisons use.
 {
-    const entries = readEntries();
     let checked = 0;
     for (const id of STEP2_FLIPPED) {
         const entry = entries.get(id);
@@ -242,11 +281,17 @@ ok(`block alias table covers 60+ headings (found ${labels.length})`, labels.leng
     }
     ok(`heading round-trips checked across flipped entries (${checked})`, checked > 0, String(checked));
 
-    const preset = fs.readFileSync(path.join(ROOT, "lib/builtin-preset.ts"), "utf8");
-    const done = ALL_CHECKPHONE_ENTRIES.every((id) => STEP2_FLIPPED.has(id));
-    if (!done) {
-        ok("entries not yet flipped still teach legacy headings",
-            preset.includes("#会话1") || preset.includes("#相簿") || preset.includes("#最近通话"), "");
+    // Derive the "not finished yet" check from the tracker rather than from a hardcoded
+    // heading — a literal sentinel silently stops meaning anything the moment its own
+    // entry is flipped, which is exactly what happened to #会话1 in this batch.
+    const pending = ALL_CHECKPHONE_ENTRIES.filter((id) => !STEP2_FLIPPED.has(id));
+    if (pending.length) {
+        const stillLegacy = pending.filter((id) => {
+            const e = entries.get(id);
+            return e && taughtTokens(e).headings.some((h) => /[一-鿿]/.test(h.name));
+        });
+        ok(`entries not yet flipped still teach legacy headings (${stillLegacy.length}/${pending.length})`,
+            stillLegacy.length > 0, pending.join(", "));
     }
 }
 

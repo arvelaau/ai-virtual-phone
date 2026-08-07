@@ -5151,9 +5151,21 @@ function derivePhotoTone(
   return cycle[(albumIndex + photoIndex) % cycle.length];
 }
 
+/**
+ * The photo sub-block heading, at either nesting depth.
+ *
+ * This one was missed by the Step-1b sweep because the label was baked into a DEFAULT
+ * PARAMETER rather than interpolated as `${label}` — worth remembering as a shape a
+ * source grep will not find.
+ */
+function photoHeadingPattern(hashes: "##" | "###"): RegExp {
+  return new RegExp(`^${hashes}\\s*(?:${blockLabelPattern("照片")})(\\d+)\\s*$`, "gm");
+}
+
 function parsePhotoEntryBlocks(
   section: string,
-  headingPattern: RegExp = /^##\s*照片(\d+)\s*$/gm,
+  // built per call: a `g` regex carries lastIndex, and the label must stay bilingual
+  headingPattern: RegExp = photoHeadingPattern("##"),
 ): Array<{ order: string; fields: Record<string, string> }> {
   const matches = [...section.matchAll(headingPattern)];
   return matches.map((current, index) => {
@@ -5179,7 +5191,7 @@ function parsePhotoAlbumBlocks(section: string): Array<{ order: string; fields: 
     return {
       order: current[1] || String(index + 1),
       fields: parseTakeoutTaggedFields(albumMetaBlock),
-      photos: parsePhotoEntryBlocks(block, /^##\s*照片(\d+)\s*$/gm),
+      photos: parsePhotoEntryBlocks(block, photoHeadingPattern("##")),
     };
   });
 }
@@ -5207,7 +5219,7 @@ export function parsePhotosBlockPayload(text: string): PhoneBlockParseResult {
         return {
           order: current[1] || String(index + 1),
           fields: parseTakeoutTaggedFields(albumMetaBlock),
-          photos: parsePhotoEntryBlocks(block, /^###\s*照片(\d+)\s*$/gm),
+          photos: parsePhotoEntryBlocks(block, photoHeadingPattern("###")),
         };
       });
     }

@@ -37,7 +37,29 @@ export const STEP2_FLIPPED = new Set([
   "checkphone_assets",
   "checkphone_user_fact_guard",
   "checkphone_bilingual_text",
+  // batch 2
+  "checkphone_phone",
+  "checkphone_photos",
+  "checkphone_messages",
+  "checkphone_telegram",
+  "checkphone_email",
 ]);
+
+/**
+ * CJK that must SURVIVE in a flipped entry, with the reason and the consumer.
+ *
+ * These are value FORMATS rather than field names, and their consumers live in the
+ * checkphone UI pages — Step 3 territory. Flipping one here without moving its page in
+ * the same change would silently break parsing on the other side.
+ */
+export const DELIBERATE_CJK = {
+  checkphone_email: [{
+    // components/checkphone/checkphone-email-page.tsx parses email.timeLabel with
+    // /^(\d{1,2})月(\d{1,2})日\s+(\d{1,2}):(\d{2})$/ — moves in lockstep with Step 3
+    pattern: /M月D日|4月3日|4月2日/,
+    why: "the M月D日 HH:mm time format, parsed by checkphone-email-page.tsx",
+  }],
+};
 
 /**
  * Assert everything one FLIPPED entry teaches is resolvable, and that a PENDING one has
@@ -49,9 +71,17 @@ export const STEP2_FLIPPED = new Set([
  */
 export function assertEntry(ok, entry, flipped) {
   const a = auditEntry(entry);
+  const allowed = DELIBERATE_CJK[entry.id] ?? [];
   if (flipped) {
-    ok(`${entry.id}: no CJK left`, a.cjkLines.length === 0,
-      a.cjkLines.slice(0, 3).map((x) => x.n + ": " + x.l.trim()).join("\n"));
+    const unexplained = a.cjkLines.filter((x) => !allowed.some((r) => r.pattern.test(x.l)));
+    ok(`${entry.id}: no unexplained CJK left`, unexplained.length === 0,
+      unexplained.slice(0, 3).map((x) => x.n + ": " + x.l.trim()).join("\n"));
+    // and the documented exceptions must still be there, so a later "cleanup" cannot
+    // silently remove one and desync it from its consumer
+    for (const r of allowed) {
+      ok(`${entry.id}: keeps its documented exception — ${r.why}`,
+        a.cjkLines.some((x) => r.pattern.test(x.l)), r.pattern.source);
+    }
     ok(`${entry.id}: every taught heading resolves`, a.badHeadings.length === 0,
       a.badHeadings.map((h) => h.level + h.name).join("  "));
     ok(`${entry.id}: every taught field token resolves`, a.badFields.length === 0,
