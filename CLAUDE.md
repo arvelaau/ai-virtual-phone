@@ -1015,6 +1015,23 @@ Each needs the null-preset check before any teaching flip, per the standing rule
 
 **The fixture asserts Step 2 has NOT happened**, so it fails if the teaching is flipped without updating it. Non-vacuity both ways: dropping the Chinese alias from `标题` → 28/31; dropping the English alias from `名称` → 29/31.
 
+### ✅ STEP 1b DONE (`2f616c4`) — bilingual block headings, 35 match sites
+39/39, **`_fx-checkphone-blocks.mjs` kept in the repo**. `tsc` clean. `_fx-checkphone-fields.mjs` still 31/31. **No teaching change; deliberately invisible to the user.** Section below records what Step 1b was for; this entry records how it landed.
+
+**63 headings** in `CHECKPHONE_BLOCK_ALIASES`, same shape as the field table — legacy Chinese as the KEY so it doubles as the canonical internal value, English first in the value array.
+
+**The scope count grew twice during execution.** The plan below says "3 parameterised extractors"; there are **5** — two more take the `^##` **sub-block** form (`:4915`, `:5950`) and were missed by a `replace_all` that only targeted `^#`. The fixture caught it via a "no parameterised extractor interpolates the raw label" assertion, which is exactly the kind of source-level guard worth writing for a mechanical conversion: it counts what is left, not what was changed.
+
+**`canonicalBlockLabel()` is what kept the diff small.** 8 sites read the heading back out of a capture group and compare it — cast to `CheckPhoneTakeoutCategory` at the takeout parser (`:1821`), `=== "帖子"` in the X parser (`:2767`), and others. Normalising any accepted spelling back to the Chinese one means **zero downstream comparisons changed**. Same "normalise to canonical" trick as `lib/call-tag-patterns.ts`.
+
+**`blockLabelPattern()` emits aliases longest-first, and that is load-bearing**, not tidiness: without it `精选` shadows `精选动态`, and the highlights section parses as the featured section with a stray `动态` left in the body. Fixture pins this case explicitly.
+
+**Latent bug fixed for free**: `extractShoppingTopLevelBlocks` and `extractMusicBlocks` interpolated the label into a regex **raw, unescaped**. Everything now routes through `blockLabelPattern()`, which escapes.
+
+**Non-vacuity control**: dropping the English alias from two headings (`推荐`, `购物车`) gives **33/39**, failing exactly the six English-path assertions including the end-to-end `parseShoppingBlockPayload` run. Worth noting *which* assertion catches it — **not** "all N headings match in English" (with the alias gone, the "English" name *is* the Chinese one, so it trivially matches) but **"English heading names carry no CJK"**. Both assertions are needed; either alone is vacuous under a plausible break.
+
+**`String.replace` `$` hazard bit twice in this step** (already recorded elsewhere in this file, repeated because it cost a restore each time): the replacement string interprets `$&`, `` $` ``, `$'`, `$1`. The block text being inserted *contained* `"\\$&"` inside `escapeForRegex`, which got expanded to the anchor text and silently produced `value.replace(/…/g, "\\// ── Bilingual field lookup ─")`. **Use `split`/`join` for any programmatic source insertion, never `String.replace`.**
+
 ### 🚨 STEP 1 WAS INCOMPLETE — Step 1b is required before ANY teaching flip
 Found while opening `checkphone_browser` to translate it. **Step 1 made *field* reads bilingual but not *block headings*.** The taught format has two protocol layers:
 ```
@@ -1033,7 +1050,7 @@ Flipping a heading to `#History` today makes block extraction stop matching — 
 
 **The 26 inline sites** (line numbers as of `8cf829f`): `1465 备忘录`, `1546 邮件`, `1674 (美食|饮品|商超|药品|其他)`, `1688 ##订单`, `1907 (最近在玩|愿望单|游戏库)`, `1923 ##游戏`, `2154 (观看记录|收藏)`, `2166 ##视频`, `2347 (Posts|Comments|发帖|评论)`, `2612 (帖子|回复|媒体|喜欢)`, `2636 ##(帖子|回复|媒体|喜欢)`, `2901 ##(视频|频道)`, `2918 (观看记录|稍后观看|赞过的视频|赞过视频|订阅)`, `3167 ##精选(?:动态)?`, `3197 #帖子`, `3201 #精选动态`, `3224 ##帖子`, `3588 (作品|喜欢|收藏)`, `3712 ##帖子`, `4078 会话`, `4944 相簿`, `4972 ##相簿`, `5593 账户`, `5594 流水`, `5829 (最近通话|联系人|常用联系人|语音信箱)`, `5888 ##线程`.
 
-**Plan** (mirror Step 1, which worked):
+**Plan as originally written** (kept for the record; executed in `2f616c4`, with the corrections noted in the STEP 1b DONE entry above — notably 5 parameterised extractors, not 3, and 63 labels, not ~55):
 1. `CHECKPHONE_BLOCK_ALIASES` keyed by the legacy Chinese label, English first — same shape as `CHECKPHONE_FIELD_ALIASES`.
 2. `blockLabelPattern(legacy)` returning an escaped alternation. Drop it into all 3 parameterised extractors — **and note two of the three do not escape the label today** (`extractShoppingTopLevelBlocks`, `extractMusicBlocks` interpolate `${label}` raw, unlike `extractTopLevelTaggedBlocks` which escapes). The helper fixes that for free; do not lose it.
 3. Convert the 26 inline sites individually — they cannot take one global regex like Step 1 did, because their alternation shapes vary.
