@@ -1002,7 +1002,20 @@ This is the crucial difference from every engine done so far. `xiaohongshu-engin
 ### Finding 5 — 24 `simpleLLMCall` / `sendLLMRequest` call sites
 Each needs the null-preset check before any teaching flip, per the standing rule.
 
-### Recommended order — do NOT translate first
+### ✅ STEP 1 DONE (`a6138c0`) — bilingual field lookup, 423 call sites
+31/31, **`_fx-checkphone-fields.mjs` kept in the repo**. `tsc` clean. **No teaching change; deliberately invisible to the user.**
+
+**The design choice that made it tractable**: not 154 named constants, but **one alias table keyed by the legacy Chinese name**, which doubles as the internal identifier. Each site went `fields["标题"]` → `pickField(fields, "标题")` — a single mechanical transform, trivially reviewable diff, and **no half-converted state was ever possible** because the conversion ran as one atomic pass.
+
+`pickField` does two passes, mirroring `xiaohongshu-engine`'s `textField`: exact match, then a case-insensitive sweep (a model writing English produces `[title]` as often as `[Title]`). An unknown key falls back to reading that name directly, so a missing table entry can never silently return `undefined`.
+
+**Two conversion details worth knowing if this is ever redone:**
+- The first regex also matched property accesses, rewriting `entry.fields["X"]` into `entry.pickField(fields, "X")`. `tsc` caught it instantly; redone with the receiver captured — **162 of the 423 sites carry an `entry.` / `photo.` prefix.**
+- Three sites stopped narrowing afterwards, because `x ? x.replace(...)` no longer refers to one expression once both halves are calls. Fixed by hand; the `类型` one collapsed to `(pickField(...) ?? "").trim() || "service"`, exactly the original semantics.
+
+**The fixture asserts Step 2 has NOT happened**, so it fails if the teaching is flipped without updating it. Non-vacuity both ways: dropping the Chinese alias from `标题` → 28/31; dropping the English alias from `名称` → 29/31.
+
+### Remaining order — do NOT translate first
 1. **Build the alias mechanism.** Add a `pickField(fields, names[])` helper with a case-insensitive second pass, exactly like `xiaohongshu-engine`'s. Convert all 398 index reads to bilingual lookups. **No teaching change, zero user-visible change** — this is the safety net everything else stands on.
 2. **Flip the 26 preset entries.** Only after step 1 is proven, since the parsers must accept English before the model is told to write it.
 3. **The 11 UI pages + `chat-time.ts`**, in one lockstep change with their engine-side producers.
