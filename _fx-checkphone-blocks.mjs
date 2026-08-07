@@ -40,6 +40,7 @@ const {
     CHECKPHONE_BLOCK_ALIASES, blockLabelPattern, canonicalBlockLabel,
     parseShoppingBlockPayload, parseBrowserBlockPayload, parsePhotosBlockPayload,
     parseTelegramBlockPayload, parseMessagesBlockPayload, parsePhoneBlockPayload,
+    parseSteamBlockPayload, parseBilibiliBlockPayload, parseReadingBlockPayload,
 } = E;
 
 ok("blockLabelPattern is exported", typeof blockLabelPattern === "function");
@@ -244,6 +245,12 @@ function taughtFormat(entry) {
             (p) => p?.threads?.[0]?.messages?.length, 1],
         ["checkphone_photos", parsePhotosBlockPayload, (p) => p?.albums?.length, 2,
             (p) => p?.albums?.[0]?.photos?.length, 2],
+        ["checkphone_steam", parseSteamBlockPayload, (p) => p?.recentlyPlayed?.length, 1,
+            (p) => p?.wishlist?.length, 1],
+        ["checkphone_bilibili", parseBilibiliBlockPayload, (p) => p?.watchHistory?.length, 1,
+            (p) => p?.favorites?.length, 1],
+        ["checkphone_reading", parseReadingBlockPayload, (p) => p?.currentBooks?.length, 1,
+            (p) => p?.highlights?.length, 1],
     ];
     for (const [id, parser, countOf, expectCount, secondOf, expectSecond] of cases) {
         if (!STEP2_FLIPPED.has(id)) continue;

@@ -43,6 +43,10 @@ export const STEP2_FLIPPED = new Set([
   "checkphone_messages",
   "checkphone_telegram",
   "checkphone_email",
+  // batch 3
+  "checkphone_bilibili",
+  "checkphone_steam",
+  "checkphone_reading",
 ]);
 
 /**

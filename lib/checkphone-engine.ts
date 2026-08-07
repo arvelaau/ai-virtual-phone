@@ -1913,7 +1913,7 @@ function extractTopLevelTaggedBlocks(source: string, label: string): Array<{ ord
   });
 }
 
-function parseTakeoutBlockPayload(text: string): {
+export function parseTakeoutBlockPayload(text: string): {
   parsed: unknown | null;
   sanitizedCandidate: string;
   parseMode: "sanitized" | "failed";
@@ -2139,7 +2139,7 @@ function clampSteamProgressPercent(value: number): number {
   return Math.min(100, Math.max(0, Math.round(value)));
 }
 
-function parseSteamBlockPayload(text: string): {
+export function parseSteamBlockPayload(text: string): {
   parsed: unknown | null;
   sanitizedCandidate: string;
   parseMode: "sanitized" | "failed";
@@ -2388,7 +2388,7 @@ function parseBilibiliNumericField(value: string | undefined): number {
   return Number(normalized);
 }
 
-function parseBilibiliBlockPayload(text: string): {
+export function parseBilibiliBlockPayload(text: string): {
   parsed: unknown | null;
   sanitizedCandidate: string;
   parseMode: "sanitized" | "failed";
@@ -6641,7 +6641,7 @@ function parseMusicTrackFields(
   };
 }
 
-function parseMusicBlockPayload(text: string): PhoneBlockParseResult {
+export function parseMusicBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
 
@@ -6956,7 +6956,7 @@ function parseDoubanActivityFields(
   };
 }
 
-function parseDoubanBlockPayload(text: string): PhoneBlockParseResult {
+export function parseDoubanBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
 
@@ -8154,7 +8154,7 @@ function parseReadingBookFields(
   };
 }
 
-function parseReadingBlockPayload(text: string): PhoneBlockParseResult {
+export function parseReadingBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
 
