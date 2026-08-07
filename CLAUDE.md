@@ -1058,6 +1058,29 @@ Flipping a heading to `#History` today makes block extraction stop matching — 
 
 **Why this must be complete before Step 2**: a half-bilingual block layer means blocks reached through the un-converted path stop parsing the moment the teaching flips, with no error. Same failure class as the `tool-executor` / `FETCH_RESULT_HEADER` / `prompt-sanitizer` regressions.
 
+### ✅ STEP 1c DONE (`22c7d10`) — indexed field names + 6 late-found headings
+`_fx-checkphone-fields.mjs` 50/50, `_fx-checkphone-blocks.mjs` 57/57, `tsc` clean. **Still no teaching change.**
+
+**How it was found, and why that method matters.** Step 1 and Step 1b were both scoped by *grepping the source*. Step 1c came from doing the opposite: extracting every heading and every bracket token that the 26 preset entries actually **teach**, then checking each one resolves through the alias tables. That found two whole families the source greps had missed. **Do this audit first on any future protocol migration** — the teaching is the specification, and a source grep can only find the sites you already know how to describe.
+
+**1. Indexed field names — the bigger gap.** A second family of names is assembled per row rather than written as a literal:
+```
+fields[`消息${n}正文`]      [消息1正文] [评论2作者] [商品3图标] [歌曲1]
+```
+Step 1 converted the 423 **static** reads; these are **template literals**, so its regex could not see them. 48 reads across 28 shapes and 4 prefixes (`消息`/`评论`/`商品`/`歌曲`), plus **9 hand-written index scanners** (`key.match(/^评论(\d+)作者$/)`).
+
+New `pickIndexedField(fields, prefix, n, suffix)` and `indexedFieldNumbers(fields, prefix, suffixes[])` assemble candidates from prefix-alias × index × suffix-alias, with the same case-insensitive second pass as `pickField`.
+
+**The scanners were the dangerous half.** Chinese-only, they return an **empty list** the moment the model writes `[Message1Body]` — every row vanishes, no error anywhere. The fixture's non-vacuity run reproduces it exactly: telegram comes back with `n: 0` messages.
+
+Six suffixes that only ever occur *inside* an indexed name were absent from the field table and are now in it (`回复`, `引用标题`, `引用正文`, `语音时长`, `语音转写`, `发送方`); the table goes **154 → 160**. Two naming collisions had to be resolved: `回复` → `InReplyTo` (since `回复对象` already owns `ReplyTo`) and `留言` → `VoicemailEntry` (since `语音信箱` already owns `Voicemail`).
+
+**2. Six block headings Step 1b missed** — `历史记录`, `收藏夹`, `记录`, `照片`, `留言`, `通话`. `extractBrowserSection` is a **sixth** parameterised extractor, and it takes its label in a parameter named **`heading`, not `label`**, so the Step-1b conversion regex skipped it silently. It now routes through `blockLabelPattern()`, which also replaces its own hand-rolled escaping.
+
+**Same receiver bug as Step 1 recurred** — the conversion regex rewrote `entry.fields[…]` into `entry.pickIndexedField(fields, …)`. `tsc` caught it instantly. If this conversion is ever redone, capture the receiver.
+
+Five more block parsers were exported (`browser`, `phone`, `telegram`, `messages`, `photos`) so the fixtures drive real code instead of copies of its regexes.
+
 ### Step 2 progress — 1 of 26 entries (`8cf829f`)
 `checkphone_manifest` only, flipped ahead of Step 1b because it is **the one checkphone entry parsed as JSON** (`normalizeManifest` reads `record.optionalAppIds` / `record.topAppIds`, both ASCII) rather than through the block-and-field format. Everything it names — the app ids — was already ASCII; the Chinese was a parenthetical gloss.
 
