@@ -968,6 +968,61 @@ if (label.startsWith("昨天 ") || label.includes("月") || label.includes("年"
 ```
 `formatChatUiTime` is imported by five checkphone pages plus `checkphone-engine.ts`. Translating its `WEEKDAY_NAMES` or its `M月D日` / `Y年M月D日` formats would silently break that classifier. **It must move in the same change as `checkphone_*` + `checkphone-engine.ts`.** Moved to the checkphone bundle.
 
+## ✅✅ CHECKPHONE BUNDLE COMPLETE (2026-08-07) — Steps 1, 1b, 1c, 2, 3, 4 all done
+**This closes Phase D and the whole `.tsx`+`.ts` translation project.** `BUILTIN_PRESET_VERSION` **278**. `tsc` 0 errors; `_fx-checkphone-fields.mjs` **131/131**, `_fx-checkphone-blocks.mjs` **372/372**.
+
+The bundle was ~2603 CJK lines across 5 files plus 11 UI pages, and it needed **six** steps rather than the four originally planned — Steps 1b and 1c were both discovered *after* the preceding step was declared finished.
+
+| step | what | commits |
+|---|---|---|
+| 1 | bilingual **field lookup**, 423 static call sites | `a6138c0` |
+| 1b | bilingual **block headings**, 35 match sites | `2f616c4` |
+| 1c | bilingual **indexed field names** + 6 late-found headings | `22c7d10` |
+| 2 | flip all **26 preset entries**, version → 276 | `e7b1035` … `62e60c5` |
+| 3 | the **11 UI pages + `chat-time.ts`**, version → 277 | `9419284`, `91f0120`, `80479ba` |
+| 4 | **engine prose**, version → 278 | `0f6cb25`, `4f56fca`, `161d36e` |
+
+### The one lesson worth carrying forward
+**Scope every protocol migration from the TEACHING, not from a source grep.** Steps 1 and 1b were both scoped by grepping the engine for match sites, and both came back incomplete — because a grep can only find the shapes you already know to look for. Step 1c came from doing the opposite: extract every token the 26 preset entries actually *teach*, then check each resolves. That found two whole families in one pass.
+
+Shapes a source grep provably missed: a label in a **default parameter** (`= /^##\s*照片(\d+)\s*$/gm`), a parameter named `heading` instead of `label`, names built as **template literals** (`fields[\`消息${n}正文\`]`), and hand-written **index scanners** (`key.match(/^评论(\d+)作者$/)`).
+
+### Four protocol layers, not one
+Each was found only after the previous was declared done:
+1. **field names** — `[标题]` → `[Title]`
+2. **block headings** — `#历史记录` → `#History`
+3. **indexed field names** — `[消息1正文]` → `[Message1Body]`
+4. **field VALUES** — `[Type]发帖`, `[Status]已完成`, `[CommentNReplyTo]评论1`
+
+Layer 4 is the one `pickField` cannot help with, because the key is the *value*. Most were already bilingual from the original author (`cash`/`savings`, `incoming`/`outgoing`, `yes`/`true`, `k`/`w`). The ones that were not, and would each have failed **silently**:
+- `DOUBAN_ACTIVITY_TYPE_MAP` — every activity would have collapsed to the `post` fallback
+- `parseNotesPinned` (`=== "是"`) — every note silently unpinned
+- **the comment reply-target** `评论N` — three parsers each with their own copy; every threaded reply would have flattened to top level
+- `CheckPhoneAssetAccentLabel` — a stored, rendered badge
+
+### `DELIBERATE_CJK` is now empty — all four exceptions resolved
+Each existed only because its consumer had not moved yet, and each was closed by moving the consumer **first**:
+
+| exception | closed in | how |
+|---|---|---|
+| email `M月D日` | 3b | `parseEmailTimeLabel` reads both, teaching → `3 Apr 14:32` |
+| takeout `已完成`/`已取消` | 3b | `describeTakeoutOrderStatus` reads both |
+| weibo `本人` | 3b | the badge test reads both |
+| chat `[真实会话]` family | 4a | engine builder + entry prose in one change |
+
+**Two cases that looked like they needed an exception and did not**, worth remembering as the counter-pattern: takeout's five **category values** (the heading capture is normalised back to Chinese by `canonicalBlockLabel`, so `order.category` never changes) and music's `分钟`/`最近偏爱` (parsed by the page, but never *taught* — they are the UI's own default and the engine's fallback). **A consumer matching a Chinese string is not sufficient reason to keep it.**
+
+### Step 3 caught a regression Step 3a had introduced
+Translating `chat-time.ts` changed the labels it emits, and `checkphone-engine.ts:1429` feeds those into a real conversation's `timeLabel`, which `checkphone-chat-page.tsx` **ranks**. That parser knew only the Chinese shapes, so real conversations were sorting on a fallback. **The fixtures would never have caught it** — they cover the preset protocol, not that page's date heuristics. It surfaced only from tracing consumers before editing.
+
+`getAssetActivityTimeLabel` was rewritten to test the bare-`HH:mm` **shape** rather than enumerate qualifier words, so that pair cannot come apart again.
+
+### What is still Chinese in the bundle, permanently and on purpose
+The identifier layer Steps 1/1b/1c deliberately built: the alias tables; every `pickField` / `pickIndexedField` / `blockLabelPattern` / `canonicalBlockLabel` **key argument**; `CHECKPHONE_TAKEOUT_CATEGORIES` (the takeout storage key); `sectionName` type annotations; the douyin section map keys; `ASSET_ACCENT_LABELS`' legacy half; the `消息${idx}text` tolerances; and every parser alternation that accepts both languages. Plus `CHECKPHONE_APP_SPECS[].label`, which is the app's own identifier — prompt context now reads the parallel `englishLabel` instead.
+
+### The version gate, one more time
+`BUILTIN_PRESET_VERSION` was bumped **three times** across Steps 2-4 (276, 277, 278), because `builtin-preset.ts` changed in each. `loadPresets()` only refreshes when `builtInVersion < BUILTIN_PRESET_VERSION`, so **any preset edit without a bump is dead code**. The fixture now derives this assertion from the entry tracker, so it cannot be forgotten again.
+
 ## 🔍 CHECKPHONE BUNDLE — FULL AUDIT (2026-08-07), execution NOT started
 Requested before any translation, given the size. **Read this before touching anything in the bundle.**
 
