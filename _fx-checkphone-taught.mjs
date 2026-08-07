@@ -47,6 +47,9 @@ export const STEP2_FLIPPED = new Set([
   "checkphone_bilibili",
   "checkphone_steam",
   "checkphone_reading",
+  "checkphone_douban",
+  "checkphone_takeout",
+  "checkphone_music",
 ]);
 
 /**
@@ -63,6 +66,24 @@ export const DELIBERATE_CJK = {
     pattern: /M月D日|4月3日|4月2日/,
     why: "the M月D日 HH:mm time format, parsed by checkphone-email-page.tsx",
   }],
+  checkphone_takeout: [{
+    // The order status is stored and rendered raw, and checkphone-takeout-page.tsx:382
+    // special-cases 已完成/已取消. Kept Chinese until that page moves in Step 3.
+    //
+    // The five CATEGORY values deliberately have NO entry here, though the same page
+    // matches them (TAKEOUT_TABS :23, order.category === selectedCategory :169). They do
+    // not need one: the category comes from the block heading capture, which
+    // canonicalBlockLabel normalises back to Chinese, so order.category stays 美食
+    // whether the model writes #美食1 or #Food1. The headings are therefore safe to flip.
+    pattern: /已送达|已完成|已取消/,
+    why: "the order status values, special-cased by checkphone-takeout-page.tsx:382",
+  }],
+  // checkphone_music deliberately has NO entry, though checkphone-music-page.tsx:133,138
+  // does parse 分钟 and 最近偏爱. Checked against the entry rather than assumed: it teaches
+  // [ThisMonthDuration] as a bare number and [FavouriteArtist] as a plain name, so neither
+  // string is ever TAUGHT. 分钟 is the UI's own default suffix and 最近偏爱 is the engine's
+  // fallback at checkphone-engine.ts:6686 when the field is missing. Both are producers on
+  // our side of the line, so the teaching can be fully English.
 };
 
 /**

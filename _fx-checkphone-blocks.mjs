@@ -41,6 +41,7 @@ const {
     parseShoppingBlockPayload, parseBrowserBlockPayload, parsePhotosBlockPayload,
     parseTelegramBlockPayload, parseMessagesBlockPayload, parsePhoneBlockPayload,
     parseSteamBlockPayload, parseBilibiliBlockPayload, parseReadingBlockPayload,
+    parseTakeoutBlockPayload, parseMusicBlockPayload, parseDoubanBlockPayload,
 } = E;
 
 ok("blockLabelPattern is exported", typeof blockLabelPattern === "function");
@@ -251,6 +252,16 @@ function taughtFormat(entry) {
             (p) => p?.favorites?.length, 1],
         ["checkphone_reading", parseReadingBlockPayload, (p) => p?.currentBooks?.length, 1,
             (p) => p?.highlights?.length, 1],
+        ["checkphone_takeout", parseTakeoutBlockPayload, (p) => p?.orders?.length, 2,
+            // the category must still come back CANONICAL Chinese even though the entry
+            // now teaches #Food -- that is what keeps TAKEOUT_TABS matching in the UI
+            (p) => p?.orders?.[0]?.category, "美食"],
+        ["checkphone_music", parseMusicBlockPayload, (p) => p?.recentTracks?.length, 1,
+            (p) => p?.playlists?.length, 1],
+        ["checkphone_douban", parseDoubanBlockPayload, (p) => p?.activities?.length, 1,
+            // [Type]post|movie_review|... -- the model copying the placeholder verbatim
+            // still resolves, because "post" is the first alternative and a valid value
+            (p) => p?.activities?.[0]?.type, "post"],
     ];
     for (const [id, parser, countOf, expectCount, secondOf, expectSecond] of cases) {
         if (!STEP2_FLIPPED.has(id)) continue;

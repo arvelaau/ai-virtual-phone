@@ -6871,7 +6871,34 @@ function deriveDoubanTone(index: number) {
   return tones[index % tones.length] ?? "linen";
 }
 
+/**
+ * [Type] on a douban activity is a VALUE discriminator, not a field name — the one in
+ * this bundle that pickField could not help with. It was Chinese-only, so teaching English
+ * values would have silently collapsed every activity to the "post" fallback.
+ *
+ * The canonical values are the enum names themselves, which were already English, so the
+ * teaching now uses those directly; the English words and every legacy Chinese spelling
+ * are accepted alongside them. Lookup is case-insensitive because the model hand-types it.
+ */
 const DOUBAN_ACTIVITY_TYPE_MAP: Record<string, CheckPhoneDoubanActivityType> = {
+  // canonical enum names, as taught
+  "post": "post",
+  "movie_review": "movie_review",
+  "book_review": "book_review",
+  "diary": "diary",
+  "listened": "listened",
+  "want_watch": "want_watch",
+  "want_read": "want_read",
+  // the English words a model may reach for instead
+  "broadcast": "post",
+  "film review": "movie_review",
+  "movie": "movie_review",
+  "book review": "book_review",
+  "book": "book_review",
+  "music": "listened",
+  "want to watch": "want_watch",
+  "want to read": "want_read",
+  // legacy Chinese, permanently accepted
   "发帖": "post",
   "广播": "post",
   "影评": "movie_review",
@@ -6886,18 +6913,20 @@ const DOUBAN_ACTIVITY_TYPE_MAP: Record<string, CheckPhoneDoubanActivityType> = {
   "想读": "want_read",
 };
 
+/** Display fallbacks when the model supplies no [Action]/[Category]. Rendered verbatim. */
 const DOUBAN_ACTIVITY_LABELS: Record<CheckPhoneDoubanActivityType, { action: string; category: string }> = {
-  post: { action: "发帖", category: "广播" },
-  movie_review: { action: "影评", category: "电影" },
-  book_review: { action: "书评", category: "图书" },
-  diary: { action: "日记", category: "日记" },
-  listened: { action: "听过", category: "音乐" },
-  want_watch: { action: "想看", category: "电影" },
-  want_read: { action: "想读", category: "图书" },
+  post: { action: "Posted", category: "Broadcast" },
+  movie_review: { action: "Film review", category: "Film" },
+  book_review: { action: "Book review", category: "Books" },
+  diary: { action: "Diary", category: "Diary" },
+  listened: { action: "Listened", category: "Music" },
+  want_watch: { action: "Want to watch", category: "Film" },
+  want_read: { action: "Want to read", category: "Books" },
 };
 
 function normalizeDoubanActivityType(value: string | undefined): CheckPhoneDoubanActivityType {
-  return DOUBAN_ACTIVITY_TYPE_MAP[(value || "").trim()] ?? "post";
+  const raw = (value || "").trim();
+  return DOUBAN_ACTIVITY_TYPE_MAP[raw] ?? DOUBAN_ACTIVITY_TYPE_MAP[raw.toLowerCase()] ?? "post";
 }
 
 function parseDoubanTopicComments(
