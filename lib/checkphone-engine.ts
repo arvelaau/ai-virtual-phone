@@ -128,7 +128,7 @@ async function buildCheckPhoneManifestMessages(
   const settings = loadCheckPhoneSettings();
   const memConfig = loadMemoryConfig();
   const { recentBlocks, wbActivationContext, unifiedRecentItems } = prepareShortTermContext(characterId, "checkphone", {
-    userName: userIdentity?.name ?? "用户",
+    userName: userIdentity?.name ?? "User",
     history: [],
   });
 
@@ -214,7 +214,7 @@ export const CHECKPHONE_BLOCK_ALIASES: Record<string, readonly string[]> = {
   "书摘": ["BookExcerpts", "书摘"],
 
   // inline regexes
-  "备忘录": ["Notepad", "备忘录"],
+  "Notepad": ["Notepad", "Notepad"],
   "邮件": ["Mail", "邮件"],
   "美食": ["Food", "美食"],
   "饮品": ["Drinks", "饮品"],
@@ -395,7 +395,7 @@ export const CHECKPHONE_FIELD_ALIASES: Record<string, readonly string[]> = {
   "条目": ["Item", "条目"],
   "图片描述": ["ImageDescription", "图片描述"],
   "发件人": ["From", "发件人"],
-  "邮箱": ["Email", "邮箱"],
+  "Mail": ["Email", "Mail"],
   "主题": ["Subject", "主题"],
   "收件人": ["To", "收件人"],
   "星标": ["Starred", "星标"],
@@ -870,7 +870,7 @@ export async function previewCheckPhonePromptPayload(
   const snapshotSummary = targetAppId === "chat"
     ? [
         formatRealChatSnapshotForPrompt(buildRealCheckPhoneChatPayload(characterId)),
-        snapshot?.payload ? "\n[上次完整快照摘要]\n" + formatSnapshotSummary(snapshot.payload) : "",
+        snapshot?.payload ? "\n[Previous full snapshot summary]\n" + formatSnapshotSummary(snapshot.payload) : "",
       ].filter(Boolean).join("\n")
     : snapshot?.payload
       ? formatSnapshotSummary(snapshot.payload)
@@ -883,9 +883,9 @@ export async function previewCheckPhonePromptPayload(
       });
   return {
     messages: previewMessagesForApi(apiConfig, preset, messages),
-    characterName: `查手机:${character?.name ?? characterId}`,
+    characterName: `CheckPhone:${character?.name ?? characterId}`,
     model: apiConfig.defaultModel,
-    presetName: preset?.name ?? "默认预设",
+    presetName: preset?.name ?? "(no preset)",
   };
 }
 
@@ -1409,7 +1409,7 @@ function getCheckPhoneRealChatText(message: ChatMessage): string {
     // and the English one now emitted by lib/rich-tag-builders.ts.
     const labelFromContent = message.content.match(/\[(?:表情包|Sticker)[：:]([^\]]+)\]/)?.[1]?.trim() ?? "";
     const label = labelFromData || labelFromContent;
-    return label ? buildStickerTag(label) : "[表情]";
+    return label ? buildStickerTag(label) : "[Sticker]";
   }
   return getChatMessagePreview(message).trim() || message.content.trim();
 }
@@ -1426,7 +1426,7 @@ function extractDirectConversation(
   return [
     {
       id: `real_conv_${session.id}`,
-      name: userName || "用户",
+      name: userName || "User",
       preview: getCheckPhoneRealChatText(latest),
       timeLabel: formatChatUiTime(latest.createdAt),
       muted: session.isMuted === true,
@@ -1457,7 +1457,7 @@ function extractRealGroups(
       const memberCount = Math.max((session.participantIds?.length ?? 0) + (session.isSpectator ? 0 : 1), 2);
       return {
         id: `real_group_${session.id}`,
-        name: session.groupName?.trim() || "群聊",
+        name: session.groupName?.trim() || "Group chat",
         preview: getCheckPhoneRealChatText(latest),
         timeLabel: formatChatUiTime(latest.createdAt),
         muted: session.isMuted === true,
@@ -1531,7 +1531,7 @@ function extractRealMoments(characterId: string, userName: string): CheckPhoneCh
 
 function buildRealCheckPhoneChatPayload(characterId: string): CheckPhoneChatPayload {
   const sessions = loadChatSessions();
-  const userName = resolveUserIdentity(characterId, "checkphone")?.name ?? "用户";
+  const userName = resolveUserIdentity(characterId, "checkphone")?.name ?? "User";
   const directSession = sessions.find((session) => !session.isGroup && session.contactId === characterId);
   const conversations = extractDirectConversation(directSession, characterId, userName);
   const groups = extractRealGroups(sessions, characterId, userName);
@@ -1576,7 +1576,7 @@ function mergeChatPayload(
 ): CheckPhoneChatPayload {
   const characters = loadCharacters();
   const characterName = characters.find((item) => item.id === characterId)?.name ?? "";
-  const userName = resolveUserIdentity(characterId, "checkphone")?.name ?? "用户";
+  const userName = resolveUserIdentity(characterId, "checkphone")?.name ?? "User";
   // 只拦用户名（防伪造）和角色自己的名字（防自聊）；其他角色卡不再一刀切拉黑，
   // 否则生成的同世界配角（也是角色卡）永远进不了补充会话/动态/联系人
   const blockedNpcOnlyNames = new Set<string>(
@@ -1658,7 +1658,7 @@ async function buildCheckPhoneAppMessages(
   const settings = loadCheckPhoneSettings();
   const memConfig = loadMemoryConfig();
   const { recentBlocks, wbActivationContext, unifiedRecentItems } = prepareShortTermContext(characterId, "checkphone", {
-    userName: userIdentity?.name ?? "用户",
+    userName: userIdentity?.name ?? "User",
     history: [],
   });
 
@@ -1715,8 +1715,8 @@ function normalizeNotesPayload(payload: unknown): CheckPhoneNotesPayload | null 
     .filter(Boolean) as CheckPhoneNotesPayload["notes"];
 
   return {
-    headerTitle: "备忘录",
-    headerSubtitle: "最近写下的碎片",
+    headerTitle: "Notepad",
+    headerSubtitle: "Fragments written down lately",
     notes: notes.slice(0, 9),
   };
 }
@@ -1739,7 +1739,7 @@ function parseNotesBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
 
-  const matches = [...source.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern("备忘录")})(\\d+)\\s*$`, "gm"))];
+  const matches = [...source.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern("Notepad")})(\\d+)\\s*$`, "gm"))];
   if (matches.length === 0) {
     return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "no #NotepadN section found" };
   }
@@ -1810,8 +1810,8 @@ function normalizeEmailPayload(payload: unknown): CheckPhoneEmailPayload | null 
     .filter(Boolean) as CheckPhoneEmailPayload["emails"];
 
   return {
-    headerTitle: "邮箱",
-    headerSubtitle: "最近的收件箱",
+    headerTitle: "Mail",
+    headerSubtitle: "Recent inbox",
     emails: emails.slice(0, 18),
   };
 }
@@ -1834,7 +1834,7 @@ function parseEmailBlockPayload(text: string): PhoneBlockParseResult {
     return {
       id: `mail_${order}`,
       senderName: pickField(fields, "发件人") || "",
-      senderAddress: pickField(fields, "邮箱") || "",
+      senderAddress: pickField(fields, "Mail") || "",
       subject: pickField(fields, "主题") || "",
       timeLabel: pickField(fields, "时间") || "",
       body: pickField(fields, "正文") || "",
@@ -2007,8 +2007,8 @@ export function parseTakeoutBlockPayload(text: string): {
   }
 
   const parsed = {
-    headerTitle: "外卖",
-    headerSubtitle: "最近吃了什么",
+    headerTitle: "Takeaway",
+    headerSubtitle: "What they have been eating",
     orders,
   };
 
@@ -2096,7 +2096,7 @@ function normalizeTakeoutPayload(payload: unknown): CheckPhoneTakeoutPayload | n
 
   return {
     headerTitle:
-      typeof record.headerTitle === "string" && record.headerTitle.trim() ? record.headerTitle.trim() : "外卖",
+      typeof record.headerTitle === "string" && record.headerTitle.trim() ? record.headerTitle.trim() : "Takeaway",
     headerSubtitle:
       typeof record.headerSubtitle === "string" && record.headerSubtitle.trim() ? record.headerSubtitle.trim() : "最近点了什么",
     orders: orders.slice().sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 24),
@@ -2115,7 +2115,7 @@ function diagnoseTakeoutNormalizeFailure(payload: unknown): string {
     const item = entry as Record<string, unknown>;
     const id = typeof item.id === "string" ? item.id.trim() : "";
     if (!id) return `orders[${index}].id is missing`;
-    if (seen.has(id)) return `orders 存在重复 id: ${id}`;
+    if (seen.has(id)) return `duplicate order id: ${id}`;
     seen.add(id);
     if (typeof item.shopName !== "string" || !item.shopName.trim()) return `orders[${index}].shopName is missing`;
     if (typeof item.category !== "string" || !CHECKPHONE_TAKEOUT_CATEGORIES.includes(item.category as CheckPhoneTakeoutCategory)) {
@@ -2235,7 +2235,7 @@ export function parseSteamBlockPayload(text: string): {
   };
 
   const parsed = {
-    headerTitle: "游戏库",
+    headerTitle: "Game library",
     profile: {
       name: pickField(profileFields, "昵称") || "",
       handle: pickField(profileFields, "账号") || "",
@@ -2350,7 +2350,7 @@ function normalizeSteamPayload(payload: unknown): CheckPhoneSteamPayload | null 
     headerTitle:
       typeof record.headerTitle === "string" && record.headerTitle.trim() && record.headerTitle.trim() !== "Steam"
         ? record.headerTitle.trim()
-        : "游戏库",
+        : "Game library",
     profile,
     recentlyPlayed: recentlyPlayed.sort((a, b) => Date.parse(b.lastPlayedAt) - Date.parse(a.lastPlayedAt)),
     wishlist: wishlist.slice(0, 12),
@@ -2375,7 +2375,7 @@ function diagnoseSteamNormalizeFailure(payload: unknown): string {
     if (!item || typeof item !== "object") return `recentlyPlayed[${index}] is not an object`;
     const id = typeof item.id === "string" ? item.id.trim() : "";
     if (!id) return `recentlyPlayed[${index}].id is missing`;
-    if (seen.has(id)) return `存在重复 id: ${id}`;
+    if (seen.has(id)) return `duplicate id: ${id}`;
     seen.add(id);
     if (typeof item.totalHours !== "number" || !Number.isFinite(item.totalHours)) return `recentlyPlayed[${index}].totalHours is invalid`;
     if (typeof item.recentHours !== "number" || !Number.isFinite(item.recentHours)) return `recentlyPlayed[${index}].recentHours is invalid`;
@@ -2386,7 +2386,7 @@ function diagnoseSteamNormalizeFailure(payload: unknown): string {
     if (!item || typeof item !== "object") return `wishlist[${index}] is not an object`;
     const id = typeof item.id === "string" ? item.id.trim() : "";
     if (!id) return `wishlist[${index}].id is missing`;
-    if (seen.has(id)) return `存在重复 id: ${id}`;
+    if (seen.has(id)) return `duplicate id: ${id}`;
     seen.add(id);
     if (typeof item.price !== "number" || !Number.isFinite(item.price)) return `wishlist[${index}].price is invalid`;
   }
@@ -2395,7 +2395,7 @@ function diagnoseSteamNormalizeFailure(payload: unknown): string {
     if (!item || typeof item !== "object") return `library[${index}] is not an object`;
     const id = typeof item.id === "string" ? item.id.trim() : "";
     if (!id) return `library[${index}].id is missing`;
-    if (seen.has(id)) return `存在重复 id: ${id}`;
+    if (seen.has(id)) return `duplicate id: ${id}`;
     seen.add(id);
     if (typeof item.totalHours !== "number" || !Number.isFinite(item.totalHours)) return `library[${index}].totalHours is invalid`;
     if (typeof item.progressPercent !== "number" || !Number.isFinite(item.progressPercent)) return `library[${index}].progressPercent is invalid`;
@@ -2470,8 +2470,8 @@ export function parseBilibiliBlockPayload(text: string): {
   };
 
   const parsed = {
-    headerTitle: "B站",
-    headerSubtitle: "最近看了什么，为什么留下它们",
+    headerTitle: "Bilibili",
+    headerSubtitle: "What they watched, and why they kept it",
     watchHistory: parseSectionVideos("观看记录"),
     favorites: parseSectionVideos("收藏"),
   };
@@ -2534,9 +2534,9 @@ function normalizeBilibiliPayload(payload: unknown): CheckPhoneBilibiliPayload |
   }
 
   return {
-    headerTitle: typeof record.headerTitle === "string" && record.headerTitle.trim() ? record.headerTitle.trim() : "B站",
+    headerTitle: typeof record.headerTitle === "string" && record.headerTitle.trim() ? record.headerTitle.trim() : "Bilibili",
     headerSubtitle:
-      typeof record.headerSubtitle === "string" && record.headerSubtitle.trim() ? record.headerSubtitle.trim() : "最近看了什么，为什么留下它们",
+      typeof record.headerSubtitle === "string" && record.headerSubtitle.trim() ? record.headerSubtitle.trim() : "What they watched, and why they kept it",
     watchHistory: watchHistory.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
     favorites: favorites.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
   };
@@ -2553,7 +2553,7 @@ function diagnoseBilibiliNormalizeFailure(payload: unknown): string {
     if (!item || typeof item !== "object") return `watchHistory[${index}] is not an object`;
     const id = typeof item.id === "string" ? item.id.trim() : "";
     if (!id) return `watchHistory[${index}].id is missing`;
-    if (seen.has(id)) return `存在重复 id: ${id}`;
+    if (seen.has(id)) return `duplicate id: ${id}`;
     seen.add(id);
     if (typeof item.visualDescription !== "string" || !item.visualDescription.trim()) return `watchHistory[${index}].visualDescription is missing`;
     if (typeof item.playCount !== "number" || !Number.isFinite(item.playCount)) return `watchHistory[${index}].playCount is invalid`;
@@ -2563,7 +2563,7 @@ function diagnoseBilibiliNormalizeFailure(payload: unknown): string {
     if (!item || typeof item !== "object") return `favorites[${index}] is not an object`;
     const id = typeof item.id === "string" ? item.id.trim() : "";
     if (!id) return `favorites[${index}].id is missing`;
-    if (seen.has(id)) return `存在重复 id: ${id}`;
+    if (seen.has(id)) return `duplicate id: ${id}`;
     seen.add(id);
     if (typeof item.visualDescription !== "string" || !item.visualDescription.trim()) return `favorites[${index}].visualDescription is missing`;
     if (typeof item.playCount !== "number" || !Number.isFinite(item.playCount)) return `favorites[${index}].playCount is invalid`;
@@ -2784,7 +2784,7 @@ function diagnoseRedditNormalizeFailure(payload: unknown): string {
     if (!item || typeof item !== "object") return `posts[${index}] is not an object`;
     const id = typeof item.id === "string" ? item.id.trim() : "";
     if (!id) return `posts[${index}].id is missing`;
-    if (seen.has(id)) return `存在重复 id: ${id}`;
+    if (seen.has(id)) return `duplicate id: ${id}`;
     seen.add(id);
     if (typeof item.communityName !== "string" || !item.communityName.trim()) return `posts[${index}].communityName is missing`;
     if (typeof item.title !== "string" || !item.title.trim()) return `posts[${index}].title is missing`;
@@ -2800,7 +2800,7 @@ function diagnoseRedditNormalizeFailure(payload: unknown): string {
     if (!item || typeof item !== "object") return `comments[${index}] is not an object`;
     const id = typeof item.id === "string" ? item.id.trim() : "";
     if (!id) return `comments[${index}].id is missing`;
-    if (seen.has(id)) return `存在重复 id: ${id}`;
+    if (seen.has(id)) return `duplicate id: ${id}`;
     seen.add(id);
     if (typeof item.communityName !== "string" || !item.communityName.trim()) return `comments[${index}].communityName is missing`;
     if (typeof item.postTitle !== "string" || !item.postTitle.trim()) return `comments[${index}].postTitle is missing`;
@@ -2967,7 +2967,7 @@ function parseXBlockPayload(text: string): XBlockParseResult {
 
   const parsed = {
     headerTitle: "X",
-    headerSubtitle: "帖子、回复与喜欢",
+    headerSubtitle: "Posts, replies and likes",
     profile,
     posts,
     replies,
@@ -3096,7 +3096,7 @@ function normalizeXPayload(payload: unknown, characterName = ""): CheckPhoneXPay
   return {
     headerTitle: typeof record.headerTitle === "string" && record.headerTitle.trim() ? record.headerTitle.trim() : "X",
     headerSubtitle:
-      typeof record.headerSubtitle === "string" && record.headerSubtitle.trim() ? record.headerSubtitle.trim() : "帖子、回复与喜欢",
+      typeof record.headerSubtitle === "string" && record.headerSubtitle.trim() ? record.headerSubtitle.trim() : "Posts, replies and likes",
     profile: {
       ...profile,
       followingCount: Math.max(0, Math.round(profile.followingCount)),
@@ -3136,7 +3136,7 @@ function diagnoseXNormalizeFailure(payload: unknown): string {
       if (!item || typeof item !== "object") return `${sectionName}[${index}] is not an object`;
       const id = typeof item.id === "string" ? item.id.trim() : "";
       if (!id) return `${sectionName}[${index}].id is missing`;
-      if (seen.has(id)) return `存在重复 id: ${id}`;
+      if (seen.has(id)) return `duplicate id: ${id}`;
       seen.add(id);
       if (typeof item.createdAt !== "string" || !isIsoTimestamp(item.createdAt.trim())) return `${sectionName}[${index}].createdAt is invalid`;
       if (typeof item.replyCount !== "number" || !Number.isFinite(item.replyCount)) return `${sectionName}[${index}].replyCount is invalid`;
@@ -3362,7 +3362,7 @@ function diagnoseYoutubeNormalizeFailure(payload: unknown): string {
     const issue = diagnoseVideo(item, `watchHistory[${index}]`);
     if (issue) return issue;
     const id = (item.id as string).trim();
-    if (seen.has(id)) return `存在重复 id: ${id}`;
+    if (seen.has(id)) return `duplicate id: ${id}`;
     seen.add(id);
     if (typeof item.progressLabel !== "string" || !item.progressLabel.trim()) return `watchHistory[${index}].progressLabel is missing`;
   }
@@ -3372,7 +3372,7 @@ function diagnoseYoutubeNormalizeFailure(payload: unknown): string {
     const issue = diagnoseVideo(item, `watchLater[${index}]`);
     if (issue) return issue;
     const id = (item.id as string).trim();
-    if (seen.has(id)) return `存在重复 id: ${id}`;
+    if (seen.has(id)) return `duplicate id: ${id}`;
     seen.add(id);
   }
   for (let index = 0; index < record.likedVideos.length; index += 1) {
@@ -3381,7 +3381,7 @@ function diagnoseYoutubeNormalizeFailure(payload: unknown): string {
     const issue = diagnoseVideo(item, `likedVideos[${index}]`);
     if (issue) return issue;
     const id = (item.id as string).trim();
-    if (seen.has(id)) return `存在重复 id: ${id}`;
+    if (seen.has(id)) return `duplicate id: ${id}`;
     seen.add(id);
   }
   return "structure has missing fields, an invalid time, or a duplicate id";
@@ -3510,7 +3510,7 @@ function parseInstagramBlockPayload(text: string): InstagramBlockParseResult {
 
   const parsed = {
     headerTitle: "Instagram",
-    headerSubtitle: "主页与帖子",
+    headerSubtitle: "Profile and posts",
     profile,
     highlights,
     posts,
@@ -3624,7 +3624,7 @@ function normalizeInstagramPayload(payload: unknown): CheckPhoneInstagramPayload
 
   return {
     headerTitle: typeof record.headerTitle === "string" && record.headerTitle.trim() ? record.headerTitle.trim() : "Instagram",
-    headerSubtitle: typeof record.headerSubtitle === "string" && record.headerSubtitle.trim() ? record.headerSubtitle.trim() : "主页与帖子",
+    headerSubtitle: typeof record.headerSubtitle === "string" && record.headerSubtitle.trim() ? record.headerSubtitle.trim() : "Profile and posts",
     profile,
     highlights: (explicitHighlights.length ? explicitHighlights : fallbackHighlights).slice(0, 5),
     posts: posts.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
@@ -3649,7 +3649,7 @@ function diagnoseInstagramNormalizeFailure(payload: unknown): string {
     if (!item || typeof item !== "object") return `posts[${index}] is not an object`;
     const id = typeof item.id === "string" ? item.id.trim() : "";
     if (!id) return `posts[${index}].id is missing`;
-    if (seen.has(id)) return `存在重复 id: ${id}`;
+    if (seen.has(id)) return `duplicate id: ${id}`;
     seen.add(id);
     if (typeof item.coverIcon !== "string" || !item.coverIcon.trim()) return `posts[${index}].coverIcon is missing`;
     if (typeof item.createdAt !== "string" || !isIsoTimestamp(item.createdAt.trim())) return `posts[${index}].createdAt is invalid`;
@@ -3802,9 +3802,9 @@ function normalizeDouyinPayload(payload: unknown, characterName = ""): CheckPhon
   }
 
   return {
-    headerTitle: typeof record.headerTitle === "string" && record.headerTitle.trim() ? record.headerTitle.trim() : "抖音",
+    headerTitle: typeof record.headerTitle === "string" && record.headerTitle.trim() ? record.headerTitle.trim() : "Douyin",
     headerSubtitle:
-      typeof record.headerSubtitle === "string" && record.headerSubtitle.trim() ? record.headerSubtitle.trim() : "作品、收藏与喜欢",
+      typeof record.headerSubtitle === "string" && record.headerSubtitle.trim() ? record.headerSubtitle.trim() : "Posts, saved and liked",
     profile: {
       name: profileName,
       handle,
@@ -3878,8 +3878,8 @@ function parseDouyinBlockPayload(text: string): DouyinBlockParseResult {
   };
 
   const result: Record<string, unknown> = {
-    headerTitle: "抖音",
-    headerSubtitle: "作品、收藏与喜欢",
+    headerTitle: "Douyin",
+    headerSubtitle: "Posts, saved and liked",
     profile,
     works: [],
     likedVideos: [],
@@ -4087,7 +4087,7 @@ export async function generateCheckPhoneDouyin(
       return {
         payload: null,
         summary: "",
-        error: "无法解析抖音内容",
+        error: "could not parse the Douyin content",
         debugRawOutput: rawOutput,
         debugSanitizedOutput: sanitizedCandidate,
         debugParseMode: parseMode,
@@ -4145,7 +4145,7 @@ export async function generateCheckPhoneInstagram(
       return {
         payload: null,
         summary: "",
-        error: "无法解析 Instagram 内容",
+        error: "could not parse the Instagram content",
         debugRawOutput: rawOutput,
         debugSanitizedOutput: sanitizedCandidate,
         debugParseMode: parseMode,
@@ -4170,7 +4170,7 @@ function diagnoseDouyinNormalizeFailure(payload: unknown): string {
   if (!payload || typeof payload !== "object") return "top level is not an object";
   const record = payload as Record<string, unknown>;
   const profile = record.profile && typeof record.profile === "object" ? (record.profile as Record<string, unknown>) : null;
-  if (!profile) return "缺少 profile 对象";
+  if (!profile) return "the profile object is missing";
   if (typeof profile.name !== "string" || !profile.name.trim()) return "profile.name is missing";
 
   const validTone = (value: unknown) =>
@@ -4214,7 +4214,7 @@ function diagnoseDouyinNormalizeFailure(payload: unknown): string {
     diagnoseVideoList("works", record.works) ||
     diagnoseVideoList("savedVideos", record.savedVideos) ||
     diagnoseVideoList("likedVideos", record.likedVideos) ||
-    "没有可展示的有效帖子"
+    "no valid posts to display"
   );
 }
 
@@ -4401,7 +4401,7 @@ export async function generateCheckPhoneNotes(
     if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "" };
     const { parsed } = parseNotesBlockPayload(rawOutput);
     const payload = normalizeNotesPayload(parsed);
-    if (!payload) return { payload: null, summary: "", error: "无法解析备忘录内容", debugRawOutput: rawOutput };
+    if (!payload) return { payload: null, summary: "", error: "could not parse the Notepad content", debugRawOutput: rawOutput };
     return {
       payload,
       summary: formatSnapshotSummary(payload),
@@ -4438,7 +4438,7 @@ export async function generateCheckPhoneEmail(
     if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "" };
     const { parsed } = parseEmailBlockPayload(rawOutput);
     const payload = normalizeEmailPayload(parsed);
-    if (!payload) return { payload: null, summary: "", error: "无法解析邮箱内容", debugRawOutput: rawOutput };
+    if (!payload) return { payload: null, summary: "", error: "could not parse the Mail content", debugRawOutput: rawOutput };
     return {
       payload,
       summary: formatSnapshotSummary(payload),
@@ -4488,7 +4488,7 @@ export async function generateCheckPhoneTakeout(
       return {
         payload: null,
         summary: "",
-        error: "无法解析外卖内容",
+        error: "could not parse the takeaway content",
         debugRawOutput: rawOutput,
         debugSanitizedOutput: sanitizedCandidate,
         debugParseMode: parseMode,
@@ -4533,7 +4533,7 @@ export async function generateCheckPhoneTelegram(
     if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "" };
     const { parsed } = parseTelegramBlockPayload(rawOutput);
     const payload = normalizeTelegramPayload(parsed);
-    if (!payload) return { payload: null, summary: "", error: "无法解析 Telegram 内容", debugRawOutput: rawOutput };
+    if (!payload) return { payload: null, summary: "", error: "could not parse the Telegram content", debugRawOutput: rawOutput };
     return {
       payload,
       summary: formatSnapshotSummary(payload),
@@ -4583,7 +4583,7 @@ export async function generateCheckPhoneSteam(
       return {
         payload: null,
         summary: "",
-        error: "无法解析游戏库内容",
+        error: "could not parse the game library content",
         debugRawOutput: rawOutput,
         debugSanitizedOutput: sanitizedCandidate,
         debugParseMode: parseMode,
@@ -4642,7 +4642,7 @@ export async function generateCheckPhoneReddit(
       return {
         payload: null,
         summary: "",
-        error: "无法解析 Reddit 内容",
+        error: "could not parse the Reddit content",
         debugRawOutput: rawOutput,
         debugSanitizedOutput: sanitizedCandidate,
         debugParseMode: parseMode,
@@ -4702,7 +4702,7 @@ export async function generateCheckPhoneX(
       return {
         payload: null,
         summary: "",
-        error: "无法解析 X 内容",
+        error: "could not parse the X content",
         debugRawOutput: rawOutput,
         debugSanitizedOutput: sanitizedCandidate,
         debugParseMode: parseMode,
@@ -4761,7 +4761,7 @@ export async function generateCheckPhoneYoutube(
       return {
         payload: null,
         summary: "",
-        error: "无法解析 YouTube 内容",
+        error: "could not parse the YouTube content",
         debugRawOutput: rawOutput,
         debugSanitizedOutput: sanitizedCandidate,
         debugParseMode: parseMode,
@@ -4820,7 +4820,7 @@ export async function generateCheckPhoneBilibili(
       return {
         payload: null,
         summary: "",
-        error: "无法解析 B站 内容",
+        error: "could not parse the Bilibili content",
         debugRawOutput: rawOutput,
         debugSanitizedOutput: sanitizedCandidate,
         debugParseMode: parseMode,
@@ -4894,7 +4894,7 @@ function diagnoseMessagesNormalizeFailure(payload: unknown): string {
   if (!payload || typeof payload !== "object") return "top level is not an object";
   const record = payload as Record<string, unknown>;
   const threads = Array.isArray(record.threads) ? record.threads : [];
-  if (threads.length < 1) return `threads 数量不足: ${threads.length}`;
+  if (threads.length < 1) return `too few threads: ${threads.length}`;
 
   for (let index = 0; index < threads.length; index += 1) {
     const item = threads[index];
@@ -4904,7 +4904,7 @@ function diagnoseMessagesNormalizeFailure(payload: unknown): string {
     if (typeof thread.sender !== "string" || !thread.sender.trim()) return `threads[${index}].sender is missing`;
     if (typeof thread.timeLabel !== "string" || !thread.timeLabel.trim()) return `threads[${index}].timeLabel is missing`;
     const messages = Array.isArray(thread.messages) ? thread.messages : [];
-    if (messages.length < 1) return `threads[${index}].messages 数量不足: ${messages.length}`;
+    if (messages.length < 1) return `too few messages in threads[${index}]: ${messages.length}`;
     for (let messageIndex = 0; messageIndex < messages.length; messageIndex += 1) {
       const message = messages[messageIndex];
       if (!message || typeof message !== "object") return `threads[${index}].messages[${messageIndex}] is not an object`;
@@ -4947,7 +4947,7 @@ export async function generateCheckPhoneMessages(
       return {
         payload: null,
         summary: "",
-        error: "无法解析信息内容",
+        error: "could not parse the Messages content",
         debugRawOutput: rawOutput,
         debugSanitizedOutput: sanitizedCandidate,
         debugParseMode: parseMode,
@@ -5005,9 +5005,9 @@ function normalizeBrowserPayload(payload: unknown): CheckPhoneBrowserPayload | n
   if (history.length === 0 && bookmarks.length === 0) return null;
 
   return {
-    headerTitle: typeof record.headerTitle === "string" && record.headerTitle.trim() ? record.headerTitle.trim() : "浏览器",
+    headerTitle: typeof record.headerTitle === "string" && record.headerTitle.trim() ? record.headerTitle.trim() : "Browser",
     headerSubtitle:
-      typeof record.headerSubtitle === "string" && record.headerSubtitle.trim() ? record.headerSubtitle.trim() : "历史记录与收藏夹",
+      typeof record.headerSubtitle === "string" && record.headerSubtitle.trim() ? record.headerSubtitle.trim() : "History and bookmarks",
     history: history.slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     bookmarks,
   };
@@ -5059,14 +5059,14 @@ export function parseBrowserBlockPayload(text: string): PhoneBlockParseResult {
       id: `bookmark${order}`,
       title: pickField(fields, "标题") || "",
       urlLabel: pickField(fields, "网址") || "",
-      categoryLabel: pickField(fields, "分类") || "收藏",
+      categoryLabel: pickField(fields, "分类") || "Saved",
       content: pickField(fields, "内容") || "",
       reason: pickField(fields, "收藏原因") || "",
     }))
     .filter((item) => item.title && item.urlLabel);
   const parsed = {
-    headerTitle: "浏览器",
-    headerSubtitle: "历史记录与收藏夹",
+    headerTitle: "Browser",
+    headerSubtitle: "History and bookmarks",
     history,
     bookmarks,
   };
@@ -5111,7 +5111,7 @@ export async function generateCheckPhoneBrowser(
       return {
         payload: null,
         summary: "",
-        error: "无法解析浏览器内容",
+        error: "could not parse the browser content",
         debugRawOutput: rawOutput,
         debugSanitizedOutput: sanitizedCandidate,
         debugParseMode: parseMode,
@@ -5267,7 +5267,7 @@ export function parsePhotosBlockPayload(text: string): PhoneBlockParseResult {
 
   return {
     parsed: {
-      headerTitle: "相册",
+      headerTitle: "Photos",
       albums,
     },
     sanitizedCandidate: source,
@@ -5338,8 +5338,8 @@ function normalizePhotosPayload(payload: unknown): CheckPhonePhotosPayload | nul
   if (!featuredPhotoId) featuredPhotoId = photos[0]?.id ?? "";
 
   return {
-    headerTitle: "相册",
-    headerSubtitle: "最近的碎片",
+    headerTitle: "Photos",
+    headerSubtitle: "Recent fragments",
     featuredPhotoId: featuredPhotoId || undefined,
     albums: albums.slice(0, 6),
     photos: photos.slice(0, 24),
@@ -5371,7 +5371,7 @@ export async function generateCheckPhonePhotos(
     if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "" };
     const { parsed } = parsePhotosBlockPayload(rawOutput);
     const payload = normalizePhotosPayload(parsed);
-    if (!payload) return { payload: null, summary: "", error: "无法解析相册内容", debugRawOutput: rawOutput };
+    if (!payload) return { payload: null, summary: "", error: "could not parse the Photos content", debugRawOutput: rawOutput };
     return {
       payload,
       summary: formatSnapshotSummary(payload),
@@ -5438,40 +5438,40 @@ function parseChatBlockPayload(text: string): PhoneBlockParseResult {
     name: pickField(entry.fields, "名称") || "",
     muted: parseBlockBoolean(pickField(entry.fields, "静音")),
     pinned: parseBlockBoolean(pickField(entry.fields, "置顶")),
-    tagLabel: pickField(entry.fields, "标签") || "补充会话",
+    tagLabel: pickField(entry.fields, "标签") || "Extra conversation",
     messages: parseChatSupplementalMessages(entry.fields, `supp_conv_${entry.order}`, false),
   }));
   const supplementalGroups = extractTopLevelTaggedBlocks(source, "补充群聊").map((entry) => ({
     id: `supp_group_${entry.order}`,
     name: pickField(entry.fields, "名称") || "",
     muted: parseBlockBoolean(pickField(entry.fields, "静音")),
-    memberCountLabel: pickField(entry.fields, "人数") || "多人",
-    activityLabel: pickField(entry.fields, "活跃") || "最近活跃",
+    memberCountLabel: pickField(entry.fields, "人数") || "several members",
+    activityLabel: pickField(entry.fields, "活跃") || "Active recently",
     messages: parseChatSupplementalMessages(entry.fields, `supp_group_${entry.order}`, true),
   }));
   const supplementalMoments = extractTopLevelTaggedBlocks(source, "补充动态").map((entry) => ({
     id: `supp_moment_${entry.order}`,
     authorLabel: pickField(entry.fields, "作者") || "",
-    authorAccent: pickField(entry.fields, "标记") || "最近动态",
+    authorAccent: pickField(entry.fields, "标记") || "Recent post",
     timeLabel: pickField(entry.fields, "时间") || "",
     body: pickField(entry.fields, "正文") || "",
-    mediaLabel: pickField(entry.fields, "媒体") || "动态",
+    mediaLabel: pickField(entry.fields, "媒体") || "post",
     photoDescription: pickField(entry.fields, "媒体") || undefined,
-    likeCountLabel: pickField(entry.fields, "点赞") || "0 赞",
-    commentCountLabel: pickField(entry.fields, "评论数") || "0 评论",
+    likeCountLabel: pickField(entry.fields, "点赞") || "0 likes",
+    commentCountLabel: pickField(entry.fields, "评论数") || "0 comments",
     comments: parseChatMomentComments(entry.fields, `supp_moment_${entry.order}`),
   }));
   const supplementalContacts = extractTopLevelTaggedBlocks(source, "补充联系人").map((entry) => ({
     id: `supp_contact_${entry.order}`,
     name: pickField(entry.fields, "名称") || "",
-    tagLabel: pickField(entry.fields, "标签") || "联系人",
-    relationLabel: pickField(entry.fields, "关系") || "关系",
+    tagLabel: pickField(entry.fields, "标签") || "Contact",
+    relationLabel: pickField(entry.fields, "关系") || "Relationship",
     recentLabel: pickField(entry.fields, "最近") || "",
     note: pickField(entry.fields, "备注") || "",
   }));
 
   if (supplementalConversations.length + supplementalGroups.length + supplementalMoments.length + supplementalContacts.length === 0) {
-    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到聊天补充块" };
+    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "no supplementary chat block found" };
   }
 
   return {
@@ -5678,7 +5678,7 @@ export async function generateCheckPhoneChat(
     const messages = await buildCheckPhoneAppMessages(characterId, "chat", preset, worldBooks, regexes, {
       snapshotSummary: [
         realSnapshotSummary,
-        previousPayload ? "\n[上次完整快照摘要]\n" + formatSnapshotSummary(previousPayload) : "",
+        previousPayload ? "\n[Previous full snapshot summary]\n" + formatSnapshotSummary(previousPayload) : "",
       ].filter(Boolean).join("\n"),
       lastRefreshAt: previousUpdatedAt ?? "",
     });
@@ -5695,7 +5695,7 @@ export async function generateCheckPhoneChat(
       return {
         payload: realPayload,
         summary: formatSnapshotSummary(realPayload),
-        error: "the model returned nothing，已回退为真实数据",
+        error: "the model returned nothing; fell back to the real data",
         debugRawOutput: rawOutput ?? "",
       };
     }
@@ -5705,7 +5705,7 @@ export async function generateCheckPhoneChat(
       return {
         payload: realPayload,
         summary: formatSnapshotSummary(realPayload),
-        error: "无法解析补充聊天内容，已回退为真实数据",
+        error: "could not parse the supplementary chat content; fell back to the real data",
         debugRawOutput: rawOutput,
       };
     }
@@ -5728,11 +5728,11 @@ function normalizeAssetsPayload(payload: unknown): CheckPhoneAssetsPayload | nul
   const totalLabel =
     headlineRaw && typeof headlineRaw.totalLabel === "string" && headlineRaw.totalLabel.trim()
       ? headlineRaw.totalLabel.trim()
-      : "总资产";
+      : "Total assets";
   const periodLabel =
     headlineRaw && typeof headlineRaw.periodLabel === "string" && headlineRaw.periodLabel.trim()
       ? headlineRaw.periodLabel.trim()
-      : "账户与近期流水";
+      : "Accounts and recent activity";
 
   const accountsRaw = Array.isArray(record.accounts) ? record.accounts : [];
   const activitiesRaw = Array.isArray(record.activities) ? record.activities : [];
@@ -5795,8 +5795,8 @@ function normalizeAssetsPayload(payload: unknown): CheckPhoneAssetsPayload | nul
   }
 
   return {
-    headerTitle: "资产",
-    headerSubtitle: "账户与近期变动",
+    headerTitle: "Assets",
+    headerSubtitle: "Accounts and recent changes",
     headline: { totalLabel, periodLabel },
     accounts: accounts.slice(0, 6),
     activities: activities
@@ -5899,7 +5899,7 @@ function parseAssetsBlockPayload(text: string): PhoneBlockParseResult {
 
   return {
     parsed: {
-      headline: { totalLabel: "总资产", periodLabel: "账户与近期流水" },
+      headline: { totalLabel: "Total assets", periodLabel: "Accounts and recent activity" },
       accounts,
       activities,
     },
@@ -5933,7 +5933,7 @@ export async function generateCheckPhoneAssets(
     if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "" };
     const { parsed } = parseAssetsBlockPayload(rawOutput);
     const payload = normalizeAssetsPayload(parsed);
-    if (!payload) return { payload: null, summary: "", error: "无法解析资产内容", debugRawOutput: rawOutput };
+    if (!payload) return { payload: null, summary: "", error: "could not parse the assets content", debugRawOutput: rawOutput };
     return {
       payload,
       summary: formatSnapshotSummary(payload),
@@ -6023,7 +6023,7 @@ function normalizePhonePayload(payload: unknown): CheckPhonePhonePayload | null 
     headerSubtitle:
       typeof record.headerSubtitle === "string" && record.headerSubtitle.trim()
         ? record.headerSubtitle.trim()
-        : "最近联络与未接来电",
+        : "Recent calls and missed calls",
     recents: recents
       .slice()
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -6116,8 +6116,8 @@ export function parsePhoneBlockPayload(text: string): PhoneBlockParseResult {
   }));
 
   const parsed = {
-    headerTitle: "电话",
-    headerSubtitle: "最近联络与未接来电",
+    headerTitle: "Phone",
+    headerSubtitle: "Recent calls and missed calls",
     recents,
     contacts,
     voicemails,
@@ -6184,8 +6184,8 @@ export function parseMessagesBlockPayload(text: string): PhoneBlockParseResult {
     };
   }).filter((thread) => thread.sender && thread.messages.length > 0);
   const parsed = {
-    headerTitle: "信息",
-    headerSubtitle: "通知与短信",
+    headerTitle: "Messages",
+    headerSubtitle: "Notifications and texts",
     featuredThreadId: threads[0]?.id ?? "",
     threads,
   };
@@ -6221,7 +6221,7 @@ export async function generateCheckPhonePhone(
       return {
         payload: null,
         summary: "",
-        error: "无法解析电话内容",
+        error: "could not parse the phone content",
         debugRawOutput: rawOutput,
         debugSanitizedOutput: sanitizedCandidate,
         debugParseMode: parseMode,
@@ -6248,7 +6248,7 @@ function diagnosePhoneNormalizeFailure(payload: unknown): string {
   const recents = Array.isArray(record.recents) ? record.recents : Array.isArray(record.calls) ? record.calls : [];
   const voicemails = Array.isArray(record.voicemails) ? record.voicemails : Array.isArray(record.voiceMails) ? record.voiceMails : [];
 
-  if (contacts.length + recents.length + voicemails.length < 1) return "没有解析到任何电话内容";
+  if (contacts.length + recents.length + voicemails.length < 1) return "no phone content could be parsed";
 
   const contactIds = new Set<string>();
   for (let index = 0; index < contacts.length; index += 1) {
@@ -6257,7 +6257,7 @@ function diagnosePhoneNormalizeFailure(payload: unknown): string {
     const recordItem = item as Record<string, unknown>;
     const id = typeof recordItem.id === "string" ? recordItem.id.trim() : "";
     if (!id) return `contacts[${index}].id is missing`;
-    if (contactIds.has(id)) return `contacts 存在重复 id: ${id}`;
+    if (contactIds.has(id)) return `duplicate contact id: ${id}`;
     contactIds.add(id);
     if (typeof recordItem.name !== "string" || !recordItem.name.trim()) return `contacts[${index}].name is missing`;
     if (typeof recordItem.tagLabel !== "string" || !recordItem.tagLabel.trim()) return `contacts[${index}].tagLabel is missing`;
@@ -6273,7 +6273,7 @@ function diagnosePhoneNormalizeFailure(payload: unknown): string {
     const recordItem = item as Record<string, unknown>;
     const id = typeof recordItem.id === "string" ? recordItem.id.trim() : "";
     if (!id) return `recents[${index}].id is missing`;
-    if (recentIds.has(id)) return `recents 存在重复 id: ${id}`;
+    if (recentIds.has(id)) return `duplicate recent-call id: ${id}`;
     recentIds.add(id);
     if (typeof recordItem.name !== "string" || !recordItem.name.trim()) return `recents[${index}].name is missing`;
     if (typeof recordItem.createdAt !== "string" || !isIsoTimestamp(recordItem.createdAt.trim())) return `recents[${index}].createdAt is invalid`;
@@ -6290,7 +6290,7 @@ function diagnosePhoneNormalizeFailure(payload: unknown): string {
     const recordItem = item as Record<string, unknown>;
     const id = typeof recordItem.id === "string" ? recordItem.id.trim() : "";
     if (!id) return `voicemails[${index}].id is missing`;
-    if (voicemailIds.has(id)) return `voicemails 存在重复 id: ${id}`;
+    if (voicemailIds.has(id)) return `duplicate voicemail id: ${id}`;
     voicemailIds.add(id);
     if (typeof recordItem.name !== "string" || !recordItem.name.trim()) return `voicemails[${index}].name is missing`;
     if (typeof recordItem.createdAt !== "string" || !isIsoTimestamp(recordItem.createdAt.trim())) return `voicemails[${index}].createdAt is invalid`;
@@ -6315,7 +6315,7 @@ function normalizeShoppingProduct(
   const priceLabel = typeof product.priceLabel === "string" ? product.priceLabel.trim() : "";
   const tagLabel = typeof product.tagLabel === "string" && product.tagLabel.trim()
     ? product.tagLabel.trim()
-    : (defaults?.tagLabel ?? "商品");
+    : (defaults?.tagLabel ?? "Item");
   const subtitle = typeof product.subtitle === "string" && product.subtitle.trim()
     ? product.subtitle.trim()
     : (defaults?.subtitle ?? "");
@@ -6413,16 +6413,16 @@ export function parseShoppingBlockPayload(text: string): PhoneBlockParseResult {
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
 
   const recentlyViewed = extractShoppingTopLevelBlocks(source, "最近浏览").map((entry, index) =>
-    parseShoppingProductFields(entry.fields, `view_${entry.order}`, "最近浏览", index),
+    parseShoppingProductFields(entry.fields, `view_${entry.order}`, "Recently viewed", index),
   );
   const recommendations = extractShoppingTopLevelBlocks(source, "推荐").map((entry, index) =>
-    parseShoppingProductFields(entry.fields, `rec_${entry.order}`, "为你推荐", index),
+    parseShoppingProductFields(entry.fields, `rec_${entry.order}`, "Recommended for you", index),
   );
   const savedItems = extractShoppingTopLevelBlocks(source, "收藏").map((entry, index) =>
-    parseShoppingProductFields(entry.fields, `saved_${entry.order}`, "收藏", index),
+    parseShoppingProductFields(entry.fields, `saved_${entry.order}`, "Saved", index),
   );
   const cartItems = extractShoppingTopLevelBlocks(source, "购物车").map((entry, index) => ({
-    ...parseShoppingProductFields(entry.fields, `cart_${entry.order}`, "购物车", index),
+    ...parseShoppingProductFields(entry.fields, `cart_${entry.order}`, "Basket", index),
     quantityLabel: pickField(entry.fields, "数量") || "× 1",
   }));
   const orders = extractShoppingTopLevelBlocks(source, "订单").map((entry) => {
@@ -6442,7 +6442,7 @@ export function parseShoppingBlockPayload(text: string): PhoneBlockParseResult {
   });
 
   if (recentlyViewed.length + recommendations.length + savedItems.length + cartItems.length + orders.length === 0) {
-    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到购物块" };
+    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "no shopping block found" };
   }
 
   return {
@@ -6460,14 +6460,14 @@ export function normalizeShoppingPayload(payload: unknown): CheckPhoneShoppingPa
     .map((item) => normalizeShoppingProduct(item))
     .filter(Boolean) as CheckPhoneShoppingPayload["recentlyViewed"];
   const recommendations = (Array.isArray(record.recommendations) ? record.recommendations : Array.isArray(record.recommendedItems) ? record.recommendedItems : [])
-    .map((item) => normalizeShoppingProduct(item, { tagLabel: "为你推荐" }))
+    .map((item) => normalizeShoppingProduct(item, { tagLabel: "Recommended for you" }))
     .filter(Boolean) as CheckPhoneShoppingPayload["recommendations"];
   const savedItems = (Array.isArray(record.savedItems) ? record.savedItems : Array.isArray(record.favorites) ? record.favorites : [])
-    .map((item) => normalizeShoppingProduct(item, { tagLabel: "收藏" }))
+    .map((item) => normalizeShoppingProduct(item, { tagLabel: "Saved" }))
     .filter(Boolean) as CheckPhoneShoppingPayload["savedItems"];
   const cartItems = (Array.isArray(record.cartItems) ? record.cartItems : Array.isArray(record.cart) ? record.cart : [])
     .map((item) => {
-      const normalized = normalizeShoppingProduct(item, { tagLabel: "购物车" });
+      const normalized = normalizeShoppingProduct(item, { tagLabel: "Basket" });
       if (!normalized || !item || typeof item !== "object") return null;
       const product = item as Record<string, unknown>;
       const quantityLabel =
@@ -6501,7 +6501,7 @@ export function normalizeShoppingPayload(payload: unknown): CheckPhoneShoppingPa
         .map((entry) => {
           const normalized = normalizeShoppingProduct(entry, {
             merchantLabel: merchantLabel || "STORE",
-            tagLabel: statusLabel || "订单商品",
+            tagLabel: statusLabel || "Order item",
             detail: note || summary,
           });
           if (!normalized || !entry || typeof entry !== "object") return null;
@@ -6571,9 +6571,9 @@ export function normalizeShoppingPayload(payload: unknown): CheckPhoneShoppingPa
     : savedItems.length;
 
   return {
-    headerTitle: "购物",
-    headerSubtitle: "最近的订单与心动",
-    searchHint: "搜索商品",
+    headerTitle: "Shopping",
+    headerSubtitle: "Recent orders and things they want",
+    searchHint: "Search products",
     stats: {
       pendingCount,
       cartCount,
@@ -6612,7 +6612,7 @@ export async function generateCheckPhoneShopping(
     if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", rawOutput: rawOutput ?? "" };
     const { parsed } = parseShoppingBlockPayload(rawOutput);
     const normalized = normalizeShoppingPayload(parsed);
-    if (!normalized) return { payload: null, summary: "", error: "无法解析购物内容", rawOutput };
+    if (!normalized) return { payload: null, summary: "", error: "could not parse the shopping content", rawOutput };
     return {
       payload: normalized,
       summary: formatSnapshotSummary(normalized),
@@ -8472,7 +8472,7 @@ function diagnoseWeiboNormalizeFailure(payload: unknown): string {
   const record = payload as Record<string, unknown>;
 
   const profileRaw = record.profile && typeof record.profile === "object" ? (record.profile as Record<string, unknown>) : null;
-  if (!profileRaw) return "缺少 profile 对象";
+  if (!profileRaw) return "the profile object is missing";
   if (typeof profileRaw.name !== "string" || !profileRaw.name.trim()) return "profile.name is missing";
   if (typeof profileRaw.handle !== "string" || !profileRaw.handle.trim()) return "profile.handle is missing";
   if (typeof profileRaw.bio !== "string" || !profileRaw.bio.trim()) return "profile.bio is missing";
