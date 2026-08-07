@@ -41,6 +41,11 @@ function StoryFoldBlock({ label, content, scopeClass, children }: {
     const [translating, setTranslating] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<"both" | "zh" | "orig">("both");
+    // Lazy-mount the contents: while collapsed, an iframe inside has zero width, so the
+    // height bridge measures garbage and locks in a bad height — which then shows as a
+    // large blank gap once the block is expanded. Rendering only after the first open
+    // avoids ever taking that measurement. (upstream 55d6f68)
+    const [hasOpened, setHasOpened] = useState(false);
     const handleTranslate = async (e: { preventDefault(): void; stopPropagation(): void }) => {
         e.preventDefault();
         e.stopPropagation();
@@ -63,7 +68,11 @@ function StoryFoldBlock({ label, content, scopeClass, children }: {
         setViewMode(mode);
     };
     return (
-        <details className="story-fold-block" data-fold-tag={label}>
+        <details
+            className="story-fold-block"
+            data-fold-tag={label}
+            onToggle={(e) => { if (e.currentTarget.open) setHasOpened(true); }}
+        >
             <summary>
                 {label}
                 {canTranslate && !translation && (
@@ -92,7 +101,7 @@ function StoryFoldBlock({ label, content, scopeClass, children }: {
                         <MarkdownSegment content={translation} scopeClass={scopeClass} />
                     </div>
                 )}
-                {(viewMode !== "zh" || !translation) && children}
+                {(viewMode !== "zh" || !translation) && hasOpened ? children : null}
             </div>
         </details>
     );
