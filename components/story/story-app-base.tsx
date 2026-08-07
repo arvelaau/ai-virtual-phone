@@ -877,29 +877,20 @@ export function StoryApp({ onClose }: StoryAppProps) {
         <div className="story-drawer-section">
           <div className="story-drawer-eyebrow">Story Characters</div>
           <div className="story-character-list">
-            {characters.map((character) => {
-              const session = createOrGetStorySession(character.id);
-              const sessionMessages = loadStoryMessages(session.id);
-              return (
-                <button
-                  key={character.id}
-                  className="story-character-chip"
-                  data-active={character.id === activeCharacterId ? "true" : undefined}
-                  onClick={() => {
-                    setActiveCharacterId(character.id);
-                    setDrawerOpen(false);
-                  }}
-                >
-                  <Avatar src={character.avatar || undefined} name={character.name} size="md" />
-                  <div className="text-left" style={{ minWidth: 0, overflow: "hidden", flex: 1 }}>
-                    <div className="font-semibold text-[var(--c-story-text,#4b4335)] truncate">{character.name}</div>
-                    <div className="text-[calc(12px*var(--app-text-scale,1))] text-[var(--c-story-sub,rgba(95,82,61,0.72))] truncate">
-                      {getStoryPreview(sessionMessages)}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
+            {characters.map((character) => (
+              <button
+                key={character.id}
+                className="story-character-chip"
+                data-active={character.id === activeCharacterId ? "true" : undefined}
+                onClick={() => {
+                  setActiveCharacterId(character.id);
+                  setDrawerOpen(false);
+                }}
+              >
+                <Avatar src={character.avatar || undefined} name={character.name} size="lg" />
+                <span className="story-character-name">{character.name}</span>
+              </button>
+            ))}
           </div>
         </div>
 
@@ -982,7 +973,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
         <div className="story-drawer-section">
           <div className="story-drawer-eyebrow">Tools</div>
           <button
-            className="story-character-chip justify-center"
+            className="story-tool-btn"
             onClick={() => {
               const rebuilt = rebuildStorySessionRenderCache(activeCharacterId, currentSession.id, { sessionFoldTags: currentSession.foldTags });
               setMessages(rebuilt);
