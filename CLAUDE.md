@@ -1292,6 +1292,29 @@ Real divergence from our baseline: **129 files, +23024 / −5191**, 149 commits,
 
 **`BUILTIN_PRESET_VERSION` is now 275**, bumped to activate the three Moments rules. Bumped ahead of "after D2" deliberately: nothing left in D2 touched `builtin-preset.ts` (`mascot-tools.ts` and `mascot-prompts.ts` are not part of the preset), so no second bump was coming from that work.
 
+### Story-mode polish fixes — **PORTED** (2026-08-07)
+Five fixes, five commits: `90a33f7`, `93e253a`, `8035f12`, `746b4d7`, `1d14573`. `tsc` 0 errors throughout.
+
+**Audit first, and it came back clean:** 3 files only (`components/ui/story-html-renderer.tsx`, `components/story/story-app-base.tsx`, `styles/story.css`). **`lib/story-engine.ts` is not touched by any of them**, so there was no collision with the fully-translated engine.
+
+| fix | upstream | note |
+|---|---|---|
+| iframe height ratchet | `7929e87` | `documentElement.scrollHeight` was in the max — but the parent sizes the iframe from what we report, so that value reflects the IFRAME, not the content. Once it grew it never shrank. Plus a zero-width guard. |
+| collapsed content lazy-mount | `55d6f68` | Same root cause from the other side: a collapsed `<details>` gives an iframe zero width, so it measures garbage. `hasOpened` is one-way, so collapsing again does not force a re-measure. |
+| first-line indent | `041abc5` + `9ff361e` + `1cd1593` | **Three commits, not the two the brief listed.** |
+| auto-scroll after retry | `f16f1c2` | Shorter content makes the browser clamp scroll to the new bottom, which reads as jumping upward. |
+| fallback cover | `13162a0` + `3bcacca` + `dcac2fe` | Three successive refinements of one element; only the final state ported. |
+
+**Two audit findings worth keeping:**
+1. **We never had the BASE first-line indent.** `styles/story.css` contained no `text-indent` at all, so porting only the two refinements the brief named would have added rules with nothing to refine. Had to pull `041abc5` in as well. *Check that a refinement's base exists before porting the refinement.*
+2. **Ported by hand, never cherry-picked.** Histories are unrelated and both `.tsx` files were translated in Phase 1, so context lines differ everywhere. The one part copied byte-for-byte is the iframe bridge script, which is generated-page code rather than app source.
+
+**Deliberately not taken while in these files:** upstream's `margin 0.6em → 1.1em` and `line-height 1.68 → 1.78` (`db637e5`), and the cross-session generation-state fix (`3330405`) that `f16f1c2`'s context sits on — our `handleStoryRetry` uses `setIsGenerating` where upstream uses `markGenerating(sessionId, …)`. The scroll fix is independent of it.
+
+**One translation decision:** upstream's empty-name cover fallback is the character `书`. Since every user-facing string in the repo is now English, that became an open-book emoji — same meaning, no Chinese glyph reintroduced, and the element is `aria-hidden` anyway.
+
+**Still Chinese:** `styles/story.css` has 30 CJK lines of pre-existing comments in parts this port did not touch.
+
 ### Not ported (decide per feature; each is a Chinese-language feature port that would then need translating)
 `工坊` / Workshop app (12 `lib/qa-*.ts` + `phone-qa-app.tsx` + docs — docs Q&A plus a **GitHub agent that reads and edits code**), the WeChat cloud assistant (Supabase edge function + local scripts + a polling-traffic fix), the `夜光 Lumen` music overhaul (~40 commits), local test modes for Game Hall and Black Market theater, and a run of story-mode polish fixes.
 
