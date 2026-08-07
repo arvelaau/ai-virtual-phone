@@ -21,10 +21,34 @@ type CheckPhoneEmailPageProps = {
   onBack: () => void;
 };
 
+const EMAIL_MONTH_NAMES = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+/**
+ * Read the [Time] label off an email.
+ *
+ * Accepts the English form the entry teaches now ("3 Aug 14:32") and the legacy Chinese
+ * one ("8月3日 14:32"), because snapshots generated before the migration still carry it
+ * and nothing rewrites them. Returning null on an unrecognised label is the pre-existing
+ * behaviour and stays: the list simply falls back to displaying the raw string.
+ */
 function parseEmailTimeLabel(label: string): Date | null {
-  const match = label.match(/^(\d{1,2})月(\d{1,2})日\s+(\d{1,2}):(\d{2})$/);
-  if (!match) return null;
-  const [, monthRaw, dayRaw, hourRaw, minuteRaw] = match;
+  const trimmed = label.trim();
+  let monthRaw: string | undefined;
+  let dayRaw: string | undefined;
+  let hourRaw: string | undefined;
+  let minuteRaw: string | undefined;
+
+  const en = trimmed.match(/^(\d{1,2})\s+([A-Za-z]{3,})\.?\s+(\d{1,2}):(\d{2})$/);
+  if (en) {
+    const monthIndex = EMAIL_MONTH_NAMES.indexOf(en[2].slice(0, 3).toLowerCase());
+    if (monthIndex < 0) return null;
+    [, dayRaw, , hourRaw, minuteRaw] = en;
+    monthRaw = String(monthIndex + 1);
+  } else {
+    const zh = trimmed.match(/^(\d{1,2})月(\d{1,2})日\s+(\d{1,2}):(\d{2})$/);
+    if (!zh) return null;
+    [, monthRaw, dayRaw, hourRaw, minuteRaw] = zh;
+  }
   const now = new Date();
   let year = now.getFullYear();
   const month = Number(monthRaw);

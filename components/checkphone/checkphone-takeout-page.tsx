@@ -20,8 +20,36 @@ type CheckPhoneTakeoutPageProps = {
   onBack: () => void;
 };
 
+/**
+ * Spell out a terminal order status, and pass anything else through unchanged.
+ *
+ * The status is whatever the model wrote into [Status] and is rendered raw otherwise, so
+ * both the legacy Chinese values and the English ones must be recognised: pre-migration
+ * snapshots still carry 已完成 / 已取消, and nothing rewrites them.
+ */
+function describeTakeoutOrderStatus(status: string): string {
+  const value = status.trim();
+  if (/^(?:已完成|completed|complete|done)$/i.test(value)) return "Order completed";
+  if (/^(?:已取消|cancelled|canceled)$/i.test(value)) return "Order cancelled";
+  return status;
+}
+
+// The VALUES stay Chinese: they are the storage key. An order's category comes from the
+// block-heading capture, which checkphone-engine's canonicalBlockLabel normalises back to
+// Chinese, so order.category is 美食 whether the model wrote #美食1 or #Food1 — and the
+// filter at :183 compares against exactly that. Only the LABELS are translated, through
+// the map below, which is why this list must not be "tidied up" into English.
 const TAKEOUT_TABS = ["美食", "饮品", "商超", "药品", "其他"] as const;
 const TAKEOUT_FILTERS = ["全部", ...TAKEOUT_TABS] as const;
+
+const TAKEOUT_FILTER_LABELS: Record<(typeof TAKEOUT_FILTERS)[number], string> = {
+  "全部": "All",
+  "美食": "Food",
+  "饮品": "Drinks",
+  "商超": "Groceries",
+  "药品": "Pharmacy",
+  "其他": "Other",
+};
 
 type TakeoutFilter = (typeof TAKEOUT_FILTERS)[number];
 
@@ -320,7 +348,7 @@ export function CheckPhoneTakeoutPage({ character, onBack }: CheckPhoneTakeoutPa
                       padding: "4px 8px"
                     }}
                   >
-                    {category}
+                    {TAKEOUT_FILTER_LABELS[category]}
                   </button>
                 ))}
               </div>
@@ -379,8 +407,7 @@ export function CheckPhoneTakeoutPage({ character, onBack }: CheckPhoneTakeoutPa
               </div>
 
               <div className="cp-takeout-detail-status-header">
-                {activeOrder.status === "已完成" ? "订单已完成" :
-                 activeOrder.status === "已取消" ? "订单已取消" : activeOrder.status}
+                {describeTakeoutOrderStatus(activeOrder.status)}
                 <div style={{ fontSize: 'calc(13px*var(--app-text-scale,1))', color: '#666', marginTop: '4px', fontWeight: 'normal' }}>
                   Thank you for your trust -- we look forward to serving you again.
                 </div>

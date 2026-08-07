@@ -247,7 +247,9 @@ function WeiboPostCard({
                 >
                   {post.authorName}
                 </strong>
-                {post.authorBadge && post.authorBadge !== "本人" && (
+                {/* The badge is for OTHER people's identity labels; a post by the character
+                    themselves is marked with 本人 (legacy) or "Self" and gets no badge. */}
+                {post.authorBadge && !/^(?:本人|self|me|author)$/i.test(post.authorBadge.trim()) && (
                   <span
                     style={{
                       fontSize: "calc(10px*var(--app-text-scale,1))",

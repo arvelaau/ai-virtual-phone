@@ -69,24 +69,18 @@ export const STEP2_FLIPPED = new Set([
  * the same change would silently break parsing on the other side.
  */
 export const DELIBERATE_CJK = {
-  checkphone_email: [{
-    // components/checkphone/checkphone-email-page.tsx parses email.timeLabel with
-    // /^(\d{1,2})月(\d{1,2})日\s+(\d{1,2}):(\d{2})$/ — moves in lockstep with Step 3
-    pattern: /M月D日|4月3日|4月2日/,
-    why: "the M月D日 HH:mm time format, parsed by checkphone-email-page.tsx",
-  }],
-  checkphone_takeout: [{
-    // The order status is stored and rendered raw, and checkphone-takeout-page.tsx:382
-    // special-cases 已完成/已取消. Kept Chinese until that page moves in Step 3.
-    //
-    // The five CATEGORY values deliberately have NO entry here, though the same page
-    // matches them (TAKEOUT_TABS :23, order.category === selectedCategory :169). They do
-    // not need one: the category comes from the block heading capture, which
-    // canonicalBlockLabel normalises back to Chinese, so order.category stays 美食
-    // whether the model writes #美食1 or #Food1. The headings are therefore safe to flip.
-    pattern: /已送达|已完成|已取消/,
-    why: "the order status values, special-cased by checkphone-takeout-page.tsx:382",
-  }],
+  // checkphone_email, checkphone_takeout and checkphone_weibo used to have entries here.
+  // All three were waiting on their UI page, and Step 3 is where those pages moved, so
+  // the consumers were made bilingual FIRST and the teachings then flipped:
+  //   email    parseEmailTimeLabel        now reads "3 Apr 14:32" and "8月3日 14:32"
+  //   takeout  describeTakeoutOrderStatus now reads Completed/Cancelled and 已完成/已取消
+  //   weibo    the authorBadge test       now reads Self and 本人
+  // The legacy forms stay recognised permanently, since pre-migration snapshots carry
+  // them and nothing rewrites stored data.
+  //
+  // takeout's five CATEGORY values never needed an entry: the category comes from the
+  // block-heading capture, which canonicalBlockLabel normalises back to Chinese, so
+  // order.category stays 美食 whether the model writes #美食1 or #Food1.
   checkphone_chat: [{
     // The entry's prose refers to the [真实会话] / [真实群聊] / [真实朋友圈] / [真实评论]
     // blocks that the ENGINE injects into this prompt (checkphone-engine.ts:1553). Those
@@ -94,11 +88,6 @@ export const DELIBERATE_CJK = {
     // exactly as the model will see them, or the instruction points at nothing.
     pattern: /真实会话|真实群聊|真实朋友圈|真实评论/,
     why: "names the [真实会话] blocks the engine injects at checkphone-engine.ts:1553",
-  }],
-  checkphone_weibo: [{
-    // checkphone-weibo-page.tsx:250 renders the badge only when authorBadge !== "本人"
-    pattern: /本人/,
-    why: "the 本人 self-identity value, compared by checkphone-weibo-page.tsx:250",
   }],
   // checkphone_music deliberately has NO entry, though checkphone-music-page.tsx:133,138
   // does parse 分钟 and 最近偏爱. Checked against the entry rather than assumed: it teaches

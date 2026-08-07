@@ -59,7 +59,7 @@ export const BUILTIN_PRESET_ID = "builtin_default_v1";
 //                   left un-bumped at the time. Nothing else in D2 touches this file:
 //                   mascot-tools.ts and mascot-prompts.ts are not part of the preset,
 //                   so no further bump is coming from that work.
-export const BUILTIN_PRESET_VERSION = 276;
+export const BUILTIN_PRESET_VERSION = 277;
 
 export function createBuiltinPreset(): PresetConfig {
     const now = Date.now();
@@ -2607,7 +2607,7 @@ export function createBuiltinPreset(): PresetConfig {
                     "[Shop]A-Wen Clay Pot Rice",
                     "[Time]2026-04-05T21:14:00+08:00",
                     "[Icon]🍚",
-                    "[Status]已送达",
+                    "[Status]Delivered",
                     "[Amount]48",
                     "[Item1]Cured sausage clay pot rice x1",
                     "[Item1Icon]🍚",
@@ -2624,7 +2624,7 @@ export function createBuiltinPreset(): PresetConfig {
                     "[Shop]Mountain City Iced Tofu Pudding",
                     "[Time]2026-04-05T16:20:00+08:00",
                     "[Icon]🥤",
-                    "[Status]已送达",
+                    "[Status]Delivered",
                     "[Amount]22",
                     "[Item1]Osmanthus iced tofu pudding x1",
                     "[Item1Icon]🍮",
@@ -2639,7 +2639,7 @@ export function createBuiltinPreset(): PresetConfig {
                     "- [Note] and [Review] are optional.",
                     "- Number the item fields consecutively — Item1, Item2, Item3 — with no gaps.",
                     "- Each item must be followed immediately by its own icon: [Item1] then [Item1Icon]. The item icon should match that item, not repeat the order's icon.",
-                    "- [Status] keeps its Chinese wording (已送达 / 已完成 / 已取消); the order page still reads those exact values.",
+                    "- [Status] is the delivery state, e.g. Delivered, Completed or Cancelled.",
                     "- Always use ISO 8601 for times, e.g. 2026-04-05T21:14:00+08:00.",
                     "- [Amount] is a bare number, whole or decimal, with no currency word or symbol.",
                     "- Output these field blocks only — no explanations, no code fences.",
@@ -2678,7 +2678,7 @@ export function createBuiltinPreset(): PresetConfig {
                     "[From]Farstar Alumni Office",
                     "[Email]alumni@school.example",
                     "[Subject]Confirmation: spring alumni salon",
-                    "[Time]4月3日 14:32",
+                    "[Time]3 Apr 14:32",
                     "[To]{{char}}",
                     "[Unread]yes",
                     "[Starred]no",
@@ -2692,7 +2692,7 @@ export function createBuiltinPreset(): PresetConfig {
                     "[From]Billing notice",
                     "[Email]notice@billing.example",
                     "[Subject]Your monthly statement is ready",
-                    "[Time]4月2日 09:10",
+                    "[Time]2 Apr 09:10",
                     "[To]{{char}}",
                     "[Unread]no",
                     "[Starred]no",
@@ -2703,7 +2703,7 @@ export function createBuiltinPreset(): PresetConfig {
                     "- The sample is a format reference only; never reuse its content or wording.",
                     "- Generate at least 8 messages, clearly varied in origin and in length.",
                     "- Every message carries From, Email, Subject, Time, To and Body.",
-                    "- [Time] uses the M月D日 HH:mm format, e.g. 4月3日 14:32. Keep this format exactly — the app parses it to work out the date.",
+                    "- [Time] uses a short day-month time, e.g. 3 Apr 14:32. Keep this shape exactly — the app parses it to work out the date.",
                     "- The body may break lines naturally, carrying a salutation, paragraphs, a sign-off or a postscript the way real mail does.",
                     "- Output the block format above and nothing else.",
                     "</checkphone_email_instruction>",
@@ -3707,7 +3707,7 @@ export function createBuiltinPreset(): PresetConfig {
                     "",
                     "#MyWeibo1",
                     "[Author]{{char}}",
-                    "[Identity]本人",
+                    "[Identity]Self",
                     "[Body]their own post",
                     "[Icon]a single icon",
                     "[Reposts]a number",
@@ -3732,7 +3732,7 @@ export function createBuiltinPreset(): PresetConfig {
                     "- Most #MyWeibo entries should carry 4 to 6 comments, and the home feed should carry a fair number too, so the page reads like real interaction.",
                     "- For a threaded reply use [CommentNReplyTo]CommentM, where M is a comment number that already appeared above; replies may nest further, e.g. comment 3 replying to comment 2. Never write \"X → Y\" or \"replying to X:\" inside the comment text itself.",
                     "- [Type] is direct or group; [MessageNDirection] is incoming or outgoing.",
-                    "- [Identity] on a #MyWeibo entry must stay the exact word 本人 — the app reads that value to know the post is {{char}}'s own.",
+                    "- [Identity] on a #MyWeibo entry must be the exact word Self — the app reads that value to know the post is {{char}}'s own.",
                     "- [Icon] must be a single, immediately readable, restrained emoji or icon character.",
                     "- Output #Trending from highest heat to lowest; the system numbers them.",
                     "- Keep the posts short and immediate, and the comments like ordinary users talking to each other. This is not a long-form platform.",
