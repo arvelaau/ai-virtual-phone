@@ -158,6 +158,203 @@ async function buildCheckPhoneManifestMessages(
   });
 }
 
+// ── Bilingual field lookup ───────────────────────────────────────────────────
+//
+// The checkphone AI answers in a `[FieldName]value` block format, and every reader in
+// this file used to index the parsed bag directly: pickField(fields, "标题"), pickField(profileFields, "昵称")
+// and so on, at 421 call sites across 154 distinct names.
+//
+// That made the field names a hard protocol: the model had to write them in Chinese or
+// nothing was read. This table is the safety net that has to exist BEFORE the teaching
+// can be flipped to English — same order as every other migration in this project
+// (parsers bilingual first, producers second).
+//
+// The legacy Chinese name stays as the KEY, so it doubles as the internal identifier and
+// the call sites stay readable. The value is the list of spellings accepted on input,
+// English first because that is what will be taught.
+export const CHECKPHONE_FIELD_ALIASES: Record<string, readonly string[]> = {
+  "时间": ["Time", "时间"],
+  "图标": ["Icon", "图标"],
+  "标题": ["Title", "标题"],
+  "正文": ["Body", "正文"],
+  "类型": ["Type", "类型"],
+  "名称": ["Name", "名称"],
+  "简介": ["Bio", "简介"],
+  "感受": ["Feeling", "感受"],
+  "标签": ["Tags", "标签"],
+  "昵称": ["Nickname", "昵称"],
+  "时长": ["Duration", "时长"],
+  "作者": ["Author", "作者"],
+  "备注": ["Note", "备注"],
+  "播放量": ["PlayCount", "播放量"],
+  "粉丝": ["Followers", "粉丝"],
+  "浏览量": ["ViewCount", "浏览量"],
+  "关注": ["Following", "关注"],
+  "点赞量": ["LikeCount", "点赞量"],
+  "状态": ["Status", "状态"],
+  "未读": ["Unread", "未读"],
+  "当时状态": ["StatusAtTheTime", "当时状态"],
+  "回复量": ["ReplyCount", "回复量"],
+  "转发量": ["RepostCount", "转发量"],
+  "内容": ["Content", "内容"],
+  "静音": ["Muted", "静音"],
+  "内心": ["InnerThoughts", "内心"],
+  "点赞": ["Likes", "点赞"],
+  "置顶": ["Pinned", "置顶"],
+  "店铺": ["Shop", "店铺"],
+  "游戏名": ["GameName", "游戏名"],
+  "进度": ["Progress", "进度"],
+  "账号": ["Handle", "账号"],
+  "画面描述": ["SceneDescription", "画面描述"],
+  "用户名": ["Username", "用户名"],
+  "评论量": ["CommentCount", "评论量"],
+  "地点": ["Location", "地点"],
+  "媒体描述": ["MediaDescription", "媒体描述"],
+  "频道": ["Channel", "频道"],
+  "视频描述": ["VideoDescription", "视频描述"],
+  "分类": ["Category", "分类"],
+  "说明": ["Description", "说明"],
+  "标记": ["Marker", "标记"],
+  "评论数": ["CommentTotal", "评论数"],
+  "详情": ["Detail", "详情"],
+  "姓名": ["FullName", "姓名"],
+  "摘要": ["Summary", "摘要"],
+  "收藏": ["Saves", "收藏"],
+  "书名": ["BookTitle", "书名"],
+  "金额": ["Amount", "金额"],
+  "情境": ["Situation", "情境"],
+  "总时长": ["TotalDuration", "总时长"],
+  "上次游玩": ["LastPlayed", "上次游玩"],
+  "感想": ["Thoughts", "感想"],
+  "价格": ["Price", "价格"],
+  "UP主": ["Uploader", "UP主"],
+  "看到哪了": ["ProgressNote", "看到哪了"],
+  "收藏原因": ["ReasonSaved", "收藏原因"],
+  "社区": ["Community", "社区"],
+  "赞同量": ["UpvoteCount", "赞同量"],
+  "内心想法": ["InnerThought", "内心想法"],
+  "加入时间": ["JoinedAt", "加入时间"],
+  "喜欢原因": ["ReasonLiked", "喜欢原因"],
+  "描述": ["Desc", "描述"],
+  "发帖时间": ["PostedAt", "发帖时间"],
+  "获赞": ["LikesReceived", "获赞"],
+  "网址": ["Url", "网址"],
+  "媒体": ["Media", "媒体"],
+  "尾号": ["LastDigits", "尾号"],
+  "转发": ["Reposts", "转发"],
+  "条目": ["Item", "条目"],
+  "图片描述": ["ImageDescription", "图片描述"],
+  "发件人": ["From", "发件人"],
+  "邮箱": ["Email", "邮箱"],
+  "主题": ["Subject", "主题"],
+  "收件人": ["To", "收件人"],
+  "星标": ["Starred", "星标"],
+  "附件": ["Attachment", "附件"],
+  "心声": ["InnerVoice", "心声"],
+  "评价": ["Review", "评价"],
+  "近两周时长": ["LastTwoWeeksDuration", "近两周时长"],
+  "想玩原因": ["ReasonWantToPlay", "想玩原因"],
+  "帖子 Karma": ["PostKarma", "帖子 Karma"],
+  "评论 Karma": ["CommentKarma", "评论 Karma"],
+  "原帖标题": ["OriginalPostTitle", "原帖标题"],
+  "加入": ["Joined", "加入"],
+  "回复对象": ["ReplyTo", "回复对象"],
+  "原帖摘要": ["OriginalPostSummary", "原帖摘要"],
+  "作者用户名": ["AuthorUsername", "作者用户名"],
+  "作者账号": ["AuthorHandle", "作者账号"],
+  "稍后原因": ["ReasonForLater", "稍后原因"],
+  "分享量": ["ShareCount", "分享量"],
+  "抖音号": ["DouyinId", "抖音号"],
+  "互关": ["MutualFollow", "互关"],
+  "博主": ["Blogger", "博主"],
+  "帖子标题": ["PostTitle", "帖子标题"],
+  "帖子正文": ["PostBody", "帖子正文"],
+  "收藏量": ["SaveCount", "收藏量"],
+  "头像": ["Avatar", "头像"],
+  "认证": ["Verified", "认证"],
+  "在线": ["Online", "在线"],
+  "机器人": ["Bot", "机器人"],
+  "已读状态": ["ReadStatus", "已读状态"],
+  "预览符号": ["PreviewSymbol", "预览符号"],
+  "精选": ["Featured", "精选"],
+  "人数": ["MemberCount", "人数"],
+  "活跃": ["Active", "活跃"],
+  "关系": ["Relationship", "关系"],
+  "最近": ["Recent", "最近"],
+  "机构": ["Organisation", "机构"],
+  "余额": ["Balance", "余额"],
+  "账户": ["Account", "账户"],
+  "方向": ["Direction", "方向"],
+  "转写": ["Transcript", "转写"],
+  "线程ID": ["ThreadId", "线程ID"],
+  "发送人": ["Sender", "发送人"],
+  "数量": ["Quantity", "数量"],
+  "总价": ["TotalPrice", "总价"],
+  "歌名": ["TrackName", "歌名"],
+  "歌手": ["Artist", "歌手"],
+  "专辑": ["Album", "专辑"],
+  "喜欢": ["Liked", "喜欢"],
+  "副标题": ["Subtitle", "副标题"],
+  "听歌状态": ["ListeningStatus", "听歌状态"],
+  "本月时长": ["ThisMonthDuration", "本月时长"],
+  "偏爱歌手": ["FavouriteArtist", "偏爱歌手"],
+  "小组": ["Group", "小组"],
+  "评分": ["Rating", "评分"],
+  "动作": ["Action", "动作"],
+  "条目信息": ["ItemInfo", "条目信息"],
+  "回应": ["Response", "回应"],
+  "评论": ["Comment", "评论"],
+  "城市": ["City", "城市"],
+  "被关注": ["FollowedBy", "被关注"],
+  "想看": ["WantToWatch", "想看"],
+  "想读": ["WantToRead", "想读"],
+  "成员数": ["MemberTotal", "成员数"],
+  "最近更新": ["LastUpdated", "最近更新"],
+  "更新时间": ["UpdatedAt", "更新时间"],
+  "已赞": ["HasLiked", "已赞"],
+  "已收藏": ["HasSaved", "已收藏"],
+  "赞藏": ["LikesAndSaves", "赞藏"],
+  "赞藏通知": ["LikeSaveNotification", "赞藏通知"],
+  "新增关注": ["NewFollowers", "新增关注"],
+  "评论提及": ["CommentMention", "评论提及"],
+  "身份": ["Identity", "身份"],
+  "热度": ["Heat", "热度"],
+  "提及通知": ["MentionNotification", "提及通知"],
+  "评论通知": ["CommentNotification", "评论通知"],
+  "点赞通知": ["LikeNotification", "点赞通知"],
+  "摘录": ["Excerpt", "摘录"],
+  "章节": ["Chapter", "章节"],
+  "注记": ["Annotation", "注记"],
+  "阅读状态": ["ReadingStatus", "阅读状态"],
+  "落款时间": ["SignedAt", "落款时间"],
+};
+
+/**
+ * Read one field from a parsed block, accepting either the English name the model is
+ * taught or the legacy Chinese one.
+ *
+ * Two passes, like xiaohongshu-engine's textField: exact match first, then a
+ * case-insensitive sweep — a model writing English produces `[title]` about as often as
+ * `[Title]`, and the block parser preserves whatever case it was given.
+ *
+ * `legacyName` is the Chinese key, which is also the internal identifier; an unknown key
+ * falls back to reading that name directly so a call site can never silently return
+ * undefined just because the table is missing an entry.
+ */
+export function pickField(fields: Record<string, string> | undefined, legacyName: string): string | undefined {
+  if (!fields) return undefined;
+  const names = CHECKPHONE_FIELD_ALIASES[legacyName] ?? [legacyName];
+  for (const name of names) {
+    const value = fields[name];
+    if (value !== undefined) return value;
+  }
+  const lowered = names.map((n) => n.toLowerCase());
+  for (const key of Object.keys(fields)) {
+    if (lowered.includes(key.toLowerCase())) return fields[key];
+  }
+  return undefined;
+}
+
 const CHECKPHONE_COMMON_TEXT_FIELD_KEYS = [
   "headerTitle",
   "headerSubtitle",
@@ -1278,12 +1475,12 @@ function parseNotesBlockPayload(text: string): PhoneBlockParseResult {
     const order = String(index + 1);
     return {
       id: `note_${order}`,
-      title: fields["标题"] || "",
-      updatedLabel: fields["时间"] || "",
-      pinned: parseNotesPinned(fields["置顶"]),
-      tagLabel: fields["标签"] || "",
-      imageDescription: fields["图片描述"] || "",
-      body: fields["正文"] || "",
+      title: pickField(fields, "标题") || "",
+      updatedLabel: pickField(fields, "时间") || "",
+      pinned: parseNotesPinned(pickField(fields, "置顶")),
+      tagLabel: pickField(fields, "标签") || "",
+      imageDescription: pickField(fields, "图片描述") || "",
+      body: pickField(fields, "正文") || "",
     };
   });
 
@@ -1359,15 +1556,15 @@ function parseEmailBlockPayload(text: string): PhoneBlockParseResult {
     const order = String(index + 1);
     return {
       id: `mail_${order}`,
-      senderName: fields["发件人"] || "",
-      senderAddress: fields["邮箱"] || "",
-      subject: fields["主题"] || "",
-      timeLabel: fields["时间"] || "",
-      body: fields["正文"] || "",
-      recipientLabel: fields["收件人"] || "",
-      unread: parseBlockBoolean(fields["未读"]),
-      starred: parseBlockBoolean(fields["星标"]),
-      attachmentLabel: fields["附件"] || undefined,
+      senderName: pickField(fields, "发件人") || "",
+      senderAddress: pickField(fields, "邮箱") || "",
+      subject: pickField(fields, "主题") || "",
+      timeLabel: pickField(fields, "时间") || "",
+      body: pickField(fields, "正文") || "",
+      recipientLabel: pickField(fields, "收件人") || "",
+      unread: parseBlockBoolean(pickField(fields, "未读")),
+      starred: parseBlockBoolean(pickField(fields, "星标")),
+      attachmentLabel: pickField(fields, "附件") || undefined,
     };
   });
 
@@ -1516,17 +1713,17 @@ function parseTakeoutBlockPayload(text: string): {
 
       return {
         id: `takeout_${category}_${current[1] || index + 1}`,
-        shopName: fields["店铺"] || "",
+        shopName: pickField(fields, "店铺") || "",
         category,
-        createdAt: fields["时间"] || "",
-        icon: fields["图标"] || "",
-        status: fields["状态"] || "",
-        amount: parseTakeoutAmount(fields["金额"]),
+        createdAt: pickField(fields, "时间") || "",
+        icon: pickField(fields, "图标") || "",
+        status: pickField(fields, "状态") || "",
+        amount: parseTakeoutAmount(pickField(fields, "金额")),
         items,
-        note: fields["备注"] || undefined,
-        scenario: fields["情境"] || "",
-        innerVoice: fields["心声"] || "",
-        review: fields["评价"] || undefined,
+        note: pickField(fields, "备注") || undefined,
+        scenario: pickField(fields, "情境") || "",
+        innerVoice: pickField(fields, "心声") || "",
+        review: pickField(fields, "评价") || undefined,
       };
     });
   });
@@ -1733,37 +1930,37 @@ function parseSteamBlockPayload(text: string): {
       if (sectionName === "最近在玩") {
         return {
           id: gameId,
-          title: fields["游戏名"] || "",
-          icon: fields["图标"] || "",
-          genre: fields["类型"] || "",
-          totalHours: parseSteamNumericField(fields["总时长"]),
-          recentHours: parseSteamNumericField(fields["近两周时长"]),
-          progressPercent: parseSteamProgressField(fields["进度"]),
-          lastPlayedAt: fields["上次游玩"] || "",
-          status: fields["状态"] || "",
-          note: fields["感想"] || "",
+          title: pickField(fields, "游戏名") || "",
+          icon: pickField(fields, "图标") || "",
+          genre: pickField(fields, "类型") || "",
+          totalHours: parseSteamNumericField(pickField(fields, "总时长")),
+          recentHours: parseSteamNumericField(pickField(fields, "近两周时长")),
+          progressPercent: parseSteamProgressField(pickField(fields, "进度")),
+          lastPlayedAt: pickField(fields, "上次游玩") || "",
+          status: pickField(fields, "状态") || "",
+          note: pickField(fields, "感想") || "",
         };
       }
       if (sectionName === "愿望单") {
         return {
           id: gameId,
-          title: fields["游戏名"] || "",
-          icon: fields["图标"] || "",
-          genre: fields["类型"] || "",
-          price: parseSteamNumericField(fields["价格"]),
-          reason: fields["想玩原因"] || "",
+          title: pickField(fields, "游戏名") || "",
+          icon: pickField(fields, "图标") || "",
+          genre: pickField(fields, "类型") || "",
+          price: parseSteamNumericField(pickField(fields, "价格")),
+          reason: pickField(fields, "想玩原因") || "",
         };
       }
       return {
         id: gameId,
-        title: fields["游戏名"] || "",
-        icon: fields["图标"] || "",
-        genre: fields["类型"] || "",
-        totalHours: parseSteamNumericField(fields["总时长"]),
-        progressPercent: parseSteamProgressField(fields["进度"]),
-        lastPlayedAt: fields["上次游玩"] || "",
-        status: fields["状态"] || "",
-        note: fields["感想"] || "",
+        title: pickField(fields, "游戏名") || "",
+        icon: pickField(fields, "图标") || "",
+        genre: pickField(fields, "类型") || "",
+        totalHours: parseSteamNumericField(pickField(fields, "总时长")),
+        progressPercent: parseSteamProgressField(pickField(fields, "进度")),
+        lastPlayedAt: pickField(fields, "上次游玩") || "",
+        status: pickField(fields, "状态") || "",
+        note: pickField(fields, "感想") || "",
       };
     });
   };
@@ -1771,9 +1968,9 @@ function parseSteamBlockPayload(text: string): {
   const parsed = {
     headerTitle: "游戏库",
     profile: {
-      name: profileFields["昵称"] || "",
-      handle: profileFields["账号"] || "",
-      bio: profileFields["简介"] || "",
+      name: pickField(profileFields, "昵称") || "",
+      handle: pickField(profileFields, "账号") || "",
+      bio: pickField(profileFields, "简介") || "",
     },
     recentlyPlayed: parseSectionGames("最近在玩"),
     wishlist: parseSectionGames("愿望单"),
@@ -1976,29 +2173,29 @@ function parseBilibiliBlockPayload(text: string): {
       if (sectionName === "观看记录") {
         return {
           id,
-          title: fields["标题"] || "",
-          upName: fields["UP主"] || "",
-          icon: fields["图标"] || "",
-          visualDescription: fields["画面描述"] || "",
-          createdAt: fields["时间"] || "",
-          durationLabel: fields["时长"] || "",
-          playCount: parseBilibiliNumericField(fields["播放量"]),
-          progressLabel: fields["看到哪了"] || "",
-          stateNote: fields["当时状态"] || "",
-          feeling: fields["感受"] || "",
+          title: pickField(fields, "标题") || "",
+          upName: pickField(fields, "UP主") || "",
+          icon: pickField(fields, "图标") || "",
+          visualDescription: pickField(fields, "画面描述") || "",
+          createdAt: pickField(fields, "时间") || "",
+          durationLabel: pickField(fields, "时长") || "",
+          playCount: parseBilibiliNumericField(pickField(fields, "播放量")),
+          progressLabel: pickField(fields, "看到哪了") || "",
+          stateNote: pickField(fields, "当时状态") || "",
+          feeling: pickField(fields, "感受") || "",
         };
       }
       return {
         id,
-        title: fields["标题"] || "",
-        upName: fields["UP主"] || "",
-        icon: fields["图标"] || "",
-        visualDescription: fields["画面描述"] || "",
-        createdAt: fields["时间"] || "",
-        durationLabel: fields["时长"] || "",
-        playCount: parseBilibiliNumericField(fields["播放量"]),
-        saveReason: fields["收藏原因"] || "",
-        feeling: fields["感受"] || "",
+        title: pickField(fields, "标题") || "",
+        upName: pickField(fields, "UP主") || "",
+        icon: pickField(fields, "图标") || "",
+        visualDescription: pickField(fields, "画面描述") || "",
+        createdAt: pickField(fields, "时间") || "",
+        durationLabel: pickField(fields, "时长") || "",
+        playCount: parseBilibiliNumericField(pickField(fields, "播放量")),
+        saveReason: pickField(fields, "收藏原因") || "",
+        feeling: pickField(fields, "感受") || "",
       };
     });
   };
@@ -2155,36 +2352,36 @@ function parseRedditBlockPayload(text: string): RedditBlockParseResult {
   const firstSectionIndex = sectionMatches[0]?.index ?? 0;
   const profileFields = parseTakeoutTaggedFields(source.slice(0, firstSectionIndex).trim());
   const profile = {
-    name: normalizeRedditMultilineText(profileFields["昵称"] || ""),
-    handle: normalizeRedditMultilineText(profileFields["用户名"] || ""),
-    bio: normalizeRedditMultilineText(profileFields["简介"] || ""),
-    followers: parseRedditNumericField(profileFields["粉丝"]),
-    postKarma: parseRedditNumericField(profileFields["Post Karma"] || profileFields["帖子 Karma"] || profileFields["Karma"]),
-    commentKarma: parseRedditNumericField(profileFields["Comment Karma"] || profileFields["评论 Karma"]),
+    name: normalizeRedditMultilineText(pickField(profileFields, "昵称") || ""),
+    handle: normalizeRedditMultilineText(pickField(profileFields, "用户名") || ""),
+    bio: normalizeRedditMultilineText(pickField(profileFields, "简介") || ""),
+    followers: parseRedditNumericField(pickField(profileFields, "粉丝")),
+    postKarma: parseRedditNumericField(profileFields["Post Karma"] || pickField(profileFields, "帖子 Karma") || profileFields["Karma"]),
+    commentKarma: parseRedditNumericField(profileFields["Comment Karma"] || pickField(profileFields, "评论 Karma")),
     cakeDay: profileFields["Cake Day"] || "",
   };
 
   const posts = parseRedditSectionBlocks(source, sectionMatches, ["Posts", "发帖"], "帖子").map((entry) => ({
     id: `reddit_post_${entry.number}`,
-    communityName: normalizeRedditMultilineText(entry.fields["社区"] || ""),
-    title: normalizeRedditMultilineText(entry.fields["标题"] || ""),
-    body: normalizeRedditMultilineText(entry.fields["正文"] || ""),
-    createdAt: entry.fields["时间"] || "",
-    upvoteCount: parseRedditNumericField(entry.fields["赞同量"]),
-    commentCount: parseRedditNumericField(entry.fields["评论量"]),
-    viewCount: parseRedditNumericField(entry.fields["浏览量"]),
-    innerThought: normalizeRedditMultilineText(entry.fields["内心想法"] || entry.fields["Innerthought"] || entry.fields["InnerThought"] || entry.fields["感受"] || ""),
+    communityName: normalizeRedditMultilineText(pickField(entry.fields, "社区") || ""),
+    title: normalizeRedditMultilineText(pickField(entry.fields, "标题") || ""),
+    body: normalizeRedditMultilineText(pickField(entry.fields, "正文") || ""),
+    createdAt: pickField(entry.fields, "时间") || "",
+    upvoteCount: parseRedditNumericField(pickField(entry.fields, "赞同量")),
+    commentCount: parseRedditNumericField(pickField(entry.fields, "评论量")),
+    viewCount: parseRedditNumericField(pickField(entry.fields, "浏览量")),
+    innerThought: normalizeRedditMultilineText(pickField(entry.fields, "内心想法") || entry.fields["Innerthought"] || entry.fields["InnerThought"] || pickField(entry.fields, "感受") || ""),
   }));
 
   const comments = parseRedditSectionBlocks(source, sectionMatches, ["Comments", "评论"], "评论").map((entry) => ({
     id: `reddit_comment_${entry.number}`,
-    communityName: normalizeRedditMultilineText(entry.fields["社区"] || ""),
-    postTitle: normalizeRedditMultilineText(entry.fields["原帖标题"] || entry.fields["标题"] || ""),
-    body: normalizeRedditMultilineText(entry.fields["正文"] || ""),
-    createdAt: entry.fields["时间"] || "",
-    upvoteCount: parseRedditNumericField(entry.fields["赞同量"]),
-    viewCount: parseRedditNumericField(entry.fields["浏览量"]),
-    innerThought: normalizeRedditMultilineText(entry.fields["内心想法"] || entry.fields["Innerthought"] || entry.fields["InnerThought"] || entry.fields["感受"] || ""),
+    communityName: normalizeRedditMultilineText(pickField(entry.fields, "社区") || ""),
+    postTitle: normalizeRedditMultilineText(pickField(entry.fields, "原帖标题") || pickField(entry.fields, "标题") || ""),
+    body: normalizeRedditMultilineText(pickField(entry.fields, "正文") || ""),
+    createdAt: pickField(entry.fields, "时间") || "",
+    upvoteCount: parseRedditNumericField(pickField(entry.fields, "赞同量")),
+    viewCount: parseRedditNumericField(pickField(entry.fields, "浏览量")),
+    innerThought: normalizeRedditMultilineText(pickField(entry.fields, "内心想法") || entry.fields["Innerthought"] || entry.fields["InnerThought"] || pickField(entry.fields, "感受") || ""),
   }));
 
   const parsed = {
@@ -2420,13 +2617,13 @@ function parseXBlockPayload(text: string): XBlockParseResult {
   const firstSectionIndex = sectionMatches[0]?.index ?? 0;
   const profileFields = parseTakeoutTaggedFields(source.slice(0, firstSectionIndex).trim());
   const profile = {
-    name: profileFields["昵称"] || "",
-    handle: profileFields["用户名"] || "",
-    bio: profileFields["简介"] || "",
-    location: profileFields["地点"] || undefined,
-    joinedAt: profileFields["加入时间"] || profileFields["加入"] || undefined,
-    followingCount: parseXNumericField(profileFields["关注"]),
-    followerCount: parseXNumericField(profileFields["粉丝"]),
+    name: pickField(profileFields, "昵称") || "",
+    handle: pickField(profileFields, "用户名") || "",
+    bio: pickField(profileFields, "简介") || "",
+    location: pickField(profileFields, "地点") || undefined,
+    joinedAt: pickField(profileFields, "加入时间") || pickField(profileFields, "加入") || undefined,
+    followingCount: parseXNumericField(pickField(profileFields, "关注")),
+    followerCount: parseXNumericField(pickField(profileFields, "粉丝")),
   };
 
   const parseSectionBlocks = (sectionName: "帖子" | "回复" | "媒体" | "喜欢") => {
@@ -2450,53 +2647,53 @@ function parseXBlockPayload(text: string): XBlockParseResult {
 
   const posts = parseSectionBlocks("帖子").map((entry) => ({
     id: `x_post_${entry.number}`,
-    body: entry.fields["正文"] || "",
-    mediaDescription: entry.fields["媒体描述"] || undefined,
-    createdAt: entry.fields["时间"] || "",
-    replyCount: parseXNumericField(entry.fields["回复量"]),
-    repostCount: parseXNumericField(entry.fields["转发量"]),
-    likeCount: parseXNumericField(entry.fields["点赞量"]),
-    viewCount: parseXNumericField(entry.fields["浏览量"]),
-    note: entry.fields["感受"] || "",
+    body: pickField(entry.fields, "正文") || "",
+    mediaDescription: pickField(entry.fields, "媒体描述") || undefined,
+    createdAt: pickField(entry.fields, "时间") || "",
+    replyCount: parseXNumericField(pickField(entry.fields, "回复量")),
+    repostCount: parseXNumericField(pickField(entry.fields, "转发量")),
+    likeCount: parseXNumericField(pickField(entry.fields, "点赞量")),
+    viewCount: parseXNumericField(pickField(entry.fields, "浏览量")),
+    note: pickField(entry.fields, "感受") || "",
   }));
 
   const replies = parseSectionBlocks("回复").map((entry) => ({
     id: `x_reply_${entry.number}`,
-    targetName: entry.fields["回复对象"] || "",
-    targetSnippet: entry.fields["原帖摘要"] || "",
-    body: entry.fields["正文"] || "",
-    createdAt: entry.fields["时间"] || "",
-    replyCount: parseXNumericField(entry.fields["回复量"]),
-    repostCount: parseXNumericField(entry.fields["转发量"]),
-    likeCount: parseXNumericField(entry.fields["点赞量"]),
-    viewCount: parseXNumericField(entry.fields["浏览量"]),
-    note: entry.fields["感受"] || "",
+    targetName: pickField(entry.fields, "回复对象") || "",
+    targetSnippet: pickField(entry.fields, "原帖摘要") || "",
+    body: pickField(entry.fields, "正文") || "",
+    createdAt: pickField(entry.fields, "时间") || "",
+    replyCount: parseXNumericField(pickField(entry.fields, "回复量")),
+    repostCount: parseXNumericField(pickField(entry.fields, "转发量")),
+    likeCount: parseXNumericField(pickField(entry.fields, "点赞量")),
+    viewCount: parseXNumericField(pickField(entry.fields, "浏览量")),
+    note: pickField(entry.fields, "感受") || "",
   }));
 
   const media = parseSectionBlocks("媒体").map((entry) => ({
     id: `x_media_${entry.number}`,
-    body: entry.fields["正文"] || "",
-    mediaDescription: entry.fields["媒体描述"] || "",
-    createdAt: entry.fields["时间"] || "",
-    replyCount: parseXNumericField(entry.fields["回复量"]),
-    repostCount: parseXNumericField(entry.fields["转发量"]),
-    likeCount: parseXNumericField(entry.fields["点赞量"]),
-    viewCount: parseXNumericField(entry.fields["浏览量"]),
-    note: entry.fields["感受"] || "",
+    body: pickField(entry.fields, "正文") || "",
+    mediaDescription: pickField(entry.fields, "媒体描述") || "",
+    createdAt: pickField(entry.fields, "时间") || "",
+    replyCount: parseXNumericField(pickField(entry.fields, "回复量")),
+    repostCount: parseXNumericField(pickField(entry.fields, "转发量")),
+    likeCount: parseXNumericField(pickField(entry.fields, "点赞量")),
+    viewCount: parseXNumericField(pickField(entry.fields, "浏览量")),
+    note: pickField(entry.fields, "感受") || "",
   }));
 
   const likes = parseSectionBlocks("喜欢").map((entry) => ({
     id: `x_like_${entry.number}`,
-    authorName: entry.fields["作者"] || "",
-    authorHandle: entry.fields["作者用户名"] || entry.fields["作者账号"] || "",
-    body: entry.fields["正文"] || "",
-    mediaDescription: entry.fields["媒体描述"] || undefined,
-    createdAt: entry.fields["时间"] || "",
-    replyCount: parseXNumericField(entry.fields["回复量"]),
-    repostCount: parseXNumericField(entry.fields["转发量"]),
-    likeCount: parseXNumericField(entry.fields["点赞量"]),
-    viewCount: parseXNumericField(entry.fields["浏览量"]),
-    likeReason: entry.fields["喜欢原因"] || "",
+    authorName: pickField(entry.fields, "作者") || "",
+    authorHandle: pickField(entry.fields, "作者用户名") || pickField(entry.fields, "作者账号") || "",
+    body: pickField(entry.fields, "正文") || "",
+    mediaDescription: pickField(entry.fields, "媒体描述") || undefined,
+    createdAt: pickField(entry.fields, "时间") || "",
+    replyCount: parseXNumericField(pickField(entry.fields, "回复量")),
+    repostCount: parseXNumericField(pickField(entry.fields, "转发量")),
+    likeCount: parseXNumericField(pickField(entry.fields, "点赞量")),
+    viewCount: parseXNumericField(pickField(entry.fields, "浏览量")),
+    likeReason: pickField(entry.fields, "喜欢原因") || "",
   }));
 
   const parsed = {
@@ -2736,43 +2933,43 @@ function parseYoutubeBlockPayload(text: string): YoutubeBlockParseResult {
     .filter((entry) => entry.kind === "video")
     .map((entry) => ({
       id: `youtube_history_${entry.number}`,
-      title: entry.fields["标题"] || "",
-      channelName: entry.fields["频道"] || "",
-      icon: entry.fields["图标"] || "",
-      createdAt: entry.fields["时间"] || "",
-      durationLabel: entry.fields["时长"] || "",
-      playCount: parseYoutubeNumericField(entry.fields["播放量"]),
-      progressLabel: entry.fields["看到哪了"] || "",
-      stateNote: entry.fields["当时状态"] || "",
-      feeling: entry.fields["感受"] || "",
+      title: pickField(entry.fields, "标题") || "",
+      channelName: pickField(entry.fields, "频道") || "",
+      icon: pickField(entry.fields, "图标") || "",
+      createdAt: pickField(entry.fields, "时间") || "",
+      durationLabel: pickField(entry.fields, "时长") || "",
+      playCount: parseYoutubeNumericField(pickField(entry.fields, "播放量")),
+      progressLabel: pickField(entry.fields, "看到哪了") || "",
+      stateNote: pickField(entry.fields, "当时状态") || "",
+      feeling: pickField(entry.fields, "感受") || "",
     }));
 
   const watchLater = parseSectionBlocks("稍后观看")
     .filter((entry) => entry.kind === "video")
     .map((entry) => ({
       id: `youtube_watch_later_${entry.number}`,
-      title: entry.fields["标题"] || "",
-      channelName: entry.fields["频道"] || "",
-      icon: entry.fields["图标"] || "",
-      createdAt: entry.fields["时间"] || "",
-      durationLabel: entry.fields["时长"] || "",
-      playCount: parseYoutubeNumericField(entry.fields["播放量"]),
-      stateNote: entry.fields["当时状态"] || entry.fields["稍后原因"] || "",
-      feeling: entry.fields["感受"] || "",
+      title: pickField(entry.fields, "标题") || "",
+      channelName: pickField(entry.fields, "频道") || "",
+      icon: pickField(entry.fields, "图标") || "",
+      createdAt: pickField(entry.fields, "时间") || "",
+      durationLabel: pickField(entry.fields, "时长") || "",
+      playCount: parseYoutubeNumericField(pickField(entry.fields, "播放量")),
+      stateNote: pickField(entry.fields, "当时状态") || pickField(entry.fields, "稍后原因") || "",
+      feeling: pickField(entry.fields, "感受") || "",
     }));
 
   const likedVideos = parseSectionBlocks("赞过的视频", "赞过视频")
     .filter((entry) => entry.kind === "video")
     .map((entry) => ({
       id: `youtube_liked_${entry.number}`,
-      title: entry.fields["标题"] || "",
-      channelName: entry.fields["频道"] || "",
-      icon: entry.fields["图标"] || "",
-      createdAt: entry.fields["时间"] || "",
-      durationLabel: entry.fields["时长"] || "",
-      playCount: parseYoutubeNumericField(entry.fields["播放量"]),
-      stateNote: entry.fields["当时状态"] || entry.fields["喜欢原因"] || "",
-      feeling: entry.fields["感受"] || "",
+      title: pickField(entry.fields, "标题") || "",
+      channelName: pickField(entry.fields, "频道") || "",
+      icon: pickField(entry.fields, "图标") || "",
+      createdAt: pickField(entry.fields, "时间") || "",
+      durationLabel: pickField(entry.fields, "时长") || "",
+      playCount: parseYoutubeNumericField(pickField(entry.fields, "播放量")),
+      stateNote: pickField(entry.fields, "当时状态") || pickField(entry.fields, "喜欢原因") || "",
+      feeling: pickField(entry.fields, "感受") || "",
     }));
 
   const parsed = {
@@ -2978,9 +3175,9 @@ function parseInstagramHighlights(sectionBody: string): CheckPhoneInstagramPaylo
     const start = current.index + current[0].length;
     const end = next?.index ?? sectionBody.length;
     const fields = parseDouyinTaggedFields(sectionBody.slice(start, end).trim());
-    const title = fields["标题"]?.trim() || "";
-    const coverIcon = fields["图标"]?.trim() || "";
-    const description = fields["内容"]?.trim() || fields["描述"]?.trim() || "";
+    const title = pickField(fields, "标题")?.trim() || "";
+    const coverIcon = pickField(fields, "图标")?.trim() || "";
+    const description = pickField(fields, "内容")?.trim() || pickField(fields, "描述")?.trim() || "";
     if (!title || !coverIcon || !description) continue;
     highlights.push({
       id: `ig_highlight_${number}`,
@@ -3009,11 +3206,11 @@ function parseInstagramBlockPayload(text: string): InstagramBlockParseResult {
   const firstSectionIndex = Math.min(postSectionIndex, highlightSectionIndex ?? postSectionIndex);
   const profileFields = parseDouyinTaggedFields(source.slice(0, firstSectionIndex).trim());
   const profile = {
-    name: profileFields["昵称"] || "",
-    username: profileFields["用户名"] || "",
-    bio: profileFields["简介"] || "",
-    followingCount: parseInstagramNumericField(profileFields["关注"]),
-    followerCount: parseInstagramNumericField(profileFields["粉丝"]),
+    name: pickField(profileFields, "昵称") || "",
+    username: pickField(profileFields, "用户名") || "",
+    bio: pickField(profileFields, "简介") || "",
+    followingCount: parseInstagramNumericField(pickField(profileFields, "关注")),
+    followerCount: parseInstagramNumericField(pickField(profileFields, "粉丝")),
   };
 
   const highlights = highlightSectionIndex === undefined
@@ -3037,14 +3234,14 @@ function parseInstagramBlockPayload(text: string): InstagramBlockParseResult {
     const fields = parseDouyinTaggedFields(sectionBody.slice(start, end).trim());
     posts.push({
       id: `ig_post_${number}`,
-      coverIcon: fields["图标"] || "",
-      imageDescription: fields["画面描述"] || undefined,
-      createdAt: fields["发帖时间"] || fields["时间"] || "",
-      location: fields["地点"] || undefined,
-      caption: fields["正文"] || "",
-      likeCount: parseInstagramNumericField(fields["点赞量"]),
-      commentCount: parseInstagramNumericField(fields["评论量"]),
-      shareCount: parseInstagramNumericField(fields["分享量"]),
+      coverIcon: pickField(fields, "图标") || "",
+      imageDescription: pickField(fields, "画面描述") || undefined,
+      createdAt: pickField(fields, "发帖时间") || pickField(fields, "时间") || "",
+      location: pickField(fields, "地点") || undefined,
+      caption: pickField(fields, "正文") || "",
+      likeCount: parseInstagramNumericField(pickField(fields, "点赞量")),
+      commentCount: parseInstagramNumericField(pickField(fields, "评论量")),
+      shareCount: parseInstagramNumericField(pickField(fields, "分享量")),
       comments: parseInstagramComments(fields, number),
     });
   }
@@ -3403,13 +3600,13 @@ function parseDouyinBlockPayload(text: string): DouyinBlockParseResult {
   const profileFields = parseDouyinTaggedFields(profileBlock);
 
   const profile = {
-    name: profileFields["昵称"] || "",
-    handle: profileFields["抖音号"] || "",
-    bio: profileFields["简介"] || "",
-    likesTotal: parseDouyinNumericField(profileFields["获赞"]),
-    mutualFollowCount: parseDouyinNumericField(profileFields["互关"]),
-    followingCount: parseDouyinNumericField(profileFields["关注"]),
-    followerCount: parseDouyinNumericField(profileFields["粉丝"]),
+    name: pickField(profileFields, "昵称") || "",
+    handle: pickField(profileFields, "抖音号") || "",
+    bio: pickField(profileFields, "简介") || "",
+    likesTotal: parseDouyinNumericField(pickField(profileFields, "获赞")),
+    mutualFollowCount: parseDouyinNumericField(pickField(profileFields, "互关")),
+    followingCount: parseDouyinNumericField(pickField(profileFields, "关注")),
+    followerCount: parseDouyinNumericField(pickField(profileFields, "粉丝")),
   };
 
   const sectionMap: Record<string, "works" | "likedVideos" | "savedVideos"> = {
@@ -3525,16 +3722,16 @@ function parseDouyinSectionPosts(
     const end = next?.index ?? sectionBody.length;
     const block = sectionBody.slice(start, end).trim();
     const fields = parseDouyinTaggedFields(block);
-    const authorName = fields["博主"] || fields["作者"] || "";
-    const title = fields["帖子标题"] || "";
-    const caption = fields["帖子正文"] || "";
-    const videoDescription = fields["视频描述"] || "";
-    const coverIcon = fields["图标"] || "";
-    const createdAt = fields["发帖时间"] || fields["时间"] || "";
-    const playCount = parseDouyinNumericField(fields["播放量"]);
-    const likeCount = parseDouyinNumericField(fields["点赞量"]);
-    const commentCount = parseDouyinNumericField(fields["评论量"]);
-    const saveCount = parseDouyinNumericField(fields["收藏量"]);
+    const authorName = pickField(fields, "博主") || pickField(fields, "作者") || "";
+    const title = pickField(fields, "帖子标题") || "";
+    const caption = pickField(fields, "帖子正文") || "";
+    const videoDescription = pickField(fields, "视频描述") || "";
+    const coverIcon = pickField(fields, "图标") || "";
+    const createdAt = pickField(fields, "发帖时间") || pickField(fields, "时间") || "";
+    const playCount = parseDouyinNumericField(pickField(fields, "播放量"));
+    const likeCount = parseDouyinNumericField(pickField(fields, "点赞量"));
+    const commentCount = parseDouyinNumericField(pickField(fields, "评论量"));
+    const saveCount = parseDouyinNumericField(pickField(fields, "收藏量"));
 
     const comments = parseDouyinBlockComments(fields, `${targetKey}_${number}`);
 
@@ -3896,18 +4093,18 @@ function parseTelegramBlockPayload(text: string): PhoneBlockParseResult {
     const threadId = `tg_thread_${index + 1}`;
     return {
       id: threadId,
-      title: fields["标题"] || "",
-      kind: parseTelegramKind(fields["类型"]) || "direct",
-      handle: fields["账号"] || undefined,
-      about: fields["简介"] || undefined,
-      avatarLabel: fields["头像"] || undefined,
-      verified: parseBlockBoolean(fields["认证"]),
-      online: parseBlockBoolean(fields["在线"]),
-      isBot: parseBlockBoolean(fields["机器人"]),
-      lastStatus: parseTelegramLastStatus(fields["已读状态"]),
-      unreadCount: Number(fields["未读"] || 0),
-      pinned: parseBlockBoolean(fields["置顶"]),
-      muted: parseBlockBoolean(fields["静音"]),
+      title: pickField(fields, "标题") || "",
+      kind: parseTelegramKind(pickField(fields, "类型")) || "direct",
+      handle: pickField(fields, "账号") || undefined,
+      about: pickField(fields, "简介") || undefined,
+      avatarLabel: pickField(fields, "头像") || undefined,
+      verified: parseBlockBoolean(pickField(fields, "认证")),
+      online: parseBlockBoolean(pickField(fields, "在线")),
+      isBot: parseBlockBoolean(pickField(fields, "机器人")),
+      lastStatus: parseTelegramLastStatus(pickField(fields, "已读状态")),
+      unreadCount: Number(pickField(fields, "未读") || 0),
+      pinned: parseBlockBoolean(pickField(fields, "置顶")),
+      muted: parseBlockBoolean(pickField(fields, "静音")),
       messages: messageNumbers.map((number) => ({
         id: `${threadId}_msg_${number}`,
         authorName: fields[`消息${number}作者`] || "",
@@ -4601,22 +4798,22 @@ function parseBrowserBlockPayload(text: string): PhoneBlockParseResult {
   const history = parseBrowserEntryBlocks(historySection, "记录")
     .map(({ order, fields }) => ({
       id: `history${order}`,
-      title: fields["标题"] || "",
-      urlLabel: fields["网址"] || "",
-      createdAt: fields["时间"] || new Date().toISOString(),
-      content: fields["内容"] || "",
-      context: fields["情境"] || "",
-      innerThought: fields["内心"] || "",
+      title: pickField(fields, "标题") || "",
+      urlLabel: pickField(fields, "网址") || "",
+      createdAt: pickField(fields, "时间") || new Date().toISOString(),
+      content: pickField(fields, "内容") || "",
+      context: pickField(fields, "情境") || "",
+      innerThought: pickField(fields, "内心") || "",
     }))
     .filter((item) => item.title && item.urlLabel);
   const bookmarks = parseBrowserEntryBlocks(bookmarksSection, "收藏")
     .map(({ order, fields }) => ({
       id: `bookmark${order}`,
-      title: fields["标题"] || "",
-      urlLabel: fields["网址"] || "",
-      categoryLabel: fields["分类"] || "收藏",
-      content: fields["内容"] || "",
-      reason: fields["收藏原因"] || "",
+      title: pickField(fields, "标题") || "",
+      urlLabel: pickField(fields, "网址") || "",
+      categoryLabel: pickField(fields, "分类") || "收藏",
+      content: pickField(fields, "内容") || "",
+      reason: pickField(fields, "收藏原因") || "",
     }))
     .filter((item) => item.title && item.urlLabel);
   const parsed = {
@@ -4795,16 +4992,16 @@ function parsePhotosBlockPayload(text: string): PhoneBlockParseResult {
 
   const albums = albumEntries.map((entry) => ({
     order: entry.order,
-    title: entry.fields["名称"] || "",
-    moodLabel: entry.fields["说明"] || "",
+    title: pickField(entry.fields, "名称") || "",
+    moodLabel: pickField(entry.fields, "说明") || "",
     photos: entry.photos.map((photo) => ({
       order: photo.order,
-      title: photo.fields["标题"] || "",
-      shotAtLabel: photo.fields["时间"] || "",
-      locationLabel: photo.fields["地点"] || "",
-      description: photo.fields["描述"] || "",
-      previewIcon: photo.fields["预览符号"] || "",
-      featured: parsePhotosBoolean(photo.fields["精选"]),
+      title: pickField(photo.fields, "标题") || "",
+      shotAtLabel: pickField(photo.fields, "时间") || "",
+      locationLabel: pickField(photo.fields, "地点") || "",
+      description: pickField(photo.fields, "描述") || "",
+      previewIcon: pickField(photo.fields, "预览符号") || "",
+      featured: parsePhotosBoolean(pickField(photo.fields, "精选")),
     })),
   }));
 
@@ -4986,39 +5183,39 @@ function parseChatBlockPayload(text: string): PhoneBlockParseResult {
 
   const supplementalConversations = extractTopLevelTaggedBlocks(source, "补充会话").map((entry) => ({
     id: `supp_conv_${entry.order}`,
-    name: entry.fields["名称"] || "",
-    muted: parseBlockBoolean(entry.fields["静音"]),
-    pinned: parseBlockBoolean(entry.fields["置顶"]),
-    tagLabel: entry.fields["标签"] || "补充会话",
+    name: pickField(entry.fields, "名称") || "",
+    muted: parseBlockBoolean(pickField(entry.fields, "静音")),
+    pinned: parseBlockBoolean(pickField(entry.fields, "置顶")),
+    tagLabel: pickField(entry.fields, "标签") || "补充会话",
     messages: parseChatSupplementalMessages(entry.fields, `supp_conv_${entry.order}`, false),
   }));
   const supplementalGroups = extractTopLevelTaggedBlocks(source, "补充群聊").map((entry) => ({
     id: `supp_group_${entry.order}`,
-    name: entry.fields["名称"] || "",
-    muted: parseBlockBoolean(entry.fields["静音"]),
-    memberCountLabel: entry.fields["人数"] || "多人",
-    activityLabel: entry.fields["活跃"] || "最近活跃",
+    name: pickField(entry.fields, "名称") || "",
+    muted: parseBlockBoolean(pickField(entry.fields, "静音")),
+    memberCountLabel: pickField(entry.fields, "人数") || "多人",
+    activityLabel: pickField(entry.fields, "活跃") || "最近活跃",
     messages: parseChatSupplementalMessages(entry.fields, `supp_group_${entry.order}`, true),
   }));
   const supplementalMoments = extractTopLevelTaggedBlocks(source, "补充动态").map((entry) => ({
     id: `supp_moment_${entry.order}`,
-    authorLabel: entry.fields["作者"] || "",
-    authorAccent: entry.fields["标记"] || "最近动态",
-    timeLabel: entry.fields["时间"] || "",
-    body: entry.fields["正文"] || "",
-    mediaLabel: entry.fields["媒体"] || "动态",
-    photoDescription: entry.fields["媒体"] || undefined,
-    likeCountLabel: entry.fields["点赞"] || "0 赞",
-    commentCountLabel: entry.fields["评论数"] || "0 评论",
+    authorLabel: pickField(entry.fields, "作者") || "",
+    authorAccent: pickField(entry.fields, "标记") || "最近动态",
+    timeLabel: pickField(entry.fields, "时间") || "",
+    body: pickField(entry.fields, "正文") || "",
+    mediaLabel: pickField(entry.fields, "媒体") || "动态",
+    photoDescription: pickField(entry.fields, "媒体") || undefined,
+    likeCountLabel: pickField(entry.fields, "点赞") || "0 赞",
+    commentCountLabel: pickField(entry.fields, "评论数") || "0 评论",
     comments: parseChatMomentComments(entry.fields, `supp_moment_${entry.order}`),
   }));
   const supplementalContacts = extractTopLevelTaggedBlocks(source, "补充联系人").map((entry) => ({
     id: `supp_contact_${entry.order}`,
-    name: entry.fields["名称"] || "",
-    tagLabel: entry.fields["标签"] || "联系人",
-    relationLabel: entry.fields["关系"] || "关系",
-    recentLabel: entry.fields["最近"] || "",
-    note: entry.fields["备注"] || "",
+    name: pickField(entry.fields, "名称") || "",
+    tagLabel: pickField(entry.fields, "标签") || "联系人",
+    relationLabel: pickField(entry.fields, "关系") || "关系",
+    recentLabel: pickField(entry.fields, "最近") || "",
+    note: pickField(entry.fields, "备注") || "",
   }));
 
   if (supplementalConversations.length + supplementalGroups.length + supplementalMoments.length + supplementalContacts.length === 0) {
@@ -5410,20 +5607,20 @@ function parseAssetsBlockPayload(text: string): PhoneBlockParseResult {
     const start = (current.index ?? 0) + current[0].length;
     const fields = parseTakeoutTaggedFields(source.slice(start, blockEnd(current.index ?? 0, allMatches)).trim());
     const order = String(index + 1);
-    const kind = parseAssetAccountKind(fields["类型"]) || "cash";
-    const title = fields["名称"] || "";
+    const kind = parseAssetAccountKind(pickField(fields, "类型")) || "cash";
+    const title = pickField(fields, "名称") || "";
     const id = `asset_account_${order}`;
     if (title) accountNameToId.set(title, id);
     return {
       id,
       title,
       kind,
-      bankLabel: fields["机构"] || "",
-      maskedNumber: fields["尾号"] ? `•••• ${fields["尾号"].replace(/\D/g, "").slice(-4)}` : "",
+      bankLabel: pickField(fields, "机构") || "",
+      maskedNumber: pickField(fields, "尾号") ? `•••• ${(pickField(fields, "尾号") ?? "").replace(/\D/g, "").slice(-4)}` : "",
       cardStyle: deriveAssetCardStyle(kind),
-      balance: fields["余额"] || "",
-      note: fields["备注"] || "",
-      accentLabel: normalizeAssetAccentLabel(fields["标记"]),
+      balance: pickField(fields, "余额") || "",
+      note: pickField(fields, "备注") || "",
+      accentLabel: normalizeAssetAccentLabel(pickField(fields, "标记")),
     };
   });
 
@@ -5432,15 +5629,15 @@ function parseAssetsBlockPayload(text: string): PhoneBlockParseResult {
     const start = (current.index ?? 0) + current[0].length;
     const fields = parseTakeoutTaggedFields(source.slice(start, blockEnd(current.index ?? 0, allMatches)).trim());
     const order = String(index + 1);
-    const accountName = fields["账户"] || "";
+    const accountName = pickField(fields, "账户") || "";
     return {
       id: `asset_activity_${order}`,
-      title: fields["标题"] || "",
-      amount: fields["金额"] || "",
-      category: fields["分类"] || "",
-      createdAt: fields["时间"] || "",
+      title: pickField(fields, "标题") || "",
+      amount: pickField(fields, "金额") || "",
+      category: pickField(fields, "分类") || "",
+      createdAt: pickField(fields, "时间") || "",
       accountId: accountNameToId.get(accountName) || firstAccountId,
-      detail: fields["详情"] || "",
+      detail: pickField(fields, "详情") || "",
     };
   });
 
@@ -5636,28 +5833,28 @@ function parsePhoneBlockPayload(text: string): PhoneBlockParseResult {
 
   const recents = parsePhoneSectionBlocks(source, sectionMatches, "最近通话").map((entry) => ({
     id: `call_${entry.number}`,
-    name: entry.fields["姓名"] || "",
-    createdAt: entry.fields["时间"] || "",
-    durationLabel: entry.fields["时长"] || "",
-    direction: parsePhoneDirection(entry.fields["方向"] || ""),
-    summary: entry.fields["内容"] || "",
-    innerThought: entry.fields["内心"] || "",
+    name: pickField(entry.fields, "姓名") || "",
+    createdAt: pickField(entry.fields, "时间") || "",
+    durationLabel: pickField(entry.fields, "时长") || "",
+    direction: parsePhoneDirection(pickField(entry.fields, "方向") || ""),
+    summary: pickField(entry.fields, "内容") || "",
+    innerThought: pickField(entry.fields, "内心") || "",
   }));
 
   const contacts = parsePhoneSectionBlocks(source, sectionMatches, "联系人").map((entry) => ({
     id: `contact_${entry.number}`,
-    name: entry.fields["姓名"] || "",
-    tagLabel: entry.fields["标签"] || "",
-    note: entry.fields["备注"] || "",
-    accentLabel: entry.fields["标记"] || "",
+    name: pickField(entry.fields, "姓名") || "",
+    tagLabel: pickField(entry.fields, "标签") || "",
+    note: pickField(entry.fields, "备注") || "",
+    accentLabel: pickField(entry.fields, "标记") || "",
   }));
 
   const voicemails = parsePhoneSectionBlocks(source, sectionMatches, "语音信箱").map((entry) => ({
     id: `vm_${entry.number}`,
-    name: entry.fields["姓名"] || "",
-    createdAt: entry.fields["时间"] || "",
-    durationLabel: entry.fields["时长"] || "",
-    transcript: entry.fields["转写"] || "",
+    name: pickField(entry.fields, "姓名") || "",
+    createdAt: pickField(entry.fields, "时间") || "",
+    durationLabel: pickField(entry.fields, "时长") || "",
+    transcript: pickField(entry.fields, "转写") || "",
   }));
 
   const parsed = {
@@ -5721,13 +5918,13 @@ function parseMessagesBlockPayload(text: string): PhoneBlockParseResult {
       })
       .filter((item) => item.text);
     return {
-      id: fields["线程ID"] || `thread${currentMatch[1] || index + 1}`,
-      sender: fields["发送人"] || "",
+      id: pickField(fields, "线程ID") || `thread${currentMatch[1] || index + 1}`,
+      sender: pickField(fields, "发送人") || "",
       preview: messages[messages.length - 1]?.text || "",
-      timeLabel: fields["时间"] || "",
-      kind: typeof fields["类型"] === "string" && fields["类型"].trim() ? fields["类型"].trim() : "service",
-      unread: parseMessagesBoolean(fields["未读"]),
-      muted: parseMessagesBoolean(fields["静音"]),
+      timeLabel: pickField(fields, "时间") || "",
+      kind: (pickField(fields, "类型") ?? "").trim() || "service",
+      unread: parseMessagesBoolean(pickField(fields, "未读")),
+      muted: parseMessagesBoolean(pickField(fields, "静音")),
       messages,
     };
   }).filter((thread) => thread.sender && thread.messages.length > 0);
@@ -5903,16 +6100,16 @@ function parseShoppingProductFields(
   tagLabel: string,
   index: number,
 ): CheckPhoneShoppingPayload["recentlyViewed"][number] {
-  const subtitle = fields["说明"] || fields["详情"] || fields["名称"] || "";
+  const subtitle = pickField(fields, "说明") || pickField(fields, "详情") || pickField(fields, "名称") || "";
   return {
     id,
-    title: fields["名称"] || "",
-    merchantLabel: fields["店铺"] || "",
-    priceLabel: fields["价格"] || "",
+    title: pickField(fields, "名称") || "",
+    merchantLabel: pickField(fields, "店铺") || "",
+    priceLabel: pickField(fields, "价格") || "",
     tagLabel,
     subtitle,
-    detail: fields["详情"] || subtitle,
-    previewIcon: fields["图标"] || "",
+    detail: pickField(fields, "详情") || subtitle,
+    previewIcon: pickField(fields, "图标") || "",
     tone: deriveShoppingTone(index),
   };
 }
@@ -5976,20 +6173,20 @@ export function parseShoppingBlockPayload(text: string): PhoneBlockParseResult {
   );
   const cartItems = extractShoppingTopLevelBlocks(source, "购物车").map((entry, index) => ({
     ...parseShoppingProductFields(entry.fields, `cart_${entry.order}`, "购物车", index),
-    quantityLabel: entry.fields["数量"] || "× 1",
+    quantityLabel: pickField(entry.fields, "数量") || "× 1",
   }));
   const orders = extractShoppingTopLevelBlocks(source, "订单").map((entry) => {
     const id = `order_${entry.order}`;
-    const statusLabel = entry.fields["状态"] || "";
-    const merchantLabel = entry.fields["店铺"] || "";
+    const statusLabel = pickField(entry.fields, "状态") || "";
+    const merchantLabel = pickField(entry.fields, "店铺") || "";
     return {
       id,
       statusLabel,
-      timeLabel: entry.fields["时间"] || "",
-      totalLabel: entry.fields["总价"] || "",
+      timeLabel: pickField(entry.fields, "时间") || "",
+      totalLabel: pickField(entry.fields, "总价") || "",
       merchantLabel,
-      summary: entry.fields["摘要"] || "",
-      note: entry.fields["备注"] || entry.fields["摘要"] || "",
+      summary: pickField(entry.fields, "摘要") || "",
+      note: pickField(entry.fields, "备注") || pickField(entry.fields, "摘要") || "",
       items: parseShoppingOrderItems(entry.fields, id, merchantLabel, statusLabel),
     };
   });
@@ -6204,14 +6401,14 @@ function parseMusicTrackFields(
 ): CheckPhoneMusicPayload["recentTracks"][number] {
   return {
     id,
-    title: fields["歌名"] || "",
-    artist: fields["歌手"] || "",
-    albumTitle: fields["专辑"] || "",
-    coverIcon: fields["图标"] || "",
+    title: pickField(fields, "歌名") || "",
+    artist: pickField(fields, "歌手") || "",
+    albumTitle: pickField(fields, "专辑") || "",
+    coverIcon: pickField(fields, "图标") || "",
     tone: deriveMusicTone(index),
-    durationLabel: fields["时长"] || "",
-    note: fields["内心"] || fields["备注"] || "",
-    liked: liked || parseBlockBoolean(fields["喜欢"]),
+    durationLabel: pickField(fields, "时长") || "",
+    note: pickField(fields, "内心") || pickField(fields, "备注") || "",
+    liked: liked || parseBlockBoolean(pickField(fields, "喜欢")),
   };
 }
 
@@ -6241,13 +6438,13 @@ function parseMusicBlockPayload(text: string): PhoneBlockParseResult {
       .filter(Boolean) as string[];
     return {
       id: `playlist_${entry.order}`,
-      title: entry.fields["名称"] || "",
-      subtitle: entry.fields["副标题"] || "",
-      coverIcon: entry.fields["图标"] || "",
+      title: pickField(entry.fields, "名称") || "",
+      subtitle: pickField(entry.fields, "副标题") || "",
+      coverIcon: pickField(entry.fields, "图标") || "",
       tone: deriveMusicTone(index + recentTracks.length + likedTracks.length),
       trackIds,
-      saved: parseBlockBoolean(entry.fields["收藏"]),
-      curatorNote: entry.fields["内心"] || entry.fields["说明"] || "",
+      saved: parseBlockBoolean(pickField(entry.fields, "收藏")),
+      curatorNote: pickField(entry.fields, "内心") || pickField(entry.fields, "说明") || "",
     };
   });
 
@@ -6258,10 +6455,10 @@ function parseMusicBlockPayload(text: string): PhoneBlockParseResult {
   return {
     parsed: {
       profile: {
-        nickname: profileFields["昵称"] || "",
-        listeningMood: profileFields["听歌状态"] || "最近的循环方式",
-        monthlyMinutesLabel: profileFields["本月时长"] || "本月听歌",
-        topArtistLabel: profileFields["偏爱歌手"] || "最近偏爱",
+        nickname: pickField(profileFields, "昵称") || "",
+        listeningMood: pickField(profileFields, "听歌状态") || "最近的循环方式",
+        monthlyMinutesLabel: pickField(profileFields, "本月时长") || "本月听歌",
+        topArtistLabel: pickField(profileFields, "偏爱歌手") || "最近偏爱",
       },
       nowPlayingTrackId: recentTracks[0]?.id || likedTracks[0]?.id || "",
       recentTracks,
@@ -6502,14 +6699,14 @@ function parseDoubanTopicFields(
 ): NonNullable<CheckPhoneDoubanPayload["repliedTopics"]>[number] {
   return {
     id,
-    groupName: fields["小组"] || "",
-    title: fields["标题"] || "",
-    authorName: fields["作者"] || "",
-    body: fields["正文"] || "",
-    createdAt: fields["时间"] || "",
-    likeCount: parseBlockInteger(fields["点赞"]),
-    saveCount: parseBlockInteger(fields["收藏"]),
-    repostCount: parseBlockInteger(fields["转发"]),
+    groupName: pickField(fields, "小组") || "",
+    title: pickField(fields, "标题") || "",
+    authorName: pickField(fields, "作者") || "",
+    body: pickField(fields, "正文") || "",
+    createdAt: pickField(fields, "时间") || "",
+    likeCount: parseBlockInteger(pickField(fields, "点赞")),
+    saveCount: parseBlockInteger(pickField(fields, "收藏")),
+    repostCount: parseBlockInteger(pickField(fields, "转发")),
     comments: parseDoubanTopicComments(fields, id),
   };
 }
@@ -6518,23 +6715,23 @@ function parseDoubanActivityFields(
   fields: Record<string, string>,
   id: string,
 ): CheckPhoneDoubanPayload["activities"][number] {
-  const type = normalizeDoubanActivityType(fields["类型"]);
+  const type = normalizeDoubanActivityType(pickField(fields, "类型"));
   const fallback = DOUBAN_ACTIVITY_LABELS[type];
-  const rating = parseBlockInteger(fields["评分"]);
+  const rating = parseBlockInteger(pickField(fields, "评分"));
   return {
     id,
     type,
-    actionLabel: fields["动作"] || fallback.action,
-    categoryLabel: fields["分类"] || fallback.category,
-    title: fields["标题"] || fields["条目"] || "",
-    body: fields["正文"] || "",
-    createdAt: fields["时间"] || "",
-    subjectName: fields["条目"] || undefined,
-    subjectMeta: fields["条目信息"] || undefined,
-    coverIcon: fields["图标"] || undefined,
+    actionLabel: pickField(fields, "动作") || fallback.action,
+    categoryLabel: pickField(fields, "分类") || fallback.category,
+    title: pickField(fields, "标题") || pickField(fields, "条目") || "",
+    body: pickField(fields, "正文") || "",
+    createdAt: pickField(fields, "时间") || "",
+    subjectName: pickField(fields, "条目") || undefined,
+    subjectMeta: pickField(fields, "条目信息") || undefined,
+    coverIcon: pickField(fields, "图标") || undefined,
     rating: Number.isFinite(rating) ? rating : undefined,
-    reactionCount: parseBlockInteger(fields["回应"]),
-    commentCount: parseBlockInteger(fields["评论"]),
+    reactionCount: parseBlockInteger(pickField(fields, "回应")),
+    commentCount: parseBlockInteger(pickField(fields, "评论")),
   };
 }
 
@@ -6547,14 +6744,14 @@ function parseDoubanBlockPayload(text: string): PhoneBlockParseResult {
     const firstActivityIndex = source.search(/^#动态\d+/m);
     const profileFields = parseDouyinTaggedFields(firstActivityIndex >= 0 ? source.slice(0, firstActivityIndex).trim() : source);
     const profile = {
-      name: profileFields["昵称"] || "",
-      bio: profileFields["简介"] || "",
-      location: profileFields["城市"] || undefined,
-      joinedAt: profileFields["加入时间"] || undefined,
-      followingCount: parseBlockInteger(profileFields["关注"]),
-      followerCount: parseBlockInteger(profileFields["被关注"]),
-      wantWatchCount: parseBlockInteger(profileFields["想看"]),
-      wantReadCount: parseBlockInteger(profileFields["想读"]),
+      name: pickField(profileFields, "昵称") || "",
+      bio: pickField(profileFields, "简介") || "",
+      location: pickField(profileFields, "城市") || undefined,
+      joinedAt: pickField(profileFields, "加入时间") || undefined,
+      followingCount: parseBlockInteger(pickField(profileFields, "关注")),
+      followerCount: parseBlockInteger(pickField(profileFields, "被关注")),
+      wantWatchCount: parseBlockInteger(pickField(profileFields, "想看")),
+      wantReadCount: parseBlockInteger(pickField(profileFields, "想读")),
     };
     const activities = activityBlocks.map((entry) => parseDoubanActivityFields(entry.fields, `douban_activity_${entry.order}`));
     return {
@@ -6566,12 +6763,12 @@ function parseDoubanBlockPayload(text: string): PhoneBlockParseResult {
 
   const myGroups = extractTopLevelTaggedBlocks(source, "小组").map((entry, index) => ({
     id: `group_${entry.order}`,
-    name: entry.fields["名称"] || "",
-    coverIcon: entry.fields["图标"] || "",
+    name: pickField(entry.fields, "名称") || "",
+    coverIcon: pickField(entry.fields, "图标") || "",
     tone: deriveDoubanTone(index),
-    memberCount: parseBlockInteger(entry.fields["成员数"]),
-    latestUpdate: entry.fields["最近更新"] || "",
-    updatedAt: entry.fields["更新时间"] || "",
+    memberCount: parseBlockInteger(pickField(entry.fields, "成员数")),
+    latestUpdate: pickField(entry.fields, "最近更新") || "",
+    updatedAt: pickField(entry.fields, "更新时间") || "",
   }));
   const repliedTopics = extractTopLevelTaggedBlocks(source, "回复帖子").map((entry) =>
     parseDoubanTopicFields(entry.fields, `replied_topic_${entry.order}`),
@@ -7059,18 +7256,18 @@ function parseXiaohongshuNoteFields(
 ): CheckPhoneXiaohongshuPayload["homeNotes"][number] {
   return {
     id,
-    authorName: fields["作者"] || "",
-    title: fields["标题"] || "",
-    body: fields["正文"] || "",
-    ...(fields["视频描述"] ? { videoDescription: fields["视频描述"] } : {}),
-    coverIcon: fields["图标"] || "",
+    authorName: pickField(fields, "作者") || "",
+    title: pickField(fields, "标题") || "",
+    body: pickField(fields, "正文") || "",
+    ...(pickField(fields, "视频描述") ? { videoDescription: pickField(fields, "视频描述") } : {}),
+    coverIcon: pickField(fields, "图标") || "",
     tone: deriveXiaohongshuTone(index),
-    likeCount: parseXiaohongshuMetric(fields["点赞"]),
-    commentCount: parseXiaohongshuMetric(fields["评论数"]),
-    saveCount: parseXiaohongshuMetric(fields["收藏"]),
-    liked: parseBlockBoolean(fields["已赞"]),
-    saved: parseBlockBoolean(fields["已收藏"]),
-    tags: parseBlockList(fields["标签"]).slice(0, 4),
+    likeCount: parseXiaohongshuMetric(pickField(fields, "点赞")),
+    commentCount: parseXiaohongshuMetric(pickField(fields, "评论数")),
+    saveCount: parseXiaohongshuMetric(pickField(fields, "收藏")),
+    liked: parseBlockBoolean(pickField(fields, "已赞")),
+    saved: parseBlockBoolean(pickField(fields, "已收藏")),
+    tags: parseBlockList(pickField(fields, "标签")).slice(0, 4),
     comments: parseSocialComments(fields, id),
   };
 }
@@ -7098,15 +7295,15 @@ function parseXiaohongshuBlockPayload(text: string): PhoneBlockParseResult {
     parseXiaohongshuNoteFields(entry.fields, `my_note_${entry.order}`, index + homeNotes.length + videoNotes.length),
   );
   const messageThreads = extractTopLevelTaggedBlocks(source, "消息").map((entry) => {
-    const type = parseXiaohongshuThreadType(entry.fields["类型"], entry.fields["标签"]);
+    const type = parseXiaohongshuThreadType(pickField(entry.fields, "类型"), pickField(entry.fields, "标签"));
     const messages = parseSocialThreadMessages(entry.fields, `xhs_thread_${entry.order}`);
     const lastMessage = messages[messages.length - 1];
     return {
       id: `xhs_thread_${entry.order}`,
-      name: entry.fields["名称"] || "",
+      name: pickField(entry.fields, "名称") || "",
       type,
       unread: lastMessage?.direction === "incoming",
-      tagLabel: entry.fields["标签"] || (type === "group" ? "群聊" : "私信"),
+      tagLabel: pickField(entry.fields, "标签") || (type === "group" ? "群聊" : "私信"),
       messages,
     };
   });
@@ -7118,16 +7315,16 @@ function parseXiaohongshuBlockPayload(text: string): PhoneBlockParseResult {
   return {
     parsed: {
       profile: {
-        name: profileFields["昵称"] || "",
-        bio: profileFields["简介"] || "",
-        followingCount: parseXiaohongshuMetric(profileFields["关注"]),
-        followerCount: parseXiaohongshuMetric(profileFields["粉丝"]),
-        likedAndSavedCount: parseXiaohongshuMetric(profileFields["赞藏"]),
+        name: pickField(profileFields, "昵称") || "",
+        bio: pickField(profileFields, "简介") || "",
+        followingCount: parseXiaohongshuMetric(pickField(profileFields, "关注")),
+        followerCount: parseXiaohongshuMetric(pickField(profileFields, "粉丝")),
+        likedAndSavedCount: parseXiaohongshuMetric(pickField(profileFields, "赞藏")),
       },
       messageOverview: {
-        likesAndSavesCount: parseBlockInteger(profileFields["赞藏通知"]),
-        newFollowersCount: parseBlockInteger(profileFields["新增关注"]),
-        commentsAndMentionsCount: parseBlockInteger(profileFields["评论提及"]),
+        likesAndSavesCount: parseBlockInteger(pickField(profileFields, "赞藏通知")),
+        newFollowersCount: parseBlockInteger(pickField(profileFields, "新增关注")),
+        commentsAndMentionsCount: parseBlockInteger(pickField(profileFields, "评论提及")),
       },
       homeNotes,
       videoNotes,
@@ -7436,14 +7633,14 @@ function parseWeiboPostFields(
 ): CheckPhoneWeiboPayload["homePosts"][number] {
   return {
     id,
-    authorName: fields["作者"] || "",
-    authorBadge: fields["身份"] || "",
-    body: fields["正文"] || "",
-    mediaIcon: fields["图标"] || "",
+    authorName: pickField(fields, "作者") || "",
+    authorBadge: pickField(fields, "身份") || "",
+    body: pickField(fields, "正文") || "",
+    mediaIcon: pickField(fields, "图标") || "",
     tone: deriveWeiboTone(index),
-    repostCount: parseBlockInteger(fields["转发"]),
-    commentCount: parseBlockInteger(fields["评论数"]),
-    likeCount: parseBlockInteger(fields["点赞"]),
+    repostCount: parseBlockInteger(pickField(fields, "转发")),
+    commentCount: parseBlockInteger(pickField(fields, "评论数")),
+    likeCount: parseBlockInteger(pickField(fields, "点赞")),
     comments: parseSocialComments(fields, id),
   };
 }
@@ -7459,19 +7656,19 @@ function parseWeiboBlockPayload(text: string): PhoneBlockParseResult {
   );
   const trendingTopics = extractTopLevelTaggedBlocks(source, "热搜").map((entry) => ({
     id: `trend_${entry.order}`,
-    title: entry.fields["标题"] || "",
-    heatLabel: entry.fields["热度"] || "",
-    summary: entry.fields["摘要"] || "",
+    title: pickField(entry.fields, "标题") || "",
+    heatLabel: pickField(entry.fields, "热度") || "",
+    summary: pickField(entry.fields, "摘要") || "",
     relatedPostIds: [],
   }));
   const messageThreads = extractTopLevelTaggedBlocks(source, "消息").map((entry) => {
-    const type = entry.fields["类型"] === "group" ? "group" : "direct";
+    const type = pickField(entry.fields, "类型") === "group" ? "group" : "direct";
     return {
       id: `weibo_thread_${entry.order}`,
-      name: entry.fields["名称"] || "",
+      name: pickField(entry.fields, "名称") || "",
       type,
-      unread: parseBlockBoolean(entry.fields["未读"]),
-      tagLabel: entry.fields["标签"] || (type === "group" ? "群聊" : "私信"),
+      unread: parseBlockBoolean(pickField(entry.fields, "未读")),
+      tagLabel: pickField(entry.fields, "标签") || (type === "group" ? "群聊" : "私信"),
       messages: parseSocialThreadMessages(entry.fields, `weibo_thread_${entry.order}`),
     };
   });
@@ -7483,19 +7680,19 @@ function parseWeiboBlockPayload(text: string): PhoneBlockParseResult {
     return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到微博块" };
   }
 
-  const mentionsCount = parseBlockInteger(profileFields["提及通知"]);
-  const commentsCount = parseBlockInteger(profileFields["评论通知"]);
-  const likesCount = parseBlockInteger(profileFields["点赞通知"]);
+  const mentionsCount = parseBlockInteger(pickField(profileFields, "提及通知"));
+  const commentsCount = parseBlockInteger(pickField(profileFields, "评论通知"));
+  const likesCount = parseBlockInteger(pickField(profileFields, "点赞通知"));
 
   return {
     parsed: {
       profile: {
-        name: profileFields["昵称"] || "",
-        handle: profileFields["账号"] || "",
-        bio: profileFields["简介"] || "",
-        followingCount: parseBlockInteger(profileFields["关注"]),
-        followerCount: parseBlockInteger(profileFields["粉丝"]),
-        likedTotal: parseBlockInteger(profileFields["获赞"]),
+        name: pickField(profileFields, "昵称") || "",
+        handle: pickField(profileFields, "账号") || "",
+        bio: pickField(profileFields, "简介") || "",
+        followingCount: parseBlockInteger(pickField(profileFields, "关注")),
+        followerCount: parseBlockInteger(pickField(profileFields, "粉丝")),
+        likedTotal: parseBlockInteger(pickField(profileFields, "获赞")),
       },
       messageOverview: {
         mentionsCount: Number.isFinite(mentionsCount) ? mentionsCount : 0,
@@ -7729,18 +7926,18 @@ function parseReadingBookFields(
   id: string,
   index: number,
 ): CheckPhoneReadingPayload["currentBooks"][number] {
-  const title = fields["书名"] || "";
-  const author = fields["作者"] || "";
+  const title = pickField(fields, "书名") || "";
+  const author = pickField(fields, "作者") || "";
   return {
     id,
     title,
     author,
-    coverIcon: fields["图标"] || "",
+    coverIcon: pickField(fields, "图标") || "",
     tone: deriveReadingTone(`${id}:${title}:${author}:${index}`),
-    status: fields["状态"] as CheckPhoneReadingPayload["currentBooks"][number]["status"],
-    progressLabel: fields["进度"] || "",
-    summary: fields["简介"] || "",
-    tags: parseBlockList(fields["标签"]).slice(0, 4),
+    status: pickField(fields, "状态") as CheckPhoneReadingPayload["currentBooks"][number]["status"],
+    progressLabel: pickField(fields, "进度") || "",
+    summary: pickField(fields, "简介") || "",
+    tags: parseBlockList(pickField(fields, "标签")).slice(0, 4),
   };
 }
 
@@ -7764,17 +7961,17 @@ function parseReadingBlockPayload(text: string): PhoneBlockParseResult {
 
   const highlights = extractTopLevelTaggedBlocks(source, "书摘").map((entry) => ({
     id: `highlight_${entry.order}`,
-    bookId: bookTitleToId.get(entry.fields["书名"] || "") || "",
-    quote: entry.fields["摘录"] || "",
-    chapterLabel: entry.fields["章节"] || "",
-    note: entry.fields["注记"] || "",
+    bookId: bookTitleToId.get(pickField(entry.fields, "书名") || "") || "",
+    quote: pickField(entry.fields, "摘录") || "",
+    chapterLabel: pickField(entry.fields, "章节") || "",
+    note: pickField(entry.fields, "注记") || "",
   }));
   const notes = extractTopLevelTaggedBlocks(source, "笔记").map((entry) => ({
     id: `reading_note_${entry.order}`,
-    bookId: bookTitleToId.get(entry.fields["书名"] || "") || "",
-    title: entry.fields["标题"] || "",
-    body: entry.fields["正文"] || "",
-    updatedLabel: entry.fields["时间"] || "",
+    bookId: bookTitleToId.get(pickField(entry.fields, "书名") || "") || "",
+    title: pickField(entry.fields, "标题") || "",
+    body: pickField(entry.fields, "正文") || "",
+    updatedLabel: pickField(entry.fields, "时间") || "",
   }));
 
   if (currentBooks.length + libraryBooks.length + highlights.length + notes.length === 0) {
@@ -7784,8 +7981,8 @@ function parseReadingBlockPayload(text: string): PhoneBlockParseResult {
   return {
     parsed: {
       profile: {
-        status: profileFields["阅读状态"] || "最近的阅读痕迹",
-        updatedLabel: profileFields["落款时间"] || profileFields["时间"] || "",
+        status: pickField(profileFields, "阅读状态") || "最近的阅读痕迹",
+        updatedLabel: pickField(profileFields, "落款时间") || pickField(profileFields, "时间") || "",
       },
       currentBooks,
       libraryBooks,
