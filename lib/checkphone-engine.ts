@@ -122,7 +122,7 @@ async function buildCheckPhoneManifestMessages(
   regexes: RegexConfig[],
 ): Promise<LLMMessage[]> {
   const character = loadCharacters().find((item) => item.id === characterId);
-  if (!character) throw new Error("角色不存在");
+  if (!character) throw new Error("character not found");
 
   const userIdentity = resolveUserIdentity(characterId, "checkphone");
   const settings = loadCheckPhoneSettings();
@@ -831,7 +831,7 @@ export async function generateCheckPhoneManifest(
   characterId: string,
 ): Promise<{ manifest: CheckPhoneManifest | null; error?: string; debugRawOutput?: string }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { manifest: null, error: "未找到可用的 API 配置", debugRawOutput: "" };
+  if (!apiConfig) return { manifest: null, error: "no usable API configuration found", debugRawOutput: "" };
 
   try {
     const messages = await buildCheckPhoneManifestMessages(characterId, preset, worldBooks, regexes);
@@ -844,15 +844,15 @@ export async function generateCheckPhoneManifest(
       { skipOutputRegex: true, appId: "checkphone_manifest" },
     );
 
-    if (!rawOutput?.trim()) return { manifest: null, error: "LLM 返回为空", debugRawOutput: rawOutput ?? "" };
+    if (!rawOutput?.trim()) return { manifest: null, error: "the model returned nothing", debugRawOutput: rawOutput ?? "" };
     const { parsed } = parseCheckPhoneJson(rawOutput);
     const manifest = normalizeManifest(characterId, parsed);
     if (!manifest) {
-      return { manifest: null, error: "无法解析桌面安装清单", debugRawOutput: rawOutput };
+      return { manifest: null, error: "could not parse the home-screen manifest", debugRawOutput: rawOutput };
     }
     return { manifest, debugRawOutput: rawOutput };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { manifest: null, error: message, debugRawOutput: "" };
   }
 }
@@ -862,7 +862,7 @@ export async function previewCheckPhonePromptPayload(
   targetAppId: CheckPhoneAppId | "manifest",
 ): Promise<{ messages: LLMMessage[]; characterName: string; model: string; presetName: string }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) throw new Error("未找到可用的 API 配置");
+  if (!apiConfig) throw new Error("no usable API configuration found");
   const character = loadCharacters().find((item) => item.id === characterId);
   const snapshot = targetAppId === "manifest"
     ? null
@@ -890,13 +890,15 @@ export async function previewCheckPhonePromptPayload(
 }
 
 export function formatCheckPhoneManifestSummary(manifest: CheckPhoneManifest): string {
-  const topLabels = manifest.topAppIds.map((id) => CHECKPHONE_APP_SPECS[id].label).join("、");
-  const optionalLabels = manifest.optionalAppIds.map((id) => CHECKPHONE_APP_SPECS[id].label).join("、");
+  // englishLabel, not label: this is prompt context the model reads, and CHECKPHONE_APP_SPECS
+  // already carries both. Verified first that .label is parsed back nowhere in the repo.
+  const topLabels = manifest.topAppIds.map((id) => CHECKPHONE_APP_SPECS[id].englishLabel).join(", ");
+  const optionalLabels = manifest.optionalAppIds.map((id) => CHECKPHONE_APP_SPECS[id].englishLabel).join(", ");
   return [
-    `DOCK：${CHECKPHONE_DOCK_APP_IDS.map((id) => CHECKPHONE_APP_SPECS[id].label).join("、")}`,
-    `上方固定：${CHECKPHONE_FIXED_APP_IDS.map((id) => CHECKPHONE_APP_SPECS[id].label).join("、")}`,
-    `可选安装：${optionalLabels}`,
-    `桌面顺序：${topLabels}`,
+    `Dock: ${CHECKPHONE_DOCK_APP_IDS.map((id) => CHECKPHONE_APP_SPECS[id].englishLabel).join(", ")}`,
+    `Pinned to the top row: ${CHECKPHONE_FIXED_APP_IDS.map((id) => CHECKPHONE_APP_SPECS[id].englishLabel).join(", ")}`,
+    `Optional apps installed: ${optionalLabels}`,
+    `Home screen order: ${topLabels}`,
   ].join("\n");
 }
 
@@ -1429,7 +1431,7 @@ function extractDirectConversation(
       timeLabel: formatChatUiTime(latest.createdAt),
       muted: session.isMuted === true,
       pinned: session.isPinned === true,
-      tagLabel: "真实会话",
+      tagLabel: "Real conversation",
       messages: visibleMessages.slice(-10).map((msg) => ({
         id: msg.id,
         text: getCheckPhoneRealChatText(msg),
@@ -1499,15 +1501,15 @@ function extractRealMoments(characterId: string, userName: string): CheckPhoneCh
       authorLabel,
       authorAccent:
         post.authorType === "user"
-          ? "真实动态"
-          : "朋友圈",
+          ? "Own post"
+          : "Moments",
       timeLabel: formatChatUiTime(post.createdAt),
       body: post.content.trim(),
-      mediaLabel: post.photoUrl || post.photoDescription ? "有图" : "文字",
+      mediaLabel: post.photoUrl || post.photoDescription ? "image" : "text",
       photoUrl: post.photoUrl,
       photoDescription: post.photoDescription,
-      likeCountLabel: `${likes.length} 赞`,
-      commentCountLabel: `${comments.length} 评论`,
+      likeCountLabel: `${likes.length} likes`,
+      commentCountLabel: `${comments.length} comments`,
       comments: comments.slice(0, 8).map((comment) => ({
         id: comment.id,
         authorLabel: resolveCheckPhoneDisplayName(
@@ -1535,8 +1537,8 @@ function buildRealCheckPhoneChatPayload(characterId: string): CheckPhoneChatPayl
   const groups = extractRealGroups(sessions, characterId, userName);
   const momentsFeed = extractRealMoments(characterId, userName);
   return {
-    headerTitle: "聊天",
-    headerSubtitle: "真实互动与补充内容",
+    headerTitle: "Chat",
+    headerSubtitle: "Real interactions and supplementary content",
     conversations,
     groups,
     momentsFeed,
@@ -1650,7 +1652,7 @@ async function buildCheckPhoneAppMessages(
   options?: { snapshotSummary?: string; lastRefreshAt?: string },
 ): Promise<LLMMessage[]> {
   const character = loadCharacters().find((item) => item.id === characterId);
-  if (!character) throw new Error("角色不存在");
+  if (!character) throw new Error("character not found");
 
   const userIdentity = resolveUserIdentity(characterId, "checkphone");
   const settings = loadCheckPhoneSettings();
@@ -1681,7 +1683,7 @@ async function buildCheckPhoneAppMessages(
     recentBlocks,
     unifiedRecentItems,
     phoneAppId: appId,
-    phoneAppLabel: CHECKPHONE_APP_SPECS[appId].label,
+    phoneAppLabel: CHECKPHONE_APP_SPECS[appId].englishLabel,
     phoneSnapshotSummary: options?.snapshotSummary ?? "",
     phoneLastRefreshAt: options?.lastRefreshAt ?? "",
     checkPhoneBilingualInstruction: buildCheckPhoneBilingualInstruction(
@@ -1735,11 +1737,11 @@ function parseNotesPinned(value: string | undefined): boolean {
 
 function parseNotesBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
 
   const matches = [...source.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern("备忘录")})(\\d+)\\s*$`, "gm"))];
   if (matches.length === 0) {
-    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 #备忘录N 分区" };
+    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "no #NotepadN section found" };
   }
 
   const notes = matches.map((current, index) => {
@@ -1816,11 +1818,11 @@ function normalizeEmailPayload(payload: unknown): CheckPhoneEmailPayload | null 
 
 function parseEmailBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
 
   const matches = [...source.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern("邮件")})(\\d+)\\s*$`, "gm"))];
   if (matches.length === 0) {
-    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 #邮件N 分区" };
+    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "no #MailN section found" };
   }
 
   const emails = matches.map((current, index) => {
@@ -1942,7 +1944,7 @@ export function parseTakeoutBlockPayload(text: string): {
 } {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) {
-    return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+    return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
   }
 
   const sectionMatches = [...source.matchAll(new RegExp(`^#\\s*(${blockLabelPattern("美食")}|${blockLabelPattern("饮品")}|${blockLabelPattern("商超")}|${blockLabelPattern("药品")}|${blockLabelPattern("其他")})\\s*$`, "gm"))];
@@ -1951,7 +1953,7 @@ export function parseTakeoutBlockPayload(text: string): {
       parsed: null,
       sanitizedCandidate: source,
       parseMode: "failed",
-      parseError: "未找到外卖分类分区",
+      parseError: "no takeaway category section found",
     };
   }
   const orders = sectionMatches.flatMap((sectionMatch, sectionIndex) => {
@@ -2000,7 +2002,7 @@ export function parseTakeoutBlockPayload(text: string): {
       parsed: null,
       sanitizedCandidate: source,
       parseMode: "failed",
-      parseError: "未找到 ##订单 编号块",
+      parseError: "no numbered ##Orders block found",
     };
   }
 
@@ -2102,44 +2104,44 @@ function normalizeTakeoutPayload(payload: unknown): CheckPhoneTakeoutPayload | n
 }
 
 function diagnoseTakeoutNormalizeFailure(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "顶层不是对象";
+  if (!payload || typeof payload !== "object") return "top level is not an object";
   const record = payload as Record<string, unknown>;
-  if (!Array.isArray(record.orders)) return "orders 不是数组";
+  if (!Array.isArray(record.orders)) return "orders is not an array";
   const isIsoTimestamp = (value: string) => !Number.isNaN(Date.parse(value));
   const seen = new Set<string>();
   for (let index = 0; index < record.orders.length; index += 1) {
     const entry = record.orders[index];
-    if (!entry || typeof entry !== "object") return `orders[${index}] 不是对象`;
+    if (!entry || typeof entry !== "object") return `orders[${index}] is not an object`;
     const item = entry as Record<string, unknown>;
     const id = typeof item.id === "string" ? item.id.trim() : "";
-    if (!id) return `orders[${index}].id 缺失`;
+    if (!id) return `orders[${index}].id is missing`;
     if (seen.has(id)) return `orders 存在重复 id: ${id}`;
     seen.add(id);
-    if (typeof item.shopName !== "string" || !item.shopName.trim()) return `orders[${index}].shopName 缺失`;
+    if (typeof item.shopName !== "string" || !item.shopName.trim()) return `orders[${index}].shopName is missing`;
     if (typeof item.category !== "string" || !CHECKPHONE_TAKEOUT_CATEGORIES.includes(item.category as CheckPhoneTakeoutCategory)) {
-      return `orders[${index}].category 非法`;
+      return `orders[${index}].category is invalid`;
     }
-    if (typeof item.createdAt !== "string" || !isIsoTimestamp(item.createdAt.trim())) return `orders[${index}].createdAt 非法`;
-    if (typeof item.icon !== "string" || !item.icon.trim()) return `orders[${index}].icon 缺失`;
-    if (typeof item.status !== "string" || !item.status.trim()) return `orders[${index}].status 缺失`;
-    if (typeof item.amount !== "number" || !Number.isFinite(item.amount)) return `orders[${index}].amount 非法`;
+    if (typeof item.createdAt !== "string" || !isIsoTimestamp(item.createdAt.trim())) return `orders[${index}].createdAt is invalid`;
+    if (typeof item.icon !== "string" || !item.icon.trim()) return `orders[${index}].icon is missing`;
+    if (typeof item.status !== "string" || !item.status.trim()) return `orders[${index}].status is missing`;
+    if (typeof item.amount !== "number" || !Number.isFinite(item.amount)) return `orders[${index}].amount is invalid`;
     if (!Array.isArray(item.items) || item.items.length === 0) return `orders[${index}].items 为空`;
     for (let itemIndex = 0; itemIndex < item.items.length; itemIndex += 1) {
       const orderItem = item.items[itemIndex];
       if (typeof orderItem === "string" && orderItem.trim()) continue;
-      if (!orderItem || typeof orderItem !== "object") return `orders[${index}].items[${itemIndex}] 非法`;
+      if (!orderItem || typeof orderItem !== "object") return `orders[${index}].items[${itemIndex}] is invalid`;
       const orderItemRecord = orderItem as Record<string, unknown>;
       if (typeof orderItemRecord.name !== "string" || !orderItemRecord.name.trim()) {
-        return `orders[${index}].items[${itemIndex}].name 缺失`;
+        return `orders[${index}].items[${itemIndex}].name is missing`;
       }
       if (typeof orderItemRecord.icon !== "string" || !orderItemRecord.icon.trim()) {
-        return `orders[${index}].items[${itemIndex}].icon 缺失`;
+        return `orders[${index}].items[${itemIndex}].icon is missing`;
       }
     }
-    if (typeof item.scenario !== "string" || !item.scenario.trim()) return `orders[${index}].scenario 缺失`;
-    if (typeof item.innerVoice !== "string" || !item.innerVoice.trim()) return `orders[${index}].innerVoice 缺失`;
+    if (typeof item.scenario !== "string" || !item.scenario.trim()) return `orders[${index}].scenario is missing`;
+    if (typeof item.innerVoice !== "string" || !item.innerVoice.trim()) return `orders[${index}].innerVoice is missing`;
   }
-  return "结构存在字段缺失、枚举非法或重复id";
+  return "structure has missing fields, an invalid enum value, or a duplicate id";
 }
 
 function parseSteamNumericField(value: string | undefined): number {
@@ -2168,12 +2170,12 @@ export function parseSteamBlockPayload(text: string): {
 } {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) {
-    return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+    return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
   }
 
   const sections = [...source.matchAll(new RegExp(`^#\\s*(${blockLabelPattern("最近在玩")}|${blockLabelPattern("愿望单")}|${blockLabelPattern("游戏库")})\\s*$`, "gm"))];
   if (sections.length === 0) {
-    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到游戏库分区" };
+    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "no game library section found" };
   }
 
   const firstSectionIndex = sections[0]?.index ?? 0;
@@ -2357,48 +2359,48 @@ function normalizeSteamPayload(payload: unknown): CheckPhoneSteamPayload | null 
 }
 
 function diagnoseSteamNormalizeFailure(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "顶层不是对象";
+  if (!payload || typeof payload !== "object") return "top level is not an object";
   const record = payload as Record<string, unknown>;
-  if (!record.profile || typeof record.profile !== "object") return "profile 缺失";
+  if (!record.profile || typeof record.profile !== "object") return "profile is missing";
   const profile = record.profile as Record<string, unknown>;
-  if (typeof profile.name !== "string" || !profile.name.trim()) return "profile.name 缺失";
-  if (typeof profile.handle !== "string" || !profile.handle.trim()) return "profile.handle 缺失";
-  if (typeof profile.bio !== "string" || !profile.bio.trim()) return "profile.bio 缺失";
-  if (!Array.isArray(record.recentlyPlayed)) return "recentlyPlayed 不是数组";
-  if (!Array.isArray(record.wishlist)) return "wishlist 不是数组";
-  if (!Array.isArray(record.library)) return "library 不是数组";
+  if (typeof profile.name !== "string" || !profile.name.trim()) return "profile.name is missing";
+  if (typeof profile.handle !== "string" || !profile.handle.trim()) return "profile.handle is missing";
+  if (typeof profile.bio !== "string" || !profile.bio.trim()) return "profile.bio is missing";
+  if (!Array.isArray(record.recentlyPlayed)) return "recentlyPlayed is not an array";
+  if (!Array.isArray(record.wishlist)) return "wishlist is not an array";
+  if (!Array.isArray(record.library)) return "library is not an array";
   const seen = new Set<string>();
   for (let index = 0; index < record.recentlyPlayed.length; index += 1) {
     const item = record.recentlyPlayed[index] as Record<string, unknown>;
-    if (!item || typeof item !== "object") return `recentlyPlayed[${index}] 不是对象`;
+    if (!item || typeof item !== "object") return `recentlyPlayed[${index}] is not an object`;
     const id = typeof item.id === "string" ? item.id.trim() : "";
-    if (!id) return `recentlyPlayed[${index}].id 缺失`;
+    if (!id) return `recentlyPlayed[${index}].id is missing`;
     if (seen.has(id)) return `存在重复 id: ${id}`;
     seen.add(id);
-    if (typeof item.totalHours !== "number" || !Number.isFinite(item.totalHours)) return `recentlyPlayed[${index}].totalHours 非法`;
-    if (typeof item.recentHours !== "number" || !Number.isFinite(item.recentHours)) return `recentlyPlayed[${index}].recentHours 非法`;
-    if (typeof item.progressPercent !== "number" || !Number.isFinite(item.progressPercent)) return `recentlyPlayed[${index}].progressPercent 非法`;
+    if (typeof item.totalHours !== "number" || !Number.isFinite(item.totalHours)) return `recentlyPlayed[${index}].totalHours is invalid`;
+    if (typeof item.recentHours !== "number" || !Number.isFinite(item.recentHours)) return `recentlyPlayed[${index}].recentHours is invalid`;
+    if (typeof item.progressPercent !== "number" || !Number.isFinite(item.progressPercent)) return `recentlyPlayed[${index}].progressPercent is invalid`;
   }
   for (let index = 0; index < record.wishlist.length; index += 1) {
     const item = record.wishlist[index] as Record<string, unknown>;
-    if (!item || typeof item !== "object") return `wishlist[${index}] 不是对象`;
+    if (!item || typeof item !== "object") return `wishlist[${index}] is not an object`;
     const id = typeof item.id === "string" ? item.id.trim() : "";
-    if (!id) return `wishlist[${index}].id 缺失`;
+    if (!id) return `wishlist[${index}].id is missing`;
     if (seen.has(id)) return `存在重复 id: ${id}`;
     seen.add(id);
-    if (typeof item.price !== "number" || !Number.isFinite(item.price)) return `wishlist[${index}].price 非法`;
+    if (typeof item.price !== "number" || !Number.isFinite(item.price)) return `wishlist[${index}].price is invalid`;
   }
   for (let index = 0; index < record.library.length; index += 1) {
     const item = record.library[index] as Record<string, unknown>;
-    if (!item || typeof item !== "object") return `library[${index}] 不是对象`;
+    if (!item || typeof item !== "object") return `library[${index}] is not an object`;
     const id = typeof item.id === "string" ? item.id.trim() : "";
-    if (!id) return `library[${index}].id 缺失`;
+    if (!id) return `library[${index}].id is missing`;
     if (seen.has(id)) return `存在重复 id: ${id}`;
     seen.add(id);
-    if (typeof item.totalHours !== "number" || !Number.isFinite(item.totalHours)) return `library[${index}].totalHours 非法`;
-    if (typeof item.progressPercent !== "number" || !Number.isFinite(item.progressPercent)) return `library[${index}].progressPercent 非法`;
+    if (typeof item.totalHours !== "number" || !Number.isFinite(item.totalHours)) return `library[${index}].totalHours is invalid`;
+    if (typeof item.progressPercent !== "number" || !Number.isFinite(item.progressPercent)) return `library[${index}].progressPercent is invalid`;
   }
-  return "结构存在字段缺失、时间非法或重复id";
+  return "structure has missing fields, an invalid time, or a duplicate id";
 }
 
 function parseBilibiliNumericField(value: string | undefined): number {
@@ -2416,11 +2418,11 @@ export function parseBilibiliBlockPayload(text: string): {
   parseError?: string;
 } {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
 
   const sections = [...source.matchAll(new RegExp(`^#\\s*(${blockLabelPattern("观看记录")}|${blockLabelPattern("收藏")})\\s*$`, "gm"))];
   if (sections.length === 0) {
-    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 B站分区" };
+    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "no Bilibili section found" };
   }
 
   const parseSectionVideos = (sectionName: "观看记录" | "收藏") => {
@@ -2541,32 +2543,32 @@ function normalizeBilibiliPayload(payload: unknown): CheckPhoneBilibiliPayload |
 }
 
 function diagnoseBilibiliNormalizeFailure(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "顶层不是对象";
+  if (!payload || typeof payload !== "object") return "top level is not an object";
   const record = payload as Record<string, unknown>;
-  if (!Array.isArray(record.watchHistory)) return "watchHistory 不是数组";
-  if (!Array.isArray(record.favorites)) return "favorites 不是数组";
+  if (!Array.isArray(record.watchHistory)) return "watchHistory is not an array";
+  if (!Array.isArray(record.favorites)) return "favorites is not an array";
   const seen = new Set<string>();
   for (let index = 0; index < record.watchHistory.length; index += 1) {
     const item = record.watchHistory[index] as Record<string, unknown>;
-    if (!item || typeof item !== "object") return `watchHistory[${index}] 不是对象`;
+    if (!item || typeof item !== "object") return `watchHistory[${index}] is not an object`;
     const id = typeof item.id === "string" ? item.id.trim() : "";
-    if (!id) return `watchHistory[${index}].id 缺失`;
+    if (!id) return `watchHistory[${index}].id is missing`;
     if (seen.has(id)) return `存在重复 id: ${id}`;
     seen.add(id);
-    if (typeof item.visualDescription !== "string" || !item.visualDescription.trim()) return `watchHistory[${index}].visualDescription 缺失`;
-    if (typeof item.playCount !== "number" || !Number.isFinite(item.playCount)) return `watchHistory[${index}].playCount 非法`;
+    if (typeof item.visualDescription !== "string" || !item.visualDescription.trim()) return `watchHistory[${index}].visualDescription is missing`;
+    if (typeof item.playCount !== "number" || !Number.isFinite(item.playCount)) return `watchHistory[${index}].playCount is invalid`;
   }
   for (let index = 0; index < record.favorites.length; index += 1) {
     const item = record.favorites[index] as Record<string, unknown>;
-    if (!item || typeof item !== "object") return `favorites[${index}] 不是对象`;
+    if (!item || typeof item !== "object") return `favorites[${index}] is not an object`;
     const id = typeof item.id === "string" ? item.id.trim() : "";
-    if (!id) return `favorites[${index}].id 缺失`;
+    if (!id) return `favorites[${index}].id is missing`;
     if (seen.has(id)) return `存在重复 id: ${id}`;
     seen.add(id);
-    if (typeof item.visualDescription !== "string" || !item.visualDescription.trim()) return `favorites[${index}].visualDescription 缺失`;
-    if (typeof item.playCount !== "number" || !Number.isFinite(item.playCount)) return `favorites[${index}].playCount 非法`;
+    if (typeof item.visualDescription !== "string" || !item.visualDescription.trim()) return `favorites[${index}].visualDescription is missing`;
+    if (typeof item.playCount !== "number" || !Number.isFinite(item.playCount)) return `favorites[${index}].playCount is invalid`;
   }
-  return "结构存在字段缺失、时间非法或重复id";
+  return "structure has missing fields, an invalid time, or a duplicate id";
 }
 
 type RedditBlockParseResult = {
@@ -2609,11 +2611,11 @@ function parseRedditSectionBlocks(source: string, sectionMatches: RegExpMatchArr
 
 function parseRedditBlockPayload(text: string): RedditBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
 
   const sectionMatches = [...source.matchAll(new RegExp(`^#\\s*(Posts|${blockLabelPattern("发帖")}|${blockLabelPattern("评论")})\\s*$`, "gm"))];
   if (sectionMatches.length === 0) {
-    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 #Posts / #Comments 分区" };
+    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "no #Posts / #Comments section found" };
   }
 
   const firstSectionIndex = sectionMatches[0]?.index ?? 0;
@@ -2762,53 +2764,53 @@ function normalizeRedditPayload(payload: unknown): CheckPhoneRedditPayload | nul
 }
 
 function diagnoseRedditNormalizeFailure(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "顶层不是对象";
+  if (!payload || typeof payload !== "object") return "top level is not an object";
   const record = payload as Record<string, unknown>;
   const isIsoTimestamp = (value: string) => !Number.isNaN(Date.parse(value));
-  if (!record.profile || typeof record.profile !== "object") return "profile 缺失";
+  if (!record.profile || typeof record.profile !== "object") return "profile is missing";
   const profile = record.profile as Record<string, unknown>;
-  if (typeof profile.name !== "string" || !profile.name.trim()) return "profile.name 缺失";
-  if (typeof profile.handle !== "string" || !profile.handle.trim()) return "profile.handle 缺失";
-  if (typeof profile.bio !== "string" || !profile.bio.trim()) return "profile.bio 缺失";
-  if (typeof profile.followers !== "number" || !Number.isFinite(profile.followers)) return "profile.followers 非法";
-  if (typeof profile.postKarma !== "number" || !Number.isFinite(profile.postKarma)) return "profile.postKarma 非法";
-  if (typeof profile.commentKarma !== "number" || !Number.isFinite(profile.commentKarma)) return "profile.commentKarma 非法";
-  if (typeof profile.cakeDay !== "string" || !isIsoTimestamp(profile.cakeDay.trim())) return "profile.cakeDay 非法";
-  if (!Array.isArray(record.posts)) return "posts 不是数组";
-  if (!Array.isArray(record.comments)) return "comments 不是数组";
+  if (typeof profile.name !== "string" || !profile.name.trim()) return "profile.name is missing";
+  if (typeof profile.handle !== "string" || !profile.handle.trim()) return "profile.handle is missing";
+  if (typeof profile.bio !== "string" || !profile.bio.trim()) return "profile.bio is missing";
+  if (typeof profile.followers !== "number" || !Number.isFinite(profile.followers)) return "profile.followers is invalid";
+  if (typeof profile.postKarma !== "number" || !Number.isFinite(profile.postKarma)) return "profile.postKarma is invalid";
+  if (typeof profile.commentKarma !== "number" || !Number.isFinite(profile.commentKarma)) return "profile.commentKarma is invalid";
+  if (typeof profile.cakeDay !== "string" || !isIsoTimestamp(profile.cakeDay.trim())) return "profile.cakeDay is invalid";
+  if (!Array.isArray(record.posts)) return "posts is not an array";
+  if (!Array.isArray(record.comments)) return "comments is not an array";
   const seen = new Set<string>();
   for (let index = 0; index < record.posts.length; index += 1) {
     const item = record.posts[index] as Record<string, unknown>;
-    if (!item || typeof item !== "object") return `posts[${index}] 不是对象`;
+    if (!item || typeof item !== "object") return `posts[${index}] is not an object`;
     const id = typeof item.id === "string" ? item.id.trim() : "";
-    if (!id) return `posts[${index}].id 缺失`;
+    if (!id) return `posts[${index}].id is missing`;
     if (seen.has(id)) return `存在重复 id: ${id}`;
     seen.add(id);
-    if (typeof item.communityName !== "string" || !item.communityName.trim()) return `posts[${index}].communityName 缺失`;
-    if (typeof item.title !== "string" || !item.title.trim()) return `posts[${index}].title 缺失`;
-    if (typeof item.body !== "string" || !item.body.trim()) return `posts[${index}].body 缺失`;
-    if (typeof item.createdAt !== "string" || !isIsoTimestamp(item.createdAt.trim())) return `posts[${index}].createdAt 非法`;
-    if (typeof item.upvoteCount !== "number" || !Number.isFinite(item.upvoteCount)) return `posts[${index}].upvoteCount 非法`;
-    if (typeof item.commentCount !== "number" || !Number.isFinite(item.commentCount)) return `posts[${index}].commentCount 非法`;
-    if (typeof item.viewCount !== "number" || !Number.isFinite(item.viewCount)) return `posts[${index}].viewCount 非法`;
-    if (typeof item.innerThought !== "string" || !item.innerThought.trim()) return `posts[${index}].innerThought 缺失`;
+    if (typeof item.communityName !== "string" || !item.communityName.trim()) return `posts[${index}].communityName is missing`;
+    if (typeof item.title !== "string" || !item.title.trim()) return `posts[${index}].title is missing`;
+    if (typeof item.body !== "string" || !item.body.trim()) return `posts[${index}].body is missing`;
+    if (typeof item.createdAt !== "string" || !isIsoTimestamp(item.createdAt.trim())) return `posts[${index}].createdAt is invalid`;
+    if (typeof item.upvoteCount !== "number" || !Number.isFinite(item.upvoteCount)) return `posts[${index}].upvoteCount is invalid`;
+    if (typeof item.commentCount !== "number" || !Number.isFinite(item.commentCount)) return `posts[${index}].commentCount is invalid`;
+    if (typeof item.viewCount !== "number" || !Number.isFinite(item.viewCount)) return `posts[${index}].viewCount is invalid`;
+    if (typeof item.innerThought !== "string" || !item.innerThought.trim()) return `posts[${index}].innerThought is missing`;
   }
   for (let index = 0; index < record.comments.length; index += 1) {
     const item = record.comments[index] as Record<string, unknown>;
-    if (!item || typeof item !== "object") return `comments[${index}] 不是对象`;
+    if (!item || typeof item !== "object") return `comments[${index}] is not an object`;
     const id = typeof item.id === "string" ? item.id.trim() : "";
-    if (!id) return `comments[${index}].id 缺失`;
+    if (!id) return `comments[${index}].id is missing`;
     if (seen.has(id)) return `存在重复 id: ${id}`;
     seen.add(id);
-    if (typeof item.communityName !== "string" || !item.communityName.trim()) return `comments[${index}].communityName 缺失`;
-    if (typeof item.postTitle !== "string" || !item.postTitle.trim()) return `comments[${index}].postTitle 缺失`;
-    if (typeof item.body !== "string" || !item.body.trim()) return `comments[${index}].body 缺失`;
-    if (typeof item.createdAt !== "string" || !isIsoTimestamp(item.createdAt.trim())) return `comments[${index}].createdAt 非法`;
-    if (typeof item.upvoteCount !== "number" || !Number.isFinite(item.upvoteCount)) return `comments[${index}].upvoteCount 非法`;
-    if (typeof item.viewCount !== "number" || !Number.isFinite(item.viewCount)) return `comments[${index}].viewCount 非法`;
-    if (typeof item.innerThought !== "string" || !item.innerThought.trim()) return `comments[${index}].innerThought 缺失`;
+    if (typeof item.communityName !== "string" || !item.communityName.trim()) return `comments[${index}].communityName is missing`;
+    if (typeof item.postTitle !== "string" || !item.postTitle.trim()) return `comments[${index}].postTitle is missing`;
+    if (typeof item.body !== "string" || !item.body.trim()) return `comments[${index}].body is missing`;
+    if (typeof item.createdAt !== "string" || !isIsoTimestamp(item.createdAt.trim())) return `comments[${index}].createdAt is invalid`;
+    if (typeof item.upvoteCount !== "number" || !Number.isFinite(item.upvoteCount)) return `comments[${index}].upvoteCount is invalid`;
+    if (typeof item.viewCount !== "number" || !Number.isFinite(item.viewCount)) return `comments[${index}].viewCount is invalid`;
+    if (typeof item.innerThought !== "string" || !item.innerThought.trim()) return `comments[${index}].innerThought is missing`;
   }
-  return "结构存在字段缺失、时间非法或重复id";
+  return "structure has missing fields, an invalid time, or a duplicate id";
 }
 
 type XBlockParseResult = {
@@ -2874,11 +2876,11 @@ function normalizeXExternalHandle(rawHandle: string, displayName: string): strin
 
 function parseXBlockPayload(text: string): XBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
 
   const sectionMatches = [...source.matchAll(new RegExp(`^#\\s*(${blockLabelPattern("帖子")}|${blockLabelPattern("回复")}|${blockLabelPattern("媒体")}|${blockLabelPattern("喜欢")})\\s*$`, "gm"))];
   if (sectionMatches.length === 0) {
-    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 #帖子 / #回复 / #喜欢 分区" };
+    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "no #Posts / #Replies / #Likes section found" };
   }
 
   const firstSectionIndex = sectionMatches[0]?.index ?? 0;
@@ -3108,20 +3110,20 @@ function normalizeXPayload(payload: unknown, characterName = ""): CheckPhoneXPay
 }
 
 function diagnoseXNormalizeFailure(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "顶层不是对象";
+  if (!payload || typeof payload !== "object") return "top level is not an object";
   const record = payload as Record<string, unknown>;
   const isIsoTimestamp = (value: string) => !Number.isNaN(Date.parse(value));
-  if (!record.profile || typeof record.profile !== "object") return "profile 缺失";
+  if (!record.profile || typeof record.profile !== "object") return "profile is missing";
   const profile = record.profile as Record<string, unknown>;
-  if (typeof profile.name !== "string" || !profile.name.trim()) return "profile.name 缺失";
-  if (typeof profile.handle !== "string" || !profile.handle.trim()) return "profile.handle 缺失";
-  if (typeof profile.bio !== "string" || !profile.bio.trim()) return "profile.bio 缺失";
-  if (typeof profile.followingCount !== "number" || !Number.isFinite(profile.followingCount)) return "profile.followingCount 非法";
-  if (typeof profile.followerCount !== "number" || !Number.isFinite(profile.followerCount)) return "profile.followerCount 非法";
-  if (!Array.isArray(record.posts)) return "posts 不是数组";
-  if (!Array.isArray(record.replies)) return "replies 不是数组";
-  if ("media" in record && !Array.isArray(record.media)) return "media 不是数组";
-  if (!Array.isArray(record.likes)) return "likes 不是数组";
+  if (typeof profile.name !== "string" || !profile.name.trim()) return "profile.name is missing";
+  if (typeof profile.handle !== "string" || !profile.handle.trim()) return "profile.handle is missing";
+  if (typeof profile.bio !== "string" || !profile.bio.trim()) return "profile.bio is missing";
+  if (typeof profile.followingCount !== "number" || !Number.isFinite(profile.followingCount)) return "profile.followingCount is invalid";
+  if (typeof profile.followerCount !== "number" || !Number.isFinite(profile.followerCount)) return "profile.followerCount is invalid";
+  if (!Array.isArray(record.posts)) return "posts is not an array";
+  if (!Array.isArray(record.replies)) return "replies is not an array";
+  if ("media" in record && !Array.isArray(record.media)) return "media is not an array";
+  if (!Array.isArray(record.likes)) return "likes is not an array";
   const seen = new Set<string>();
   for (const [sectionName, entries] of [
     ["posts", record.posts],
@@ -3131,22 +3133,22 @@ function diagnoseXNormalizeFailure(payload: unknown): string {
   ] as const) {
     for (let index = 0; index < entries.length; index += 1) {
       const item = entries[index] as Record<string, unknown>;
-      if (!item || typeof item !== "object") return `${sectionName}[${index}] 不是对象`;
+      if (!item || typeof item !== "object") return `${sectionName}[${index}] is not an object`;
       const id = typeof item.id === "string" ? item.id.trim() : "";
-      if (!id) return `${sectionName}[${index}].id 缺失`;
+      if (!id) return `${sectionName}[${index}].id is missing`;
       if (seen.has(id)) return `存在重复 id: ${id}`;
       seen.add(id);
-      if (typeof item.createdAt !== "string" || !isIsoTimestamp(item.createdAt.trim())) return `${sectionName}[${index}].createdAt 非法`;
-      if (typeof item.replyCount !== "number" || !Number.isFinite(item.replyCount)) return `${sectionName}[${index}].replyCount 非法`;
-      if (typeof item.repostCount !== "number" || !Number.isFinite(item.repostCount)) return `${sectionName}[${index}].repostCount 非法`;
-      if (typeof item.likeCount !== "number" || !Number.isFinite(item.likeCount)) return `${sectionName}[${index}].likeCount 非法`;
-      if (typeof item.viewCount !== "number" || !Number.isFinite(item.viewCount)) return `${sectionName}[${index}].viewCount 非法`;
+      if (typeof item.createdAt !== "string" || !isIsoTimestamp(item.createdAt.trim())) return `${sectionName}[${index}].createdAt is invalid`;
+      if (typeof item.replyCount !== "number" || !Number.isFinite(item.replyCount)) return `${sectionName}[${index}].replyCount is invalid`;
+      if (typeof item.repostCount !== "number" || !Number.isFinite(item.repostCount)) return `${sectionName}[${index}].repostCount is invalid`;
+      if (typeof item.likeCount !== "number" || !Number.isFinite(item.likeCount)) return `${sectionName}[${index}].likeCount is invalid`;
+      if (typeof item.viewCount !== "number" || !Number.isFinite(item.viewCount)) return `${sectionName}[${index}].viewCount is invalid`;
       if (sectionName === "likes") {
-        if (typeof item.authorHandle !== "string" || !item.authorHandle.trim()) return `likes[${index}].authorHandle 缺失`;
+        if (typeof item.authorHandle !== "string" || !item.authorHandle.trim()) return `likes[${index}].authorHandle is missing`;
       }
     }
   }
-  return "结构存在字段缺失、时间非法或重复id";
+  return "structure has missing fields, an invalid time, or a duplicate id";
 }
 
 type YoutubeBlockParseResult = {
@@ -3180,11 +3182,11 @@ function parseYoutubeSectionEntries(sectionBody: string) {
 
 function parseYoutubeBlockPayload(text: string): YoutubeBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
 
   const sections = [...source.matchAll(new RegExp(`^#\\s*(${blockLabelPattern("观看记录")}|${blockLabelPattern("稍后观看")}|${blockLabelPattern("赞过的视频")}|${blockLabelPattern("赞过视频")}|${blockLabelPattern("订阅")})\\s*$`, "gm"))];
   if (sections.length === 0) {
-    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 YouTube 分区" };
+    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "no YouTube section found" };
   }
 
   const parseSectionBlocks = (...sectionNames: string[]) => {
@@ -3333,40 +3335,40 @@ function normalizeYoutubePayload(payload: unknown): CheckPhoneYoutubePayload | n
 }
 
 function diagnoseYoutubeNormalizeFailure(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "顶层不是对象";
+  if (!payload || typeof payload !== "object") return "top level is not an object";
   const record = payload as Record<string, unknown>;
   const isIsoTimestamp = (value: string) => !Number.isNaN(Date.parse(value));
-  if (!Array.isArray(record.watchHistory)) return "watchHistory 不是数组";
-  if (!Array.isArray(record.watchLater)) return "watchLater 不是数组";
-  if (!Array.isArray(record.likedVideos)) return "likedVideos 不是数组";
+  if (!Array.isArray(record.watchHistory)) return "watchHistory is not an array";
+  if (!Array.isArray(record.watchLater)) return "watchLater is not an array";
+  if (!Array.isArray(record.likedVideos)) return "likedVideos is not an array";
 
   const diagnoseVideo = (item: Record<string, unknown>, label: string) => {
     const id = typeof item.id === "string" ? item.id.trim() : "";
-    if (!id) return `${label}.id 缺失`;
-    if (typeof item.title !== "string" || !item.title.trim()) return `${label}.title 缺失`;
-    if (typeof item.channelName !== "string" || !item.channelName.trim()) return `${label}.channelName 缺失`;
-    if (typeof item.createdAt !== "string" || !isIsoTimestamp(item.createdAt.trim())) return `${label}.createdAt 非法`;
-    if (typeof item.durationLabel !== "string" || !item.durationLabel.trim()) return `${label}.durationLabel 缺失`;
-    if (typeof item.playCount !== "number" || !Number.isFinite(item.playCount)) return `${label}.playCount 非法`;
-    if (typeof item.stateNote !== "string" || !item.stateNote.trim()) return `${label}.stateNote 缺失`;
-    if (typeof item.feeling !== "string" || !item.feeling.trim()) return `${label}.feeling 缺失`;
+    if (!id) return `${label}.id is missing`;
+    if (typeof item.title !== "string" || !item.title.trim()) return `${label}.title is missing`;
+    if (typeof item.channelName !== "string" || !item.channelName.trim()) return `${label}.channelName is missing`;
+    if (typeof item.createdAt !== "string" || !isIsoTimestamp(item.createdAt.trim())) return `${label}.createdAt is invalid`;
+    if (typeof item.durationLabel !== "string" || !item.durationLabel.trim()) return `${label}.durationLabel is missing`;
+    if (typeof item.playCount !== "number" || !Number.isFinite(item.playCount)) return `${label}.playCount is invalid`;
+    if (typeof item.stateNote !== "string" || !item.stateNote.trim()) return `${label}.stateNote is missing`;
+    if (typeof item.feeling !== "string" || !item.feeling.trim()) return `${label}.feeling is missing`;
     return null;
   };
 
   const seen = new Set<string>();
   for (let index = 0; index < record.watchHistory.length; index += 1) {
     const item = record.watchHistory[index] as Record<string, unknown>;
-    if (!item || typeof item !== "object") return `watchHistory[${index}] 不是对象`;
+    if (!item || typeof item !== "object") return `watchHistory[${index}] is not an object`;
     const issue = diagnoseVideo(item, `watchHistory[${index}]`);
     if (issue) return issue;
     const id = (item.id as string).trim();
     if (seen.has(id)) return `存在重复 id: ${id}`;
     seen.add(id);
-    if (typeof item.progressLabel !== "string" || !item.progressLabel.trim()) return `watchHistory[${index}].progressLabel 缺失`;
+    if (typeof item.progressLabel !== "string" || !item.progressLabel.trim()) return `watchHistory[${index}].progressLabel is missing`;
   }
   for (let index = 0; index < record.watchLater.length; index += 1) {
     const item = record.watchLater[index] as Record<string, unknown>;
-    if (!item || typeof item !== "object") return `watchLater[${index}] 不是对象`;
+    if (!item || typeof item !== "object") return `watchLater[${index}] is not an object`;
     const issue = diagnoseVideo(item, `watchLater[${index}]`);
     if (issue) return issue;
     const id = (item.id as string).trim();
@@ -3375,14 +3377,14 @@ function diagnoseYoutubeNormalizeFailure(payload: unknown): string {
   }
   for (let index = 0; index < record.likedVideos.length; index += 1) {
     const item = record.likedVideos[index] as Record<string, unknown>;
-    if (!item || typeof item !== "object") return `likedVideos[${index}] 不是对象`;
+    if (!item || typeof item !== "object") return `likedVideos[${index}] is not an object`;
     const issue = diagnoseVideo(item, `likedVideos[${index}]`);
     if (issue) return issue;
     const id = (item.id as string).trim();
     if (seen.has(id)) return `存在重复 id: ${id}`;
     seen.add(id);
   }
-  return "结构存在字段缺失、时间非法或重复id";
+  return "structure has missing fields, an invalid time, or a duplicate id";
 }
 
 type InstagramBlockParseResult = {
@@ -3452,11 +3454,11 @@ function parseInstagramHighlights(sectionBody: string): CheckPhoneInstagramPaylo
 
 function parseInstagramBlockPayload(text: string): InstagramBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
 
   const postSectionMatches = [...source.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern("帖子")})\\s*$`, "gm"))];
   if (postSectionMatches.length === 0) {
-    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 #帖子 分区" };
+    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "no #Posts section found" };
   }
   const highlightSectionMatches = [...source.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern("精选动态")})\\s*$`, "gm"))];
 
@@ -3630,32 +3632,32 @@ function normalizeInstagramPayload(payload: unknown): CheckPhoneInstagramPayload
 }
 
 function diagnoseInstagramNormalizeFailure(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "顶层不是对象";
+  if (!payload || typeof payload !== "object") return "top level is not an object";
   const record = payload as Record<string, unknown>;
   const isIsoTimestamp = (value: string) => !Number.isNaN(Date.parse(value));
-  if (!record.profile || typeof record.profile !== "object") return "profile 缺失";
+  if (!record.profile || typeof record.profile !== "object") return "profile is missing";
   const profile = record.profile as Record<string, unknown>;
-  if (typeof profile.name !== "string" || !profile.name.trim()) return "profile.name 缺失";
-  if (typeof profile.username !== "string" || !profile.username.trim()) return "profile.username 缺失";
-  if (typeof profile.bio !== "string" || !profile.bio.trim()) return "profile.bio 缺失";
-  if (typeof profile.followingCount !== "number" || !Number.isFinite(profile.followingCount)) return "profile.followingCount 非法";
-  if (typeof profile.followerCount !== "number" || !Number.isFinite(profile.followerCount)) return "profile.followerCount 非法";
-  if (!Array.isArray(record.posts)) return "posts 不是数组";
+  if (typeof profile.name !== "string" || !profile.name.trim()) return "profile.name is missing";
+  if (typeof profile.username !== "string" || !profile.username.trim()) return "profile.username is missing";
+  if (typeof profile.bio !== "string" || !profile.bio.trim()) return "profile.bio is missing";
+  if (typeof profile.followingCount !== "number" || !Number.isFinite(profile.followingCount)) return "profile.followingCount is invalid";
+  if (typeof profile.followerCount !== "number" || !Number.isFinite(profile.followerCount)) return "profile.followerCount is invalid";
+  if (!Array.isArray(record.posts)) return "posts is not an array";
   const seen = new Set<string>();
   for (let index = 0; index < record.posts.length; index += 1) {
     const item = record.posts[index] as Record<string, unknown>;
-    if (!item || typeof item !== "object") return `posts[${index}] 不是对象`;
+    if (!item || typeof item !== "object") return `posts[${index}] is not an object`;
     const id = typeof item.id === "string" ? item.id.trim() : "";
-    if (!id) return `posts[${index}].id 缺失`;
+    if (!id) return `posts[${index}].id is missing`;
     if (seen.has(id)) return `存在重复 id: ${id}`;
     seen.add(id);
-    if (typeof item.coverIcon !== "string" || !item.coverIcon.trim()) return `posts[${index}].coverIcon 缺失`;
-    if (typeof item.createdAt !== "string" || !isIsoTimestamp(item.createdAt.trim())) return `posts[${index}].createdAt 非法`;
-    if (typeof item.caption !== "string" || !item.caption.trim()) return `posts[${index}].caption 缺失`;
-    if (typeof item.likeCount !== "number" || !Number.isFinite(item.likeCount)) return `posts[${index}].likeCount 非法`;
-    if (!Array.isArray(item.comments)) return `posts[${index}].comments 不是数组`;
+    if (typeof item.coverIcon !== "string" || !item.coverIcon.trim()) return `posts[${index}].coverIcon is missing`;
+    if (typeof item.createdAt !== "string" || !isIsoTimestamp(item.createdAt.trim())) return `posts[${index}].createdAt is invalid`;
+    if (typeof item.caption !== "string" || !item.caption.trim()) return `posts[${index}].caption is missing`;
+    if (typeof item.likeCount !== "number" || !Number.isFinite(item.likeCount)) return `posts[${index}].likeCount is invalid`;
+    if (!Array.isArray(item.comments)) return `posts[${index}].comments is not an array`;
   }
-  return "结构存在字段缺失、时间非法或重复id";
+  return "structure has missing fields, an invalid time, or a duplicate id";
 }
 
 function buildEmailPreview(body: string): string {
@@ -3841,7 +3843,7 @@ function parseDouyinBlockPayload(text: string): DouyinBlockParseResult {
       parsed: null,
       sanitizedCandidate: "",
       parseMode: "failed",
-      parseError: "LLM 返回为空",
+      parseError: "the model returned nothing",
     };
   }
 
@@ -3851,7 +3853,7 @@ function parseDouyinBlockPayload(text: string): DouyinBlockParseResult {
       parsed: null,
       sanitizedCandidate: source,
       parseMode: "failed",
-      parseError: "未找到 #作品 / #喜欢 / #收藏 分区",
+      parseError: "no #Works / #Likes / #Saved section found",
     };
   }
 
@@ -4061,7 +4063,7 @@ export async function generateCheckPhoneDouyin(
   previousUpdatedAt?: string,
 ): Promise<{ payload: CheckPhoneDouyinPayload | null; summary: string; error?: string; debugRawOutput?: string; debugSanitizedOutput?: string; debugParseMode?: "raw" | "sanitized" | "failed"; debugParseError?: string; debugNormalizeError?: string }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "", debugParseMode: "failed" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "", debugParseMode: "failed" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "douyin", preset, worldBooks, regexes, {
@@ -4078,7 +4080,7 @@ export async function generateCheckPhoneDouyin(
       { skipOutputRegex: true, appId: "checkphone_douyin" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
     const { parsed, sanitizedCandidate, parseMode, parseError } = parseDouyinBlockPayload(rawOutput);
     const payload = normalizeDouyinPayload(parsed, characterName);
     if (!payload) {
@@ -4100,7 +4102,7 @@ export async function generateCheckPhoneDouyin(
       debugParseMode: parseMode,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "", debugParseMode: "failed", debugParseError: message };
   }
 }
@@ -4120,7 +4122,7 @@ export async function generateCheckPhoneInstagram(
   debugNormalizeError?: string;
 }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "", debugParseMode: "failed" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "", debugParseMode: "failed" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "instagram", preset, worldBooks, regexes, {
@@ -4136,7 +4138,7 @@ export async function generateCheckPhoneInstagram(
       { skipOutputRegex: true, appId: "checkphone_instagram" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
     const { parsed, sanitizedCandidate, parseMode, parseError } = parseInstagramBlockPayload(rawOutput);
     const payload = normalizeInstagramPayload(parsed);
     if (!payload) {
@@ -4159,49 +4161,49 @@ export async function generateCheckPhoneInstagram(
       debugParseMode: parseMode,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "", debugParseMode: "failed", debugParseError: message };
   }
 }
 
 function diagnoseDouyinNormalizeFailure(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "顶层不是对象";
+  if (!payload || typeof payload !== "object") return "top level is not an object";
   const record = payload as Record<string, unknown>;
   const profile = record.profile && typeof record.profile === "object" ? (record.profile as Record<string, unknown>) : null;
   if (!profile) return "缺少 profile 对象";
-  if (typeof profile.name !== "string" || !profile.name.trim()) return "profile.name 缺失";
+  if (typeof profile.name !== "string" || !profile.name.trim()) return "profile.name is missing";
 
   const validTone = (value: unknown) =>
     value === "ivory" || value === "mist" || value === "blush" || value === "graphite";
   const isIsoTimestamp = (value: string) => !Number.isNaN(Date.parse(value));
 
   const diagnoseVideoList = (label: string, input: unknown): string | null => {
-    if (!Array.isArray(input)) return `${label} 不是数组`;
+    if (!Array.isArray(input)) return `${label} is not an array`;
     for (let index = 0; index < input.length; index += 1) {
       const entry = input[index];
-      if (!entry || typeof entry !== "object") return `${label}[${index}] 不是对象`;
+      if (!entry || typeof entry !== "object") return `${label}[${index}] is not an object`;
       const item = entry as Record<string, unknown>;
       const id = typeof item.id === "string" ? item.id.trim() : "";
-      if (!id) return `${label}[${index}].id 缺失`;
-      if (typeof item.title !== "string" || !item.title.trim()) return `${label}[${index}].title 缺失`;
-      if (typeof item.caption !== "string" || !item.caption.trim()) return `${label}[${index}].caption 缺失`;
-      if (!validTone(item.tone)) return `${label}[${index}].tone 非法`;
-      if (typeof item.createdAt !== "string" || !isIsoTimestamp(item.createdAt.trim())) return `${label}[${index}].createdAt 非法`;
-      if (!Array.isArray(item.comments)) return `${label}[${index}].comments 不是数组`;
+      if (!id) return `${label}[${index}].id is missing`;
+      if (typeof item.title !== "string" || !item.title.trim()) return `${label}[${index}].title is missing`;
+      if (typeof item.caption !== "string" || !item.caption.trim()) return `${label}[${index}].caption is missing`;
+      if (!validTone(item.tone)) return `${label}[${index}].tone is invalid`;
+      if (typeof item.createdAt !== "string" || !isIsoTimestamp(item.createdAt.trim())) return `${label}[${index}].createdAt is invalid`;
+      if (!Array.isArray(item.comments)) return `${label}[${index}].comments is not an array`;
       for (let commentIndex = 0; commentIndex < item.comments.length; commentIndex += 1) {
         const comment = item.comments[commentIndex];
-        if (!comment || typeof comment !== "object") return `${label}[${index}].comments[${commentIndex}] 不是对象`;
+        if (!comment || typeof comment !== "object") return `${label}[${index}].comments[${commentIndex}] is not an object`;
         const commentRecord = comment as Record<string, unknown>;
         const commentId = typeof commentRecord.id === "string" ? commentRecord.id.trim() : "";
-        if (!commentId) return `${label}[${index}].comments[${commentIndex}].id 缺失`;
+        if (!commentId) return `${label}[${index}].comments[${commentIndex}].id is missing`;
         if (typeof commentRecord.authorName !== "string" || !commentRecord.authorName.trim()) {
-          return `${label}[${index}].comments[${commentIndex}].authorName 缺失`;
+          return `${label}[${index}].comments[${commentIndex}].authorName is missing`;
         }
         if (typeof commentRecord.text !== "string" || !commentRecord.text.trim()) {
-          return `${label}[${index}].comments[${commentIndex}].text 缺失`;
+          return `${label}[${index}].comments[${commentIndex}].text is missing`;
         }
         if (typeof commentRecord.createdAt !== "string" || !isIsoTimestamp(commentRecord.createdAt.trim())) {
-          return `${label}[${index}].comments[${commentIndex}].createdAt 非法`;
+          return `${label}[${index}].comments[${commentIndex}].createdAt is invalid`;
         }
       }
     }
@@ -4324,11 +4326,11 @@ function parseTelegramDirection(value: string | undefined): CheckPhoneTelegramPa
 
 export function parseTelegramBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
 
   const matches = [...source.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern("会话")})(\\d+)\\s*$`, "gm"))];
   if (matches.length === 0) {
-    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 #会话N 分区" };
+    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "no #ConversationsN section found" };
   }
 
   const threads = matches.map((current, index) => {
@@ -4380,7 +4382,7 @@ export async function generateCheckPhoneNotes(
   previousUpdatedAt?: string,
 ): Promise<{ payload: CheckPhoneNotesPayload | null; summary: string; error?: string; debugRawOutput?: string }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "notes", preset, worldBooks, regexes, {
@@ -4396,7 +4398,7 @@ export async function generateCheckPhoneNotes(
       { skipOutputRegex: true, appId: "checkphone_notes" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "" };
     const { parsed } = parseNotesBlockPayload(rawOutput);
     const payload = normalizeNotesPayload(parsed);
     if (!payload) return { payload: null, summary: "", error: "无法解析备忘录内容", debugRawOutput: rawOutput };
@@ -4406,7 +4408,7 @@ export async function generateCheckPhoneNotes(
       debugRawOutput: rawOutput,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "" };
   }
 }
@@ -4417,7 +4419,7 @@ export async function generateCheckPhoneEmail(
   previousUpdatedAt?: string,
 ): Promise<{ payload: CheckPhoneEmailPayload | null; summary: string; error?: string; debugRawOutput?: string }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "email", preset, worldBooks, regexes, {
@@ -4433,7 +4435,7 @@ export async function generateCheckPhoneEmail(
       { skipOutputRegex: true, appId: "checkphone_email" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "" };
     const { parsed } = parseEmailBlockPayload(rawOutput);
     const payload = normalizeEmailPayload(parsed);
     if (!payload) return { payload: null, summary: "", error: "无法解析邮箱内容", debugRawOutput: rawOutput };
@@ -4443,7 +4445,7 @@ export async function generateCheckPhoneEmail(
       debugRawOutput: rawOutput,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "" };
   }
 }
@@ -4463,7 +4465,7 @@ export async function generateCheckPhoneTakeout(
   debugNormalizeError?: string;
 }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "", debugParseMode: "failed" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "", debugParseMode: "failed" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "takeout", preset, worldBooks, regexes, {
@@ -4479,7 +4481,7 @@ export async function generateCheckPhoneTakeout(
       { skipOutputRegex: true, appId: "checkphone_takeout" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
     const { parsed, sanitizedCandidate, parseMode, parseError } = parseTakeoutBlockPayload(rawOutput);
     const payload = normalizeTakeoutPayload(parsed);
     if (!payload) {
@@ -4501,7 +4503,7 @@ export async function generateCheckPhoneTakeout(
       debugParseMode: parseMode,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "", debugParseMode: "failed", debugParseError: message };
   }
 }
@@ -4512,7 +4514,7 @@ export async function generateCheckPhoneTelegram(
   previousUpdatedAt?: string,
 ): Promise<{ payload: CheckPhoneTelegramPayload | null; summary: string; error?: string; debugRawOutput?: string }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "telegram", preset, worldBooks, regexes, {
@@ -4528,7 +4530,7 @@ export async function generateCheckPhoneTelegram(
       { skipOutputRegex: true, appId: "checkphone_telegram" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "" };
     const { parsed } = parseTelegramBlockPayload(rawOutput);
     const payload = normalizeTelegramPayload(parsed);
     if (!payload) return { payload: null, summary: "", error: "无法解析 Telegram 内容", debugRawOutput: rawOutput };
@@ -4538,7 +4540,7 @@ export async function generateCheckPhoneTelegram(
       debugRawOutput: rawOutput,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "" };
   }
 }
@@ -4558,7 +4560,7 @@ export async function generateCheckPhoneSteam(
   debugNormalizeError?: string;
 }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "", debugParseMode: "failed" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "", debugParseMode: "failed" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "steam", preset, worldBooks, regexes, {
@@ -4574,7 +4576,7 @@ export async function generateCheckPhoneSteam(
       { skipOutputRegex: true, appId: "checkphone_steam" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
     const { parsed, sanitizedCandidate, parseMode, parseError } = parseSteamBlockPayload(rawOutput);
     const payload = normalizeSteamPayload(parsed);
     if (!payload) {
@@ -4597,7 +4599,7 @@ export async function generateCheckPhoneSteam(
       debugParseMode: parseMode,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "", debugParseMode: "failed", debugParseError: message };
   }
 }
@@ -4617,7 +4619,7 @@ export async function generateCheckPhoneReddit(
   debugNormalizeError?: string;
 }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "", debugParseMode: "failed" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "", debugParseMode: "failed" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "reddit", preset, worldBooks, regexes, {
@@ -4633,7 +4635,7 @@ export async function generateCheckPhoneReddit(
       { skipOutputRegex: true, appId: "checkphone_reddit" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
     const { parsed, sanitizedCandidate, parseMode, parseError } = parseRedditBlockPayload(rawOutput);
     const payload = normalizeRedditPayload(parsed);
     if (!payload) {
@@ -4656,7 +4658,7 @@ export async function generateCheckPhoneReddit(
       debugParseMode: parseMode,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "", debugParseMode: "failed", debugParseError: message };
   }
 }
@@ -4676,7 +4678,7 @@ export async function generateCheckPhoneX(
   debugNormalizeError?: string;
 }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "", debugParseMode: "failed" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "", debugParseMode: "failed" };
 
   try {
     const characterName = loadCharacters().find((item) => item.id === characterId)?.name;
@@ -4693,7 +4695,7 @@ export async function generateCheckPhoneX(
       { skipOutputRegex: true, appId: "checkphone_x" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
     const { parsed, sanitizedCandidate, parseMode, parseError } = parseXBlockPayload(rawOutput);
     const payload = normalizeXPayload(parsed, characterName);
     if (!payload) {
@@ -4716,7 +4718,7 @@ export async function generateCheckPhoneX(
       debugParseMode: parseMode,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "", debugParseMode: "failed", debugParseError: message };
   }
 }
@@ -4736,7 +4738,7 @@ export async function generateCheckPhoneYoutube(
   debugNormalizeError?: string;
 }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "", debugParseMode: "failed" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "", debugParseMode: "failed" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "youtube", preset, worldBooks, regexes, {
@@ -4752,7 +4754,7 @@ export async function generateCheckPhoneYoutube(
       { skipOutputRegex: true, appId: "checkphone_youtube" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
     const { parsed, sanitizedCandidate, parseMode, parseError } = parseYoutubeBlockPayload(rawOutput);
     const payload = normalizeYoutubePayload(parsed);
     if (!payload) {
@@ -4775,7 +4777,7 @@ export async function generateCheckPhoneYoutube(
       debugParseMode: parseMode,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "", debugParseMode: "failed", debugParseError: message };
   }
 }
@@ -4795,7 +4797,7 @@ export async function generateCheckPhoneBilibili(
   debugNormalizeError?: string;
 }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "", debugParseMode: "failed" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "", debugParseMode: "failed" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "bilibili", preset, worldBooks, regexes, {
@@ -4811,7 +4813,7 @@ export async function generateCheckPhoneBilibili(
       { skipOutputRegex: true, appId: "checkphone_bilibili" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
     const { parsed, sanitizedCandidate, parseMode, parseError } = parseBilibiliBlockPayload(rawOutput);
     const payload = normalizeBilibiliPayload(parsed);
     if (!payload) {
@@ -4834,7 +4836,7 @@ export async function generateCheckPhoneBilibili(
       debugParseMode: parseMode,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "", debugParseMode: "failed", debugParseError: message };
   }
 }
@@ -4889,31 +4891,31 @@ function normalizeMessagesPayload(payload: unknown): CheckPhoneMessagesPayload |
 }
 
 function diagnoseMessagesNormalizeFailure(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "顶层不是对象";
+  if (!payload || typeof payload !== "object") return "top level is not an object";
   const record = payload as Record<string, unknown>;
   const threads = Array.isArray(record.threads) ? record.threads : [];
   if (threads.length < 1) return `threads 数量不足: ${threads.length}`;
 
   for (let index = 0; index < threads.length; index += 1) {
     const item = threads[index];
-    if (!item || typeof item !== "object") return `threads[${index}] 不是对象`;
+    if (!item || typeof item !== "object") return `threads[${index}] is not an object`;
     const thread = item as Record<string, unknown>;
-    if (typeof thread.id !== "string" || !thread.id.trim()) return `threads[${index}].id 缺失`;
-    if (typeof thread.sender !== "string" || !thread.sender.trim()) return `threads[${index}].sender 缺失`;
-    if (typeof thread.timeLabel !== "string" || !thread.timeLabel.trim()) return `threads[${index}].timeLabel 缺失`;
+    if (typeof thread.id !== "string" || !thread.id.trim()) return `threads[${index}].id is missing`;
+    if (typeof thread.sender !== "string" || !thread.sender.trim()) return `threads[${index}].sender is missing`;
+    if (typeof thread.timeLabel !== "string" || !thread.timeLabel.trim()) return `threads[${index}].timeLabel is missing`;
     const messages = Array.isArray(thread.messages) ? thread.messages : [];
     if (messages.length < 1) return `threads[${index}].messages 数量不足: ${messages.length}`;
     for (let messageIndex = 0; messageIndex < messages.length; messageIndex += 1) {
       const message = messages[messageIndex];
-      if (!message || typeof message !== "object") return `threads[${index}].messages[${messageIndex}] 不是对象`;
+      if (!message || typeof message !== "object") return `threads[${index}].messages[${messageIndex}] is not an object`;
       const entry = message as Record<string, unknown>;
-      if (typeof entry.text !== "string" || !entry.text.trim()) return `threads[${index}].messages[${messageIndex}].text 缺失`;
-      if (typeof entry.timeLabel !== "string" || !entry.timeLabel.trim()) return `threads[${index}].messages[${messageIndex}].timeLabel 缺失`;
-      if (entry.direction !== "incoming" && entry.direction !== "outgoing") return `threads[${index}].messages[${messageIndex}].direction 非法`;
+      if (typeof entry.text !== "string" || !entry.text.trim()) return `threads[${index}].messages[${messageIndex}].text is missing`;
+      if (typeof entry.timeLabel !== "string" || !entry.timeLabel.trim()) return `threads[${index}].messages[${messageIndex}].timeLabel is missing`;
+      if (entry.direction !== "incoming" && entry.direction !== "outgoing") return `threads[${index}].messages[${messageIndex}].direction is invalid`;
     }
   }
 
-  return "结构存在字段缺失或方向非法";
+  return "structure has missing fields or an invalid direction";
 }
 
 export async function generateCheckPhoneMessages(
@@ -4922,7 +4924,7 @@ export async function generateCheckPhoneMessages(
   previousUpdatedAt?: string,
 ): Promise<{ payload: CheckPhoneMessagesPayload | null; summary: string; error?: string; debugRawOutput?: string; debugSanitizedOutput?: string; debugParseMode?: "raw" | "sanitized" | "failed"; debugParseError?: string; debugNormalizeError?: string }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "", debugParseMode: "failed" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "", debugParseMode: "failed" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "messages", preset, worldBooks, regexes, {
@@ -4938,7 +4940,7 @@ export async function generateCheckPhoneMessages(
       { skipOutputRegex: true, appId: "checkphone_messages" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
     const { parsed, sanitizedCandidate, parseMode, parseError } = parseMessagesBlockPayload(rawOutput);
     const payload = normalizeMessagesPayload(parsed);
     if (!payload) {
@@ -4958,7 +4960,7 @@ export async function generateCheckPhoneMessages(
       summary: formatSnapshotSummary(payload),
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "", debugParseMode: "failed", debugParseError: message };
   }
 }
@@ -5035,11 +5037,11 @@ function parseBrowserEntryBlocks(section: string, label: string): Array<{ order:
 
 export function parseBrowserBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
   const historySection = extractBrowserSection(source, "历史记录");
   const bookmarksSection = extractBrowserSection(source, "收藏夹");
   if (!historySection && !bookmarksSection) {
-    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 #历史记录 或 #收藏夹 分区" };
+    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "no #History or #Bookmarks section found" };
   }
   const history = parseBrowserEntryBlocks(historySection, "记录")
     .map(({ order, fields }) => ({
@@ -5086,7 +5088,7 @@ export async function generateCheckPhoneBrowser(
   debugNormalizeError?: string;
 }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "", debugParseMode: "failed" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "", debugParseMode: "failed" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "browser", preset, worldBooks, regexes, {
@@ -5102,7 +5104,7 @@ export async function generateCheckPhoneBrowser(
       { skipOutputRegex: true, appId: "checkphone_browser" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
     const { parsed, sanitizedCandidate, parseMode, parseError } = parseBrowserBlockPayload(rawOutput);
     const payload = normalizeBrowserPayload(parsed);
     if (!payload) {
@@ -5123,7 +5125,7 @@ export async function generateCheckPhoneBrowser(
       debugParseMode: parseMode,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "", debugParseMode: "failed", debugParseError: message };
   }
 }
@@ -5217,7 +5219,7 @@ function parsePhotoAlbumBlocks(section: string): Array<{ order: string; fields: 
 
 export function parsePhotosBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
   let albumEntries = parsePhotoAlbumBlocks(source);
 
   // Backward compatibility for the previous nested format:
@@ -5245,7 +5247,7 @@ export function parsePhotosBlockPayload(text: string): PhoneBlockParseResult {
   }
 
   if (albumEntries.length === 0) {
-    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 #相簿N 分区" };
+    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "no #AlbumsN section found" };
   }
 
   const albums = albumEntries.map((entry) => ({
@@ -5350,7 +5352,7 @@ export async function generateCheckPhonePhotos(
   previousUpdatedAt?: string,
 ): Promise<{ payload: CheckPhonePhotosPayload | null; summary: string; error?: string; debugRawOutput?: string }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "photos", preset, worldBooks, regexes, {
@@ -5366,7 +5368,7 @@ export async function generateCheckPhonePhotos(
       { skipOutputRegex: true, appId: "checkphone_photos" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "" };
     const { parsed } = parsePhotosBlockPayload(rawOutput);
     const payload = normalizePhotosPayload(parsed);
     if (!payload) return { payload: null, summary: "", error: "无法解析相册内容", debugRawOutput: rawOutput };
@@ -5376,7 +5378,7 @@ export async function generateCheckPhonePhotos(
       debugRawOutput: rawOutput,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "" };
   }
 }
@@ -5429,7 +5431,7 @@ function parseChatMomentComments(
 
 function parseChatBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
 
   const supplementalConversations = extractTopLevelTaggedBlocks(source, "补充会话").map((entry) => ({
     id: `supp_conv_${entry.order}`,
@@ -5668,7 +5670,7 @@ export async function generateCheckPhoneChat(
   previousUpdatedAt?: string,
 ): Promise<{ payload: CheckPhoneChatPayload | null; summary: string; error?: string; debugRawOutput?: string }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "" };
 
   try {
     const realPayload = buildRealCheckPhoneChatPayload(characterId);
@@ -5693,7 +5695,7 @@ export async function generateCheckPhoneChat(
       return {
         payload: realPayload,
         summary: formatSnapshotSummary(realPayload),
-        error: "LLM 返回为空，已回退为真实数据",
+        error: "the model returned nothing，已回退为真实数据",
         debugRawOutput: rawOutput ?? "",
       };
     }
@@ -5713,7 +5715,7 @@ export async function generateCheckPhoneChat(
       summary: formatSnapshotSummary(merged),
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     const realPayload = buildRealCheckPhoneChatPayload(characterId);
     return { payload: realPayload, summary: formatSnapshotSummary(realPayload), error: message, debugRawOutput: "" };
   }
@@ -5842,12 +5844,12 @@ function normalizeAssetAccentLabel(value: string | undefined): CheckPhoneAssetsP
 
 function parseAssetsBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
 
   const accountMatches = [...source.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern("账户")})(\\d+)\\s*$`, "gm"))];
   const activityMatches = [...source.matchAll(new RegExp(`^#\\s*(?:${blockLabelPattern("流水")})(\\d+)\\s*$`, "gm"))];
   if (accountMatches.length === 0 && activityMatches.length === 0) {
-    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 #账户N 或 #流水N 分区" };
+    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "no #AccountsN or #TransactionsN section found" };
   }
 
   const blockEnd = (currentIndex: number, allMatches: RegExpMatchArray[]) => {
@@ -5912,7 +5914,7 @@ export async function generateCheckPhoneAssets(
   previousUpdatedAt?: string,
 ): Promise<{ payload: CheckPhoneAssetsPayload | null; summary: string; error?: string; debugRawOutput?: string }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "assets", preset, worldBooks, regexes, {
@@ -5928,7 +5930,7 @@ export async function generateCheckPhoneAssets(
       { skipOutputRegex: true, appId: "checkphone_assets" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "" };
     const { parsed } = parseAssetsBlockPayload(rawOutput);
     const payload = normalizeAssetsPayload(parsed);
     if (!payload) return { payload: null, summary: "", error: "无法解析资产内容", debugRawOutput: rawOutput };
@@ -5938,7 +5940,7 @@ export async function generateCheckPhoneAssets(
       debugRawOutput: rawOutput,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "" };
   }
 }
@@ -6080,11 +6082,11 @@ function parsePhoneSectionBlocks(
 
 export function parsePhoneBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
 
   const sectionMatches = [...source.matchAll(new RegExp(`^#\\s*(${blockLabelPattern("最近通话")}|${blockLabelPattern("联系人")}|${blockLabelPattern("常用联系人")}|${blockLabelPattern("语音信箱")})\\s*$`, "gm"))];
   if (sectionMatches.length === 0) {
-    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 #最近通话 / #联系人 / #语音信箱 分区" };
+    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "no #RecentCalls / #Contacts / #Voicemail section found" };
   }
 
   const recents = parsePhoneSectionBlocks(source, sectionMatches, "最近通话").map((entry) => ({
@@ -6139,11 +6141,11 @@ function parseMessagesDirection(value: string | undefined): "incoming" | "outgoi
 
 export function parseMessagesBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
   const body = source.replace(/^#\s*线程\s*$/m, "").trim();
   const threadMatches = [...body.matchAll(new RegExp(`^##\\s*(?:${blockLabelPattern("线程")})(\\d+)\\s*$`, "gm"))];
   if (threadMatches.length === 0) {
-    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到 ##线程 分区" };
+    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "no ##Threads section found" };
   }
   const threads = threadMatches.map((currentMatch, index) => {
     const next = threadMatches[index + 1];
@@ -6196,7 +6198,7 @@ export async function generateCheckPhonePhone(
   previousUpdatedAt?: string,
 ) : Promise<{ payload: CheckPhonePhonePayload | null; summary: string; error?: string; debugRawOutput?: string; debugSanitizedOutput?: string; debugParseMode?: "raw" | "sanitized" | "failed"; debugParseError?: string; debugNormalizeError?: string }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "", debugParseMode: "failed" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "", debugParseMode: "failed" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "phone", preset, worldBooks, regexes, {
@@ -6212,7 +6214,7 @@ export async function generateCheckPhonePhone(
       { skipOutputRegex: true, appId: "checkphone_phone" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
     const { parsed, sanitizedCandidate, parseMode, parseError } = parsePhoneBlockPayload(rawOutput);
     const normalized = normalizePhonePayload(parsed);
     if (!normalized) {
@@ -6234,13 +6236,13 @@ export async function generateCheckPhonePhone(
       debugParseMode: parseMode,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "", debugParseMode: "failed", debugParseError: message };
   }
 }
 
 function diagnosePhoneNormalizeFailure(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "顶层不是对象";
+  if (!payload || typeof payload !== "object") return "top level is not an object";
   const record = payload as Record<string, unknown>;
   const contacts = Array.isArray(record.contacts) ? record.contacts : [];
   const recents = Array.isArray(record.recents) ? record.recents : Array.isArray(record.calls) ? record.calls : [];
@@ -6251,15 +6253,15 @@ function diagnosePhoneNormalizeFailure(payload: unknown): string {
   const contactIds = new Set<string>();
   for (let index = 0; index < contacts.length; index += 1) {
     const item = contacts[index];
-    if (!item || typeof item !== "object") return `contacts[${index}] 不是对象`;
+    if (!item || typeof item !== "object") return `contacts[${index}] is not an object`;
     const recordItem = item as Record<string, unknown>;
     const id = typeof recordItem.id === "string" ? recordItem.id.trim() : "";
-    if (!id) return `contacts[${index}].id 缺失`;
+    if (!id) return `contacts[${index}].id is missing`;
     if (contactIds.has(id)) return `contacts 存在重复 id: ${id}`;
     contactIds.add(id);
-    if (typeof recordItem.name !== "string" || !recordItem.name.trim()) return `contacts[${index}].name 缺失`;
-    if (typeof recordItem.tagLabel !== "string" || !recordItem.tagLabel.trim()) return `contacts[${index}].tagLabel 缺失`;
-    if (typeof recordItem.note !== "string" || !recordItem.note.trim()) return `contacts[${index}].note 缺失`;
+    if (typeof recordItem.name !== "string" || !recordItem.name.trim()) return `contacts[${index}].name is missing`;
+    if (typeof recordItem.tagLabel !== "string" || !recordItem.tagLabel.trim()) return `contacts[${index}].tagLabel is missing`;
+    if (typeof recordItem.note !== "string" || !recordItem.note.trim()) return `contacts[${index}].note is missing`;
   }
 
   const validDirection = (value: unknown) => value === "incoming" || value === "outgoing" || value === "missed";
@@ -6267,36 +6269,36 @@ function diagnosePhoneNormalizeFailure(payload: unknown): string {
   const recentIds = new Set<string>();
   for (let index = 0; index < recents.length; index += 1) {
     const item = recents[index];
-    if (!item || typeof item !== "object") return `recents[${index}] 不是对象`;
+    if (!item || typeof item !== "object") return `recents[${index}] is not an object`;
     const recordItem = item as Record<string, unknown>;
     const id = typeof recordItem.id === "string" ? recordItem.id.trim() : "";
-    if (!id) return `recents[${index}].id 缺失`;
+    if (!id) return `recents[${index}].id is missing`;
     if (recentIds.has(id)) return `recents 存在重复 id: ${id}`;
     recentIds.add(id);
-    if (typeof recordItem.name !== "string" || !recordItem.name.trim()) return `recents[${index}].name 缺失`;
-    if (typeof recordItem.createdAt !== "string" || !isIsoTimestamp(recordItem.createdAt.trim())) return `recents[${index}].createdAt 非法`;
-    if (typeof recordItem.durationLabel !== "string" || !recordItem.durationLabel.trim()) return `recents[${index}].durationLabel 缺失`;
-    if (!validDirection(recordItem.direction)) return `recents[${index}].direction 非法`;
-    if (typeof recordItem.summary !== "string" || !recordItem.summary.trim()) return `recents[${index}].summary 缺失`;
-    if (typeof recordItem.innerThought !== "string" || !recordItem.innerThought.trim()) return `recents[${index}].innerThought 缺失`;
+    if (typeof recordItem.name !== "string" || !recordItem.name.trim()) return `recents[${index}].name is missing`;
+    if (typeof recordItem.createdAt !== "string" || !isIsoTimestamp(recordItem.createdAt.trim())) return `recents[${index}].createdAt is invalid`;
+    if (typeof recordItem.durationLabel !== "string" || !recordItem.durationLabel.trim()) return `recents[${index}].durationLabel is missing`;
+    if (!validDirection(recordItem.direction)) return `recents[${index}].direction is invalid`;
+    if (typeof recordItem.summary !== "string" || !recordItem.summary.trim()) return `recents[${index}].summary is missing`;
+    if (typeof recordItem.innerThought !== "string" || !recordItem.innerThought.trim()) return `recents[${index}].innerThought is missing`;
   }
 
   const voicemailIds = new Set<string>();
   for (let index = 0; index < voicemails.length; index += 1) {
     const item = voicemails[index];
-    if (!item || typeof item !== "object") return `voicemails[${index}] 不是对象`;
+    if (!item || typeof item !== "object") return `voicemails[${index}] is not an object`;
     const recordItem = item as Record<string, unknown>;
     const id = typeof recordItem.id === "string" ? recordItem.id.trim() : "";
-    if (!id) return `voicemails[${index}].id 缺失`;
+    if (!id) return `voicemails[${index}].id is missing`;
     if (voicemailIds.has(id)) return `voicemails 存在重复 id: ${id}`;
     voicemailIds.add(id);
-    if (typeof recordItem.name !== "string" || !recordItem.name.trim()) return `voicemails[${index}].name 缺失`;
-    if (typeof recordItem.createdAt !== "string" || !isIsoTimestamp(recordItem.createdAt.trim())) return `voicemails[${index}].createdAt 非法`;
-    if (typeof recordItem.durationLabel !== "string" || !recordItem.durationLabel.trim()) return `voicemails[${index}].durationLabel 缺失`;
-    if (typeof recordItem.transcript !== "string" || !recordItem.transcript.trim()) return `voicemails[${index}].transcript 缺失`;
+    if (typeof recordItem.name !== "string" || !recordItem.name.trim()) return `voicemails[${index}].name is missing`;
+    if (typeof recordItem.createdAt !== "string" || !isIsoTimestamp(recordItem.createdAt.trim())) return `voicemails[${index}].createdAt is invalid`;
+    if (typeof recordItem.durationLabel !== "string" || !recordItem.durationLabel.trim()) return `voicemails[${index}].durationLabel is missing`;
+    if (typeof recordItem.transcript !== "string" || !recordItem.transcript.trim()) return `voicemails[${index}].transcript is missing`;
   }
 
-  return "结构存在字段缺失、枚举非法或重复id";
+  return "structure has missing fields, an invalid enum value, or a duplicate id";
 }
 
 function normalizeShoppingProduct(
@@ -6408,7 +6410,7 @@ function parseShoppingOrderItems(
 
 export function parseShoppingBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
 
   const recentlyViewed = extractShoppingTopLevelBlocks(source, "最近浏览").map((entry, index) =>
     parseShoppingProductFields(entry.fields, `view_${entry.order}`, "最近浏览", index),
@@ -6591,7 +6593,7 @@ export async function generateCheckPhoneShopping(
   previousUpdatedAt?: string,
 ): Promise<{ payload: CheckPhoneShoppingPayload | null; summary: string; error?: string; rawOutput?: string }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", rawOutput: "" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", rawOutput: "" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "shopping", preset, worldBooks, regexes, {
@@ -6607,7 +6609,7 @@ export async function generateCheckPhoneShopping(
       { skipOutputRegex: true, appId: "checkphone_shopping" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", rawOutput: rawOutput ?? "" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", rawOutput: rawOutput ?? "" };
     const { parsed } = parseShoppingBlockPayload(rawOutput);
     const normalized = normalizeShoppingPayload(parsed);
     if (!normalized) return { payload: null, summary: "", error: "无法解析购物内容", rawOutput };
@@ -6617,7 +6619,7 @@ export async function generateCheckPhoneShopping(
       rawOutput,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, rawOutput: "" };
   }
 }
@@ -6662,7 +6664,7 @@ function parseMusicTrackFields(
 
 export function parseMusicBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
 
   const firstSection = source.search(/^#\s*\S.*$/m);
   const profileFields = parseTakeoutTaggedFields(firstSection >= 0 ? source.slice(0, firstSection).trim() : source);
@@ -6845,7 +6847,7 @@ export async function generateCheckPhoneMusic(
   previousUpdatedAt?: string,
 ): Promise<{ payload: CheckPhoneMusicPayload | null; summary: string; error?: string; debugRawOutput?: string; debugParseMode?: "raw" | "sanitized" | "failed"; debugParseError?: string }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "", debugParseMode: "failed" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "", debugParseMode: "failed" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "music", preset, worldBooks, regexes, {
@@ -6861,7 +6863,7 @@ export async function generateCheckPhoneMusic(
       { skipOutputRegex: true, appId: "checkphone_music" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
     const { parsed, parseMode, parseError } = parseMusicBlockPayload(rawOutput);
     const normalized = normalizeMusicPayload(parsed);
     if (!normalized) {
@@ -6880,7 +6882,7 @@ export async function generateCheckPhoneMusic(
       debugParseMode: parseMode,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "", debugParseMode: "failed", debugParseError: message };
   }
 }
@@ -7006,7 +7008,7 @@ function parseDoubanActivityFields(
 
 export function parseDoubanBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
 
   const activityBlocks = extractTopLevelTaggedBlocks(source, "动态");
   if (activityBlocks.length > 0) {
@@ -7296,7 +7298,7 @@ export async function generateCheckPhoneDouban(
   previousUpdatedAt?: string,
 ): Promise<{ payload: CheckPhoneDoubanPayload | null; summary: string; error?: string; debugRawOutput?: string; debugParseMode?: "raw" | "sanitized" | "failed"; debugParseError?: string; debugNormalizeError?: string }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "", debugParseMode: "failed" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "", debugParseMode: "failed" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "douban", preset, worldBooks, regexes, {
@@ -7312,7 +7314,7 @@ export async function generateCheckPhoneDouban(
       { skipOutputRegex: true, appId: "checkphone_douban" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
     const { parsed, parseMode, parseError } = parseDoubanBlockPayload(rawOutput);
     const normalized = normalizeDoubanPayload(parsed);
     if (!normalized) {
@@ -7332,13 +7334,13 @@ export async function generateCheckPhoneDouban(
       debugParseMode: parseMode,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "", debugParseMode: "failed", debugParseError: message };
   }
 }
 
 function diagnoseDoubanNormalizeFailure(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "顶层不是对象";
+  if (!payload || typeof payload !== "object") return "top level is not an object";
   const record = payload as Record<string, unknown>;
 
   const myGroups = Array.isArray(record.myGroups) ? record.myGroups : Array.isArray(record.groups) ? record.groups : [];
@@ -7374,86 +7376,86 @@ function diagnoseDoubanNormalizeFailure(payload: unknown): string {
   if (activities.length > 0) {
     for (let index = 0; index < activities.length; index += 1) {
       const item = activities[index];
-      if (!item || typeof item !== "object") return `activities[${index}] 不是对象`;
+      if (!item || typeof item !== "object") return `activities[${index}] is not an object`;
       const entry = item as Record<string, unknown>;
-      if (typeof entry.id !== "string" || !entry.id.trim()) return `activities[${index}].id 缺失`;
-      if (typeof entry.title !== "string" || !entry.title.trim()) return `activities[${index}].title 缺失`;
-      if (typeof entry.body !== "string" || !entry.body.trim()) return `activities[${index}].body 缺失`;
+      if (typeof entry.id !== "string" || !entry.id.trim()) return `activities[${index}].id is missing`;
+      if (typeof entry.title !== "string" || !entry.title.trim()) return `activities[${index}].title is missing`;
+      if (typeof entry.body !== "string" || !entry.body.trim()) return `activities[${index}].body is missing`;
       if (typeof entry.createdAt !== "string" || !entry.createdAt.trim() || !isIsoTimestamp(entry.createdAt)) {
-        return `activities[${index}].createdAt 非法`;
+        return `activities[${index}].createdAt is invalid`;
       }
       if (!Number.isFinite(typeof entry.reactionCount === "number" ? entry.reactionCount : Number(entry.reactionCount))) {
-        return `activities[${index}].reactionCount 非法`;
+        return `activities[${index}].reactionCount is invalid`;
       }
       if (!Number.isFinite(typeof entry.commentCount === "number" ? entry.commentCount : Number(entry.commentCount))) {
-        return `activities[${index}].commentCount 非法`;
+        return `activities[${index}].commentCount is invalid`;
       }
     }
   }
 
   for (let index = 0; index < myGroups.length; index += 1) {
     const item = myGroups[index];
-    if (!item || typeof item !== "object") return `myGroups[${index}] 不是对象`;
+    if (!item || typeof item !== "object") return `myGroups[${index}] is not an object`;
     const entry = item as Record<string, unknown>;
-    if (typeof entry.id !== "string" || !entry.id.trim()) return `myGroups[${index}].id 缺失`;
-    if (typeof entry.name !== "string" || !entry.name.trim()) return `myGroups[${index}].name 缺失`;
-    if (typeof entry.coverIcon !== "string" || !entry.coverIcon.trim()) return `myGroups[${index}].coverIcon 缺失`;
-    if (!validTone(entry.tone)) return `myGroups[${index}].tone 非法`;
+    if (typeof entry.id !== "string" || !entry.id.trim()) return `myGroups[${index}].id is missing`;
+    if (typeof entry.name !== "string" || !entry.name.trim()) return `myGroups[${index}].name is missing`;
+    if (typeof entry.coverIcon !== "string" || !entry.coverIcon.trim()) return `myGroups[${index}].coverIcon is missing`;
+    if (!validTone(entry.tone)) return `myGroups[${index}].tone is invalid`;
     if (!Number.isFinite(typeof entry.memberCount === "number" ? entry.memberCount : Number(entry.memberCount))) {
-      return `myGroups[${index}].memberCount 非法`;
+      return `myGroups[${index}].memberCount is invalid`;
     }
-    if (typeof entry.latestUpdate !== "string" || !entry.latestUpdate.trim()) return `myGroups[${index}].latestUpdate 缺失`;
+    if (typeof entry.latestUpdate !== "string" || !entry.latestUpdate.trim()) return `myGroups[${index}].latestUpdate is missing`;
     if (typeof entry.updatedAt !== "string" || !entry.updatedAt.trim() || !isIsoTimestamp(entry.updatedAt)) {
-      return `myGroups[${index}].updatedAt 非法`;
+      return `myGroups[${index}].updatedAt is invalid`;
     }
   }
 
   const inspectTopic = (items: unknown[], label: "repliedTopics" | "publishedTopics") => {
     for (let index = 0; index < items.length; index += 1) {
       const item = items[index];
-      if (!item || typeof item !== "object") return `${label}[${index}] 不是对象`;
+      if (!item || typeof item !== "object") return `${label}[${index}] is not an object`;
       const entry = item as Record<string, unknown>;
-      if (typeof entry.id !== "string" || !entry.id.trim()) return `${label}[${index}].id 缺失`;
-      if (typeof entry.groupName !== "string" || !entry.groupName.trim()) return `${label}[${index}].groupName 缺失`;
-      if (typeof entry.title !== "string" || !entry.title.trim()) return `${label}[${index}].title 缺失`;
-      if (typeof entry.authorName !== "string" || !entry.authorName.trim()) return `${label}[${index}].authorName 缺失`;
-      if (typeof entry.body !== "string" || !entry.body.trim()) return `${label}[${index}].body 缺失`;
+      if (typeof entry.id !== "string" || !entry.id.trim()) return `${label}[${index}].id is missing`;
+      if (typeof entry.groupName !== "string" || !entry.groupName.trim()) return `${label}[${index}].groupName is missing`;
+      if (typeof entry.title !== "string" || !entry.title.trim()) return `${label}[${index}].title is missing`;
+      if (typeof entry.authorName !== "string" || !entry.authorName.trim()) return `${label}[${index}].authorName is missing`;
+      if (typeof entry.body !== "string" || !entry.body.trim()) return `${label}[${index}].body is missing`;
       if (typeof entry.createdAt !== "string" || !entry.createdAt.trim() || !isIsoTimestamp(entry.createdAt)) {
-        return `${label}[${index}].createdAt 非法`;
+        return `${label}[${index}].createdAt is invalid`;
       }
       if (!Number.isFinite(typeof entry.likeCount === "number" ? entry.likeCount : Number(entry.likeCount))) {
-        return `${label}[${index}].likeCount 非法`;
+        return `${label}[${index}].likeCount is invalid`;
       }
       if (!Number.isFinite(typeof entry.saveCount === "number" ? entry.saveCount : Number(entry.saveCount))) {
-        return `${label}[${index}].saveCount 非法`;
+        return `${label}[${index}].saveCount is invalid`;
       }
       if (!Number.isFinite(typeof entry.repostCount === "number" ? entry.repostCount : Number(entry.repostCount))) {
-        return `${label}[${index}].repostCount 非法`;
+        return `${label}[${index}].repostCount is invalid`;
       }
-      if (!Array.isArray(entry.comments)) return `${label}[${index}].comments 缺失`;
+      if (!Array.isArray(entry.comments)) return `${label}[${index}].comments is missing`;
       const commentIds = new Set<string>();
       for (let commentIndex = 0; commentIndex < entry.comments.length; commentIndex += 1) {
         const comment = entry.comments[commentIndex];
-        if (!comment || typeof comment !== "object") return `${label}[${index}].comments[${commentIndex}] 不是对象`;
+        if (!comment || typeof comment !== "object") return `${label}[${index}].comments[${commentIndex}] is not an object`;
         const commentEntry = comment as Record<string, unknown>;
         const commentId = typeof commentEntry.id === "string" ? commentEntry.id.trim() : "";
-        if (!commentId) return `${label}[${index}].comments[${commentIndex}].id 缺失`;
+        if (!commentId) return `${label}[${index}].comments[${commentIndex}].id is missing`;
         if (commentIds.has(commentId)) return `${label}[${index}].comments 存在重复 id: ${commentId}`;
         commentIds.add(commentId);
         if (typeof commentEntry.authorName !== "string" || !commentEntry.authorName.trim()) {
-          return `${label}[${index}].comments[${commentIndex}].authorName 缺失`;
+          return `${label}[${index}].comments[${commentIndex}].authorName is missing`;
         }
         if (typeof commentEntry.text !== "string" || !commentEntry.text.trim()) {
-          return `${label}[${index}].comments[${commentIndex}].text 缺失`;
+          return `${label}[${index}].comments[${commentIndex}].text is missing`;
         }
         if (typeof commentEntry.createdAt !== "string" || !commentEntry.createdAt.trim() || !isIsoTimestamp(commentEntry.createdAt)) {
-          return `${label}[${index}].comments[${commentIndex}].createdAt 非法`;
+          return `${label}[${index}].comments[${commentIndex}].createdAt is invalid`;
         }
         if (
           commentEntry.replyTo !== undefined &&
           (typeof commentEntry.replyTo !== "string" || !commentEntry.replyTo.trim())
         ) {
-          return `${label}[${index}].comments[${commentIndex}].replyTo 非法`;
+          return `${label}[${index}].comments[${commentIndex}].replyTo is invalid`;
         }
       }
     }
@@ -7465,7 +7467,7 @@ function diagnoseDoubanNormalizeFailure(payload: unknown): string {
   const publishedIssue = inspectTopic(publishedTopics, "publishedTopics");
   if (publishedIssue) return publishedIssue;
 
-  return "结构存在字段缺失、枚举非法或重复 id";
+  return "structure has missing fields, an invalid enum value, or a duplicate id";
 }
 
 function deriveXiaohongshuTone(index: number): CheckPhoneXiaohongshuPayload["homeNotes"][number]["tone"] {
@@ -7542,7 +7544,7 @@ function parseXiaohongshuThreadType(typeValue?: string, tagLabel?: string): Chec
 
 function parseXiaohongshuBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
 
   const firstSection = source.search(/^#\s*\S.*$/m);
   const profileFields = parseTakeoutTaggedFields(firstSection >= 0 ? source.slice(0, firstSection).trim() : source);
@@ -7908,7 +7910,7 @@ function parseWeiboPostFields(
 
 function parseWeiboBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
 
   const firstSection = source.search(/^#\s*\S.*$/m);
   const profileFields = parseTakeoutTaggedFields(firstSection >= 0 ? source.slice(0, firstSection).trim() : source);
@@ -8204,7 +8206,7 @@ function parseReadingBookFields(
 
 export function parseReadingBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
-  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "LLM 返回为空" };
+  if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
 
   const firstSection = source.search(/^#\s*\S.*$/m);
   const profileFields = parseTakeoutTaggedFields(firstSection >= 0 ? source.slice(0, firstSection).trim() : source);
@@ -8236,7 +8238,7 @@ export function parseReadingBlockPayload(text: string): PhoneBlockParseResult {
   }));
 
   if (currentBooks.length + libraryBooks.length + highlights.length + notes.length === 0) {
-    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "未找到阅读块" };
+    return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "no reading block found" };
   }
 
   return {
@@ -8374,7 +8376,7 @@ export async function generateCheckPhoneXiaohongshu(
   debugNormalizeError?: string;
 }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "", debugParseMode: "failed" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "", debugParseMode: "failed" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "xiaohongshu", preset, worldBooks, regexes, {
@@ -8391,7 +8393,7 @@ export async function generateCheckPhoneXiaohongshu(
       { skipOutputRegex: true, appId: "checkphone_xiaohongshu" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
     const { parsed, parseMode, parseError } = parseXiaohongshuBlockPayload(rawOutput);
     const normalized = normalizeXiaohongshuPayload(parsed, characterName);
     if (!normalized) {
@@ -8402,7 +8404,7 @@ export async function generateCheckPhoneXiaohongshu(
         debugRawOutput: rawOutput,
         debugParseMode: parseMode,
         debugParseError: parseError || undefined,
-        debugNormalizeError: parsed ? "结构存在字段缺失或格式非法" : undefined,
+        debugNormalizeError: parsed ? "structure has missing fields or an invalid format" : undefined,
       };
     }
     return {
@@ -8411,7 +8413,7 @@ export async function generateCheckPhoneXiaohongshu(
       debugParseMode: parseMode,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "", debugParseMode: "failed", debugParseError: message };
   }
 }
@@ -8422,7 +8424,7 @@ export async function generateCheckPhoneWeibo(
   previousUpdatedAt?: string,
 ): Promise<{ payload: CheckPhoneWeiboPayload | null; summary: string; error?: string; debugRawOutput?: string; debugParseMode?: "raw" | "sanitized" | "failed"; debugParseError?: string; debugNormalizeError?: string }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "", debugParseMode: "failed" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "", debugParseMode: "failed" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "weibo", preset, worldBooks, regexes, {
@@ -8438,7 +8440,7 @@ export async function generateCheckPhoneWeibo(
       { skipOutputRegex: true, appId: "checkphone_weibo" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
     const { parsed, parseMode, parseError } = parseWeiboBlockPayload(rawOutput);
     const characterName = loadCharacters().find((item) => item.id === characterId)?.name;
     const normalized = normalizeWeiboPayload(parsed, characterName);
@@ -8460,28 +8462,28 @@ export async function generateCheckPhoneWeibo(
       debugParseMode: parseMode,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "", debugParseMode: "failed", debugParseError: message };
   }
 }
 
 function diagnoseWeiboNormalizeFailure(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "顶层不是对象";
+  if (!payload || typeof payload !== "object") return "top level is not an object";
   const record = payload as Record<string, unknown>;
 
   const profileRaw = record.profile && typeof record.profile === "object" ? (record.profile as Record<string, unknown>) : null;
   if (!profileRaw) return "缺少 profile 对象";
-  if (typeof profileRaw.name !== "string" || !profileRaw.name.trim()) return "profile.name 缺失";
-  if (typeof profileRaw.handle !== "string" || !profileRaw.handle.trim()) return "profile.handle 缺失";
-  if (typeof profileRaw.bio !== "string" || !profileRaw.bio.trim()) return "profile.bio 缺失";
+  if (typeof profileRaw.name !== "string" || !profileRaw.name.trim()) return "profile.name is missing";
+  if (typeof profileRaw.handle !== "string" || !profileRaw.handle.trim()) return "profile.handle is missing";
+  if (typeof profileRaw.bio !== "string" || !profileRaw.bio.trim()) return "profile.bio is missing";
   if (!Number.isFinite(typeof profileRaw.followingCount === "number" ? profileRaw.followingCount : Number(profileRaw.followingCount))) {
-    return "profile.followingCount 非法";
+    return "profile.followingCount is invalid";
   }
   if (!Number.isFinite(typeof profileRaw.followerCount === "number" ? profileRaw.followerCount : Number(profileRaw.followerCount))) {
-    return "profile.followerCount 非法";
+    return "profile.followerCount is invalid";
   }
   if (!Number.isFinite(typeof profileRaw.likedTotal === "number" ? profileRaw.likedTotal : Number(profileRaw.likedTotal))) {
-    return "profile.likedTotal 非法";
+    return "profile.likedTotal is invalid";
   }
 
   const homePosts = Array.isArray(record.homePosts) ? record.homePosts : Array.isArray(record.feedPosts) ? record.feedPosts : [];
@@ -8492,16 +8494,16 @@ function diagnoseWeiboNormalizeFailure(payload: unknown): string {
   const overviewRaw = record.messageOverview && typeof record.messageOverview === "object" ? (record.messageOverview as Record<string, unknown>) : null;
   if (!overviewRaw) return "缺少 messageOverview";
   if (!Number.isFinite(typeof overviewRaw.mentionsCount === "number" ? overviewRaw.mentionsCount : Number(overviewRaw.mentionsCount))) {
-    return "messageOverview.mentionsCount 非法";
+    return "messageOverview.mentionsCount is invalid";
   }
   if (!Number.isFinite(typeof overviewRaw.commentsCount === "number" ? overviewRaw.commentsCount : Number(overviewRaw.commentsCount))) {
-    return "messageOverview.commentsCount 非法";
+    return "messageOverview.commentsCount is invalid";
   }
   if (!Number.isFinite(typeof overviewRaw.likesCount === "number" ? overviewRaw.likesCount : Number(overviewRaw.likesCount))) {
-    return "messageOverview.likesCount 非法";
+    return "messageOverview.likesCount is invalid";
   }
 
-  return "结构存在字段缺失、枚举非法或重复 id";
+  return "structure has missing fields, an invalid enum value, or a duplicate id";
 }
 
 export async function generateCheckPhoneReading(
@@ -8510,7 +8512,7 @@ export async function generateCheckPhoneReading(
   previousUpdatedAt?: string,
 ): Promise<{ payload: CheckPhoneReadingPayload | null; summary: string; error?: string; debugRawOutput?: string; debugSanitizedOutput?: string; debugParseMode?: "raw" | "sanitized" | "failed"; debugParseError?: string }> {
   const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
-  if (!apiConfig) return { payload: null, summary: "", error: "未找到可用的 API 配置", debugRawOutput: "" };
+  if (!apiConfig) return { payload: null, summary: "", error: "no usable API configuration found", debugRawOutput: "" };
 
   try {
     const messages = await buildCheckPhoneAppMessages(characterId, "reading", preset, worldBooks, regexes, {
@@ -8526,7 +8528,7 @@ export async function generateCheckPhoneReading(
       { skipOutputRegex: true, appId: "checkphone_reading" },
     );
 
-    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "LLM 返回为空", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
+    if (!rawOutput?.trim()) return { payload: null, summary: "", error: "the model returned nothing", debugRawOutput: rawOutput ?? "", debugParseMode: "failed" };
     const { parsed, sanitizedCandidate, parseMode, parseError } = parseReadingBlockPayload(rawOutput);
     const normalized = normalizeReadingPayload(parsed);
     if (!normalized) {
@@ -8548,7 +8550,7 @@ export async function generateCheckPhoneReading(
       debugParseError: parseError || undefined,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
+    const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "", debugParseMode: "failed", debugParseError: message };
   }
 }
