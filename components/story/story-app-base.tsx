@@ -774,6 +774,11 @@ export function StoryApp({ onClose }: StoryAppProps) {
     setMessages(contextMessages);
     setActiveMessageId(null);
     setStorageVersion(v => v + 1);
+    // A retry cuts off a long message, and when the content gets shorter the browser
+    // clamps the scroll position to the new bottom — which reads as the page jumping
+    // upwards. Stick to the bottom deliberately so the eye lands on the typing indicator.
+    autoBottomLockRef.current = true;
+    requestAnimationFrame(() => scrollStoryToBottom());
     setIsGenerating(true);
     const generationRun = createStoryGenerationRun(sessionId);
     const generationRunId = generationRun.runId;
