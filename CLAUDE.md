@@ -1292,6 +1292,46 @@ Real divergence from our baseline: **129 files, +23024 / −5191**, 149 commits,
 
 **`BUILTIN_PRESET_VERSION` is now 275**, bumped to activate the three Moments rules. Bumped ahead of "after D2" deliberately: nothing left in D2 touched `builtin-preset.ts` (`mascot-tools.ts` and `mascot-prompts.ts` are not part of the preset), so no second bump was coming from that work.
 
+### ✅ Story mode: the FULL 2026-08-02 paper/document redesign — **PORTED** (2026-08-07)
+Six commits: `a03cb90`, `5fff72d`, `6ca0e18`, `d543813`, `550bde5`, `35f4dda`. ~930 lines across `styles/story.css`, `components/story/story-app-base.tsx`, `components/ui/story-html-renderer.tsx`. `tsc` 0 errors and CSS braces balanced at every step; **zero CJK in both `.tsx` files throughout**.
+
+| cluster | what |
+|---|---|
+| 1 tokens | `--story-font` + `--story-paper-shadow{,-soft}`; flat white default |
+| 2 long card | header floats, `.story-stage-inner` becomes the paper, reading card flattened onto it |
+| 3 message header | `.story-msg-head/-meta/-name/-time`, square avatars |
+| 4 bubbles/folds/composer | bubble transparent + justified; folds become footnotes between dotted rules; composer flush to the bottom edge |
+| 5a renderer | serif iframe fallback + vh feedback lock |
+| 5b drawer | three-column avatar grid, borderless panel |
+
+**Ported by hand, never cherry-picked** — histories are unrelated and both `.tsx` files were translated in Phase 1, so context lines differ everywhere. Chinese comments were translated on the way in.
+
+#### The recurring trap: four user-facing toggles upstream deleted
+Upstream removed the avatar / timestamp / bubble switches (`be899cc`) and the drawer message preview. **We had all of them working**, backed by persisted prefs in `lib/story-storage.ts`. Porting the JSX as written would have silently deleted them and orphaned their stored fields. Resolution, per decision:
+
+| toggle | outcome |
+|---|---|
+| `hideAvatar`, `hideTimestamp` | **kept working.** Upstream's structure is flexbox, so hiding the avatar just drops a flex child. The head renders only when it has content — which is also why the outer gate could not stay the avatar-only test it was. |
+| `hideBubble` | **left as a deliberate no-op.** With the bubble flattened, the rule sets what the base rule already does. Kept with an explanatory comment rather than deleted; a dead control is recoverable, a deleted feature is not. |
+| drawer message preview | **removed by decision** — no room in a three-column grid, visual consistency prioritised. `getStoryPreview` is NOT dead; it still backs `currentPreview`. |
+
+#### Coupled sets — porting any one alone breaks the layout
+- **The long card**: header `relative→absolute`, stage padding `12px 16px 168px → 0 14px 0`, `.story-stage-inner` gains the paper background and header-height top padding. The floating header is what lets the paper run beneath it; either half alone leaves a gap or slides content under the bar.
+- **The message header**: `.story-row` had to go `row → column` (the header is now *above* the bubble), and the bare `[data-role="user"] { flex-direction: row-reverse }` had to be **deleted** — it would have overridden the column stacking entirely.
+- **Fold blocks**: our `▸` marker used `summary::before`, the same pseudo-element upstream's left dotted rule needs. Whole block replaced rather than patched, or two rules fight over `::before`.
+- **Composer**: a `@media` override pinned `left/right: 20px` and would have re-inset the now-edge-to-edge bar on wide screens.
+
+#### Things removed because they became incoherent
+Night-theme overrides for `.story-top-btn` and `.story-meta` (both flat now, so a night-only shadow contradicts the paper look), and `.story-meta::before`, the washi-tape strip that pinned the reading card — with the card flattened into the sheet, the tape pins nothing.
+
+#### The renderer delta was three things, two of them traps
+Two hunks looked like real changes and were **comment-only** — our English against upstream's Chinese, byte-identical code, in the two regions edited during the polish port. Taking them would have put Chinese back into a Phase-1 file. The two genuine features:
+- **`serifIframeFallback`** — an iframe cannot inherit `--story-font`, which only became visible once cluster 1 made the page serif. Verified `public/fonts/interview/noto-serif-sc.woff2` exists and is already referenced by `styles/fonts.css` before porting. Opt-in per caller: story passes it, `dwelling-app` deliberately does not.
+- **A vh feedback lock** — genuinely different from the ratchet fix below. The ratchet came from *our* measurement including `documentElement.scrollHeight`; this starts in the generated page's CSS, where `100vh` resolves against the iframe's own viewport and grows with it. No measurement change can break that cycle, so both are needed.
+
+#### A correction worth keeping
+I reported that upstream had deleted the "Rebuild Render Cache" button, from a grep for the exact class string `story-character-chip justify-center` returning 0. **They kept it** — they moved it to `.story-tool-btn`. The grep matched the class string, not the control. The correction produced the better fix: our button moved too, so `.story-character-chip` now has exactly one user. The grid rules are still scoped to `.story-character-list > .story-character-chip` anyway — it costs nothing and stops the grid reaching anything that reuses the class later.
+
 ### Story-mode polish fixes — **PORTED** (2026-08-07)
 Five fixes, five commits: `90a33f7`, `93e253a`, `8035f12`, `746b4d7`, `1d14573`. `tsc` 0 errors throughout.
 
