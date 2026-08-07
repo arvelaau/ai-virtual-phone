@@ -145,18 +145,20 @@ function StoryGeneratingIndicator({
 
   return (
     <article className="story-row" data-role="assistant" data-hide-bubble={hideBubble ? "true" : undefined}>
-      {!hideAvatar ? (
-        <div className="story-avatar-wrap">
-          <Avatar src={avatar || undefined} name={characterName} size="md" />
+      {(!hideAvatar || !hideTimestamp) ? (
+        <div className="story-msg-head">
+          {!hideAvatar ? (
+            <div className="story-avatar-wrap">
+              <Avatar src={avatar || undefined} name={characterName} size="md" />
+            </div>
+          ) : null}
+          <div className="story-msg-meta">
+            {!hideAvatar ? <span className="story-msg-name">{characterName}</span> : null}
+            {!hideTimestamp ? <span className="story-msg-time story-generating-head">{status}</span> : null}
+          </div>
         </div>
       ) : null}
       <div className="story-bubble-wrap">
-        {(!hideAvatar || !hideTimestamp) ? (
-          <div className="story-bubble-head">
-            {!hideAvatar ? <span>{characterName}</span> : null}
-            {!hideAvatar && !hideTimestamp ? <span className="story-generating-head">{status}</span> : null}
-          </div>
-        ) : null}
         <div className="story-bubble story-generating-bubble" aria-label="Generating story">
           <span className="story-generating-copy">{status}</span>
           <span className="story-generating-dots" aria-hidden="true">
@@ -1104,18 +1106,20 @@ export function StoryApp({ onClose }: StoryAppProps) {
                         setActiveMessageId(message.id);
                       }}
                     >
-                      {!uiPrefs.hideAvatar ? (
-                        <div className="story-avatar-wrap">
-                          <Avatar src={avatarUrl} name={speakerName} size="md" />
+                      {message.role !== "system" && (!uiPrefs.hideAvatar || !uiPrefs.hideTimestamp) ? (
+                        <div className="story-msg-head">
+                          {!uiPrefs.hideAvatar ? (
+                            <div className="story-avatar-wrap">
+                              <Avatar src={avatarUrl} name={speakerName} size="md" />
+                            </div>
+                          ) : null}
+                          <div className="story-msg-meta">
+                            {!uiPrefs.hideAvatar ? <span className="story-msg-name">{speakerName}</span> : null}
+                            {!uiPrefs.hideTimestamp ? <span className="story-msg-time">{formatStoryTime(message.createdAt)}</span> : null}
+                          </div>
                         </div>
                       ) : null}
                       <div className="story-bubble-wrap" style={{ position: "relative" }}>
-                        {(!uiPrefs.hideAvatar || !uiPrefs.hideTimestamp) ? (
-                          <div className="story-bubble-head">
-                            {!uiPrefs.hideAvatar ? <span>{speakerName}</span> : null}
-                            {!uiPrefs.hideTimestamp ? <span>{formatStoryTime(message.createdAt)}</span> : null}
-                          </div>
-                        ) : null}
                         <div className="story-bubble">
                           {editingMessageId === message.id ? (
                             <div className="story-inline-edit">

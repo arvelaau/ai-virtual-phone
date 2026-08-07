@@ -409,18 +409,22 @@
         }
 
         /* 气泡流排版 */
+        /* The header now sits ABOVE the bubble, so the row stacks rather than
+           placing the avatar beside it. */
         .story-row {
           display: flex;
-          gap: 16px;
-          align-items: flex-start;
+          flex-direction: column;
+          gap: 10px;
+          align-items: stretch;
           width: 100%;
           -webkit-user-select: none;
           user-select: none;
           -webkit-touch-callout: none;
         }
-        .story-row[data-role="user"] {
-          flex-direction: row-reverse;
-        }
+        /* The bare `.story-row[data-role="user"] { flex-direction: row-reverse }` is gone:
+           it flipped the old avatar-beside-bubble layout, and would now override the
+           column stacking above. Right-alignment for user messages is handled inside the
+           header instead, by .story-msg-head / .story-msg-meta below. */
         /* 富文本内容禁用原生选中，避免长按手势误触发 */
         .story-richtext {
           -webkit-user-select: none;
@@ -430,7 +434,6 @@
         .story-avatar-wrap {
           width: 38px;
           flex: 0 0 38px;
-          margin-top: 4px;
         }
         .story-bubble-wrap {
           flex: 1;
@@ -439,19 +442,43 @@
           flex-direction: column;
         }
         
-        /* 时间/名字头信息 */
-        .story-bubble-head {
+        /* Avatars become square paper chips to match the rest of the page; the letter
+           fallback sits on white rather than a tinted plate. */
+        .story-app-shell .ui-avatar {
+          border-radius: 0;
+          box-shadow: var(--story-paper-shadow-soft);
+          background: var(--c-story-bubble-bg, #ffffff);
+          color: var(--c-story-sub, #94a3b8);
+        }
+
+        /* Message header: avatar beside a two-line name/date column. */
+        .story-msg-head {
           display: flex;
           align-items: center;
-          gap: 8px;
-          font-size: calc(11px*var(--app-text-scale,1));
-          letter-spacing: 0.05em;
-          color: var(--c-story-sub, #94a3b8);
-          margin-bottom: 8px;
-          text-transform: uppercase;
+          gap: 10px;
         }
-        .story-row[data-role="user"] .story-bubble-head {
-          justify-content: flex-end;
+        .story-row[data-role="user"] .story-msg-head {
+          flex-direction: row-reverse;
+        }
+        .story-msg-meta {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          min-width: 0;
+        }
+        .story-row[data-role="user"] .story-msg-meta {
+          align-items: flex-end;
+        }
+        .story-msg-name {
+          font-size: calc(12px*var(--app-text-scale,1));
+          font-weight: 600;
+          color: var(--c-story-heading, #1e293b);
+          letter-spacing: 0.04em;
+        }
+        .story-msg-time {
+          font-size: calc(10px*var(--app-text-scale,1));
+          color: var(--c-story-sub, #94a3b8);
+          letter-spacing: 0.05em;
         }
         
         /* 气泡卡片：不再像传统的微信气泡，而是像拍立得、剪贴报 */
