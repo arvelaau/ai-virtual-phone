@@ -87,7 +87,9 @@ function getDouyinVideoText(video: CheckPhoneDouyinVideo): string {
 }
 
 function formatProfileHandle(handle: string): string {
-  return handle.startsWith("抖音号") ? handle : `抖音号：${handle}`;
+  // Display prefix only — it decorates whatever [DouyinId] holds rather than parsing it.
+  // The legacy prefix stays recognised so a pre-migration snapshot is not double-prefixed.
+  return /^(?:抖音号|Douyin ID)/i.test(handle) ? handle : `Douyin ID: ${handle}`;
 }
 
 function formatVideoTime(createdAt: string): string {

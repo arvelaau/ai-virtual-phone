@@ -1,4 +1,5 @@
-const WEEKDAY_NAMES = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function padTwo(n: number): string {
     return n < 10 ? `0${n}` : `${n}`;
@@ -18,7 +19,7 @@ export function formatChatUiTime(dateStr: string): string {
         return hhmm;
     }
     if (date.getTime() >= yesterdayStart.getTime()) {
-        return `昨天 ${hhmm}`;
+        return `Yesterday ${hhmm}`;
     }
 
     const sevenDaysAgo = new Date(todayStart.getTime() - 6 * 86400000);
@@ -27,8 +28,8 @@ export function formatChatUiTime(dateStr: string): string {
     }
 
     if (date.getFullYear() === now.getFullYear()) {
-        return `${date.getMonth() + 1}月${date.getDate()}日 ${hhmm}`;
+        return `${date.getDate()} ${MONTH_NAMES[date.getMonth()]} ${hhmm}`;
     }
 
-    return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${hhmm}`;
+    return `${date.getDate()} ${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()} ${hhmm}`;
 }

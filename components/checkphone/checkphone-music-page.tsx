@@ -130,12 +130,20 @@ function getMusicMonthlyMinutes(label: string): { value: string; suffix: string 
   const normalized = label.trim();
   const match = normalized.match(/([\d,，.]+)/);
   if (!match) return { value: normalized, suffix: "" };
-  const suffix = normalized.slice((match.index ?? 0) + match[0].length).replace(/^分钟?/, "分钟").trim();
-  return { value: match[0].replace(/，/g, ","), suffix: suffix || "分钟" };
+  // The entry teaches [ThisMonthDuration] as a bare number, so the suffix is usually
+  // absent and this default supplies it. A model that writes a unit anyway may use either
+  // language, hence both spellings are normalised to the same display word.
+  const suffix = normalized
+    .slice((match.index ?? 0) + match[0].length)
+    .replace(/^(?:分钟?|mins?|minutes?)/i, "minutes")
+    .trim();
+  return { value: match[0].replace(/，/g, ","), suffix: suffix || "minutes" };
 }
 
 function getMusicTopArtistName(label: string): string {
-  return label.replace(/^最近偏爱[:：]?\s*/, "").trim();
+  // 最近偏爱 is the engine's own fallback (checkphone-engine.ts:6686) when
+  // [FavouriteArtist] is missing, so it must stay recognised alongside the English one.
+  return label.replace(/^(?:最近偏爱|recently into|on repeat)[:：]?\s*/i, "").trim();
 }
 
 function getTrackProgress(track: CheckPhoneMusicTrack): number {

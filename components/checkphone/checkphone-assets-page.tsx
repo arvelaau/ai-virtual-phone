@@ -101,10 +101,14 @@ function isSameLocalDay(date: Date, target: Date): boolean {
 
 function getAssetActivityTimeLabel(createdAt: string): string {
   const label = formatChatUiTime(createdAt);
-  if (label.startsWith("昨天 ") || label.includes("月") || label.includes("年") || label.startsWith("星期")) {
-    return label;
-  }
-  return `今天 ${label}`;
+  // formatChatUiTime returns a bare HH:mm only for today; anything older already carries
+  // its own qualifier (Yesterday, a weekday, a date).
+  //
+  // This used to enumerate those qualifiers instead — startsWith("昨天 "), includes("月"),
+  // includes("年"), startsWith("星期") — which meant translating chat-time.ts would have
+  // silently stamped "today" onto every older transaction. Testing the SHAPE of a bare
+  // time is language-independent, so this cannot come apart again.
+  return /^\d{1,2}:\d{2}$/.test(label) ? `Today ${label}` : label;
 }
 
 function generateTransactionNo(activity: CheckPhoneAssetActivity): string {

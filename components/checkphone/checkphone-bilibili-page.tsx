@@ -80,8 +80,11 @@ function parseBilibiliDurationToSeconds(value: string): number {
 }
 
 function calculateBilibiliProgress(progressLabel: string, durationLabel: string): number {
-  if (progressLabel.includes("看完")) return 100;
-  if (progressLabel.includes("刚开始")) return 2;
+  // [ProgressNote] is taught as "time watched / total duration", but a model may still
+  // write prose. Both languages are accepted: the Chinese forms for snapshots generated
+  // before the migration, the English ones for what it writes now.
+  if (/看完|finished|watched it all|to the end/i.test(progressLabel)) return 100;
+  if (/刚开始|just started|only just began/i.test(progressLabel)) return 2;
 
   const percentMatch = progressLabel.match(/(\d+(?:\.\d+)?)%/);
   if (percentMatch) return Math.min(100, Math.max(0, Number(percentMatch[1])));
