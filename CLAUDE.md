@@ -1081,6 +1081,43 @@ Six suffixes that only ever occur *inside* an indexed name were absent from the 
 
 Five more block parsers were exported (`browser`, `phone`, `telegram`, `messages`, `photos`) so the fixtures drive real code instead of copies of its regexes.
 
+### ✅ STEP 2 COMPLETE (2026-08-07) — all 26 entries flipped, `BUILTIN_PRESET_VERSION` → **276**
+Final commit `62e60c5`. `tsc` 0 errors; `_fx-checkphone-fields.mjs` **135/135**, `_fx-checkphone-blocks.mjs` **372/372**; reverse audit reports 26 FLIPPED, 0 pending, 0 unresolved.
+
+Run in batches: `e7b1035` (5) → `9e881a0` (5) → `35284dd` (3) → `52cb3a0` (3) → `ef8a235` (2) → `9bd5dae` (2) → `1bc8b9c` (1) → `e5a0550` (2) → `62e60c5` (2 + bump).
+
+**The bump is what actually shipped any of it.** Every flipped entry was dead code until now — `loadPresets()` only refreshes when `builtInVersion < BUILTIN_PRESET_VERSION`. This is the same trap recorded earlier in this file for Phase D; worth re-reading before any future preset work.
+
+**`_fx-checkphone-taught.mjs` is the shared REVERSE AUDIT and per-entry tracker**, consumed by both fixtures. It walks the 26 entries, extracts every protocol token they actually TEACH, and resolves each against the engine's alias tables — headings, plain fields and indexed names in one pass. Asserts both directions: a flipped entry teaches only resolvable names and carries no unexplained CJK; a pending entry still teaches legacy Chinese, so the tracker cannot go stale by omission. **The "Step 2 not finished" assertion is derived from the tracker**, so completing the 26th entry flipped it to demand the bump automatically — no hand-editing, nothing to forget.
+
+**A fourth protocol layer surfaced mid-run: field VALUES.** `pickField` cannot help there — the key is the value, not the field name. Most were already bilingual from the original author (`cash`/`savings`, `incoming`/`outgoing`, `yes`/`true`, `group`/`direct`, `k`/`w`). The ones that were not:
+- `DOUBAN_ACTIVITY_TYPE_MAP` — Chinese-only discriminator; would have collapsed every activity to the `post` fallback. Now keyed on the enum names (already English) with English words and every legacy spelling accepted.
+- `parseNotesPinned` tested `=== "是"` only — the `[Pinned]yes/no` this migration teaches would have left every note silently unpinned.
+- `CheckPhoneAssetAccentLabel` — a stored, rendered badge; union widened to accept both, default `备用` → `Backup`.
+- **The comment reply-target `评论N`** — three parsers each carried their own Chinese-only `/^评论(\d+)$/` (douyin, chat moments, and the shared social one behind weibo + instagram). Teaching `Comment1` would have **silently flattened every threaded reply**. All three now call one exported `parseCommentReplyTargetNumber`.
+
+**Two more parser gaps found the same way** (both after Steps 1/1b/1c were declared done): `parsePhotoEntryBlocks` baked its label into a **default parameter** rather than interpolating `${label}`, so no source grep for the interpolation shape could see it; and `parsePhoneSectionBlocks` compared the **raw** heading capture against a Chinese literal, so an English `#RecentCalls` would have matched no section.
+
+**One UI guard moved in lockstep, deliberately** — `isXExampleHandle` (`checkphone-x-page.tsx:72`) rejects a handle the model copied out of the placeholder, and its patterns were Chinese-only. Flipping the teaching without it would have left the guard matching nothing. That is a guard kept in step with its teaching, **not** the Step 3 translation of that page.
+
+**xiaohongshu's ten `#` prose headings are gone.** In this format a line starting with `#` IS protocol syntax, so a prose section title invites the model to imitate it and emit a block heading that parses as nothing. Standing rule for any flipped entry: no bare `#` line may survive as prose.
+
+#### Remaining CJK in the checkphone entries — 4 documented exceptions, all deliberate
+Each lives in `DELIBERATE_CJK` with its consumer, and the fixture asserts it is still **PRESENT**, so a later cleanup cannot quietly delete one and desync it.
+
+| entry | kept | consumer |
+|---|---|---|
+| email | `M月D日 HH:mm` | `checkphone-email-page.tsx` date regex |
+| takeout | `已送达`/`已完成`/`已取消` | `checkphone-takeout-page.tsx:382` |
+| weibo | `本人` | `checkphone-weibo-page.tsx:250` |
+| chat | `[真实会话]` family | blocks the ENGINE injects, `checkphone-engine.ts:1553` |
+
+**Two non-exceptions worth keeping recorded**, because both looked like they needed one and did not:
+- **takeout's five category values** — the page does match them, but the category comes from the block-heading capture, which `canonicalBlockLabel` normalises back to Chinese. `order.category` stays `美食` whether the model writes `#美食1` or `#Food1`.
+- **music's `分钟` / `最近偏爱`** — the page parses both, but the entry teaches a bare number and a plain name, so neither is ever *taught*. They are the UI's own default suffix and the engine's fallback.
+
+**The lesson those two encode:** a consumer matching a Chinese string is not sufficient reason to keep it. Check whether the entry actually **teaches** that string, and whether the value reaching the consumer is normalised on the way. Both times the answer was no.
+
 ### Step 2 progress — 1 of 26 entries (`8cf829f`)
 `checkphone_manifest` only, flipped ahead of Step 1b because it is **the one checkphone entry parsed as JSON** (`normalizeManifest` reads `record.optionalAppIds` / `record.topAppIds`, both ASCII) rather than through the block-and-field format. Everything it names — the app ids — was already ASCII; the Chinese was a parenthetical gloss.
 
