@@ -215,7 +215,15 @@ export type CheckPhoneChatPayload = {
 
 export type CheckPhoneAssetAccountKind = "cash" | "savings" | "investment" | "credit";
 export type CheckPhoneAssetCardStyle = "obsidian" | "graphite" | "silver";
-export type CheckPhoneAssetAccentLabel = "常用" | "备用" | "储备" | "增值" | "信用";
+/**
+ * The badge printed under an account card. Unlike `kind`, this is not a discriminator —
+ * it is stored and rendered verbatim (checkphone-assets-page.tsx:479), so the English
+ * names are the going-forward vocabulary and the Chinese ones stay valid so snapshots
+ * generated before the migration keep rendering exactly as they did.
+ */
+export type CheckPhoneAssetAccentLabel =
+  | "Everyday" | "Backup" | "Reserve" | "Growth" | "Credit"
+  | "常用" | "备用" | "储备" | "增值" | "信用";
 
 export type CheckPhoneAssetHeadline = {
   totalLabel: string;

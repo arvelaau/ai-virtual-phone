@@ -20,6 +20,9 @@
 import { createJiti } from "jiti";
 import fs from "node:fs";
 import path from "node:path";
+import {
+    readEntries, taughtTokens, resolveHeading, STEP2_FLIPPED, ALL_CHECKPHONE_ENTRIES,
+} from "./_fx-checkphone-taught.mjs";
 
 const ROOT = process.cwd();
 const jiti = createJiti(ROOT, { jsx: true, interopDefault: true, alias: { "@": ROOT } });
@@ -215,11 +218,36 @@ ok(`block alias table covers 60+ headings (found ${labels.length})`, labels.leng
         blockLabelPattern("a+b(c)") === "a\\+b\\(c\\)", blockLabelPattern("a+b(c)"));
 }
 
-// ── 7. Step 2 has NOT happened ────────────────────────────────────────────
+// ── 7. Step 2 per-entry status: the HEADING side ──────────────────────────
+// Every heading a flipped entry teaches must round-trip: match through the alternation
+// the parsers build, and normalise back to the canonical Chinese the comparisons use.
 {
+    const entries = readEntries();
+    let checked = 0;
+    for (const id of STEP2_FLIPPED) {
+        const entry = entries.get(id);
+        if (!entry) { ok(`flipped entry "${id}" exists`, false, "not found"); continue; }
+        const { headings } = taughtTokens(entry);
+        for (const h of headings) {
+            const base = h.name.replace(/\d+$/, "");
+            const r = resolveHeading(base);
+            ok(`${id}: taught heading ${h.level}${h.name} resolves`, r.ok, JSON.stringify(r));
+            if (!r.ok) continue;
+            // and it really matches through the pattern the parsers compile
+            const re = new RegExp(`^${h.level}\\s*(?:${blockLabelPattern(r.legacy)})\\s*$`);
+            ok(`${id}: ${h.level}${base} matches the compiled alternation`, re.test(`${h.level}${base}`));
+            ok(`${id}: ${h.level}${base} normalises to ${r.legacy}`, canonicalBlockLabel(base) === r.legacy);
+            checked++;
+        }
+    }
+    ok(`heading round-trips checked across flipped entries (${checked})`, checked > 0, String(checked));
+
     const preset = fs.readFileSync(path.join(ROOT, "lib/builtin-preset.ts"), "utf8");
-    ok("checkphone preset entries still teach the legacy headings (Step 2 not finished)",
-        preset.includes("#历史记录") || preset.includes("#收藏夹") || preset.includes("[标题]"), "");
+    const done = ALL_CHECKPHONE_ENTRIES.every((id) => STEP2_FLIPPED.has(id));
+    if (!done) {
+        ok("entries not yet flipped still teach legacy headings",
+            preset.includes("#会话1") || preset.includes("#相簿") || preset.includes("#最近通话"), "");
+    }
 }
 
 console.log(`\n${pass}/${pass + fail} passed`);

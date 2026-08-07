@@ -16,6 +16,7 @@
 import { createJiti } from "jiti";
 import fs from "node:fs";
 import path from "node:path";
+import { readEntries, assertEntry, STEP2_FLIPPED, ALL_CHECKPHONE_ENTRIES } from "./_fx-checkphone-taught.mjs";
 
 const ROOT = process.cwd();
 const jiti = createJiti(ROOT, { jsx: true, interopDefault: true, alias: { "@": ROOT } });
@@ -191,12 +192,33 @@ ok(`alias table covers 160 field names (found ${names.length})`, names.length ==
         String((src.match(/indexedFieldNumbers\(/g) || []).length));
 }
 
-// ── 6. Step 2 has NOT happened ────────────────────────────────────────────
-// This step must be invisible: the preset entries still teach the Chinese names.
+// ── 6. Step 2 per-entry status ────────────────────────────────────────────
+// The REVERSE AUDIT: for every entry marked flipped, everything it teaches must resolve
+// through the engine's alias tables; every entry not marked flipped must still be legacy.
+// Both directions matter — the second is what stops the tracker going stale by omission.
 {
+    const entries = readEntries();
+    ok(`all 26 checkphone entries found (got ${entries.size})`, entries.size === 26, String(entries.size));
+    ok("the tracked entry list matches the file",
+        ALL_CHECKPHONE_ENTRIES.every((id) => entries.has(id)),
+        ALL_CHECKPHONE_ENTRIES.filter((id) => !entries.has(id)).join(", "));
+
+    for (const id of ALL_CHECKPHONE_ENTRIES) {
+        const entry = entries.get(id);
+        if (entry) assertEntry(ok, entry, STEP2_FLIPPED.has(id));
+    }
+
+    // Step 2 is finished only when all 26 are flipped; until then the version stays put so
+    // the app never loads a half-flipped preset.
+    const done = ALL_CHECKPHONE_ENTRIES.every((id) => STEP2_FLIPPED.has(id));
     const preset = fs.readFileSync(path.join(ROOT, "lib/builtin-preset.ts"), "utf8");
-    ok("checkphone preset entries still teach the legacy names (Step 2 not started)",
-        preset.includes("[标题]") || preset.includes("[名称]") || preset.includes("[时间]"), "");
+    const version = Number(preset.match(/BUILTIN_PRESET_VERSION\s*=\s*(\d+)/)?.[1] ?? 0);
+    ok(`Step 2 in progress: ${STEP2_FLIPPED.size}/26 entries flipped`, true);
+    if (!done) {
+        ok("BUILTIN_PRESET_VERSION is still 275 while Step 2 is incomplete", version === 275, String(version));
+    } else {
+        ok("BUILTIN_PRESET_VERSION was bumped past 275 once all 26 entries were flipped", version > 275, String(version));
+    }
 }
 
 console.log(`\n${pass}/${pass + fail} passed`);

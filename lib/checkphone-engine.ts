@@ -5,6 +5,7 @@ import { getChatMessagePreview, loadChatMessages, loadChatSessions, type ChatMes
 import { buildStickerTag } from "./rich-tag-builders";
 import {
   CHECKPHONE_APP_SPECS,
+  type CheckPhoneAssetAccentLabel,
   type CheckPhoneAssetsPayload,
   type CheckPhoneBilibiliPayload,
   type CheckPhoneBrowserPayload,
@@ -499,7 +500,7 @@ export const CHECKPHONE_FIELD_ALIASES: Record<string, readonly string[]> = {
  * `评论` is its own standalone field name elsewhere, so its aliases live under the
  * synthetic key `评论N` to avoid the two meanings colliding in one table entry.
  */
-const CHECKPHONE_INDEX_PREFIX_ALIASES: Record<string, readonly string[]> = {
+export const CHECKPHONE_INDEX_PREFIX_ALIASES: Record<string, readonly string[]> = {
   "消息": ["Message", "消息"],
   "评论": ["Comment", "评论"],
   "商品": ["Item", "商品"],
@@ -1706,7 +1707,9 @@ function deriveNotePreview(body: string): string {
 }
 
 function parseNotesPinned(value: string | undefined): boolean {
-  return value?.trim() === "是";
+  // Was `=== "是"` only. checkphone_notes teaches [Pinned]yes/no, so a Chinese-only test
+  // would silently make every note unpinned. parseBlockBoolean already accepts all three.
+  return parseBlockBoolean(value);
 }
 
 function parseNotesBlockPayload(text: string): PhoneBlockParseResult {
@@ -5722,14 +5725,7 @@ function normalizeAssetsPayload(payload: unknown): CheckPhoneAssetsPayload | nul
       const balance = typeof account.balance === "string" ? account.balance.trim() : "";
       const note = typeof account.note === "string" ? account.note.trim() : "";
       const accentLabelRaw = typeof account.accentLabel === "string" ? account.accentLabel.trim() : "";
-      const accentLabel =
-        accentLabelRaw === "常用" ||
-        accentLabelRaw === "备用" ||
-        accentLabelRaw === "储备" ||
-        accentLabelRaw === "增值" ||
-        accentLabelRaw === "信用"
-          ? accentLabelRaw
-          : null;
+      const accentLabel = isAssetAccentLabel(accentLabelRaw) ? accentLabelRaw : null;
       if (!id || !title || !normalizedKind || !bankLabel || !maskedNumber || !normalizedCardStyle || !balance || !note || !accentLabel) return null;
       return { id, title, kind: normalizedKind, bankLabel, maskedNumber, cardStyle: normalizedCardStyle, balance, note, accentLabel };
     })
@@ -5794,12 +5790,23 @@ function deriveAssetCardStyle(
   return "silver";
 }
 
+/**
+ * Accepted account badges, English first. The badge is rendered verbatim rather than used
+ * as a discriminator, so both vocabularies are kept: pre-migration snapshots still show
+ * the label they were generated with.
+ */
+const ASSET_ACCENT_LABELS = [
+  "Everyday", "Backup", "Reserve", "Growth", "Credit",
+  "常用", "备用", "储备", "增值", "信用",
+] as const;
+
+function isAssetAccentLabel(value: string): value is CheckPhoneAssetAccentLabel {
+  return (ASSET_ACCENT_LABELS as readonly string[]).includes(value);
+}
+
 function normalizeAssetAccentLabel(value: string | undefined): CheckPhoneAssetsPayload["accounts"][number]["accentLabel"] {
-  const normalized = value?.trim();
-  if (normalized === "常用" || normalized === "备用" || normalized === "储备" || normalized === "增值" || normalized === "信用") {
-    return normalized;
-  }
-  return "备用";
+  const normalized = value?.trim() ?? "";
+  return isAssetAccentLabel(normalized) ? normalized : "Backup";
 }
 
 function parseAssetsBlockPayload(text: string): PhoneBlockParseResult {
@@ -6017,7 +6024,9 @@ function parsePhoneSectionBlocks(
   sectionName: "最近通话" | "联系人" | "语音信箱",
 ) {
   const sectionIndex = sectionMatches.findIndex((match) => {
-    const name = (match[1] || "").trim();
+    // canonicalise first — the capture may be an English heading (#RecentCalls), and a raw
+    // comparison against the Chinese literal would find no section at all
+    const name = canonicalBlockLabel(match[1] || "");
     return name === sectionName || (sectionName === "联系人" && name === "常用联系人");
   });
   if (sectionIndex < 0) return [];
