@@ -1986,427 +1986,273 @@ export const CALENDAR_CSS_EXAMPLE = `/* ═════════════�
 
 export const MUSIC_CSS_EXAMPLE = `/* ══════════════════════════════════════════
    Music page custom styling — Aurora Purple Night theme
+   (for the new Lumen interface)
    Changes take effect as soon as you hit Save
    Clear everything and save to go back to the default
    ══════════════════════════════════════════ */
 
-/* ━━ All 18 colour variables ━━ */
+/* ━━ All colour variables ━━
+   Note: the desktop floating bubble (.music-float) and the chat mini-window
+   (.mini-app-window) keep their own light palette and ignore these variables */
 .music-app,
-.music-player,
-.music-float {
-  /* page background */
+.music-player {
+  /* Page base colour */
   --c-music-bg: #0c0a1a;
-  /* background gradient, 5 layers */
+  /* Background gradient · 5 layers */
   --c-music-bg-mint: rgba(100, 60, 220, 0.35);
   --c-music-bg-cream: rgba(180, 80, 200, 0.2);
   --c-music-bg-lime: rgba(60, 120, 255, 0.2);
   --c-music-bg-mint-dim: rgba(80, 40, 180, 0.25);
   --c-music-bg-center: rgba(60, 40, 200, 0.3);
-  /* glow behind the full-screen player */
+  /* Full-screen player background glow */
   --c-music-bg-glow: rgba(140, 80, 255, 0.15);
   --c-music-bg-mist: rgba(80, 40, 160, 0.15);
-  /* glass panel, border, very faint decoration */
+  /* Glass panel / border / opaque dialog / very faint accents */
   --c-music-surface: rgba(255, 255, 255, 0.06);
   --c-music-surface-solid: rgba(255, 255, 255, 0.12);
-  --c-music-glass-dim: rgba(255, 255, 255, 0.03);
-  /* text, accent, pure white */
-  --c-music-white: #e0d8f0;
+  --c-music-panel: rgba(26, 20, 46, 0.96);
+  --c-music-glass-dim: rgba(255, 255, 255, 0.06);
+  /* Text / secondary text / pure white */
+  --c-music-white: #ffffff;
   --c-music-text: #e0d8f0;
   --c-music-accent: #b49de8;
   --c-music-accent-dim: rgba(180, 157, 232, 0.12);
-  /* gold, overlay, heart */
-  --c-music-gold: rgba(232, 180, 100, 0.35);
-  --c-music-overlay: rgba(0, 0, 0, 0.4);
+  /* Primary accent (like heart / play all / chart numbers) */
+  --c-music-primary: #c86bff;
+  --c-music-primary-dim: rgba(200, 107, 255, 0.14);
+  /* Glowing-lyric moonlight / halo / overlay / like heart */
+  --c-music-glowtext: #ead8ff;
+  --c-music-gold: rgba(210, 170, 255, 0.4);
+  --c-music-overlay: rgba(0, 0, 0, 0.5);
   --c-music-liked: #ff5c8a;
 }
 
-/* ━━ The page overall ━━ */
+/* ━━ Page shell ━━ */
 .music-app {
-  /* swap the background gradient approach here */
-  /* background-image: linear-gradient(135deg, #0c0a1a, #1a1030); */
+  /* Tip: prefer Settings -> App page background for a background image;
+     you can also force one here: */
+  /* background-image: linear-gradient(135deg, #0c0a1a, #1a1030) !important; */
 }
 
-/* ━━ Top tab bar ━━ */
-.music-tabs {
-  border-radius: 24px;
-  box-shadow: 0 2px 16px rgba(140, 80, 255, 0.25);
-  backdrop-filter: blur(16px);
+/* ━━ Bottom area (tab bar + play bar are one sheet of glass) ━━ */
+.music-bottom-dock {
+  background: rgba(16, 10, 30, 0.45);
+  backdrop-filter: blur(28px) saturate(160%);
 }
-.music-tab {
-  font-size: calc(13px*var(--app-text-scale,1));
-  letter-spacing: 1.5px;
-  border-radius: 20px;
+.music-tabbar-item {
+  font-size: calc(9.9px*var(--app-text-scale,1));
 }
-.music-tab[data-active] {
-  box-shadow: 0 2px 12px rgba(180, 157, 232, 0.3);
+.music-tabbar-item[data-active] svg {
+  /* Glow colour of the selected tab icon */
+  color: var(--c-music-primary);
+  filter: drop-shadow(0 0 6px rgba(200, 107, 255, 0.5));
 }
-/* the icon buttons at either end of the top bar */
-.music-header-action {
-  /* opacity: 0.8; */
+.music-now-bar-title {
+  font-size: calc(11.7px*var(--app-text-scale,1));
+}
+/* Bird decorations */
+.music-bird {
+  /* opacity: 0; */ /* hide the birds */
+  /* filter: hue-rotate(180deg); */ /* recolour */
 }
 
-/* ━━ Recommended and Library pages ━━ */
-.music-discovery {
-  gap: 18px;
-  padding: 12px 16px 120px;
+/* ━━ Home ━━ */
+.music-greet-hello {
+  font-size: calc(19.8px*var(--app-text-scale,1));
+  letter-spacing: 0.02em;
 }
-.music-section-head h3 {
-  font-size: calc(15px*var(--app-text-scale,1));
-  font-weight: 600;
+.music-search-pill {
+  border-radius: 12px;
 }
-.music-section-head span {
-  color: var(--c-music-accent);
+.music-daily-card {
+  border-radius: 18px;
+  /* height: 128px; */
 }
-.music-hot-item,
+.music-daily-title {
+  font-size: calc(16.2px*var(--app-text-scale,1));
+}
+.music-rail-cover {
+  border-radius: 14px;
+}
+.music-rail-count {
+  /* Play-count badge */
+  background: rgba(20, 8, 40, 0.5);
+}
 .music-chart-card {
   border-radius: 16px;
   background: var(--c-music-surface);
   border: 1px solid var(--c-music-surface-solid);
 }
-.music-hot-rank {
-  color: var(--c-music-accent);
+.music-chart-track em {
+  /* Colour of the top three chart numbers */
+  color: var(--c-music-primary);
 }
-.music-chart-cover {
-  border-radius: 14px;
+.music-hot-rank[data-top] {
+  color: var(--c-music-primary);
 }
 
-/* ━━ Track list ━━ */
-.music-list {
-  gap: 10px;
-  padding: 12px 16px 120px;
-}
+/* ━━ Track list (flat rows) ━━ */
 .music-song {
-  border-radius: 18px;
-  padding: 12px 14px;
-  gap: 12px;
-  border: 1px solid rgba(180, 157, 232, 0.15);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(20px);
-}
-.music-song-cover {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+  border-radius: 14px;
+  padding: 10px 10px;
 }
 .music-song-title {
-  font-size: calc(14px*var(--app-text-scale,1));
+  font-size: calc(13.5px*var(--app-text-scale,1));
   letter-spacing: 0.3px;
 }
 .music-song-artist {
   font-size: calc(11px*var(--app-text-scale,1));
 }
-.music-song-duration {
-  font-size: calc(11px*var(--app-text-scale,1));
+/* Currently playing row */
+.music-song[data-playing] {
+  background: var(--c-music-primary-dim);
 }
-/* highlight for the track currently playing */
 .music-song[data-playing] .music-song-title {
-  /* color: #c8b4ff; */
+  color: var(--c-music-primary);
 }
 
-/* ━━ Now-playing bar at the bottom ━━ */
-.music-now-bar {
-  border-radius: 28px;
-  backdrop-filter: blur(32px) saturate(160%);
-  box-shadow: 0 8px 32px rgba(140, 80, 255, 0.25);
+/* ━━ Playlist detail ━━ */
+.music-pl-hero-cover {
+  border-radius: 16px;
 }
-.music-now-bar-cover {
-  border-radius: 50%;
-  border-width: 2px;
+.music-pl-hero-name {
+  font-size: calc(14.4px*var(--app-text-scale,1));
 }
-.music-now-bar-title {
-  font-size: calc(13px*var(--app-text-scale,1));
+.music-pl-hero-tags span {
+  /* Tag pills */
 }
-/* the little bird decoration */
-.music-bird {
-  /* opacity: 0; */ /* hide the bird */
-  /* filter: hue-rotate(180deg); */ /* recolour it */
+.music-playlist-play-all {
+  /* Play-all button gradient */
+  background: linear-gradient(120deg, #a44bff, #ff5cd0);
+  box-shadow: 0 8px 20px rgba(180, 80, 255, 0.3);
 }
-
-/* ━━ Full-screen player ━━ */
-/* background halo */
-.music-player-bg {
-  filter: blur(80px);
-  /* opacity: 0.8; */
-}
-/* the record */
-.music-player-vinyl {
-  width: 240px;
-  height: 240px;
-  box-shadow:
-    0 0 0 1px rgba(180, 157, 232, 0.2),
-    0 0 80px rgba(140, 80, 255, 0.15),
-    inset 0 0 30px rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(12px);
-}
-.music-player-vinyl-glow {
-  width: 320px;
-  height: 320px;
-  background: radial-gradient(circle,
-    rgba(140, 80, 255, 0.25) 0%, transparent 60%);
-}
-/* record centre */
-.music-player-vinyl-center {
-  width: 90px;
-  height: 90px;
-}
-.music-player-vinyl-dot {
-  width: 8px;
-  height: 8px;
-}
-/* record grooves */
-.music-player-vinyl-groove {
-  /* border-color: rgba(180, 157, 232, 0.1); */
-}
-/* tonearm */
-.music-player-tonearm {
-  /* transform: rotate(-25deg); */ /* resting angle */
-}
-.music-player-tonearm-pivot {
-  /* background: radial-gradient(circle, #fff, #b49de8); */
+.music-pl-chip {
+  /* Save pill */
+  border-radius: 999px;
 }
 
-/* ━━ Lyrics view ━━ */
-.music-player-lyrics {
-  padding: 40px 28px;
-  gap: 16px;
+/* ━━ Full-screen player (modern cover mode) ━━ */
+/* Colour blobs sampled from the cover: override to pin a fixed colour */
+.mp-blob-1 { /* background: rgba(140, 80, 255, 0.5) !important; */ }
+.mp-blob-2 { /* background: rgba(255, 92, 208, 0.35) !important; */ }
+.mp-blob-3 { /* background: rgba(60, 120, 255, 0.3) !important; */ }
+.mp-cover {
+  border-radius: 24px;
+  /* max-width: 276px; */
 }
-.music-player-lyric-line {
-  font-size: calc(16px*var(--app-text-scale,1));
-  line-height: 1.8;
-  /* text-shadow: 0 0 8px rgba(180, 157, 232, 0.3); */
+.mp-song {
+  font-size: calc(17px*var(--app-text-scale,1));
 }
-.music-player-lyric-line[data-active] {
-  font-size: calc(18px*var(--app-text-scale,1));
-  font-weight: 500;
-  /* text-shadow: 0 0 12px rgba(180, 157, 232, 0.5); */
+.mp-lyric-peek {
+  /* Lyric preview row at the bottom of cover mode */
 }
 
-/* ━━ Progress bar ━━ */
-.music-player-progress::before {
-  height: 3px;
-  border-radius: 2px;
+/* ━━ Glowing lyrics ━━ */
+.mp-lyric-line {
+  font-size: calc(15.3px*var(--app-text-scale,1));
+  letter-spacing: 0.08em;
 }
-.music-player-progress-fill {
-  height: 3px;
+.mp-lyric-line[data-active] {
+  font-size: calc(18.9px*var(--app-text-scale,1));
+  /* Glow colour (three halo layers) */
+  text-shadow:
+    0 0 10px rgba(240, 220, 255, 0.9),
+    0 0 30px rgba(200, 140, 255, 0.6),
+    0 0 66px rgba(160, 80, 255, 0.35);
 }
-.music-player-progress-thumb {
-  width: 14px;
-  height: 14px;
-  box-shadow: 0 0 8px rgba(180, 157, 232, 0.6);
+
+/* ━━ Waveform progress bar ━━ */
+.mp-wave i {
+  /* Unplayed waveform */
+  background: rgba(200, 170, 255, 0.18);
+}
+.mp-wave i[data-lit] {
+  /* Played waveform */
+  background: rgba(240, 220, 255, 0.85);
+  box-shadow: 0 0 6px rgba(220, 180, 255, 0.7);
+}
+.mp-wave i[data-head] {
+  /* Playhead */
+  box-shadow: 0 0 10px rgba(240, 220, 255, 0.95), 0 0 20px rgba(200, 120, 255, 0.7);
 }
 
 /* ━━ Playback controls ━━ */
-.music-player-ctrl-play {
+.mp-ctrl-play {
   width: 64px;
   height: 64px;
-  border-radius: 50%;
-  box-shadow: 0 4px 24px rgba(180, 157, 232, 0.35);
+  /* background: #fff; color: #1a1030; */
+  box-shadow: 0 10px 30px rgba(200, 140, 255, 0.2);
 }
-.music-player-ctrl-btn {
-  /* skip forward / back */
+.mp-social-btn {
+  /* Like / share pills */
+  border-radius: 999px;
 }
-.music-player-ctrl-side {
-  /* repeat mode and heart buttons */
-}
-
-/* ━━ Floating window ━━ */
-.music-float {
-  border-radius: 36px;
-  backdrop-filter: blur(28px);
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.1),
-    0 8px 32px rgba(140, 80, 255, 0.3);
-}
-.music-float[data-expanded] {
-  border-radius: 24px;
-}
-.music-float-cover-wrap {
-  /* the record artwork in the floating window */
-}
-.music-float-title {
-  font-size: calc(13px*var(--app-text-scale,1));
-  font-weight: 600;
+.mp-social-btn[data-liked] {
+  color: var(--c-music-liked);
 }
 
-/* ━━ Search page ━━ */
+/* ━━ Vinyl mode (toggled by the disc button, top right) ━━ */
+.music-player-vinyl {
+  /* width: 240px; height: 240px; */
+}
+.music-player-vinyl-glow {
+  /* Halo behind the record */
+  background: radial-gradient(circle,
+    rgba(180, 120, 255, 0.35) 0%, transparent 60%);
+}
+.music-player-tonearm {
+  /* transform: rotate(-25deg); */ /* resting angle */
+}
+
+/* ━━ Artist page ━━ */
+.mart-name {
+  font-size: calc(21.6px*var(--app-text-scale,1));
+}
+.mart-song-idx[data-top] {
+  color: var(--c-music-primary);
+}
+
+/* ━━ Mine · weekly report card ━━ */
+.music-week-card {
+  border-radius: 18px;
+  /* background: linear-gradient(140deg, #241a3d, #16102a 70%); */
+}
+.music-week-bar i {
+  /* Bar chart colour */
+  background: linear-gradient(180deg, rgba(230, 210, 255, 0.9), rgba(180, 130, 255, 0.45));
+}
+
+/* ━━ Search ━━ */
 .music-search-bar {
   border-radius: 20px;
-  height: 40px;
-  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 .music-search-input {
   font-size: calc(14px*var(--app-text-scale,1));
 }
-.music-search-input::placeholder {
-  /* color: rgba(180, 157, 232, 0.4); */
-}
 
-/* ━━ Playlist page ━━ */
-.music-playlist-grid {
-  gap: 12px;
-  /* grid-template-columns: repeat(3, 1fr); */
-}
-.music-playlist-cover {
-  border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-}
-.music-playlist-count {
-  border-radius: 6px;
-  font-size: calc(10px*var(--app-text-scale,1));
-  background: rgba(140, 80, 255, 0.6);
-}
-.music-playlist-name {
-  font-size: calc(12px*var(--app-text-scale,1));
-}
-.music-playlist-detail-name {
-  font-size: calc(16px*var(--app-text-scale,1));
-  font-weight: 600;
-}
-
-/* ━━ Empty states ━━ */
+/* ━━ Empty states / floating button ━━ */
 .music-empty {
   opacity: 0.4;
 }
-.music-empty-icon {
-  font-size: calc(48px*var(--app-text-scale,1));
-}
-.music-empty-text {
-  font-size: calc(14px*var(--app-text-scale,1));
-  letter-spacing: 1px;
-}
-
-/* ━━ Floating button ━━ */
 .music-fab-add {
-  width: 44px;
-  height: 44px;
   border-radius: 50%;
   box-shadow: 0 4px 20px rgba(140, 80, 255, 0.3);
 }
 
-/* ━━ Settings dialog ━━ */
+/* ━━ Dialogs / drawers (base colour comes from --c-music-panel) ━━ */
 .music-settings-modal-dialog {
   border-radius: 24px;
-  backdrop-filter: blur(28px);
 }
-.music-settings-header h2 {
-  font-size: calc(15px*var(--app-text-scale,1));
-}
-.music-settings-input {
-  border-radius: 10px;
-}
-.music-settings-btn {
-  border-radius: 10px;
-  height: 36px;
-}
-.music-settings-toggle {
-  /* toggle track */
-}
-.music-settings-toggle[data-checked] {
-  /* toggle, on state */
-}
-
-/* ━━ Save-to-playlist and share sheets (slide up from the bottom) ━━ */
 .music-playlist-picker {
-  /* background: var(--c-music-surface-solid); */
   /* border-radius: 20px 20px 0 0; */
 }
-.music-playlist-picker-header {
-  /* font-size: calc(14px*var(--app-text-scale,1)); */
-  /* color: var(--c-music-text); */
-  /* border-bottom: 1px solid var(--c-music-surface); */
-}
-.music-playlist-picker-item:active {
-  /* background: var(--c-music-accent-dim); */
-}
-.music-playlist-picker-name {
-  /* font-size: calc(13px*var(--app-text-scale,1)); */
-  /* color: var(--c-music-text); */
-}
-.music-playlist-picker-count {
-  /* font-size: calc(11px*var(--app-text-scale,1)); */
-  /* color: var(--c-music-accent); */
-}
-
-/* ━━ Play queue drawer (slides in from the right) ━━ */
 .music-queue-drawer {
   /* width: 75%; */
-  /* background: var(--c-music-surface-solid); */
-}
-.music-queue-header {
-  /* font-size: calc(14px*var(--app-text-scale,1)); */
-  /* color: var(--c-music-text); */
 }
 .music-queue-item[data-current] {
   /* background: var(--c-music-accent-dim); */
 }
-.music-queue-item-title {
-  /* font-size: calc(13px*var(--app-text-scale,1)); */
-  /* color: var(--c-music-text); */
-}
-.music-queue-item-artist {
-  /* font-size: calc(11px*var(--app-text-scale,1)); */
-  /* color: var(--c-music-accent); */
-}
-
-/* ━━ Confirm dialog ━━ */
-.music-confirm-dialog {
-  /* max-width: 280px; */
-}
-.music-confirm-text {
-  /* font-size: calc(13px*var(--app-text-scale,1)); */
-  /* color: var(--c-music-text); */
-}
-.music-settings-btn-danger {
-  /* background: var(--c-music-liked); */
-  /* color: var(--c-music-white); */
-}
-
-/* ━━ Toast notifications ━━ */
-.music-toast {
-  /* border-radius: 20px; */
-  /* font-size: calc(13px*var(--app-text-scale,1)); */
-}
-.music-toast-ok {
-  /* background: var(--c-music-accent-dim); */
-  /* color: var(--c-music-text); */
-}
-.music-toast-err {
-  /* color: var(--c-music-liked); */
-}
-
-/* ━━ Music share card in chat ━━ */
-.chat-music-share-card {
-  /* width: 220px; */
-  /* border-radius: 16px; */
-  /* background: var(--c-music-surface); */
-  /* border: 1px solid var(--c-music-surface-solid); */
-  /* box-shadow: 0 4px 12px var(--c-music-accent-dim); */
-}
-.chat-music-share-cover {
-  /* width: 44px; height: 44px; */
-  /* border-radius: 10px; */
-  /* background: var(--c-music-surface-solid); */
-}
-.chat-music-share-title {
-  /* font-size: calc(13px*var(--app-text-scale,1)); */
-  /* color: var(--c-music-text); */
-}
-.chat-music-share-artist {
-  /* font-size: calc(11px*var(--app-text-scale,1)); */
-  /* color: var(--c-music-accent); */
-}
-.chat-music-share-footer {
-  /* border-top: 1px solid var(--c-music-surface); */
-  /* color: var(--c-music-accent); */
-}
-
-/* ━━ Animation speed ━━ */
-/* .music-player-vinyl[data-spinning] {
-  animation-duration: 8s;
-} */
-/* .music-now-bar-cover[data-playing] {
-  animation-duration: 6s;
-} */`;
+`;
 
 export const GLOBAL_CSS_EXAMPLE = `/* === Global CSS selector examples === */
 /* This lists only the globally stable selectors. It avoids app-specific class names and does not rely on global variables. */
