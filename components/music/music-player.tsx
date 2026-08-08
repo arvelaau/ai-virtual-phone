@@ -11,17 +11,20 @@ import { extractCoverPalette, DEFAULT_COVER_PALETTE, type CoverPalette } from "@
 import {
     getUserPlaylists, addTracksToPlaylist, removeTracksFromPlaylist, getNeteasePlayInfo,
     isNeteaseConfigured, recordTrackPlaylist, removeTrackPlaylistRecord, getTrackPlaylistId,
+    getNeteaseSongDetail,
     type NeteasePlaylist,
 } from "@/lib/music-service";
+import MusicArtistPage from "./music-artist";
 import { loadMusicBg, playerBgStyle, MUSIC_BG_EVENT, type MusicBgConfig } from "@/lib/music-bg";
 
-// NOTE: upstream's comments overlay (./music-comments) and artist page
-// (./music-artist) are deliberately not ported — see the commit message. The
-// entry points below were removed rather than stubbed so no dead controls are
-// left in the UI. The service functions they need (getSongCommentPage,
-// getFloorComments, postSongComment, getArtistDetail, getArtistTopSongs,
-// getArtistAlbums) are already in lib/music-service.ts, so restoring this is
-// just adding the two components back and re-adding those entry points.
+// NOTE: upstream's comments overlay (./music-comments) is deliberately NOT
+// ported, so its entry points were removed rather than stubbed — no dead
+// controls are left in the UI. Removed with it: the comment button in the
+// social row, the commentTotal state and its count fetch, and the overlay
+// render. The service functions it would need (getSongCommentPage,
+// getFloorComments, postSongComment) are already in lib/music-service.ts, so
+// restoring it later is adding the component back plus those entry points.
+// The artist page IS ported and wired up below.
 
 const PLAY_MODE_ICONS: Record<PlayMode, { svg: string; label: string }> = {
     sequence: {
@@ -64,6 +67,7 @@ export default function MusicPlayer() {
     const [playerStyle, setPlayerStyle] = useState<PlayerStyle>(() =>
         (typeof window !== "undefined" && kvGet("music-player-style") === "vinyl") ? "vinyl" : "modern");
     const [showQueue, setShowQueue] = useState(false);
+    const [artistView, setArtistView] = useState<{ id: number; name: string } | null>(null);
     const [palette, setPalette] = useState<CoverPalette>(DEFAULT_COVER_PALETTE);
     const [bgCfg, setBgCfg] = useState<MusicBgConfig>(() => loadMusicBg());
 
@@ -162,6 +166,11 @@ export default function MusicPlayer() {
     // ── Comment count for current track ──
     const isNeteaseTrack = player.currentTrack?.id?.startsWith("netease_") ?? false;
     const neteaseId = isNeteaseTrack ? parseInt(player.currentTrack!.id.replace("netease_", ""), 10) : 0;
+
+    // Close the artist overlay when the track changes, so it never shows the
+    // previous track's artist. Upstream did this in the same effect that also
+    // reset the comment state, which is not ported.
+    useEffect(() => { setArtistView(null); }, [neteaseId]);
 
     const getTimeFromEvent = useCallback((clientX: number) => {
         const bar = progressRef.current;
@@ -320,6 +329,21 @@ export default function MusicPlayer() {
         window.dispatchEvent(new CustomEvent("open-mini-chat"));
     }, []);
 
+    const openArtistPage = useCallback(async () => {
+        if (!player.currentTrack) return;
+        if (!isNeteaseTrack || !isNeteaseConfigured()) {
+            showMusicToast("Local tracks have no artist page");
+            return;
+        }
+        const detail = await getNeteaseSongDetail(neteaseId);
+        const first = detail?.artistList?.[0];
+        if (!first) {
+            showMusicToast("No artist information found");
+            return;
+        }
+        setArtistView(first);
+    }, [player.currentTrack, isNeteaseTrack, neteaseId, showMusicToast]);
+
     const track = player.currentTrack;
     const waveBars = useMemo(() => waveHeights(track?.id || "lumen"), [track?.id]);
 
@@ -422,10 +446,10 @@ export default function MusicPlayer() {
                 </button>
                 <div className="mp-titles">
                     <div className="mp-song" {...(view === "lyrics" ? { "data-glow": "" } : {})}>{track.title}</div>
-                    {/* Plain text, not a button: upstream links this to the artist page,
-                        which is not ported. The chevron is dropped with it so nothing
-                        suggests it is tappable. */}
-                    <div className="mp-artist">{track.artist || "Unknown artist"}</div>
+                    <button className="mp-artist" onClick={openArtistPage}>
+                        {track.artist || "Unknown artist"}
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="m9 5 7 7-7 7" /></svg>
+                    </button>
                 </div>
                 <div className="mp-top-actions">
                     <button className="music-player-ctrl-btn mp-top-btn" onClick={togglePlayerStyle} title={playerStyle === "vinyl" ? "Switch to modern style" : "Switch to vinyl style"}>
@@ -681,6 +705,15 @@ export default function MusicPlayer() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Artist overlay */}
+            {artistView && (
+                <MusicArtistPage
+                    artistId={artistView.id}
+                    artistName={artistView.name}
+                    onClose={() => setArtistView(null)}
+                />
             )}
 
             {/* Add result toast */}
