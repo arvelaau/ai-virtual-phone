@@ -107,6 +107,7 @@ export type NeteasePlaylistDetail = NeteasePlaylist & {
     subscribedCount?: number;
     commentCount?: number;
     shareCount?: number;
+    subscribed?: boolean;
 };
 
 export type NeteaseHotSearch = {
@@ -478,6 +479,7 @@ export async function getPlaylistDetail(playlistId: number): Promise<NeteasePlay
             subscribedCount: p.subscribedCount,
             commentCount: p.commentCount,
             shareCount: p.shareCount,
+            subscribed: !!p.subscribed,
         };
     } catch { return null; }
 }
