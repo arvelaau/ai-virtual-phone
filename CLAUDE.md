@@ -1516,6 +1516,31 @@ User-reported: change a character's persona (friendly + emoji → fierce, curt, 
 
 **Unrelated finding, NOT fixed (out of this task's scope):** the assembled chat prompt still carries Chinese from `lib/macro-engine.ts:247` and `lib/chat-time.ts:1` — `const weekdays = ["星期日", …]`, producing `当前系统时间：2026年8月5日10:12，星期三` inside `<chat_output_format>` on **every** chat prompt. Two more `.ts` files the `.tsx`-only Phase 1 sweep never covered. Pure display strings fed to the model; worth a look when the queue reaches them.
 
+## ✅ `lib/internal-capability-storage.ts` (Chat Toolbox) — **DONE** (2026-08-08)
+Two commits: `42dc72d`, `03d0070`. **582 → 131 CJK lines**, and all 131 are kept identifiers — verified mechanically by stripping the 44 tool names (longest-first) from every line and checking nothing Chinese remains: **0 unexplained CJK**. `tsc` 0 errors.
+
+### The 44 tool names stay Chinese — measured, not assumed
+**40 of 44 are literal dispatcher identifiers.** `tool-executor.ts` has **15 Chinese `case` labels** in its dispatch switch (`case "播放音乐":`, `case "添加日程":` …), plus `name === "播放音乐"`-style guards at `:790,797`; `notewall-utils.ts:425,468` passes `"发送便签"` / `"发送便签评论"` into `parseNoteWallToolCalls`; and `builtin-preset.ts:1518` teaches *"The action name must be exactly: 发送便签"*. Translating one silently breaks dispatch — the tool is called and matches nothing.
+
+The other 4 (`网易云音乐`, `日历管理`, `本地资料库`, `工具箱管理`) are capability-level labels appearing elsewhere only *inside* error strings, never as identifiers. Left Chinese anyway: translating only those would leave the capability list half-English above its own still-Chinese sub-tools, and desync from the error messages in `tool-executor.ts` that name them. They belong to the tool-name rename track.
+
+**Every name is now glossed in English on its introducing line** — `"Action: 发送便签 (post a note)"` — so an English-reading model knows what it does without the identifier moving.
+
+### A missed producer from the protocol migration
+All 33 directive examples taught `[执行动作:…]`. That name is **still parsed** (it is in `ACTION_DIRECTIVE_NAMES = "执行动作|工具调用|CallTool"`), so nothing was broken — but the migration's rule is *parsers accept both, **producers** emit English*, and `usageGuide` is producer-side: it teaches the model what to write. `tool-prompt.ts` moved to `[CallTool:…]` in its own phase, and `builtin-preset.ts:1441,1480` were unified to it *because they contradicted the new teaching*. **This file is the same class and was missed then.** All 33 converted.
+
+### Two "write in Chinese" orders removed
+`memory_write`'s `content` said `用简洁中文描述`, in both the schema description and the usage guide. Same family as the `vn-engine` / `interview-magazine` / `calendar` / `map-rpg` / `worldbook` traps — an instruction like that overrides `output_language_rule` for that field, so it is **deleted, not translated**.
+
+### Template placeholders — safe, and verified before touching
+The guide taught `{{参数名}}` / `{{{参数名}}}` / `{{steps.名称.data}}`. The engine is in `tool-executor.ts:2822` and matches a **generic** pattern (`[^{}\s]+`), not those words, so they are illustrative only. Now `{{paramName}}` / `{{steps.name.data}}`, matching what `components/settings/toolbox-settings.tsx` already teaches — that file was the other half of this pair and was translated back in Phase 1.
+
+Also checked rather than assumed: the calendar `location` example now teaches `none` (not `无`) since `calendar-engine.ts` was made bilingual in D3, and `[MusicShare:…]` is a live alias in `rich-message-parser.ts:89`.
+
+### Two process notes from this file
+- **Splice with a tight, unique END anchor.** An end anchor set too far ahead swallowed a `TOOLBOX_REST_TOOL_PROPERTIES` const sitting between the two anchors. `tsc` caught it at once, but only because the const was referenced — a swallowed *string* block would have been silent.
+- **Never chain a destructive checkout after a stash.** `git stash pop && git checkout <file>` discarded the three pieces the pop had just restored. Redone from the scratchpad blocks; keeping each translated block as a plain text file is what made recovery cheap.
+
 ## Still open / not yet done
 - **`[系统指令]` / `[事件 …]` short-term timeline labels** (found 2026-08-06 during the offline/online research). Sites: `lib/short-term-assembler.ts:222,313`, `lib/chat-storage.ts:286,318`, `lib/chat-offline-storage.ts:178`. **These are read by the model** — they label system-instruction and offline-event entries inside the short-term event stream — so treat them as protocol, not as UI text: **make every consumer bilingual first (accept the legacy Chinese label AND the new English one), then flip the producers**, same dual-recognition pattern as the rest of this migration. Do not translate them in place; grep for every producer *and* every consumer of each label before touching either side (the `tool-executor` / `FETCH_RESULT_HEADER` / `prompt-sanitizer` regressions were all "one side moved, one consumer left behind").
 - `lib/macro-engine.ts:247` + `lib/chat-time.ts:1` Chinese weekday/date formatting reaching every chat prompt (found 2026-08-05, see above).
