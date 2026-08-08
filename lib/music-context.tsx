@@ -4,7 +4,7 @@
 import { createContext, useContext, useState, useRef, useCallback, useEffect, useMemo, type ReactNode } from "react";
 import type { MusicTrack } from "./music-storage";
 import { getAudioBlob, markTrackPlayed } from "./music-storage";
-import { findPlayableMatch, getNeteaseLyrics, getNeteasePlayUrl, getNeteaseSongDetail } from "./music-service";
+import { findPlayableMatch, getNeteaseLyrics, getNeteasePlayUrl, getNeteasePlayInfo, getNeteaseSongDetail } from "./music-service";
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
 import { registerMusicControlBridge } from "./music-control-bridge";
 
@@ -337,8 +337,9 @@ export function MusicProvider({ children }: { children: ReactNode }) {
 
         if (track.id.startsWith("netease_")) {
             const nid = parseInt(track.id.replace("netease_", ""), 10);
-            const url = await getNeteasePlayUrl(nid);
-            if (!url) return { ok: false, message: "没有找到可播放的音乐" };
+            const info = await getNeteasePlayInfo(nid);
+            const url = info.url;
+            if (!url) return { ok: false, message: info.reason || "No playable track found" };
             const [detail, lyrics] = await Promise.all([
                 getNeteaseSongDetail(nid).catch(() => null),
                 getNeteaseLyrics(nid).catch(() => ""),
@@ -360,7 +361,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
 
     const playByQuery = useCallback(async (query: string, artist?: string): Promise<{ ok: boolean; message: string; track?: MusicTrack }> => {
         const found = await findPlayableMatch(query, artist);
-        if (!found) return { ok: false, message: "没有找到可播放的音乐" };
+        if (!found) return { ok: false, message: "No playable track found" };
         const { result, playUrl: onlineUrl } = found;
         if (result.source === "local" && result.localTrack) {
             return playResolvedTrack(result.localTrack);
@@ -386,7 +387,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
             playUrl(onlineUrl, track);
             return { ok: true, message: `正在播放「${track.title}」`, track };
         }
-        return { ok: false, message: "没有找到可播放的音乐" };
+        return { ok: false, message: "No playable track found" };
     }, [playResolvedTrack, playUrl]);
 
     const addToQueue = useCallback(async (
