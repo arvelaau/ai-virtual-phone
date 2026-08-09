@@ -2597,7 +2597,7 @@ function parseRedditSectionBlocks(source: string, sectionMatches: RegExpMatchArr
   const start = (current.index ?? 0) + current[0].length;
   const end = sectionMatches[sectionIndex + 1]?.index ?? source.length;
   const body = source.slice(start, end).trim();
-  const matches = [...body.matchAll(new RegExp(`^##\\s*${blockLabel}(\\d+)\\s*$`, "gm"))];
+  const matches = [...body.matchAll(new RegExp(`^##\\s*(?:${blockLabelPattern(blockLabel)})(\\d+)\\s*$`, "gm"))];
   return matches.map((currentMatch, index) => {
     const next = matches[index + 1];
     const blockStart = (currentMatch.index ?? 0) + currentMatch[0].length;
@@ -5207,7 +5207,10 @@ function parsePhotoAlbumBlocks(section: string): Array<{ order: string; fields: 
     const start = (current.index ?? 0) + current[0].length;
     const end = next?.index ?? section.length;
     const block = section.slice(start, end).trim();
-    const firstPhotoMatch = block.match(/^##\s*照片\d+\s*$/m);
+    // photoHeadingPattern is bilingual; a raw /##照片\d+/ here would stop finding
+    // the split point once the teaching moved to ##Photo1, folding every photo
+    // block into the album metadata.
+    const firstPhotoMatch = photoHeadingPattern("##").exec(block);
     const albumMetaBlock = firstPhotoMatch ? block.slice(0, firstPhotoMatch.index ?? 0).trim() : block;
     return {
       order: current[1] || String(index + 1),
@@ -5225,7 +5228,7 @@ export function parsePhotosBlockPayload(text: string): PhoneBlockParseResult {
   // Backward compatibility for the previous nested format:
   // #相簿 -> ##相簿N -> ###照片N
   if (albumEntries.length === 0) {
-    const legacySectionMatch = source.match(/^#\s*相簿\s*$/m);
+    const legacySectionMatch = source.match(new RegExp(`^#\\s*(?:${blockLabelPattern("相簿")})\\s*$`, "m"));
     if (legacySectionMatch) {
       const start = (legacySectionMatch.index ?? 0) + legacySectionMatch[0].length;
       const legacySection = source.slice(start).trim();
@@ -5235,7 +5238,7 @@ export function parsePhotosBlockPayload(text: string): PhoneBlockParseResult {
         const blockStart = (current.index ?? 0) + current[0].length;
         const blockEnd = next?.index ?? legacySection.length;
         const block = legacySection.slice(blockStart, blockEnd).trim();
-        const firstPhotoMatch = block.match(/^###\s*照片\d+\s*$/m);
+        const firstPhotoMatch = photoHeadingPattern("###").exec(block);
         const albumMetaBlock = firstPhotoMatch ? block.slice(0, firstPhotoMatch.index ?? 0).trim() : block;
         return {
           order: current[1] || String(index + 1),
@@ -6142,7 +6145,7 @@ function parseMessagesDirection(value: string | undefined): "incoming" | "outgoi
 export function parseMessagesBlockPayload(text: string): PhoneBlockParseResult {
   const source = stripJsonWrapperNoise(text).replace(/\r/g, "").trim();
   if (!source) return { parsed: null, sanitizedCandidate: "", parseMode: "failed", parseError: "the model returned nothing" };
-  const body = source.replace(/^#\s*线程\s*$/m, "").trim();
+  const body = source.replace(new RegExp(`^#\\s*(?:${blockLabelPattern("线程")})\\s*$`, "m"), "").trim();
   const threadMatches = [...body.matchAll(new RegExp(`^##\\s*(?:${blockLabelPattern("线程")})(\\d+)\\s*$`, "gm"))];
   if (threadMatches.length === 0) {
     return { parsed: null, sanitizedCandidate: source, parseMode: "failed", parseError: "no ##Threads section found" };
@@ -7012,7 +7015,10 @@ export function parseDoubanBlockPayload(text: string): PhoneBlockParseResult {
 
   const activityBlocks = extractTopLevelTaggedBlocks(source, "动态");
   if (activityBlocks.length > 0) {
-    const firstActivityIndex = source.search(/^#动态\d+/m);
+    // Bilingual: the entry teaches #Feed1, so a raw /^#动态\d+/ returned -1 and the
+    // profile fields were then parsed from the whole document, picking up fields
+    // from inside the activity blocks.
+    const firstActivityIndex = source.search(new RegExp(`^#\\s*(?:${blockLabelPattern("动态")})\\d+`, "m"));
     const profileFields = parseDouyinTaggedFields(firstActivityIndex >= 0 ? source.slice(0, firstActivityIndex).trim() : source);
     const profile = {
       name: pickField(profileFields, "昵称") || "",
