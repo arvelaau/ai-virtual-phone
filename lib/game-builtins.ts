@@ -1,4 +1,5 @@
 import { DOUDIZHU_GAME_HTML, TRUTH_OR_DARE_GAME_HTML } from "./game-builtin-html";
+import { SUDOKU_COMPANION_GAME_HTML } from "./game-imported-html";
 import type { GameTemplate } from "./game-types";
 
 const now = "2026-06-06T00:00:00.000Z";
@@ -24,7 +25,51 @@ function template(input: Omit<GameTemplate, "playNote" | "authorId" | "authorNam
   };
 }
 
+/**
+ * A game contributed by a third-party author and shipped with the app.
+ *
+ * `source` stays "builtin" on purpose: the Hub treats "community" as a cloud
+ * listing and will try to fetch the full template and its comments from the
+ * game hall (see `ensureCommentsLoaded` / `isFullGameTemplate` in
+ * game-hub-app.tsx), which these local games have no entry for. Attribution is
+ * carried by `authorName`, which is what the UI actually displays.
+ */
+function importedTemplate(
+  input: Omit<GameTemplate, "authorId" | "authorAvatar" | "source" | "version" | "purchaseCount" | "rating" | "likeCount" | "favoriteCount" | "commentCount" | "createdAt" | "updatedAt">
+    & Partial<Pick<GameTemplate, "version">>,
+): GameTemplate {
+  return {
+    ...input,
+    authorId: `imported_${input.authorName.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`,
+    authorAvatar: "",
+    source: "builtin",
+    version: input.version ?? 1,
+    purchaseCount: 0,
+    rating: 5,
+    likeCount: 0,
+    favoriteCount: 0,
+    commentCount: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 export const GAME_BUILTIN_TEMPLATES: GameTemplate[] = [
+  importedTemplate({
+    id: "imported_game_sudoku_companion",
+    title: "Sudoku Companion",
+    codeName: "SUDOKU_COMPANION",
+    subtitle: "Solve, relay and race with a character",
+    synopsis: "Pick a character to sit beside you and work through a 9x9 grid together. They watch the board, offer hints when you stall, take turns filling squares in relay mode, or race you to the finish.",
+    playNote: "Three modes: Classic for a standard grid with hints, Daily Challenge for variant rules solved in relay, and Race where you and your character fill the grid side by side. Times and scores are kept on a local leaderboard, and finishing a round writes a short memory of the session.",
+    coverImage: "",
+    tags: ["休闲", "解谜"],
+    authorName: "Khalilah",
+    roleSlots: [],
+    pickerHtml: EMPTY_PICKER_HTML,
+    gameHtml: SUDOKU_COMPANION_GAME_HTML,
+    allowExternalControl: true,
+  }),
   template({
     id: "builtin_game_doudizhu",
     title: "欢乐斗地主",
