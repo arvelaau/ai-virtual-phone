@@ -33,9 +33,18 @@ const SIZE_RATIO_HINTS: Record<string, string> = {
     "1536x1024": "horizontal landscape 3:2 composition",
 };
 
+// The marker contains regex metacharacters, so it MUST be escaped before being
+// interpolated into a RegExp. Unescaped, `[Aspect Ratio]` compiles to a character
+// class matching any single one of "AspectRaio" — so the pattern became
+// "\s*<any of those letters><rest of line>", which silently truncated almost every
+// Extra prompt at its first such character and then persisted the damage (the
+// on-mount sync at :67-80 saves the result). Ordinary prose like
+// "a warm domestic scene" was deleted entirely.
+const RATIO_HINT_MARKER_PATTERN = RATIO_HINT_MARKER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 // Remove any auto-appended ratio hint line(s), preserving the user's own text.
 function stripRatioHint(text: string): string {
-    return text.replace(new RegExp(`\\s*${RATIO_HINT_MARKER}[^\\n]*`, "g"), "").replace(/\s+$/, "");
+    return text.replace(new RegExp(`\\s*${RATIO_HINT_MARKER_PATTERN}[^\\n]*`, "g"), "").replace(/\s+$/, "");
 }
 
 // Return the prompt with the ratio hint for `size` appended (replacing any
