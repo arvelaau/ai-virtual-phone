@@ -1290,6 +1290,35 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     const hasMoreRef = useRef(false);
     const offlineGenerationInputRef = useRef("");
     useEffect(() => () => { mountedRef.current = false; }, []);
+
+    /* ─────────────────────────────────────────────────────────────────────
+       TEMPORARY DIAGNOSTIC — "chat history vanishes during generation"
+       Remove this whole block, the [WINDOW]/[SET] tags and the [GEN] tags
+       once the cause is found. Filter the console by "[MSGS" to read it.
+       ───────────────────────────────────────────────────────────────────── */
+    const dbgPrevLenRef = useRef(0);
+    const dbgTagRef = useRef<string>("init");
+    /** Record which code path is about to change the message list. */
+    const dbgMark = useCallback((tag: string, extra?: Record<string, unknown>) => {
+        dbgTagRef.current = tag;
+        console.log(`[MSGS:call] ${tag}`, extra ?? "");
+    }, []);
+    useEffect(() => {
+        const prev = dbgPrevLenRef.current;
+        const next = messages.length;
+        dbgPrevLenRef.current = next;
+        const shrank = next < prev;
+        console.log(
+            `${shrank ? "[MSGS:SHRANK]" : "[MSGS]"} ${prev} -> ${next}` +
+            ` via=${dbgTagRef.current}` +
+            ` first=${messages[0]?.id ?? "-"} last=${messages[messages.length - 1]?.id ?? "-"}`,
+        );
+        if (shrank) {
+            // The stack shows which handler triggered the shrinking render.
+            console.trace("[MSGS:SHRANK] stack");
+        }
+    }, [messages]);
+
     useEffect(() => { visibleMessagesRef.current = messages; }, [messages]);
     useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
     useChatBottomReserve(
@@ -1318,6 +1347,15 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             ? firstVisibleIndex
             : Math.max(0, allMsgs.length - currentVisibleCount);
 
+        // TEMPORARY DIAGNOSTIC — shows whether the window collapsed because the
+        // anchor (first visible message) had already moved near the end.
+        console.log(
+            `[WINDOW] stored=${allMsgs.length} refLen=${visibleMessagesRef.current.length}` +
+            ` anchor=${firstVisibleId ?? "-"} anchorIdx=${firstVisibleIndex}` +
+            ` hasMoreRef=${hasMoreRef.current} startIndex=${startIndex}` +
+            ` -> visible=${allMsgs.length - startIndex}`,
+        );
+
         return {
             nextMessages: allMsgs.slice(startIndex),
             nextHasMore: startIndex > 0,
@@ -1326,11 +1364,12 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
 
     const applyStoredMessageWindow = useCallback((allMsgs: ChatMessage[]) => {
         const { nextMessages, nextHasMore } = selectStoredMessageWindow(allMsgs);
+        dbgMark("applyStoredMessageWindow", { stored: allMsgs.length, next: nextMessages.length });
         visibleMessagesRef.current = nextMessages;
         hasMoreRef.current = nextHasMore;
         setHasMore(nextHasMore);
         setMessages(nextMessages);
-    }, [selectStoredMessageWindow]);
+    }, [selectStoredMessageWindow, dbgMark]);
 
     const syncMessagesFromStorage = useCallback(() => {
         applyStoredMessageWindow(loadChatMessages(session.id));
@@ -1671,10 +1710,14 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         const charIds = session.isGroup && session.participantIds
             ? session.participantIds
             : [session.contactId];
+        // TEMPORARY DIAGNOSTIC — this snapshot is read synchronously but committed
+        // asynchronously, so it is a prime suspect for clobbering newer messages.
+        console.log(`[GEN:session-entry] read stored=${allMsgs.length} snapshot=${msgs.length} (commit is async)`);
         Promise.all(charIds.map(id => prewarmStickerCache(id))).then(() => {
             setStickerReady(true);
             needsInitialScrollRef.current = true;
             prevMsgCountRef.current = 0;
+            dbgMark("session-entry.then(prewarmStickerCache)", { snapshot: msgs.length });
             visibleMessagesRef.current = msgs;
             setMessages(msgs);
         });
@@ -1869,6 +1912,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         }
         const nextMessages = allMsgs.slice(-nextCount);
         const nextHasMore = nextCount < allMsgs.length;
+        dbgMark("loadMore", { stored: allMsgs.length, next: nextMessages.length });
         visibleMessagesRef.current = nextMessages;
         hasMoreRef.current = nextHasMore;
         setHasMore(nextHasMore);
@@ -3107,6 +3151,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         isGeneratingRef.current = true;
         setIsGenerating(true);
         setGenerationLock(session.id);
+        // TEMPORARY DIAGNOSTIC
+        console.log(`[GEN:start] historyPassed=${history?.length ?? "-"} visibleNow=${visibleMessagesRef.current.length}`);
 
         try {
             if (session.isGroup) {
@@ -3149,6 +3195,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             });
             setMessages(prev => [...prev, errorMsg]);
         } finally {
+            // TEMPORARY DIAGNOSTIC
+            console.log(`[GEN:end] visibleNow=${visibleMessagesRef.current.length} mounted=${mountedRef.current}`);
             if (finishGenerationRun(session.id, generationRunId)) {
                 isGeneratingRef.current = false;
                 setIsGenerating(false);
@@ -3643,6 +3691,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             });
             setMessages(prev => [...prev, errorMsg]);
         } finally {
+            // TEMPORARY DIAGNOSTIC
+            console.log(`[GEN:end] visibleNow=${visibleMessagesRef.current.length} mounted=${mountedRef.current}`);
             if (finishGenerationRun(session.id, generationRunId)) {
                 isGeneratingRef.current = false;
                 setIsGenerating(false);
@@ -5062,11 +5112,12 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         };
 
         const nextHasMore = startIndex > 0;
+        dbgMark("jumpToStoredMessage", { stored: allMsgs.length, next: nextMessages.length });
         visibleMessagesRef.current = nextMessages;
         hasMoreRef.current = nextHasMore;
         setHasMore(nextHasMore);
         setMessages(nextMessages);
-    }, [session.id, stopLoadMoreAnchorTracking]);
+    }, [session.id, stopLoadMoreAnchorTracking, dbgMark]);
 
     // Shared handler: reload messages + re-trigger scroll-to-bottom after call ends
     const returnFromCall = (hide: () => void) => {
