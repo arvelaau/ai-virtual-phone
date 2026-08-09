@@ -1,5 +1,5 @@
 import { DOUDIZHU_GAME_HTML, TRUTH_OR_DARE_GAME_HTML } from "./game-builtin-html";
-import { SUDOKU_COMPANION_GAME_HTML, WORD_SEARCH_GAME_HTML } from "./game-imported-html";
+import { SUDOKU_COMPANION_GAME_HTML, WORD_SEARCH_GAME_HTML, STAR_RING_MONOPOLY_GAME_HTML } from "./game-imported-html";
 import type { GameTemplate } from "./game-types";
 
 const now = "2026-06-06T00:00:00.000Z";
@@ -83,6 +83,21 @@ export const GAME_BUILTIN_TEMPLATES: GameTemplate[] = [
     roleSlots: [],
     pickerHtml: EMPTY_PICKER_HTML,
     gameHtml: WORD_SEARCH_GAME_HTML,
+    allowExternalControl: true,
+  }),
+  importedTemplate({
+    id: "imported_game_star_ring_monopoly",
+    title: "Star Ring Monopoly",
+    codeName: "STAR_RING_MONOPOLY",
+    subtitle: "A property night with 1-3 characters",
+    synopsis: "Bring one to three characters to a twenty-round property table. Each buys, haggles and gloats according to their own character card, reacting to rent, windfalls and near-bankruptcy in their own voice.",
+    playNote: "Everything runs on this device — there is no online room, and the multiplayer here is other characters rather than other people, so picking a single character gives you a straight one-on-one. Whoever holds the most assets after round twenty wins, and the final standings are written to memory.",
+    coverImage: "",
+    tags: ["休闲", "经营"],
+    authorName: "Khalilah",
+    roleSlots: [],
+    pickerHtml: EMPTY_PICKER_HTML,
+    gameHtml: STAR_RING_MONOPOLY_GAME_HTML,
     allowExternalControl: true,
   }),
   template({

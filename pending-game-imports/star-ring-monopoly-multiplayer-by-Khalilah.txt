@@ -1,0 +1,1222 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Star Ring Monopoly - Constellation Table</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; }
+    body {
+      overflow: hidden;
+      color: #fffaf0;
+      background: #070914;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+    }
+    button { font: inherit; border: 0; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .screen {
+      height: 100dvh;
+      padding: var(--ai-phone-game-safe-top, 82px) 10px var(--ai-phone-game-safe-bottom, 18px);
+      background:
+        radial-gradient(circle at 15% 10%, rgba(96,165,250,.35), transparent 30%),
+        radial-gradient(circle at 90% 15%, rgba(244,114,182,.25), transparent 28%),
+        linear-gradient(145deg, #090b18, #15112d 55%, #050816);
+      overflow: hidden;
+    }
+    .app {
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 8px;
+      min-height: 0;
+    }
+    .glass {
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(10,15,32,.62);
+      box-shadow: 0 18px 46px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.08);
+      backdrop-filter: blur(18px);
+    }
+    .hidden { display: none !important; }
+    .top {
+      min-height: 54px;
+      border-radius: 22px;
+      padding: 9px 11px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    h1 { margin: 0; font-size: clamp(18px, 5vw, 23px); letter-spacing: .08em; line-height: 1; }
+    .sub {
+      margin-top: 4px;
+      color: #d8c7ff;
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 60vw;
+    }
+    .pill {
+      border-radius: 999px;
+      padding: 6px 9px;
+      background: rgba(255,255,255,.1);
+      border: 1px solid rgba(255,255,255,.14);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .main {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 8px;
+      overflow: hidden;
+    }
+    .board {
+      width: min(100%, 420px, calc(100dvh - var(--ai-phone-game-safe-top, 82px) - var(--ai-phone-game-safe-bottom, 18px) - 245px));
+      min-width: 218px;
+      aspect-ratio: 1 / 1;
+      margin: 0 auto;
+      padding: 7px;
+      border-radius: 28px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.15);
+      box-shadow: 0 20px 60px rgba(0,0,0,.34);
+    }
+    .grid {
+      height: 100%;
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      grid-template-rows: repeat(7, 1fr);
+      gap: 3px;
+    }
+    .cell {
+      position: relative;
+      overflow: hidden;
+      border-radius: 11px;
+      padding: 3px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.12);
+      min-width: 0;
+    }
+    .corner { background: linear-gradient(145deg, rgba(250,204,21,.32), rgba(255,255,255,.08)); }
+    .emoji { display: block; font-size: clamp(12px, 3.5vw, 15px); line-height: 1; }
+    .name {
+      margin-top: 1px;
+      font-size: clamp(6px, 2.1vw, 8px);
+      line-height: 1.05;
+      font-weight: 800;
+      text-shadow: 0 1px 4px rgba(0,0,0,.45);
+    }
+    .price {
+      position: absolute;
+      right: 3px;
+      bottom: 2px;
+      font-size: clamp(6px, 2vw, 8px);
+      color: #fde68a;
+    }
+    .owner { position: absolute; left: 0; top: 0; width: 100%; height: 4px; }
+    .owner.p0 { background: #60a5fa; }
+    .owner.p1 { background: #fb7185; }
+    .owner.p2 { background: #34d399; }
+    .owner.p3 { background: #c084fc; }
+    .token {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      z-index: 4;
+      box-shadow: 0 5px 12px rgba(0,0,0,.4);
+    }
+    .token.p0 { background: #60a5fa; left: 4px; bottom: 4px; }
+    .token.p1 { background: #fb7185; right: 4px; bottom: 4px; }
+    .token.p2 { background: #34d399; left: 17px; bottom: 4px; }
+    .token.p3 { background: #c084fc; right: 17px; bottom: 4px; }
+    .center {
+      grid-column: 2 / 7;
+      grid-row: 2 / 7;
+      border-radius: 24px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: linear-gradient(145deg, rgba(15,23,42,.9), rgba(49,46,129,.48));
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 10px;
+      gap: 7px;
+      min-width: 0;
+    }
+    .dice {
+      width: clamp(48px, 15vw, 68px);
+      height: clamp(48px, 15vw, 68px);
+      border-radius: 20px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(145deg, #fff7ed, #facc15 55%, #fb7185);
+      color: #431407;
+      font-size: clamp(24px, 8vw, 34px);
+      font-weight: 950;
+    }
+    .center h2 { margin: 0; font-size: clamp(14px, 4vw, 18px); letter-spacing: .08em; }
+    .center p {
+      margin: 0;
+      color: #dbeafe;
+      font-size: clamp(10px, 3vw, 12px);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .panel {
+      min-height: 0;
+      border-radius: 22px;
+      padding: 8px;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      overflow: hidden;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+      max-height: 84px;
+      overflow: auto;
+    }
+    .stat {
+      padding: 7px 8px;
+      border-radius: 16px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.11);
+    }
+    .stat strong {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .stat span { color: #dbeafe; font-size: 10px; }
+    .controls {
+      display: grid;
+      grid-template-columns: 1.15fr .85fr .85fr;
+      gap: 7px;
+      margin-top: 7px;
+    }
+    .btn {
+      min-height: 40px;
+      border-radius: 15px;
+      padding: 8px 9px;
+      background: rgba(255,255,255,.1);
+      border: 1px solid rgba(255,255,255,.14);
+      font-weight: 850;
+      font-size: 13px;
+    }
+    .primary { background: linear-gradient(135deg, #60a5fa, #a78bfa 50%, #f472b6); }
+    .gold { background: linear-gradient(135deg, #facc15, #fb923c); color: #422006; }
+    .btn:disabled { opacity: .48; cursor: not-allowed; }
+    .log {
+      min-height: 0;
+      margin-top: 7px;
+      padding: 8px 9px;
+      overflow: auto;
+      border-radius: 16px;
+      background: rgba(2,6,23,.35);
+      border: 1px solid rgba(255,255,255,.1);
+      color: #e0f2fe;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .log div { margin-bottom: 5px; }
+    .modal {
+      position: absolute;
+      z-index: 10;
+      inset: 0;
+      padding: var(--ai-phone-game-safe-top, 82px) 12px var(--ai-phone-game-safe-bottom, 18px);
+      display: grid;
+      place-items: center;
+      background: rgba(2,6,23,.64);
+      backdrop-filter: blur(14px);
+    }
+    .modal-card {
+      width: 100%;
+      max-height: 100%;
+      overflow: auto;
+      border-radius: 26px;
+      padding: 16px;
+    }
+    .modal-card h2 { margin: 0 0 8px; font-size: clamp(22px, 7vw, 28px); line-height: 1.1; }
+    .modal-card p { margin: 0 0 12px; color: #e9d5ff; font-size: 13px; line-height: 1.55; }
+    .roles { display: grid; gap: 8px; margin: 10px 0; }
+    .role {
+      display: grid;
+      grid-template-columns: 44px 1fr auto;
+      align-items: center;
+      gap: 9px;
+      text-align: left;
+      border-radius: 18px;
+      padding: 9px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.12);
+    }
+    .role.selected { border-color: rgba(250,204,21,.9); box-shadow: 0 0 0 2px rgba(250,204,21,.16); }
+    .avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 16px;
+      object-fit: cover;
+      background: linear-gradient(135deg, #60a5fa, #f472b6);
+    }
+    .role b { display: block; margin-bottom: 3px; font-size: 14px; }
+    .role small { color: #dbeafe; }
+    .choice-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 9px; }
+    .toast {
+      position: absolute;
+      left: 50%;
+      bottom: calc(var(--ai-phone-game-safe-bottom, 18px) + 10px);
+      transform: translateX(-50%);
+      z-index: 20;
+      max-width: calc(100% - 32px);
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(15,23,42,.92);
+      border: 1px solid rgba(255,255,255,.16);
+      color: #fef3c7;
+      font-size: 12px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s;
+    }
+    .toast.show { opacity: 1; }
+    @media (max-height: 700px) {
+      .app, .main { gap: 6px; }
+      .top { min-height: 48px; padding: 7px 9px; }
+      .sub { display: none; }
+      .board {
+        width: min(100%, 380px, calc(100dvh - var(--ai-phone-game-safe-top, 82px) - var(--ai-phone-game-safe-bottom, 18px) - 210px));
+        min-width: 202px;
+        padding: 6px;
+      }
+      .panel { padding: 7px; }
+      .stats { max-height: 62px; }
+      .btn { min-height: 35px; font-size: 12px; padding: 6px 7px; }
+      .log { font-size: 10px; padding: 7px 8px; }
+    }
+    @media (max-height: 610px) {
+      .board {
+        width: min(100%, 330px, calc(100dvh - var(--ai-phone-game-safe-top, 82px) - var(--ai-phone-game-safe-bottom, 18px) - 170px));
+        min-width: 190px;
+      }
+      .stats { display: none; }
+      .panel { grid-template-rows: auto minmax(0, 1fr); }
+      .controls { margin-top: 0; }
+      .name { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="screen">
+    <div class="app">
+      <section class="top glass">
+        <div>
+          <h1>Star Ring Monopoly</h1>
+          <div class="sub">A table of characters - each reacts in their own voice</div>
+        </div>
+        <div class="pill" id="turnPill">Getting ready</div>
+      </section>
+
+      <section class="main">
+        <div class="board">
+          <div class="grid" id="grid">
+            <div class="center">
+              <div class="dice" id="dice">✦</div>
+              <h2 id="centerTitle">Waiting to begin</h2>
+              <p id="centerText">Bring 1-3 characters to the table. Each decides what to buy, and comments and celebrates, according to their own character.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel glass">
+          <div class="stats" id="stats"></div>
+          <div class="controls">
+            <button class="btn primary" id="rollBtn">🎲 Roll</button>
+            <button class="btn" id="newBtn">🔄 New game</button>
+            <button class="btn" id="saveBtn">💾 Save</button>
+          </div>
+          <div class="log" id="log"></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal" id="startModal">
+      <section class="modal-card glass">
+        <h2 id="startTitle">Opening Night</h2>
+        <p id="startDesc">Choose 1-3 characters to join the table. Whoever holds the most assets at the end of round 20 wins; anyone who goes bankrupt leaves early.</p>
+        <div class="roles" id="roles"></div>
+        <button class="btn primary" id="startBtn" style="width:100%;">Choose characters to begin</button>
+        <button class="btn hidden" id="continueBtn" style="width:100%; margin-top:8px;">Continue saved game</button>
+        <button class="btn" id="demoBtn" style="width:100%; margin-top:8px;">No host available - try 3 local characters</button>
+      </section>
+    </div>
+
+    <div class="modal hidden" id="choiceModal">
+      <section class="modal-card glass">
+        <h2 id="choiceTitle">Property deal</h2>
+        <p id="choiceText"></p>
+        <div class="choice-actions">
+          <button class="btn gold" id="buyBtn">✨ Buy</button>
+          <button class="btn" id="skipBtn">Pass</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal hidden" id="endModal">
+      <section class="modal-card glass">
+        <h2 id="endTitle">Final standings</h2>
+        <p id="endText"></p>
+        <button class="btn primary" id="restartBtn" style="width:100%;">Play again</button>
+        <button class="btn" id="closeBtn" style="width:100%; margin-top:8px;">Exit game</button>
+      </section>
+    </div>
+
+    <div class="toast" id="toast"></div>
+  </main>
+
+  <script>
+    const API = window.AiPhoneGame || null;
+
+    const board = [
+      { emoji:"🏁", name:"Start", type:"start" },
+      { emoji:"🌙", name:"Laurel Gardens", price:120, rent:24 },
+      { emoji:"🌀", name:"Chance Gate", type:"chance" },
+      { emoji:"🎭", name:"Mistblue Theatre", price:160, rent:32 },
+      { emoji:"🧾", name:"Tax Harbour", type:"tax", amount:90 },
+      { emoji:"📚", name:"Amber Bookshop", price:180, rent:36 },
+      { emoji:"☕", name:"Supply Station", type:"bonus", amount:120 },
+      { emoji:"🕊️", name:"White Tower Apartments", price:220, rent:44 },
+      { emoji:"📻", name:"Fortune Radio", type:"chance" },
+      { emoji:"🌹", name:"Rose Manor", price:260, rent:52 },
+      { emoji:"🏦", name:"Stardust Bank", type:"bonus", amount:160 },
+      { emoji:"🖤", name:"Obsidian Hotel", price:320, rent:64 },
+      { emoji:"💎", name:"Luxury Tax", type:"tax", amount:130 },
+      { emoji:"🚢", name:"Galaxy Docks", price:360, rent:72 },
+      { emoji:"🎡", name:"Wonder Plaza", type:"chance" },
+      { emoji:"🌌", name:"Aurora Palace", price:420, rent:84 },
+      { emoji:"🎆", name:"Victory Parade", type:"bonus", amount:200 },
+      { emoji:"🚉", name:"Cloudtop Station", price:460, rent:92 },
+      { emoji:"🥂", name:"Investors' Salon", type:"chance" },
+      { emoji:"👑", name:"Star Ring Throne", price:540, rent:108 }
+    ];
+
+    const path = [[6,6],[5,6],[4,6],[3,6],[2,6],[1,6],[0,6],[0,5],[0,4],[0,3],[0,2],[0,1],[0,0],[1,0],[2,0],[3,0],[4,0],[5,0],[6,0],[6,1]];
+
+    const demoCharacters = [
+      { id:"demo_1", name:"Star Ring Broker", subtitle:"Elegant, sharp-tongued, shrewd with investments" },
+      { id:"demo_2", name:"Laurel Collector", subtitle:"Romantic, adventurous, prone to impulse" },
+      { id:"demo_3", name:"Obsidian Banker", subtitle:"Cool, restrained, cash flow above all" }
+    ];
+
+    const emptyState = () => ({
+      playerProfile: { name: "You" },
+      characters: [],
+      selectedCharacters: [],
+      rolePkgs: {},
+      recentLines: {},
+      demo: false,
+      hasSave: false,
+      savedGame: null,
+      currentIndex: 0,
+      round: 1,
+      maxRounds: 20,
+      awaitingChoice: null,
+      ended: false,
+      players: [],
+      owners: Array(board.length).fill(null),
+      log: []
+    });
+
+    let state = emptyState();
+
+    const $ = id => document.getElementById(id);
+    const money = n => "¥" + Math.round(n);
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const alivePlayers = () => state.players.filter(p => !p.bankrupt);
+    const currentPlayer = () => state.players[state.currentIndex];
+    const asset = p => p.money + p.props.reduce((sum, i) => sum + (board[i].price || 0), 0);
+    const propCount = p => p.props.length;
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, m => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[m]));
+    }
+
+    function toast(text) {
+      $("toast").textContent = text;
+      $("toast").classList.add("show");
+      setTimeout(() => $("toast").classList.remove("show"), 1800);
+    }
+
+    function addLog(text) {
+      state.log.unshift(text);
+      state.log = state.log.slice(0, 34);
+      $("log").innerHTML = state.log.map(item => `<div>${escapeHtml(item)}</div>`).join("");
+    }
+
+    function specialLabel(cell) {
+      if (cell.type === "chance") return "Event";
+      if (cell.type === "tax") return "-" + money(cell.amount);
+      if (cell.type === "bonus") return "+" + money(cell.amount);
+      return "";
+    }
+
+    function initBoard() {
+      const grid = $("grid");
+      board.forEach((cell, i) => {
+        const [col, row] = path[i];
+        const el = document.createElement("div");
+        el.className = "cell" + (cell.type === "start" || i === 19 ? " corner" : "");
+        el.style.gridColumn = String(col + 1);
+        el.style.gridRow = String(row + 1);
+        el.innerHTML = `
+          <div class="owner" id="owner-${i}"></div>
+          <span class="emoji">${cell.emoji}</span>
+          <div class="name">${cell.name}</div>
+          <div class="price">${cell.price ? money(cell.price) : specialLabel(cell)}</div>
+          <div class="token p0 hidden" id="token-0-${i}"></div>
+          <div class="token p1 hidden" id="token-1-${i}"></div>
+          <div class="token p2 hidden" id="token-2-${i}"></div>
+          <div class="token p3 hidden" id="token-3-${i}"></div>
+        `;
+        grid.appendChild(el);
+      });
+    }
+
+    function render() {
+      $("stats").innerHTML = state.players.length ? state.players.map((p, i) => `
+        <div class="stat">
+          <strong>${["💙","🌹","🌿","💜"][i]} ${escapeHtml(p.name)}${p.bankrupt ? " (out)" : ""}</strong>
+          <span>Cash ${money(p.money)} | Properties ${propCount(p)} | Assets ${money(asset(p))}</span>
+        </div>
+      `).join("") : `<div class="stat"><strong>Waiting to begin</strong><span>Choose your characters</span></div>`;
+
+      const p = currentPlayer();
+      $("turnPill").textContent = state.ended ? "Finished" : p ? `Round ${state.round}/${state.maxRounds} | ${p.name}` : "Getting ready";
+      $("rollBtn").disabled = state.ended || !p || p.type !== "human" || !!state.awaitingChoice;
+      $("saveBtn").disabled = !state.players.length || state.ended;
+
+      board.forEach((_, i) => {
+        for (let pi = 0; pi < 4; pi++) {
+          const token = $("token-" + pi + "-" + i);
+          const player = state.players[pi];
+          if (token) token.classList.toggle("hidden", !player || player.pos !== i || player.bankrupt);
+        }
+        const ownerIndex = state.owners[i];
+        $("owner-" + i).className = "owner" + (ownerIndex !== null && ownerIndex !== undefined ? " p" + ownerIndex : "");
+      });
+    }
+
+    async function initHost() {
+      initBoard();
+      addLog("✨ Welcome to opening night.");
+
+      try {
+        if (API && API.setTitleBar) {
+          API.setTitleBar({
+            material: "glass",
+            background: "rgba(10,15,32,.45)",
+            color: "#fffaf0",
+            borderColor: "rgba(255,255,255,.12)",
+            buttonBackground: "rgba(255,255,255,.10)",
+            buttonColor: "#fffaf0"
+          });
+        }
+        if (API && API.getPlayerProfile) state.playerProfile = await API.getPlayerProfile();
+        if (API && API.listAvailableCharacters) state.characters = await API.listAvailableCharacters();
+        await detectSave();
+      } catch (e) {
+        addLog("Host features unavailable - you can play locally instead.");
+      }
+
+      renderRoles();
+      render();
+    }
+
+    async function detectSave() {
+      if (!API || !API.loadGame) return;
+      const save = await API.loadGame();
+      if (!save || save.version !== 5 || save.ended) return;
+
+      state.hasSave = true;
+      state.savedGame = save;
+      $("continueBtn").classList.remove("hidden");
+      $("startTitle").textContent = "Saved game found";
+      $("startDesc").textContent = "Pick up the last table, or choose new characters and start again.";
+    }
+
+    function renderRoles() {
+      const roles = $("roles");
+      if (!state.characters.length) {
+        roles.innerHTML = `<p style="margin:0;">No characters loaded yet. You can try the local ones for now; opening this from the phone's game hall will list your own.</p>`;
+        return;
+      }
+
+      roles.innerHTML = "";
+      state.characters.forEach(c => {
+        const selected = state.selectedCharacters.some(x => x.id === c.id);
+        const btn = document.createElement("button");
+        btn.className = "role" + (selected ? " selected" : "");
+        btn.innerHTML = `
+          ${c.avatar ? `<img class="avatar" src="${escapeHtml(c.avatar)}" alt="">` : `<div class="avatar"></div>`}
+          <span><b>${escapeHtml(c.name)}</b><small>${escapeHtml(c.subtitle || "Ready to join the table")}</small></span>
+          <span class="pill">${selected ? "Selected" : "Select"}</span>
+        `;
+        btn.onclick = () => toggleCharacter(c);
+        roles.appendChild(btn);
+      });
+    }
+
+    function toggleCharacter(c) {
+      const exists = state.selectedCharacters.some(x => x.id === c.id);
+      if (exists) {
+        state.selectedCharacters = state.selectedCharacters.filter(x => x.id !== c.id);
+      } else {
+        if (state.selectedCharacters.length >= 3) {
+          toast("Three characters at most");
+          return;
+        }
+        state.selectedCharacters.push(c);
+      }
+
+      $("startBtn").textContent = state.selectedCharacters.length
+        ? `Start with ${state.selectedCharacters.length} character${state.selectedCharacters.length > 1 ? "s" : ""}`
+        : "Choose characters to begin";
+
+      renderRoles();
+    }
+
+    async function startGame(demo) {
+      state.demo = demo;
+      if (demo) state.selectedCharacters = demoCharacters.slice();
+
+      if (!state.selectedCharacters.length) {
+        toast("Choose at least one character");
+        return;
+      }
+
+      setupPlayers();
+      $("startModal").classList.add("hidden");
+      $("centerTitle").textContent = "The table opens";
+      $("centerText").textContent = `${state.players.map(p => p.name).join(", ")} take their seats. The Star Ring auction night begins.`;
+      addLog(`🥂 ${state.players.map(p => p.name).join(", ")} take their seats.`);
+
+      await loadRolePackages();
+
+      for (const role of state.players.filter(p => p.type === "role")) {
+        const line = await roleLine(
+          role,
+          "opening",
+          "The game has just begun. In your own voice, and mindful of your relationships, say one opening line to the player and the other characters. Do not sound like generic game dialogue."
+        );
+        addLog(`${role.name}：「${line}」`);
+      }
+
+      render();
+      saveGame();
+      maybeAutoTurn();
+    }
+
+    function setupPlayers() {
+      state.players = [{
+        id: "human",
+        type: "human",
+        name: state.playerProfile.name || "You",
+        money: 1500,
+        pos: 0,
+        props: [],
+        bankrupt: false
+      }].concat(state.selectedCharacters.map(c => ({
+        id: c.id,
+        character: c,
+        type: "role",
+        name: c.name,
+        money: 1500,
+        pos: 0,
+        props: [],
+        bankrupt: false
+      })));
+
+      state.currentIndex = 0;
+      state.round = 1;
+      state.owners = Array(board.length).fill(null);
+      state.log = [];
+      state.ended = false;
+      state.awaitingChoice = null;
+      state.recentLines = {};
+    }
+
+    async function loadRolePackages() {
+      if (state.demo || !API || !API.getRoleLightPackage) return;
+      for (const p of state.players.filter(x => x.type === "role")) {
+        if (!state.rolePkgs[p.id]) {
+          try { state.rolePkgs[p.id] = await API.getRoleLightPackage(p.id); } catch (e) {}
+        }
+      }
+    }
+
+    async function continueSave() {
+      if (!state.savedGame) {
+        toast("No saved game to continue");
+        return;
+      }
+
+      const profile = state.playerProfile;
+      const characters = state.characters;
+
+      Object.assign(state, state.savedGame);
+      state.playerProfile = state.playerProfile || profile;
+      state.characters = characters.length ? characters : (state.characters || []);
+      state.rolePkgs = {};
+      state.recentLines = state.recentLines || {};
+      state.awaitingChoice = null;
+      state.hasSave = false;
+      state.savedGame = null;
+
+      $("startModal").classList.add("hidden");
+      $("choiceModal").classList.add("hidden");
+      $("endModal").classList.add("hidden");
+      $("centerTitle").textContent = "Save restored";
+      $("centerText").textContent = "The property war resumes.";
+      addLog("📜 Saved game loaded.");
+
+      await loadRolePackages();
+      render();
+      maybeAutoTurn();
+    }
+
+    async function rollCurrent() {
+      const p = currentPlayer();
+      if (!p || p.bankrupt || state.ended || state.awaitingChoice) return;
+
+      const dice = Math.ceil(Math.random() * 6);
+      $("dice").textContent = dice;
+      $("centerTitle").textContent = `${p.name} rolls ${dice}`;
+
+      await move(p, dice);
+      await resolveCell(p);
+      render();
+
+      if (!state.awaitingChoice && !state.ended) nextTurn();
+    }
+
+    async function move(p, steps) {
+      const old = p.pos;
+      p.pos = (p.pos + steps) % board.length;
+
+      if (p.pos < old) {
+        p.money += 200;
+        addLog(`🏁 ${p.name} passes Start and collects ${money(200)}.`);
+      }
+
+      const cell = board[p.pos];
+      $("centerText").textContent = `${p.name} lands on ${cell.emoji} ${cell.name}.`;
+      addLog(`${cell.emoji} ${p.name} moves ${steps} space${steps > 1 ? "s" : ""} to ${cell.name}.`);
+      render();
+      await wait(360);
+    }
+
+    async function resolveCell(p) {
+      const cell = board[p.pos];
+      const ownerIndex = state.owners[p.pos];
+
+      if (cell.type === "tax") {
+        p.money -= cell.amount;
+        addLog(`🧾 ${p.name} pays ${money(cell.amount)} at ${cell.name}.`);
+
+        if (p.type === "role") {
+          const line = await roleLine(
+            p,
+            "pay tax",
+            `You paid ${money(cell.amount)} at ${cell.name}. React in character, given where the game stands.`
+          );
+          addLog(`${p.name}：「${line}」`);
+        }
+
+        await checkBankrupt(p);
+        return;
+      }
+
+      if (cell.type === "bonus" || cell.type === "start") {
+        if (cell.amount) {
+          p.money += cell.amount;
+          addLog(`${cell.emoji} ${p.name} collects a bonus of ${money(cell.amount)}.`);
+
+          if (p.type === "role") {
+            const line = await roleLine(
+              p,
+              "bonus",
+              `You collected ${money(cell.amount)} at ${cell.name}. React in character, given your current mood.`
+            );
+            addLog(`${p.name}：「${line}」`);
+          }
+        }
+        return;
+      }
+
+      if (cell.type === "chance") {
+        await chance(p);
+        return;
+      }
+
+      if (!cell.price) return;
+
+      if (ownerIndex === null || ownerIndex === undefined) {
+        if (p.type === "human") {
+          state.awaitingChoice = { index: p.pos };
+          $("choiceTitle").textContent = `${cell.emoji} ${cell.name}`;
+          $("choiceText").textContent = `Unowned property - ${money(cell.price)} to buy, ${money(cell.rent)} rent. Take it?`;
+          $("buyBtn").disabled = p.money < cell.price;
+          $("choiceModal").classList.remove("hidden");
+        } else {
+          await roleBuyDecision(p, cell);
+        }
+        return;
+      }
+
+      if (ownerIndex !== state.players.indexOf(p)) {
+        const owner = state.players[ownerIndex];
+        if (!owner || owner.bankrupt) return;
+
+        p.money -= cell.rent;
+        owner.money += cell.rent;
+        addLog(`💸 ${p.name} pays ${owner.name} ${money(cell.rent)} rent for ${cell.name}.`);
+
+        if (p.type === "role") {
+          const line = await roleLine(
+            p,
+            "pay rent",
+            `You landed on ${owner.name}'s property ${cell.name} and paid ${money(cell.rent)} in rent. React in character, mindful of your relationship with them and where the game stands.`
+          );
+          addLog(`${p.name}：「${line}」`);
+        }
+
+        if (owner.type === "role") {
+          const line = await roleLine(
+            owner,
+            "collect rent",
+            `${p.name} landed on your property ${cell.name} and paid you ${money(cell.rent)} in rent. Say one line in character.`
+          );
+          addLog(`${owner.name}：「${line}」`);
+        }
+
+        await checkBankrupt(p);
+      }
+    }
+
+    async function roleBuyDecision(p, cell) {
+      let buy = p.money > cell.price + 220 || (cell.rent / cell.price > .18 && p.money > cell.price + 80);
+      let line = "";
+
+      if (!state.demo && API && API.callLLM && state.rolePkgs[p.id]) {
+        try {
+          const others = state.players
+            .filter(x => x.id !== p.id)
+            .map(x => `${x.name}: cash ${money(x.money)}, ${propCount(x)} properties, assets ${money(asset(x))}`)
+            .join("；");
+
+          const recent = getRecentLines(p).join(" / ");
+
+          const result = await API.callLLM({
+            characterId: p.id,
+            messages: [
+              ...state.rolePkgs[p.id].messages,
+              {
+                role: "system",
+                content:
+                  "You are playing Star Ring Monopoly. Stay strictly true to your character card - personality, voice, relationships, history and memories. Avoid generic board-game filler, and do not repeat what you said recently. Return JSON only, with no explanation: {\"buy\":true or false,\"line\":\"one line in character, 20 words or fewer\"}."
+              },
+              {
+                role: "user",
+                content:
+                  `You are ${p.name}. Cash ${money(p.money)}, ${propCount(p)} properties, assets ${money(asset(p))}.` +
+                  `The unowned property is ${cell.name}: ${money(cell.price)} to buy, ${money(cell.rent)} rent.` +
+                  `Other players: ${others || "none"}. Things you said recently: ${recent || "none"}.` +
+                  "Decide whether to buy, and say one line in character."
+              }
+            ]
+          });
+
+          const parsed = parseJson(result.content);
+          if (typeof parsed.buy === "boolean") buy = parsed.buy;
+          if (parsed.line) line = cleanLine(parsed.line);
+        } catch (e) {}
+      }
+
+      if (!line) {
+        line = fallbackRoleLine(p, buy ? "buy" : "skip");
+      }
+
+      line = rememberLine(p, line);
+
+      if (buy && p.money >= cell.price) {
+        buyProperty(p, p.pos);
+        addLog(`✨ ${p.name} buys ${cell.name}.`);
+      } else {
+        addLog(`🕯️ ${p.name} passes on ${cell.name}.`);
+      }
+
+      addLog(`${p.name}：「${line}」`);
+    }
+
+    async function chance(p) {
+      const events = [
+        { icon:"💌", text:"A mysterious dividend arrives", money:110 },
+        { icon:"🥂", text:"Sponsored an interstellar soiree", money:-100 },
+        { icon:"📈", text:"Investment rumours heat up", money:150 },
+        { icon:"🛠️", text:"Repairs to the floating terrace", money:-120 },
+        { icon:"🎁", text:"Drew a patron's reward", money:80 },
+        { icon:"🛰️", text:"Paid the orbital lane toll", money:-70 }
+      ];
+
+      const ev = events[Math.floor(Math.random() * events.length)];
+      p.money += ev.money;
+      addLog(`${ev.icon} ${p.name} draws: ${ev.text} (${ev.money >= 0 ? "+" : ""}${money(ev.money)}).`);
+
+      if (p.type === "role") {
+        const line = await roleLine(
+          p,
+          "chance event",
+          `You drew the event "${ev.text}", changing your funds by ${ev.money >= 0 ? "+" : ""}${money(ev.money)}. React in character, given your current mood.`
+        );
+        addLog(`${p.name}：「${line}」`);
+      }
+
+      await checkBankrupt(p);
+    }
+
+    async function roleLine(p, scene, prompt) {
+      if (!state.demo && API && API.callLLM && state.rolePkgs[p.id]) {
+        try {
+          const others = state.players
+            .filter(x => x.id !== p.id)
+            .map(x => `${x.name}: cash ${money(x.money)}, ${propCount(x)} properties, assets ${money(asset(x))}`)
+            .join("；");
+
+          const recent = getRecentLines(p).join(" / ");
+
+          const result = await API.callLLM({
+            characterId: p.id,
+            messages: [
+              ...state.rolePkgs[p.id].messages,
+              {
+                role: "system",
+                content:
+                  "You are playing Star Ring Monopoly with the user and other characters. Stay strictly true to your character card - personality, voice, relationships, history and memories. Avoid generic game filler, and do not repeat what you said recently. Output one line of dialogue only: no explanation, no narration, 22 words or fewer."
+              },
+              {
+                role: "user",
+                content:
+                  `Scene: ${scene}. Round ${state.round}.` +
+                  `Your position: cash ${money(p.money)}, ${propCount(p)} properties, assets ${money(asset(p))}.` +
+                  `Other players: ${others || "none"}. Things you said recently: ${recent || "none"}.` +
+                  `Task: ${prompt}`
+              }
+            ]
+          });
+
+          const line = cleanLine(result.content);
+          if (line) return rememberLine(p, line);
+        } catch (e) {}
+      }
+
+      return rememberLine(p, fallbackRoleLine(p, scene));
+    }
+
+    function getRecentLines(p) {
+      return state.recentLines[p.id] || [];
+    }
+
+    function rememberLine(p, line) {
+      const cleaned = cleanLine(line) || fallbackRoleLine(p, "normal");
+      const list = state.recentLines[p.id] || [];
+
+      let finalLine = cleaned;
+      if (list.includes(finalLine)) {
+        finalLine = fallbackRoleLine(p, "normal");
+      }
+
+      state.recentLines[p.id] = [finalLine].concat(list.filter(x => x !== finalLine)).slice(0, 8);
+      return finalLine;
+    }
+
+    function cleanLine(text) {
+      return String(text || "")
+        .replace(/^["“”'「『]+|["“”'」』]+$/g, "")
+        .replace(/^(台词|Line)[:：]\s*/i, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 160);
+    }
+
+    function fallbackRoleLine(p, scene) {
+      const name = p.name || "";
+
+      const elegant = [
+        "That move deserves to be remembered under these lights.",
+        "Chips do speak. Just very quietly.",
+        "I prefer my victories elegant.",
+        "Patience. The night has not finished betting.",
+        "A lovely position - and only just blooming."
+      ];
+
+      const bold = [
+        "A good hand deserves everything you have.",
+        "Hesitation lets gold go rusty.",
+        "This is exactly how I wanted it.",
+        "The brighter the risk, the sooner I reach for it.",
+        "Fate dealt it. I am not going to refuse."
+      ];
+
+      const calm = [
+        "Cash flow first. Ambition after.",
+        "The ledger is more honest than applause.",
+        "No hurry. The advantage will come to me.",
+        "Restraint is its own kind of acquisition.",
+        "I let the numbers stay polite on my behalf."
+      ];
+
+      const sharp = [
+        "Some people spend. Others position.",
+        "Do not mistake luck for skill.",
+        "This table is getting interesting.",
+        "I will remember this one.",
+        "The spectacle is yours. The profit is mine."
+      ];
+
+      let pool = elegant.concat(sharp);
+      if (/收藏|月桂|玫瑰|冒险|冲动|火|烈|红|laurel|rose|collector|bold|adventur|impulse|impulsive|fire|flame|red/i.test(name)) pool = bold.concat(elegant);
+      if (/银行|黑曜|冷静|理性|账|雪|冰|白|bank|obsidian|calm|cool|rational|restrain|ledger|snow|ice|white/i.test(name)) pool = calm.concat(sharp);
+
+      if (scene === "skip") pool = calm.concat(sharp);
+      if (scene === "buy") pool = bold.concat(elegant);
+      if (scene === "pay rent" || scene === "pay tax") pool = sharp.concat(calm);
+      if (scene === "collect rent" || scene === "bonus") pool = elegant.concat(sharp);
+      if (scene === "chance event") pool = bold.concat(sharp, calm);
+
+      const used = getRecentLines(p);
+      const available = pool.filter(line => !used.includes(line));
+      const choices = available.length ? available : pool;
+
+      return choices[Math.floor(Math.random() * choices.length)];
+    }
+
+    function parseJson(text) {
+      try { return JSON.parse(text); } catch (e) {}
+      const match = String(text || "").match(/\{[\s\S]*\}/);
+      if (match) {
+        try { return JSON.parse(match[0]); } catch (e) {}
+      }
+      return {};
+    }
+
+    function buyProperty(p, index) {
+      const cell = board[index];
+      const playerIndex = state.players.indexOf(p);
+      if (!cell.price || state.owners[index] !== null || p.money < cell.price) return false;
+      p.money -= cell.price;
+      p.props.push(index);
+      state.owners[index] = playerIndex;
+      return true;
+    }
+
+    async function playerBuy(buy) {
+      const choice = state.awaitingChoice;
+      if (!choice) return;
+
+      const p = currentPlayer();
+      const cell = board[choice.index];
+
+      if (buy && buyProperty(p, choice.index)) {
+        addLog(`✨ ${p.name} buys ${cell.name}.`);
+      } else {
+        addLog(`🕯️ ${p.name} passes on ${cell.name}.`);
+      }
+
+      state.awaitingChoice = null;
+      $("choiceModal").classList.add("hidden");
+      render();
+
+      if (!state.ended) nextTurn();
+    }
+
+    function nextTurn() {
+      if (alivePlayers().length <= 1) {
+        endGame("Only one player left at the table");
+        return;
+      }
+
+      const previousIndex = state.currentIndex;
+      do {
+        state.currentIndex = (state.currentIndex + 1) % state.players.length;
+      } while (state.players[state.currentIndex].bankrupt);
+
+      if (state.currentIndex <= previousIndex) {
+        state.round += 1;
+        if (state.round > state.maxRounds) {
+          endGame("Rounds complete");
+          return;
+        }
+      }
+
+      render();
+      saveGame();
+      maybeAutoTurn();
+    }
+
+    function maybeAutoTurn() {
+      const p = currentPlayer();
+      if (!p || p.type !== "role" || state.ended || state.awaitingChoice) return;
+      setTimeout(() => rollCurrent(), 650);
+    }
+
+    async function checkBankrupt(p) {
+      if (p.money >= 0) return;
+
+      p.bankrupt = true;
+      const playerIndex = state.players.indexOf(p);
+      p.props.forEach(index => {
+        if (state.owners[index] === playerIndex) state.owners[index] = null;
+      });
+      p.props = [];
+      addLog(`🌑 ${p.name} runs out of money and leaves the table.`);
+
+      if (p.type === "role") {
+        const line = await roleLine(
+          p,
+          "bankrupt",
+          "You are out of money and about to leave the table. Give one parting line, in character."
+        );
+        addLog(`${p.name}：「${line}」`);
+      }
+
+      if (alivePlayers().length <= 1) await endGame(`${p.name} went bankrupt`);
+    }
+
+    async function endGame(reason) {
+      if (state.ended) return;
+
+      state.ended = true;
+      const ranking = state.players.slice().sort((a, b) => asset(b) - asset(a));
+      const winner = ranking[0];
+      const detail = ranking.map((p, i) => `${i + 1}. ${p.name} ${money(asset(p))}`).join("；");
+      const text = `${reason}. Final standings: ${detail}. The winner is ${winner.name}.`;
+
+      $("endTitle").textContent = winner.type === "human" ? "You take the Star Ring" : `${winner.name} takes the crown`;
+      $("endText").textContent = text;
+      $("endModal").classList.remove("hidden");
+      addLog(`👑 ${text}`);
+
+      if (winner.type === "role") {
+        const line = await roleLine(
+          winner,
+          "victory",
+          `You have won the game. Final standings: ${detail}. Give one victory line, in character.`
+        );
+        addLog(`${winner.name}：「${line}」`);
+      }
+
+      render();
+
+      if (!state.demo && API && API.recordGameEvent) {
+        try {
+          const ids = state.players.filter(p => p.type === "role").map(p => p.id);
+          await API.recordGameEvent({
+            characterIds: ids,
+            summary: `${state.players[0].name} sat down to a game of Star Ring Monopoly with ${state.players.filter(p => p.type === "role").map(p => p.name).join(", ")}. Final standings were ${detail}, and ${winner.name} came out on top.`
+          });
+        } catch (e) {}
+      }
+
+      saveGame();
+    }
+
+    async function saveGame() {
+      if (!API || !API.saveGame || !state.players.length) return;
+
+      const save = {
+        version: 5,
+        playerProfile: state.playerProfile,
+        characters: state.characters,
+        selectedCharacters: state.selectedCharacters,
+        recentLines: state.recentLines,
+        demo: state.demo,
+        currentIndex: state.currentIndex,
+        round: state.round,
+        maxRounds: state.maxRounds,
+        ended: state.ended,
+        players: state.players,
+        owners: state.owners,
+        log: state.log
+      };
+
+      try { await API.saveGame(save); } catch (e) {}
+    }
+
+    async function newGame() {
+      const profile = state.playerProfile;
+      const characters = state.characters;
+
+      state = emptyState();
+      state.playerProfile = profile;
+      state.characters = characters;
+      state.selectedCharacters = [];
+
+      $("endModal").classList.add("hidden");
+      $("choiceModal").classList.add("hidden");
+      $("startModal").classList.remove("hidden");
+      $("continueBtn").classList.add("hidden");
+
+      $("startTitle").textContent = "Opening Night";
+      $("startDesc").textContent = "Choose 1-3 characters to join the table. Whoever holds the most assets at the end of round 20 wins; anyone who goes bankrupt leaves early.";
+      $("startBtn").textContent = "Choose characters to begin";
+      $("dice").textContent = "✦";
+      $("centerTitle").textContent = "Waiting to begin";
+      $("centerText").textContent = "Bring 1-3 characters to the table. Each decides what to buy, and comments and celebrates, according to their own character.";
+      $("log").innerHTML = "";
+
+      addLog("✨ Ready for a new game.");
+      renderRoles();
+      render();
+    }
+
+    function restartSamePlayers() {
+      setupPlayers();
+      $("endModal").classList.add("hidden");
+      $("choiceModal").classList.add("hidden");
+      $("dice").textContent = "✦";
+      $("centerTitle").textContent = "New game";
+      $("centerText").textContent = "The Star Ring reshuffles. Good luck.";
+      addLog("✨ A new game begins.");
+      render();
+      saveGame();
+      maybeAutoTurn();
+    }
+
+    $("startBtn").onclick = () => startGame(false);
+    $("continueBtn").onclick = continueSave;
+    $("demoBtn").onclick = () => startGame(true);
+    $("rollBtn").onclick = () => rollCurrent();
+    $("saveBtn").onclick = async () => { await saveGame(); toast("Saved"); };
+    $("newBtn").onclick = newGame;
+    $("buyBtn").onclick = () => playerBuy(true);
+    $("skipBtn").onclick = () => playerBuy(false);
+    $("restartBtn").onclick = restartSamePlayers;
+    $("closeBtn").onclick = async () => {
+      if (API && API.closeGame) await API.closeGame();
+      else toast("This environment cannot close the game");
+    };
+
+    initHost();
+  </script>
+</body>
+</html>
