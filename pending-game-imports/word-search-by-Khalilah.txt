@@ -1,0 +1,1441 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Word Search</title>
+    <style>
+        /* Styles unchanged from the previous version */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            font-family: 'PingFang SC', 'Helvetica Neue', system-ui, sans-serif;
+            background: #0d0b1a;
+            color: #f0ecf5;
+            overflow: hidden;
+            touch-action: none;
+        }
+        .game-screen {
+            min-height: 100%;
+            height: 100%;
+            box-sizing: border-box;
+            padding: var(--ai-phone-game-safe-top, 88px) 12px var(--ai-phone-game-safe-bottom, 20px);
+            display: flex;
+            flex-direction: column;
+            background: radial-gradient(ellipse at 50% 0%, #1e1a3a 0%, #0d0b1a 70%);
+            overflow: hidden;
+            position: relative;
+        }
+        .game-scroll {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding-bottom: 6px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+            -webkit-overflow-scrolling: touch;
+        }
+        .game-scroll::-webkit-scrollbar {
+            width: 3px;
+        }
+        .game-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 9px;
+        }
+        .char-select-screen {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            animation: fadeIn 0.45s ease;
+        }
+        .char-select-screen .title-block {
+            text-align: center;
+            padding: 8px 0 4px;
+        }
+        .char-select-screen .title-block h1 {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            background: linear-gradient(135deg, #f7d875, #e8b84c);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 4px;
+        }
+        .char-select-screen .title-block p {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.55);
+            letter-spacing: 1px;
+        }
+        .char-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 4px 0 12px;
+        }
+        .char-card {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            transition: all 0.2s;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .char-card:active {
+            transform: scale(0.97);
+            background: rgba(255, 255, 255, 0.10);
+        }
+        .char-card .avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            background: rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: 600;
+            color: #f7d875;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            overflow: hidden;
+            object-fit: cover;
+        }
+        .char-card .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
+        }
+        .char-card .info {
+            flex: 1;
+            min-width: 0;
+        }
+        .char-card .info .name {
+            font-size: 17px;
+            font-weight: 600;
+            color: #f0ecf5;
+        }
+        .char-card .info .sub {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.45);
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .char-card .check {
+            font-size: 20px;
+            color: #f7d875;
+            opacity: 0;
+            transition: opacity 0.25s;
+        }
+        .char-card.selected .check {
+            opacity: 1;
+        }
+        .char-card.selected {
+            border-color: rgba(247, 216, 117, 0.35);
+            background: rgba(247, 216, 117, 0.07);
+        }
+        .char-select-screen .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: rgba(255, 255, 255, 0.35);
+            font-size: 15px;
+            line-height: 1.6;
+        }
+        .char-select-screen .empty-state .icon {
+            font-size: 42px;
+            margin-bottom: 12px;
+        }
+        .btn-primary {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 14px;
+            font-size: 17px;
+            font-weight: 600;
+            background: linear-gradient(135deg, #f7d875, #e8b84c);
+            color: #1a162e;
+            cursor: pointer;
+            transition: all 0.2s;
+            touch-action: manipulation;
+            letter-spacing: 0.5px;
+            box-shadow: 0 6px 24px rgba(247, 216, 117, 0.18);
+        }
+        .btn-primary:active {
+            transform: scale(0.97);
+            opacity: 0.85;
+        }
+        .btn-primary:disabled {
+            opacity: 0.4;
+            transform: none;
+            pointer-events: none;
+        }
+        .game-play-screen {
+            flex: 1;
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            animation: fadeIn 0.4s ease;
+        }
+        .game-play-screen.active {
+            display: flex;
+        }
+        .game-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 2px 0 4px;
+            flex-shrink: 0;
+        }
+        .game-header .progress {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.55);
+            font-weight: 500;
+        }
+        .game-header .progress span {
+            color: #f7d875;
+            font-weight: 700;
+        }
+        .game-header .score {
+            font-size: 15px;
+            font-weight: 600;
+            color: #f0ecf5;
+            background: rgba(255, 255, 255, 0.06);
+            padding: 4px 14px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .game-header .score span {
+            color: #f7d875;
+        }
+        .ai-bubble {
+            flex-shrink: 0;
+            display: flex;
+            gap: 12px;
+            padding: 12px 14px;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            min-height: 64px;
+            align-items: flex-start;
+        }
+        .ai-bubble .ai-avatar {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            background: rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 600;
+            color: #f7d875;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            overflow: hidden;
+        }
+        .ai-bubble .ai-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
+        }
+        .ai-bubble .ai-msg {
+            flex: 1;
+            min-width: 0;
+        }
+        .ai-bubble .ai-msg .ai-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.50);
+            margin-bottom: 2px;
+        }
+        .ai-bubble .ai-msg .ai-text {
+            font-size: 15px;
+            line-height: 1.5;
+            color: #f0ecf5;
+            word-break: break-word;
+            white-space: pre-wrap;
+        }
+        .ai-bubble .ai-msg .ai-text .typing-cursor {
+            display: inline-block;
+            width: 2px;
+            height: 1em;
+            background: #f7d875;
+            margin-left: 2px;
+            animation: blink 0.9s step-end infinite;
+            vertical-align: text-bottom;
+        }
+        @keyframes blink {
+            0%,
+            100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0;
+            }
+        }
+        .word-list {
+            flex-shrink: 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 10px;
+            padding: 8px 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            justify-content: center;
+            min-height: 40px;
+        }
+        .word-list .word-item {
+            font-size: 15px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.35);
+            letter-spacing: 0.5px;
+            transition: all 0.3s;
+            padding: 2px 6px;
+            border-radius: 6px;
+        }
+        .word-list .word-item.found {
+            color: #f7d875;
+            text-decoration: line-through;
+            text-decoration-color: #f7d875;
+            opacity: 0.7;
+        }
+        .grid-container {
+            flex-shrink: 0;
+            display: flex;
+            justify-content: center;
+            padding: 4px 0;
+            touch-action: none;
+        }
+        .grid-table {
+            border-collapse: collapse;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .grid-table td {
+            width: 32px;
+            height: 32px;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 18px;
+            font-weight: 600;
+            color: #f0ecf5;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+            transition: background 0.15s;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            padding: 0;
+            text-transform: uppercase;
+        }
+        .grid-table td:active {
+            background: rgba(255, 255, 255, 0.10);
+        }
+        .grid-table td.selected {
+            background: rgba(247, 216, 117, 0.25);
+            border-color: rgba(247, 216, 117, 0.35);
+        }
+        .grid-table td.found {
+            background: rgba(247, 216, 117, 0.10);
+            color: #f7d875;
+            border-color: rgba(247, 216, 117, 0.15);
+        }
+        .grid-table td.highlight {
+            background: rgba(247, 216, 117, 0.18);
+        }
+        .grid-table td.invalid {
+            background: rgba(255, 80, 80, 0.15);
+        }
+        .action-row {
+            flex-shrink: 0;
+            display: flex;
+            gap: 10px;
+            padding: 2px 0 4px;
+        }
+        .action-row .btn-secondary {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.03);
+            color: rgba(255, 255, 255, 0.60);
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            touch-action: manipulation;
+            text-align: center;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+        .action-row .btn-secondary:active {
+            transform: scale(0.96);
+            background: rgba(255, 255, 255, 0.07);
+        }
+        .action-row .btn-secondary:disabled {
+            opacity: 0.3;
+            transform: none;
+            pointer-events: none;
+        }
+        .action-row .btn-secondary .badge {
+            display: inline-block;
+            background: rgba(247, 216, 117, 0.15);
+            color: #f7d875;
+            font-size: 12px;
+            border-radius: 10px;
+            padding: 0 8px;
+            margin-left: 4px;
+            font-weight: 600;
+        }
+        .action-row .btn-secondary.danger {
+            color: rgba(255, 150, 150, 0.55);
+            border-color: rgba(255, 150, 150, 0.08);
+        }
+        .action-row .btn-secondary.danger:active {
+            background: rgba(255, 150, 150, 0.06);
+        }
+        .result-screen {
+            flex: 1;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            text-align: center;
+            padding: 20px 0;
+            animation: fadeIn 0.5s ease;
+        }
+        .result-screen.active {
+            display: flex;
+        }
+        .result-screen .big-icon {
+            font-size: 64px;
+            margin-bottom: 4px;
+        }
+        .result-screen .result-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #f7d875;
+        }
+        .result-screen .result-score {
+            font-size: 20px;
+            color: rgba(255, 255, 255, 0.70);
+        }
+        .result-screen .result-score span {
+            font-size: 36px;
+            font-weight: 700;
+            color: #f0ecf5;
+        }
+        .result-screen .result-detail {
+            font-size: 15px;
+            color: rgba(255, 255, 255, 0.40);
+            line-height: 1.6;
+            max-width: 300px;
+        }
+        .result-screen .result-ai-msg {
+            padding: 16px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            max-width: 340px;
+            font-size: 15px;
+            line-height: 1.7;
+            color: rgba(255, 255, 255, 0.75);
+            margin: 4px 0 8px;
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+        }
+        .result-screen .btn-primary {
+            max-width: 280px;
+            margin-top: 8px;
+        }
+        .hidden {
+            display: none !important;
+        }
+        .fade-in {
+            animation: fadeIn 0.4s ease;
+        }
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .pulse-glow {
+            animation: pulseGlow 1.2s ease-in-out 2;
+        }
+        @keyframes pulseGlow {
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(247, 216, 117, 0);
+            }
+            50% {
+                box-shadow: 0 0 30px 8px rgba(247, 216, 117, 0.10);
+            }
+        }
+        .toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.72);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            color: #f0ecf5;
+            padding: 10px 22px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            z-index: 99;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            transform: translateX(-50%) translateY(12px);
+            white-space: nowrap;
+            max-width: 80%;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        @media (max-width: 380px) {
+            .grid-table td {
+                width: 28px;
+                height: 28px;
+                font-size: 16px;
+            }
+            .char-card .avatar {
+                width: 40px;
+                height: 40px;
+                font-size: 18px;
+            }
+            .ai-bubble .ai-msg .ai-text {
+                font-size: 14px;
+            }
+        }
+        @media (max-height: 640px) {
+            .game-screen {
+                padding-top: var(--ai-phone-game-safe-top, 72px);
+                padding-bottom: var(--ai-phone-game-safe-bottom, 16px);
+            }
+            .ai-bubble {
+                padding: 10px 12px;
+                min-height: 56px;
+            }
+            .grid-table td {
+                width: 28px;
+                height: 28px;
+                font-size: 16px;
+            }
+        }
+        @supports (padding: max(0px)) {
+            .game-screen {
+                padding-left: max(12px, env(safe-area-inset-left));
+                padding-right: max(12px, env(safe-area-inset-right));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-screen" id="app">
+        <div class="game-scroll" id="scrollContainer">
+            <div class="char-select-screen" id="charSelectScreen">
+                <div class="title-block">
+                    <h1>🔍 Word Search</h1>
+                    <p>Pick a partner and hunt for words together!</p>
+                </div>
+                <div id="charListContainer" style="flex:1;min-height:0;"></div>
+                <button class="btn-primary" id="startGameBtn" disabled>Start</button>
+                <div style="height:6px;"></div>
+            </div>
+            <div class="game-play-screen" id="gamePlayScreen">
+                <div class="game-header">
+                    <div class="progress">Found <span id="foundCount">0</span> / <span id="totalWords">0</span></div>
+                    <div class="score">⭐ <span id="scoreNum">0</span></div>
+                </div>
+                <div class="ai-bubble" id="aiBubble">
+                    <div class="ai-avatar" id="aiAvatar">🧠</div>
+                    <div class="ai-msg">
+                        <div class="ai-name" id="aiName">Partner</div>
+                        <div class="ai-text" id="aiText">Let's find them all. I'm cheering you on.</div>
+                    </div>
+                </div>
+                <div class="word-list" id="wordList"></div>
+                <div class="grid-container">
+                    <table class="grid-table" id="gridTable"></table>
+                </div>
+                <div class="action-row">
+                    <button class="btn-secondary" id="hintBtn">💡 Hint <span class="badge" id="hintCount">3</span></button>
+                    <button class="btn-secondary danger" id="resetBtn">🔄 Reset</button>
+                </div>
+                <div style="height:4px;"></div>
+            </div>
+            <div class="result-screen" id="resultScreen">
+                <div class="big-icon">🏆</div>
+                <div class="result-title" id="resultTitle">All found!</div>
+                <div class="result-score">Score <span id="resultScore">0</span></div>
+                <div class="result-detail" id="resultDetail">You found every word!</div>
+                <div class="result-ai-msg" id="resultAiMsg">🎉 Brilliant!</div>
+                <button class="btn-primary" id="replayBtn">🔄 New game</button>
+                <button class="btn-secondary" id="closeBtn" style="margin-top:6px;width:auto;padding:10px 28px;border:1px solid rgba(255,255,255,0.06);border-radius:12px;background:transparent;color:rgba(255,255,255,0.35);font-size:14px;cursor:pointer;">Exit</button>
+            </div>
+        </div>
+        <div class="toast" id="toast"></div>
+    </div>
+
+    <script>
+        (function() {
+            'use strict';
+
+            // ---------- Word bank ----------
+            const WORD_BANK = [
+                'ant', 'bat', 'cat', 'dog', 'eel', 'fox', 'gnu', 'hog', 'imp', 'jay',
+                'koi', 'lynx', 'moth', 'newt', 'orca', 'pug', 'rat', 'seal', 'toad', 'vole',
+                'wolf', 'yak', 'zebu', 'ape', 'bass', 'crab', 'deer', 'emu', 'frog', 'goat',
+                'hare', 'ibis', 'jaguar', 'koala', 'llama', 'moose', 'newt', 'otter', 'puma', 'quail',
+                'racoon', 'sheep', 'tiger', 'urchin', 'viper', 'weasel', 'xerus', 'yabby', 'zebra',
+                'apple', 'bread', 'cheese', 'dates', 'eggs', 'figs', 'grape', 'honey', 'icing', 'jam',
+                'kale', 'lemon', 'mango', 'nuts', 'oats', 'peach', 'quince', 'rice', 'sugar', 'tea',
+                'ube', 'vinegar', 'water', 'xylitol', 'yogurt', 'zest', 'berry', 'cocoa', 'dill', 'elder',
+                'fennel', 'garlic', 'herbs', 'ice', 'jelly', 'kiwi', 'lime', 'milk', 'noodle', 'olive',
+                'pasta', 'quinoa', 'raisin', 'salad', 'tofu', 'udon', 'vanilla', 'walnut', 'yam', 'ziti',
+                'bay', 'cave', 'dune', 'earth', 'fjord', 'glen', 'hill', 'island', 'jungle', 'knoll',
+                'lake', 'marsh', 'north', 'ocean', 'peak', 'ridge', 'south', 'tree', 'upland', 'valley',
+                'weald', 'xeric', 'yard', 'zenith', 'bluff', 'creek', 'delta', 'estuary', 'forest', 'gulf',
+                'harbor', 'inlet', 'meadow', 'oasis', 'pond', 'quarry', 'river', 'stream', 'tundra', 'volcano',
+                'wood', 'canyon', 'desert', 'everglade', 'glacier', 'highland', 'islet', 'lagoon', 'mountain', 'prairie',
+                'arm', 'bone', 'chin', 'ear', 'eye', 'face', 'hair', 'joint', 'kidney', 'lung',
+                'muscle', 'nerve', 'organ', 'pulse', 'rib', 'skin', 'tooth', 'vein', 'wrist', 'xiphoid',
+                'yolk', 'belly', 'brain', 'colon', 'dermis', 'elbow', 'finger', 'gland', 'heart', 'iris',
+                'jaw', 'knee', 'liver', 'mouth', 'nose', 'palm', 'spleen', 'thigh', 'ulna', 'voice',
+                'waist', 'ankle', 'blood', 'chest', 'elbow', 'femur', 'gust', 'heel', 'iliac', 'joint',
+                'book', 'chair', 'door', 'envelope', 'frame', 'guitar', 'hat', 'ink', 'jacket', 'key',
+                'lamp', 'mirror', 'needle', 'oven', 'pen', 'quilt', 'ring', 'sofa', 'table', 'umbrella',
+                'vase', 'window', 'xylophone', 'yarn', 'zipper', 'belt', 'clock', 'desk', 'eraser', 'fork',
+                'glass', 'helmet', 'icebox', 'jug', 'knife', 'lock', 'mat', 'notebook', 'ornament', 'pencil',
+                'quill', 'ruler', 'spoon', 'thread', 'umbrella', 'vial', 'wand', 'yardstick', 'bucket', 'candle'
+            ];
+
+            // ---------- State ----------
+            const state = {
+                characters: [],
+                selectedCharId: null,
+                charName: 'Partner',
+                charAvatar: null,
+                words: [],
+                grid: [],
+                gridSize: 12,
+                wordPositions: [],
+                found: [],
+                selectedCells: [],
+                score: 0,
+                hintRemaining: 3,
+                isWaiting: false,
+                gameOver: false,
+                playerName: 'Player',
+                rolePackage: null,
+            };
+
+            // ---------- DOM ----------
+            const $ = id => document.getElementById(id);
+            const charListContainer = $('charListContainer');
+            const startBtn = $('startGameBtn');
+            const charSelectScreen = $('charSelectScreen');
+            const gamePlayScreen = $('gamePlayScreen');
+            const resultScreen = $('resultScreen');
+            const foundCount = $('foundCount');
+            const totalWords = $('totalWords');
+            const scoreNum = $('scoreNum');
+            const aiAvatar = $('aiAvatar');
+            const aiName = $('aiName');
+            const aiText = $('aiText');
+            const wordList = $('wordList');
+            const gridTable = $('gridTable');
+            const hintBtn = $('hintBtn');
+            const hintCount = $('hintCount');
+            const resetBtn = $('resetBtn');
+            const resultTitle = $('resultTitle');
+            const resultScore = $('resultScore');
+            const resultDetail = $('resultDetail');
+            const resultAiMsg = $('resultAiMsg');
+            const replayBtn = $('replayBtn');
+            const closeBtn = $('closeBtn');
+            const toastEl = $('toast');
+
+            const API = window.AiPhoneGame;
+
+            // ---------- Helpers ----------
+            function isApiAvailable() { return typeof API !== 'undefined' && API !== null; }
+            async function safeApiCall(fn, fallback) {
+                if (!isApiAvailable()) return fallback;
+                try { return await fn(); } catch (e) { console.warn(e); return fallback; }
+            }
+            function shuffleArray(arr) {
+                for (let i = arr.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [arr[i], arr[j]] = [arr[j], arr[i]];
+                }
+                return arr;
+            }
+            function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+            function getCharInitial(name) {
+                if (!name) return '?';
+                const m = name.match(/^[\u4e00-\u9fa5]/);
+                if (m) return m[0];
+                return name.charAt(0).toUpperCase() || '?';
+            }
+            function escHtml(str) {
+                if (!str) return '';
+                const d = document.createElement('div');
+                d.textContent = str;
+                return d.innerHTML;
+            }
+
+            let toastTimer = null;
+
+            function showToast(msg, duration) {
+                duration = duration || 1800;
+                toastEl.textContent = msg;
+                toastEl.classList.add('show');
+                clearTimeout(toastTimer);
+                toastTimer = setTimeout(() => toastEl.classList.remove('show'), duration);
+            }
+
+            // ---------- Character selection ----------
+            async function loadCharacters() {
+                const list = await safeApiCall(() => API.listAvailableCharacters(), []);
+                state.characters = list || [];
+                renderCharList();
+            }
+
+            function renderCharList() {
+                const list = state.characters;
+                if (!list || list.length === 0) {
+                    charListContainer.innerHTML = `
+                <div class="empty-state">
+                  <div class="icon">📭</div>
+                  <div>No characters available.<br/>Create one on your phone first.</div>
+                  <div style="margin-top:12px;font-size:13px;color:rgba(255,255,255,0.2);">Or use the built-in partner</div>
+                </div>
+              `;
+                    startBtn.disabled = true;
+                    return;
+                }
+                let html = '<div class="char-grid">';
+                list.forEach((ch) => {
+                    const initial = getCharInitial(ch.name);
+                    const avatarHtml = ch.avatar ? `<img src="${ch.avatar}" alt="" loading="lazy" />` : initial;
+                    const selected = state.selectedCharId === ch.id ? 'selected' : '';
+                    html += `
+                <div class="char-card ${selected}" data-id="${ch.id}">
+                  <div class="avatar">${avatarHtml}</div>
+                  <div class="info">
+                    <div class="name">${escHtml(ch.name)}</div>
+                    <div class="sub">${escHtml(ch.subtitle || '')}</div>
+                  </div>
+                  <div class="check">✓</div>
+                </div>
+              `;
+                });
+                html += '</div>';
+                charListContainer.innerHTML = html;
+
+                charListContainer.querySelectorAll('.char-card').forEach(el => {
+                    el.addEventListener('click', function() {
+                        const id = this.dataset.id;
+                        selectCharacter(id);
+                    });
+                });
+                if (state.selectedCharId) {
+                    const cards = charListContainer.querySelectorAll('.char-card');
+                    cards.forEach(el => {
+                        if (el.dataset.id === state.selectedCharId) el.classList.add('selected');
+                    });
+                }
+                updateStartBtn();
+            }
+
+            function selectCharacter(id) {
+                state.selectedCharId = id;
+                const cards = charListContainer.querySelectorAll('.char-card');
+                cards.forEach(el => el.classList.toggle('selected', el.dataset.id === id));
+                const ch = state.characters.find(c => c.id === id);
+                if (ch) {
+                    state.charName = ch.name;
+                    state.charAvatar = ch.avatar || null;
+                }
+                updateStartBtn();
+                if (navigator.vibrate) navigator.vibrate(8);
+            }
+
+            function updateStartBtn() {
+                startBtn.disabled = !state.selectedCharId;
+                if (state.selectedCharId) {
+                    const ch = state.characters.find(c => c.id === state.selectedCharId);
+                    startBtn.textContent = `Start with ${ch ? ch.name : ''}`;
+                } else {
+                    startBtn.textContent = 'Pick a partner';
+                }
+            }
+
+            // ---------- Puzzle generation ----------
+            function generatePuzzle(numWords) {
+                const gridSize = state.gridSize;
+                const grid = Array.from({ length: gridSize }, () => Array(gridSize).fill(''));
+                const positions = [];
+                const shuffled = shuffleArray([...WORD_BANK]);
+                const unique = [];
+                const seen = new Set();
+                for (let w of shuffled) {
+                    if (!seen.has(w) && w.length >= 3 && w.length <= 8) {
+                        seen.add(w);
+                        unique.push(w);
+                    }
+                }
+                const words = unique.slice(0, numWords);
+                const dirs = [
+                    [0, 1],
+                    [1, 0],
+                    [1, 1],
+                    [1, -1]
+                ];
+                for (let w of words) {
+                    let placed = false;
+                    let attempts = 0;
+                    while (!placed && attempts < 300) {
+                        attempts++;
+                        const row = Math.floor(Math.random() * gridSize);
+                        const col = Math.floor(Math.random() * gridSize);
+                        const dir = dirs[Math.floor(Math.random() * dirs.length)];
+                        const dr = dir[0],
+                            dc = dir[1];
+                        let fit = true;
+                        for (let i = 0; i < w.length; i++) {
+                            const r = row + i * dr,
+                                c = col + i * dc;
+                            if (r < 0 || r >= gridSize || c < 0 || c >= gridSize) { fit = false; break; }
+                            if (grid[r][c] !== '' && grid[r][c] !== w[i]) { fit = false; break; }
+                        }
+                        if (fit) {
+                            const cells = [];
+                            for (let i = 0; i < w.length; i++) {
+                                const r = row + i * dr,
+                                    c = col + i * dc;
+                                grid[r][c] = w[i];
+                                cells.push([r, c]);
+                            }
+                            positions.push({ word: w, row, col, dir: dir, cells });
+                            placed = true;
+                        }
+                    }
+                    if (!placed) console.warn('Could not place word:', w);
+                }
+                for (let r = 0; r < gridSize; r++) {
+                    for (let c = 0; c < gridSize; c++) {
+                        if (grid[r][c] === '') {
+                            grid[r][c] = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+                        }
+                    }
+                }
+                return { grid, positions, words: positions.map(p => p.word) };
+            }
+
+            function resetGameState() {
+                state.found = [];
+                state.selectedCells = [];
+                state.score = 0;
+                state.hintRemaining = 3;
+                state.gameOver = false;
+                state.isWaiting = false;
+                const numWords = Math.min(9, Math.floor(Math.random() * 4) + 6);
+                const puzzle = generatePuzzle(numWords);
+                state.grid = puzzle.grid;
+                state.wordPositions = puzzle.positions;
+                state.words = puzzle.words;
+            }
+
+            async function loadRolePackage(charId) {
+                if (!isApiAvailable()) { state.rolePackage = null; return; }
+                try {
+                    state.rolePackage = await API.getRoleLightPackage(charId);
+                } catch (e) {
+                    state.rolePackage = null;
+                }
+            }
+
+            // ---------- Start game ----------
+            async function startGame() {
+                if (!state.selectedCharId) { showToast('Pick a partner first'); return; }
+                await loadRolePackage(state.selectedCharId);
+                const profile = await safeApiCall(() => API.getPlayerProfile(), { name: 'Player' });
+                state.playerName = profile.name || 'Player';
+
+                const saved = await safeApiCall(() => API.loadGame(), null);
+                if (saved && saved.wordsearch_data) {
+                    const d = saved.wordsearch_data;
+                    if (d.grid && d.grid.length === state.gridSize && d.words && d.wordPositions) {
+                        state.grid = d.grid;
+                        state.wordPositions = d.wordPositions;
+                        state.words = d.words;
+                        state.found = d.found || [];
+                        state.score = d.score || 0;
+                        state.hintRemaining = d.hintRemaining !== undefined ? d.hintRemaining : 3;
+                        state.gameOver = d.gameOver || false;
+                        showToast('📂 Save loaded');
+                    } else {
+                        resetGameState();
+                    }
+                } else {
+                    resetGameState();
+                }
+
+                charSelectScreen.style.display = 'none';
+                gamePlayScreen.classList.add('active');
+                resultScreen.classList.remove('active');
+
+                renderGrid();
+                renderWordList();
+                updateUI();
+                aiGreeting();
+            }
+
+            // ---------- Grid rendering ----------
+            function renderGrid() {
+                const grid = state.grid;
+                const size = grid.length;
+                let html = '';
+                for (let r = 0; r < size; r++) {
+                    html += '<tr>';
+                    for (let c = 0; c < size; c++) {
+                        const letter = grid[r][c];
+                        const isFound = isCellFound(r, c);
+                        const isSelected = state.selectedCells.some(([sr, sc]) => sr === r && sc === c);
+                        let cls = '';
+                        if (isFound) cls += ' found';
+                        if (isSelected) cls += ' selected';
+                        html += `<td class="${cls}" data-row="${r}" data-col="${c}">${letter.toUpperCase()}</td>`;
+                    }
+                    html += '</tr>';
+                }
+                gridTable.innerHTML = html;
+                setupGridTouchEvents();
+            }
+
+            // ---------- Touch dragging (direction is taken from the start cell, then the straight line is filled; diagonals supported) ----------
+            let touchActive = false;
+            let startRow = -1,
+                startCol = -1;
+
+            function setupGridTouchEvents() {
+                const tds = gridTable.querySelectorAll('td');
+                tds.forEach(td => {
+                    td.removeEventListener('touchstart', onTouchStart);
+                    td.removeEventListener('touchmove', onTouchMove);
+                    td.removeEventListener('touchend', onTouchEnd);
+                    td.removeEventListener('touchcancel', onTouchEnd);
+                });
+                tds.forEach(td => {
+                    td.addEventListener('touchstart', onTouchStart, { passive: true });
+                    td.addEventListener('touchmove', onTouchMove, { passive: true });
+                    td.addEventListener('touchend', onTouchEnd, { passive: true });
+                    td.addEventListener('touchcancel', onTouchEnd, { passive: true });
+                });
+            }
+
+            function onTouchStart(e) {
+                if (state.gameOver || state.isWaiting) return;
+                const td = e.currentTarget;
+                const row = parseInt(td.dataset.row);
+                const col = parseInt(td.dataset.col);
+                if (isCellFound(row, col)) {
+                    touchActive = false;
+                    return;
+                }
+                touchActive = true;
+                startRow = row;
+                startCol = col;
+                state.selectedCells = [
+                    [row, col]
+                ];
+                renderGrid();
+            }
+
+            function onTouchMove(e) {
+                if (!touchActive || state.gameOver || state.isWaiting) return;
+                const touch = e.touches[0];
+                const el = document.elementFromPoint(touch.clientX, touch.clientY);
+                if (!el) return;
+                const td = el.closest('td');
+                if (!td) return;
+                const row = parseInt(td.dataset.row);
+                const col = parseInt(td.dataset.col);
+                // Cells belonging to an already-found word cannot be selected
+                if (isCellFound(row, col)) return;
+
+                // Work out the direction from the start cell to the current one
+                const dr = Math.sign(row - startRow);
+                const dc = Math.sign(col - startCol);
+                // Direction must be one of (0,+-1), (+-1,0), (+-1,+-1), and cannot be (0,0)
+                if (dr === 0 && dc === 0) return;
+                // Check the current cell lies on the straight line from the start in that direction
+                // Only horizontal, vertical and diagonal are allowed, so the row and column deltas just have to be proportional
+                const absDr = Math.abs(row - startRow);
+                const absDc = Math.abs(col - startCol);
+                // Required: row delta is 0, or column delta is 0, or the two are equal (diagonal)
+                if (!(absDr === 0 || absDc === 0 || absDr === absDc)) {
+                    return; // not along a straight line
+                }
+
+                // Fill every cell from the start to the current one (excluding the start, already in selectedCells)
+                const newCells = [];
+                const steps = Math.max(absDr, absDc);
+                // From step 1 through to step `steps`
+                for (let i = 1; i <= steps; i++) {
+                    const r = startRow + i * dr;
+                    const c = startCol + i * dc;
+                    if (r < 0 || r >= state.gridSize || c < 0 || c >= state.gridSize) break;
+                    if (isCellFound(r, c)) break; // stop at an already-found cell
+                    newCells.push([r, c]);
+                }
+                // selectedCells becomes the start plus the cells in between
+                state.selectedCells = [
+                    [startRow, startCol]
+                ];
+                for (let cell of newCells) {
+                    state.selectedCells.push(cell);
+                }
+                renderGrid();
+            }
+
+            function onTouchEnd(e) {
+                if (touchActive && state.selectedCells.length >= 3) {
+                    checkSelectedWord();
+                }
+                touchActive = false;
+                startRow = -1;
+                startCol = -1;
+            }
+
+            // ---------- Word check (verifies the cells are collinear and contiguous) ----------
+            function checkSelectedWord() {
+                if (state.selectedCells.length < 3) {
+                    state.selectedCells = [];
+                    renderGrid();
+                    return;
+                }
+                const sorted = state.selectedCells;
+                // Verify the cells are collinear and contiguous (step of 1)
+                let isValid = true;
+                if (sorted.length >= 2) {
+                    const dr = sorted[1][0] - sorted[0][0];
+                    const dc = sorted[1][1] - sorted[0][1];
+                    if (dr === 0 && dc === 0) isValid = false;
+                    else {
+                        for (let i = 1; i < sorted.length; i++) {
+                            const ddr = sorted[i][0] - sorted[i - 1][0];
+                            const ddc = sorted[i][1] - sorted[i - 1][1];
+                            if (ddr !== dr || ddc !== dc) { isValid = false; break; }
+                            if (Math.abs(ddr) > 1 || Math.abs(ddc) > 1) { isValid = false; break; }
+                        }
+                    }
+                }
+                if (!isValid) {
+                    state.selectedCells = [];
+                    renderGrid();
+                    showToast('Drag in one straight, unbroken line');
+                    return;
+                }
+
+                let word = '';
+                for (let [r, c] of sorted) {
+                    word += state.grid[r][c];
+                }
+                word = word.toLowerCase();
+
+                const wordObj = state.wordPositions.find(p => p.word === word && !state.found.includes(word));
+                if (wordObj) {
+                    state.found.push(word);
+                    state.score += 10;
+                    state.selectedCells = [];
+                    renderGrid();
+                    renderWordList();
+                    updateUI();
+                    showToast(`✅ Found "${word}"! +10`);
+                    aiReact('found', word);
+                    saveProgress();
+                    if (state.found.length === state.words.length) {
+                        setTimeout(() => finishGame(), 600);
+                    }
+                } else {
+                    state.selectedCells = [];
+                    renderGrid();
+                    showToast('Not one of the words — try again');
+                }
+            }
+
+            function isCellFound(row, col) {
+                for (let p of state.wordPositions) {
+                    if (state.found.includes(p.word)) {
+                        for (let [r, c] of p.cells) {
+                            if (r === row && c === col) return true;
+                        }
+                    }
+                }
+                return false;
+            }
+
+            // ---------- Word list rendering ----------
+            function renderWordList() {
+                let html = '';
+                for (let w of state.words) {
+                    const found = state.found.includes(w);
+                    html += `<span class="word-item ${found ? 'found' : ''}">${w}</span>`;
+                }
+                wordList.innerHTML = html;
+                totalWords.textContent = state.words.length;
+                foundCount.textContent = state.found.length;
+            }
+
+            function updateUI() {
+                scoreNum.textContent = state.score;
+                hintCount.textContent = state.hintRemaining;
+                foundCount.textContent = state.found.length;
+                totalWords.textContent = state.words.length;
+                hintBtn.disabled = state.gameOver || state.isWaiting || state.hintRemaining <= 0;
+                if (state.gameOver) {
+                    hintBtn.disabled = true;
+                    resetBtn.disabled = false;
+                } else {
+                    resetBtn.disabled = false;
+                }
+                renderWordList();
+            }
+
+            // ---------- Companion dialogue ----------
+            function setAiMessage(name, text, isTyping) {
+                aiName.textContent = name || state.charName || 'Partner';
+                if (isTyping) {
+                    aiText.innerHTML = text + '<span class="typing-cursor"></span>';
+                } else {
+                    aiText.textContent = text;
+                }
+                if (state.charAvatar) {
+                    aiAvatar.innerHTML = `<img src="${state.charAvatar}" alt="" />`;
+                } else {
+                    const initial = getCharInitial(state.charName);
+                    aiAvatar.textContent = initial;
+                }
+            }
+
+            async function aiGreeting() {
+                const name = state.charName || 'Partner';
+                const pName = state.playerName || 'Player';
+                setAiMessage(name, `Hi ${pName}! Let's find some words.`, false);
+                const prompt =
+                    `You are ${name}. In your own voice, greet ${pName} and briefly introduce the game (finding hidden words in a letter grid). Be warm and natural, and stay in character. **Do not state your own name** — keep the focus on them. Plain conversational language only.`;
+                const context = 'greeting';
+                const reply = await callAIForResponse(prompt, context);
+                if (reply) setAiMessage(name, reply, false);
+            }
+
+            async function aiReact(action, word) {
+                if (state.isWaiting) return;
+                state.isWaiting = true;
+                updateUI();
+                setAiMessage(state.charName, '🤔 Hmm...', true);
+
+                let context = '';
+                let prompt = '';
+                if (action === 'found') {
+                    context = `found the word "${word}"`;
+                    prompt =
+                        `${state.playerName} just found the word "${word}"! In character, react with lively encouragement and praise. Plain conversational language only. Keep it to 1-2 sentences.`;
+                } else if (action === 'reset') {
+                    context = 'reset the puzzle';
+                    prompt =
+                        `${state.playerName} reset the puzzle. Say something encouraging to keep them going. Plain conversational language only. One sentence.`;
+                } else if (action === 'finish') {
+                    context = 'found every word';
+                    prompt =
+                        `${state.playerName} found every word! In character, give a warm, congratulatory wrap-up and sign off. Plain conversational language only. 2-3 sentences.`;
+                }
+
+                const reply = await callAIForResponse(prompt, context);
+                setAiMessage(state.charName, reply);
+                state.isWaiting = false;
+                updateUI();
+            }
+
+            async function callAIForResponse(prompt, context) {
+                if (!isApiAvailable()) {
+                    return getFallbackResponse(context);
+                }
+                try {
+                    let messages = [];
+                    if (state.rolePackage && state.rolePackage.messages) {
+                        messages = [...state.rolePackage.messages];
+                    } else {
+                        messages = [{
+                            role: 'system',
+                            content: `You are a warm, funny, encouraging partner named ${state.charName}. Keep replies short, imaginative and true to your character. Never write action descriptions (such as *smiles*), never use asterisks or parentheses — output plain conversational dialogue only.`
+                        }];
+                    }
+                    messages.push({
+                        role: 'system',
+                        content: `Important: your reply must be plain conversational language only — no action descriptions (such as *smiles*), no asterisks, parentheses or any formatting marks. Output dialogue only. The game is an English word search.`
+                    });
+                    const progress = `${state.found.length}/${state.words.length} words found`;
+                    messages.push({
+                        role: 'system',
+                        content: `Player: ${state.playerName}. Progress: ${progress}. They ${context}.`
+                    });
+                    messages.push({ role: 'user', content: prompt });
+
+                    const result = await API.callLLM({
+                        characterId: state.selectedCharId,
+                        messages: messages,
+                    });
+                    let reply = result.content || getFallbackResponse(context);
+                    reply = reply.replace(/\*[^*]*\*/g, '').replace(/\([^)]*\)/g, '').trim();
+                    return reply;
+                } catch (e) {
+                    console.warn(e);
+                    return getFallbackResponse(context);
+                }
+            }
+
+            function getFallbackResponse(context) {
+                if (context.includes('greeting')) {
+                    return `Hi ${state.playerName}! Let's test those eyes — find every hidden word.`;
+                } else if (context.includes('found the word')) {
+                    const msgs = ['🎉 Brilliant!', '🌟 Great spot!', '👏 Nicely done!', '💪 Unstoppable!'];
+                    return msgs[Math.floor(Math.random() * msgs.length)];
+                } else if (context.includes('reset')) {
+                    return '😊 No worries — take your time.';
+                } else if (context.includes('found every word')) {
+                    return '🎊 You did it! That was superb.';
+                }
+                return '😊 Keep going!';
+            }
+
+            // ---------- Hints ----------
+            async function giveHint() {
+                if (state.gameOver || state.isWaiting) return;
+                if (state.hintRemaining <= 0) { showToast('No hints left'); return; }
+                state.hintRemaining -= 1;
+                const unfound = state.words.filter(w => !state.found.includes(w));
+                if (unfound.length === 0) { showToast('Every word has been found!'); return; }
+                const word = unfound[Math.floor(Math.random() * unfound.length)];
+                const pos = state.wordPositions.find(p => p.word === word);
+                if (!pos) { showToast('Something went wrong — try again'); return; }
+                const [r, c] = pos.cells[0];
+                const hintText = `One word starts with "${word[0].toUpperCase()}", is ${word.length} letters long, and begins at row ${r+1}, column ${c+1}.`;
+                state.selectedCells = [];
+                renderGrid();
+                const td = gridTable.querySelector(`td[data-row="${r}"][data-col="${c}"]`);
+                if (td) {
+                    td.classList.add('highlight');
+                    setTimeout(() => td.classList.remove('highlight'), 3000);
+                }
+                updateUI();
+                saveProgress();
+
+                state.isWaiting = true;
+                setAiMessage(state.charName, '🤔 Let me think how to put this...', true);
+                const prompt =
+                    `You are giving ${state.playerName} a hint: ${hintText} Deliver it in your own voice, naturally and in character, as though you are slipping them a clue. Add nothing else — just that one hint.`;
+                const reply = await callAIForResponse(prompt, 'hint');
+                setAiMessage(state.charName, reply);
+                state.isWaiting = false;
+                updateUI();
+                showToast(`💡 Hint: ${hintText}`);
+            }
+
+            // ---------- Reset ----------
+            async function resetPuzzle() {
+                if (state.gameOver) {
+                    resetGameState();
+                    renderGrid();
+                    renderWordList();
+                    updateUI();
+                    setAiMessage(state.charName, '🔄 New puzzle ready!');
+                    saveProgress();
+                    return;
+                }
+                if (state.found.length > 0) {
+                    if (!confirm('Reset the puzzle? Your current progress will be lost.')) return;
+                }
+                resetGameState();
+                renderGrid();
+                renderWordList();
+                updateUI();
+                setAiMessage(state.charName, '🔄 New puzzle is set!');
+                saveProgress();
+                await aiReact('reset', '');
+            }
+
+            // ---------- Finish ----------
+            async function finishGame() {
+                state.gameOver = true;
+                gamePlayScreen.classList.remove('active');
+                resultScreen.classList.add('active');
+
+                const total = state.words.length;
+                const score = state.score;
+                resultScore.textContent = score;
+                resultDetail.textContent = `Found all ${total} words!`;
+
+                let title, icon;
+                if (score >= total * 10) { title = '🏆 Perfect!';
+                    icon = '🏆'; } else if (score >= total * 7) { title = '🌟 Excellent!';
+                    icon = '🌟'; } else { title = '💪 Nice work!';
+                    icon = '💪'; }
+                document.querySelector('.result-screen .big-icon').textContent = icon;
+                resultTitle.textContent = title;
+
+                const context = 'found every word';
+                const prompt =
+                    `${state.playerName} found all ${total} words with a score of ${score}. In character, give a warm wrap-up and sign off. Plain conversational language only.`;
+                const reply = await callAIForResponse(prompt, context);
+                resultAiMsg.textContent = reply;
+
+                await recordGameResult(score);
+                await safeApiCall(() => API.saveGame({ wordsearch_data: null }), null);
+            }
+
+            async function recordGameResult(score) {
+                if (!isApiAvailable()) return;
+                try {
+                    const pName = state.playerName || 'Player';
+                    const cName = state.charName || 'Partner';
+                    const summary =
+                        `${pName} and ${cName} played a word search together. ${pName} tracked down every hidden word and finished with ${score} points, ${cName} cheering them on and offering clues along the way.`;
+                    await API.recordGameEvent({
+                        characterIds: [state.selectedCharId],
+                        summary: summary,
+                    });
+                } catch (e) { console.warn(e); }
+            }
+
+            // ---------- Saving ----------
+            async function saveProgress() {
+                if (!isApiAvailable()) return;
+                try {
+                    await API.saveGame({
+                        wordsearch_data: {
+                            grid: state.grid,
+                            wordPositions: state.wordPositions,
+                            words: state.words,
+                            found: state.found,
+                            score: state.score,
+                            hintRemaining: state.hintRemaining,
+                            gameOver: state.gameOver,
+                        }
+                    });
+                } catch (e) { console.warn(e); }
+            }
+
+            // ---------- Restart / exit ----------
+            async function replayGame() {
+                resultScreen.classList.remove('active');
+                gamePlayScreen.classList.add('active');
+                resetGameState();
+                renderGrid();
+                renderWordList();
+                updateUI();
+                aiGreeting();
+                await safeApiCall(() => API.saveGame({ wordsearch_data: null }), null);
+            }
+
+            async function closeGame() {
+                if (isApiAvailable()) {
+                    try { await API.closeGame(); } catch (e) { console.warn(e); }
+                } else {
+                    showToast('👋 See you!');
+                    setTimeout(() => {
+                        document.body.innerHTML =
+                            '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.3);font-size:16px;background:#0d0b1a;">Game closed</div>';
+                    }, 500);
+                }
+            }
+
+            // ---------- Init ----------
+            async function init() {
+                if (isApiAvailable()) {
+                    try {
+                        await API.setTitleBar({
+                            material: 'glass',
+                            background: 'rgba(13, 11, 26, 0.72)',
+                            color: '#f0ecf5',
+                            borderColor: 'rgba(255,255,255,0.06)',
+                            buttonBackground: 'rgba(255,255,255,0.06)',
+                            buttonColor: '#f0ecf5',
+                            buttonBorderColor: 'rgba(255,255,255,0.08)',
+                            buttonRadius: '999px',
+                            buttonShadow: '0 4px 16px rgba(0,0,0,0.3)',
+                            iconOpacity: 0.9,
+                        });
+                    } catch (e) { /* ignore */ }
+                }
+
+                await loadCharacters();
+
+                startBtn.addEventListener('click', startGame);
+                hintBtn.addEventListener('click', giveHint);
+                resetBtn.addEventListener('click', resetPuzzle);
+                replayBtn.addEventListener('click', replayGame);
+                closeBtn.addEventListener('click', closeGame);
+
+                setTimeout(() => {
+                    if (charSelectScreen.style.display !== 'none' && state.characters.length > 0 && !state
+                        .selectedCharId) {
+                        selectCharacter(state.characters[0].id);
+                    }
+                }, 400);
+
+                console.log('[Word Search] Drag handling: direction locked from the start cell, stable diagonal selection, fewer misfires.');
+            }
+
+            if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                init();
+            } else {
+                document.addEventListener('DOMContentLoaded', init);
+            }
+
+        })();
+    </script>
+</body>
+</html>

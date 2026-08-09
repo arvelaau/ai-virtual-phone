@@ -1,5 +1,5 @@
 import { DOUDIZHU_GAME_HTML, TRUTH_OR_DARE_GAME_HTML } from "./game-builtin-html";
-import { SUDOKU_COMPANION_GAME_HTML } from "./game-imported-html";
+import { SUDOKU_COMPANION_GAME_HTML, WORD_SEARCH_GAME_HTML } from "./game-imported-html";
 import type { GameTemplate } from "./game-types";
 
 const now = "2026-06-06T00:00:00.000Z";
@@ -68,6 +68,21 @@ export const GAME_BUILTIN_TEMPLATES: GameTemplate[] = [
     roleSlots: [],
     pickerHtml: EMPTY_PICKER_HTML,
     gameHtml: SUDOKU_COMPANION_GAME_HTML,
+    allowExternalControl: true,
+  }),
+  importedTemplate({
+    id: "imported_game_word_search",
+    title: "Word Search",
+    codeName: "WORD_SEARCH",
+    subtitle: "Hunt hidden words with a partner",
+    synopsis: "Drag across a letter grid to find words hidden horizontally, vertically and diagonally. A character sits beside you, reacting to each find, nudging you with hints when you stall, and seeing you off at the end.",
+    playNote: "Words are drawn from a bank of everyday English nouns — animals, food, landscape and household things. Three hints per round, each delivered in your character's own voice. Progress is saved automatically, and finishing a grid writes a short memory of the session.",
+    coverImage: "",
+    tags: ["休闲", "解谜"],
+    authorName: "Khalilah",
+    roleSlots: [],
+    pickerHtml: EMPTY_PICKER_HTML,
+    gameHtml: WORD_SEARCH_GAME_HTML,
     allowExternalControl: true,
   }),
   template({
