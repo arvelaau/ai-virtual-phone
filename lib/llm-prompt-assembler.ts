@@ -98,6 +98,8 @@ export interface AssemblerInput {
     periodCareContext?: string;
     scheduleSummary?: string;
     currentSchedule?: string;
+    /** Couple Space standing state, built by the caller via buildCoupleSpacePromptBlock. */
+    coupleSpace?: string;
     longTermMemories?: string;
     coreMemories?: string;
     worldBookActivationContext?: string;  // override history-based keyword activation context
@@ -716,6 +718,7 @@ export function assemblePromptPayload(input: AssemblerInput): LLMMessage[] {
         engine.musicCloud = input.musicCloud ?? "";
         engine.musicOnlineHint = input.musicOnlineHint ?? "";
         engine.currentSchedule = input.currentSchedule ?? "";
+        engine.coupleSpace = input.coupleSpace ?? "";
         engine.vnScenes = input.vnScenes ?? "";
         engine.vnSprites = input.vnSprites ?? "";
         engine.vnBeats = input.vnBeats ?? "";
@@ -973,6 +976,7 @@ export function assemblePromptPayload(input: AssemblerInput): LLMMessage[] {
         engine.musicCloud = input.musicCloud ?? "";
         engine.musicOnlineHint = input.musicOnlineHint ?? "";
         engine.currentSchedule = input.currentSchedule ?? "";
+        engine.coupleSpace = input.coupleSpace ?? "";
         engine.tools = input.tools ?? "";
         engine.cocreateWriteActions = input.cocreateWriteActions ?? "";
         engine.cocreateReadActions = input.cocreateReadActions ?? "";
@@ -1777,6 +1781,9 @@ export interface GroupMemberData {
     worldBooks: WorldBookConfig[];
     scheduleSummary?: string;
     currentSchedule?: string;
+    /** Per-member Couple Space standing state. Group-level has no single couple, so the
+     *  whole-group engine deliberately leaves this unset and the entry TRIMs away. */
+    coupleSpace?: string;
     coreMemories?: string;
     longTermMemories?: string;
     currentStateValues?: StateValue[];
@@ -2060,6 +2067,7 @@ export function assembleGroupPromptPayload(input: GroupAssemblerInput): LLMMessa
         engine.musicCloud = input.musicCloud ?? "";
         engine.musicOnlineHint = input.musicOnlineHint ?? "";
         engine.currentSchedule = m.currentSchedule ?? "";
+        engine.coupleSpace = m.coupleSpace ?? "";
         engine.tools = input.tools ?? "";
         engine.cocreateWriteActions = input.cocreateWriteActions ?? "";
         engine.cocreateReadActions = input.cocreateReadActions ?? "";

@@ -45,6 +45,7 @@ export class MacroEngine {
     musicCloud: string = "";
     musicOnlineHint: string = "";
     currentSchedule: string = "";
+    coupleSpace: string = "";
     vnScenes: string = "";
     vnSprites: string = "";
     vnBeats: string = "";
@@ -177,6 +178,10 @@ export class MacroEngine {
         // what calendar-storage already returns and what group-chat-engine's NO_SCHEDULE
         // sentinel is — both consumers accept "none" and the legacy "无".
         if (body === "currentSchedule" || body === "当前日程") return this.currentSchedule || "none";
+        // Couple Space standing state (anniversaries / wishlist / gift tally). TRIMs away
+        // when the character has no Couple Space, so the preset entry disappears entirely
+        // rather than emitting an empty heading.
+        if (body === "coupleSpace") return this.coupleSpace || "\x00TRIM\x00";
         // Prompt-facing fallbacks, compared nowhere (verified repo-wide). These went first,
         // alongside vn_output_format; the rest of the family further down followed later.
         if (body === "vnScenes") return this.vnScenes || "none yet";

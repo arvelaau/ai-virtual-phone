@@ -16,6 +16,7 @@ import { retrieveCoreMemoriesForPrompt, retrieveMemoriesForPrompt } from "./memo
 import { formatCoreMemories, formatLongTermMemories } from "./memory-injector";
 import { prepareShortTermContext } from "./short-term-assembler";
 import { buildCalendarScheduleMarker, getCurrentCalendarScheduleForPrompt } from "./calendar-storage";
+import { buildCoupleSpacePromptBlock } from "./couple-space-prompt";
 import { getWeekStartIso } from "./calendar-utils";
 import { parseStoryResponse } from "./story-parser";
 import { STORY_PARSER_VERSION } from "./story-parser";
@@ -211,6 +212,7 @@ async function buildStoryPromptMessages(
     appId: "story",
     scheduleSummary: buildCalendarScheduleMarker("character", characterId, getWeekStartIso(now)),
     currentSchedule: getCurrentCalendarScheduleForPrompt("character", characterId, now),
+    coupleSpace: buildCoupleSpacePromptBlock({ characterId, characterName: character?.name }),
     coreMemories: coreMemories ? formatCoreMemories(coreMemories) : "",
     longTermMemories: memories ? formatLongTermMemories(memories) : "",
     worldBookActivationContext: wbActivationContext,

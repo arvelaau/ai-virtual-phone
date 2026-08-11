@@ -59,7 +59,13 @@ export const BUILTIN_PRESET_ID = "builtin_default_v1";
 //                   left un-bumped at the time. Nothing else in D2 touches this file:
 //                   mascot-tools.ts and mascot-prompts.ts are not part of the preset,
 //                   so no further bump is coming from that work.
-export const BUILTIN_PRESET_VERSION = 278;
+// 279 (2026-08-11): new global `couple_space_context` entry — Couple Space standing
+//                   state (anniversaries / wishlist / gift tally). Untagged, so it
+//                   reaches every surface; body is the bare {{coupleSpace}} macro, which
+//                   TRIMs the entry away entirely for characters with no Couple Space.
+//                   The block is built by the caller and passed in like currentSchedule,
+//                   so the assembler gains no import of the Couple Space store.
+export const BUILTIN_PRESET_VERSION = 279;
 
 export function createBuiltinPreset(): PresetConfig {
     const now = Date.now();
@@ -102,6 +108,12 @@ export function createBuiltinPreset(): PresetConfig {
             // First thing after the history block on purpose: it is the history's own
             // style that this rule has to override, so it must be read after it.
             { identifier: "persona_style_authority", enabled: true },
+
+            // Standing relationship facts (anniversaries / wishlist / gift tally). Sits
+            // below the history so an anniversary landing in three days is the freshest
+            // thing the model reads before replying. TRIMs away when the character has no
+            // Couple Space, so it costs nothing for everyone else.
+            { identifier: "couple_space_context", enabled: true },
 
             // ── Feature entries (after chatHistory) ──
             { identifier: "chat_tools", enabled: true },
@@ -223,6 +235,25 @@ export function createBuiltinPreset(): PresetConfig {
                     "A character profile can be edited at any time, so your earlier replies may have been written under an older version of it. Read them as a record of what was said, never as a style guide for how to say things now. Where your recent messages and the profile above disagree about your manner, follow the profile, and let your voice change starting with this message — without announcing the change, apologising for it, or explaining it in or out of character.",
                     "**This applies to voice only, never to substance.** Everything that has already happened remains true and must still be honoured in full: past events and plot, the current state of your relationship with the user and with other characters, promises made, running jokes, and every detail carried in the conversation history, short-term events, core memories and long-term memories. Keep recalling and using all of it exactly as before, with the same continuity you would show otherwise. What changes is only how you express it — not what you know, not what you feel about the user, and not what has happened between you.",
                 ].join("\n"),
+                injection_position: 0,
+                injection_depth: 0,
+                enabled: true,
+            },
+            // Couple Space standing state. Like output_language_rule and
+            // persona_style_authority this deliberately has NO `tags`, so the assembler's
+            // tag filter never drops it and one entry covers every surface.
+            // The body is a single macro on purpose: when the character has no Couple
+            // Space the macro resolves to the TRIM sentinel, the content becomes empty,
+            // and the assembler's `if (!content) continue` drops the entry outright --
+            // so no empty heading is ever emitted.
+            // The block itself is built by the CALLER (buildCoupleSpacePromptBlock) and
+            // passed in as `coupleSpace`, mirroring `currentSchedule`, so the assembler
+            // gains no import of the Couple Space store and no cycle is possible.
+            {
+                identifier: "couple_space_context",
+                name: "▸ Couple Space",
+                role: "system",
+                content: "{{coupleSpace}}",
                 injection_position: 0,
                 injection_depth: 0,
                 enabled: true,

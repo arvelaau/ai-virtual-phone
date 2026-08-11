@@ -1591,6 +1591,25 @@ Non-vacuity run, not asserted: removing the roll-forward branch gives **58/61** 
 
 **The NUL trap recurred twice more** while writing this stage (once in a source file, once in CLAUDE.md itself). Writing ` ` in a file body can land as a raw 0x00 byte. `C:\Users\hp\...\scratchpad\denul.mjs` fixes a file in place; check any new file with `s.split(String.fromCharCode(0)).length - 1`.
 
+### Stage 2b — Couple Space AI wiring: **DONE** (2026-08-11)
+`lib/couple-space-prompt.ts` + `_fx-couple-space-prompt.mjs` (35/35). `tsc` exit 0. `BUILTIN_PRESET_VERSION` → **279**.
+
+This is the standing-state layer. `buildCoupleSpacePromptBlock` composes storage + gift-provenance into one block; **the caller passes it in** (`coupleSpace`), exactly like `currentSchedule`, so `llm-prompt-assembler.ts` gains no import of the Couple Space store and the cycle noted in 2a stays impossible. New module rather than a function on storage, so storage stays a leaf.
+
+Touched: `macro-engine.ts` (field + `{{coupleSpace}}` resolver), `llm-prompt-assembler.ts` (2 type decls, 3 assignments — 1:1 x2 and group **per-member**), `chat-engine.ts`, `group-chat-engine.ts`, `story-engine.ts`, `builtin-preset.ts`.
+
+**The group-level engine deliberately leaves `coupleSpace` unset.** A group has no single couple, so only the per-member payload (`m.coupleSpace`, assembler `:2062`) is populated; the whole-group engine at `:2204` is left alone and the entry TRIMs away there.
+
+**The entry body is the bare `{{coupleSpace}}` macro.** With no Couple Space the macro resolves to the TRIM sentinel, the content becomes empty, and the assembler's `if (!content) continue` (`:846`, `:2174`, `:2242`) drops the entry outright — so no empty heading is ever emitted. Verified as behaviour (D4), not assumed. Untagged, like `output_language_rule` / `persona_style_authority`, so one entry covers every surface (D8 checks Moments).
+
+**`expand()` does not strip the TRIM sentinel** — `postProcessTrim` (`macro-engine.ts:352`) does, and the assembler runs `postProcessTrim(content).trim()`. My first fixture asserted `expand()` alone returned `""` and failed; the test was wrong, not the code. Assert the pair.
+
+Non-vacuity run, not asserted: removing the assembler assignment gives **32/35** (D1/D2/D8); reverting the version to 278 gives **34/35** (C7). That C7 assertion exists because a preset edit without a bump is dead code — the trap that silently invalidated all of early Phase D.
+
+Regression-checked after the bump: `_fx-checkphone-fields` 131/131, `_fx-checkphone-blocks` 372/372, `_fx-checkphone-headings` 10/10.
+
+**Still to do (2c):** the app itself and the 4 registration points that make it visible — `desktop-config.ts`, `desktop-shell.tsx`, `icon-glyph.tsx`, and the `loadNativeTimeline` projection block in `short-term-assembler.ts` (`sourceApp` union + `sourceDetail` + `FEATURE_TAG`). **Until that projection block lands, the 2a episodic events are written but never read.**
+
 ## Still open / not yet done
 - **`[系统指令]` / `[事件 …]` short-term timeline labels** (found 2026-08-06 during the offline/online research). Sites: `lib/short-term-assembler.ts:222,313`, `lib/chat-storage.ts:286,318`, `lib/chat-offline-storage.ts:178`. **These are read by the model** — they label system-instruction and offline-event entries inside the short-term event stream — so treat them as protocol, not as UI text: **make every consumer bilingual first (accept the legacy Chinese label AND the new English one), then flip the producers**, same dual-recognition pattern as the rest of this migration. Do not translate them in place; grep for every producer *and* every consumer of each label before touching either side (the `tool-executor` / `FETCH_RESULT_HEADER` / `prompt-sanitizer` regressions were all "one side moved, one consumer left behind").
 - `lib/macro-engine.ts:247` + `lib/chat-time.ts:1` Chinese weekday/date formatting reaching every chat prompt (found 2026-08-05, see above).
