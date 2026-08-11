@@ -1629,7 +1629,32 @@ All ten repo fixtures re-run green afterwards.
 
 **Stage 3 (reflection diary) is what remains**, plus the deferred mini-games (Route A) and gift resell + character reaction. The Stage-3 LLM-calls decision was explicitly deferred to that stage.
 
+### Stage 3 — reflection diary + memory wiring: **DONE** (2026-08-11)
+`_fx-couple-space.mjs` 61/61 → **88/88**. `tsc` exit 0. **Couple Space is complete** (stages 1, 2a-2c, 3).
+
+**`ReflectionEntry` is its own type, NOT a `DiaryEntry` discriminator.** `diary-entry-*` is AI-authored and produced unprompted by `diary-entry-timer-service`; sharing the type would let that timer start emitting relationship reflections nobody asked for.
+
+**The LLM decision was left genuinely open rather than pre-empted.** Reflections are user-written today, but `author: "user" | "character"` is in the type from the start, `addReflection` accepts it, and `recordReflectionEvent` already phrases the AI case differently (`Luna wrote a reflection` vs `The user wrote a reflection`). Turning on AI-authored reflections is additive — no migration over anything already stored. That decision is still outstanding; nothing here forecloses it.
+
+Stored inside `CoupleSpaceState.reflections`, so it inherits the per-character key and the existing save/load path. **`loadCoupleSpaceState` defaults the array when the key is absent**, because every state written before stage 3 has no `reflections` field (E18/E19 pin this).
+
+**New `cleanMultiline` — do not reuse `cleanText` for prose.** `cleanText` collapses `\s+` to a single space, which flattens a multi-paragraph reflection into one run-on block. `cleanMultiline` keeps line breaks, caps blank-line runs at one, and trims per line.
+
+#### 🚨 The whitespace bug returned in a fourth disguise
+`cleanMultiline` shipped as `.replace(/ /g, "")` — a **literal space**, stripping every space from every reflection body ("I love you" → "Iloveyou"). Notes:
+- `denul.mjs` reported the file **clean**, correctly — this was a space (0x20), not a NUL. **The NUL checker does not cover this case.**
+- It was caught only by `cat -A` on the two cleaners side by side, after noticing they rendered differently in a file view.
+- A repo-wide `grep -rn 'replace(/ /g'` afterwards found **no other instance**.
+
+That is now four variants of the same trap (blanket `\s+` strip in gift-provenance, literal NUL twice, literal space here). **Any new `clean*` helper needs a fixture assertion that a multi-word English string survives it**, before anything else.
+
+Non-vacuity run: restoring the space-strip gives **84/88**, failing exactly E2/E6/E13/F5.
+
+**Method note:** appending the test block via a bash heredoc failed — a backtick inside a `String.raw` template terminated the literal, and the script died without writing, while the fixture still reported its old 61/61. Redone by writing the block as a plain `.js` file and splicing it. Same lesson as `mascot-prompts.ts`: **no nested template literals through bash; use a file.**
+
 ## Still open / not yet done
+- **Couple Space follow-ups**: AI-authored reflections (the deferred LLM decision — the `character` author path is built but nothing calls it), mini-games Route A, and gift resell + character reaction.
+- **Track 2 game imports** (deferred wholesale during Couple Space): pocket-fishing, cute-pet, executive-diary.
 - **`[系统指令]` / `[事件 …]` short-term timeline labels** (found 2026-08-06 during the offline/online research). Sites: `lib/short-term-assembler.ts:222,313`, `lib/chat-storage.ts:286,318`, `lib/chat-offline-storage.ts:178`. **These are read by the model** — they label system-instruction and offline-event entries inside the short-term event stream — so treat them as protocol, not as UI text: **make every consumer bilingual first (accept the legacy Chinese label AND the new English one), then flip the producers**, same dual-recognition pattern as the rest of this migration. Do not translate them in place; grep for every producer *and* every consumer of each label before touching either side (the `tool-executor` / `FETCH_RESULT_HEADER` / `prompt-sanitizer` regressions were all "one side moved, one consumer left behind").
 - `lib/macro-engine.ts:247` + `lib/chat-time.ts:1` Chinese weekday/date formatting reaching every chat prompt (found 2026-08-05, see above).
 - `notifyMascotPageContext` label in `components/chat/phone-chat-app.tsx` (2 call sites) — flagged since round 2, needs revisiting per the standing-rule note above.

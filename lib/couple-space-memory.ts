@@ -1,6 +1,6 @@
 import { kvGet, kvKeysWithPrefix, kvSet, registerDynamicPrefix } from "./kv-db";
 import { formatChatTimestamp } from "./llm-prompt-assembler";
-import type { Anniversary, WishlistItem } from "./couple-space-types";
+import type { Anniversary, ReflectionEntry, WishlistItem } from "./couple-space-types";
 
 // Episodic half of the Couple Space memory wiring.
 //
@@ -146,6 +146,37 @@ export function recordWishlistFulfilledEvent(input: {
         timestamp,
         content: `${head(timestamp)} "${title}" on the Couple Space wishlist was fulfilled.`,
     });
+}
+
+export function recordReflectionEvent(input: {
+    characterId: string;
+    characterName: string;
+    reflection: ReflectionEntry;
+}): void {
+    const timestamp = input.reflection.createdAt || new Date().toISOString();
+    const characterName = cleanEventText(input.characterName, 80) || "them";
+    const title = cleanEventText(input.reflection.title, 120);
+    const titleText = title ? ` titled "${title}"` : "";
+    // Reflections are the most memory-relevant thing in Couple Space, so the body is kept
+    // far longer than the other events -- this is the entry the summarizer will draw on.
+    const body = cleanEventText(input.reflection.body, 900);
+    const who = input.reflection.author === "character"
+        ? `${characterName} wrote a reflection`
+        : "The user wrote a reflection";
+
+    upsertEvent(input.characterId, {
+        id: `couple_space_reflection_${input.reflection.id}`,
+        timestamp,
+        content: `${head(timestamp)} ${who} about their relationship with ${characterName}${titleText}: "${body}"`,
+    });
+}
+
+export function deleteCoupleSpaceProjectionEventsForReflection(characterId: string, reflectionId: string): void {
+    if (!characterId || !reflectionId || typeof window === "undefined") return;
+    const key = storageKey(characterId);
+    const events = loadEventsByKey(key);
+    const next = events.filter(entry => entry.id !== `couple_space_reflection_${reflectionId}`);
+    if (next.length !== events.length) saveEventsByKey(key, next);
 }
 
 export function deleteCoupleSpaceProjectionEventsForAnniversary(characterId: string, anniversaryId: string): void {

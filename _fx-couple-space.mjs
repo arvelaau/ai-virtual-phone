@@ -194,6 +194,76 @@ M.deleteCoupleSpaceProjectionEventsForAnniversary("char_luna", "an1");
 eq("D14 deleting the anniversary drops its event", M.loadCoupleSpaceProjectionEntries("char_luna").length, 0);
 eq("D15 other characters untouched", M.loadCoupleSpaceProjectionEntries("char_rae").length, 0);
 
+
+// ───────────────────────── E. reflections (stage 3) ─────────────────────────
+const kv = await jiti.import("./lib/kv-db.ts");
+
+S.clearCoupleSpace("char_luna");
+
+const MULTI = "First line about us.\n\nSecond paragraph, after a blank line.";
+const refl = S.addReflection("char_luna", { title: "  A quiet evening  ", body: MULTI });
+check("E1 reflection saved", Boolean(refl?.id), refl);
+// Regression guard: cleanMultiline first shipped as a literal space-strip, which would
+// turn "First line about us." into "Firstlineaboutus."
+check("E2 body keeps its spaces", refl?.body.includes("First line about us."), refl?.body);
+check("E3 body keeps its paragraph break", refl?.body.includes("\n\n"), JSON.stringify(refl?.body));
+eq("E4 title trimmed", refl?.title, "A quiet evening");
+eq("E5 author defaults to user", refl?.author, "user");
+
+const messy = S.addReflection("char_luna", { body: "line one\n\n\n\n\nline two   \n" });
+eq("E6 blank-line runs collapsed to one", messy?.body, "line one\n\nline two");
+
+check("E7 empty body rejected", S.addReflection("char_luna", { body: "   " }) === null);
+// The "character" author exists from the start so AI-written reflections need no migration.
+eq("E8 character author accepted",
+    S.addReflection("char_luna", { body: "I keep thinking about it.", author: "character" })?.author, "character");
+
+const allRefl = S.loadReflections("char_luna");
+eq("E9 all three stored", allRefl.length, 3);
+check("E10 newest first", allRefl[0]?.createdAt >= allRefl[allRefl.length - 1]?.createdAt, allRefl.map(r => r.createdAt));
+eq("E11 filter by author", S.loadReflections("char_luna", { author: "character" }).length, 1);
+eq("E12 limit honoured", S.loadReflections("char_luna", { limit: 2 }).length, 2);
+
+const edited = S.updateReflection("char_luna", refl.id, { body: "Rewritten, still with spaces." });
+eq("E13 update applies", edited?.body, "Rewritten, still with spaces.");
+eq("E14 update keeps the title", edited?.title, "A quiet evening");
+check("E15 update on unknown id is null", S.updateReflection("char_luna", "nope", { body: "x" }) === null);
+
+eq("E16 delete works", S.deleteReflection("char_luna", refl.id), true);
+eq("E17 two remain", S.loadReflections("char_luna").length, 2);
+
+// Backward compatibility: states written before stage 3 have no "reflections" key at all.
+kv.kvSet("ai_phone_couple_space_char_old", JSON.stringify({
+    version: 1,
+    anniversaries: [],
+    wishlist: [{ id: "w9", title: "Old Wish", wantedBy: "user", status: "wanted", createdAt: "", updatedAt: "" }],
+}));
+const legacy = S.loadCoupleSpaceState("char_old");
+eq("E18 legacy state loads without reflections", legacy.reflections.length, 0);
+eq("E19 legacy wishlist still intact", legacy.wishlist.length, 1);
+
+// ───────────────────────── F. reflection projections ─────────────────────────
+M.clearAllCoupleSpaceProjections();
+const projRefl = S.addReflection("char_luna", { title: "Anniversary week", body: "I want to remember how calm this felt." });
+M.recordReflectionEvent({ characterId: "char_luna", characterName: "Luna", reflection: projRefl });
+const rEntries = M.loadCoupleSpaceProjectionEntries("char_luna");
+eq("F1 reflection projected", rEntries.length, 1);
+check("F2 names the writer", rEntries[0]?.content.includes("The user wrote a reflection"), rEntries[0]?.content);
+check("F3 names the character", rEntries[0]?.content.includes("Luna"), rEntries[0]?.content);
+check("F4 includes the title", rEntries[0]?.content.includes("Anniversary week"), rEntries[0]?.content);
+check("F5 includes the body", rEntries[0]?.content.includes("how calm this felt"), rEntries[0]?.content);
+check("F6 carries the Couple Space head", rEntries[0]?.content.startsWith("[Couple Space "), rEntries[0]?.content);
+
+M.recordReflectionEvent({
+    characterId: "char_luna", characterName: "Luna",
+    reflection: { ...projRefl, id: "r_ai", author: "character", body: "I have been thinking about her." },
+});
+const aiEntry = M.loadCoupleSpaceProjectionEntries("char_luna").find(e => e.id === "couple_space_reflection_r_ai");
+check("F7 character-authored reads differently", aiEntry?.content.includes("Luna wrote a reflection"), aiEntry?.content);
+
+M.deleteCoupleSpaceProjectionEventsForReflection("char_luna", projRefl.id);
+eq("F8 deleting a reflection drops its projection", M.loadCoupleSpaceProjectionEntries("char_luna").length, 1);
+
 console.log(`\n${pass}/${pass + fail} passed`);
 console.log(
     "\nNon-vacuity: make computeUpcomingAnniversary skip the roll-forward branch and A4/A5/A14\n" +

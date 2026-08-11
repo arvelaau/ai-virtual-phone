@@ -5,6 +5,8 @@ import {
     type CoupleSpaceScope,
     type CoupleSpaceState,
     type UpcomingAnniversary,
+    type ReflectionAuthor,
+    type ReflectionEntry,
     type WishlistItem,
 } from "./couple-space-types";
 
@@ -21,6 +23,23 @@ function cleanText(value: unknown, maxLength: number): string {
     return String(value ?? "")
         .replace(/\u0000/g, "")
         .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, maxLength);
+}
+
+/**
+ * Whitespace cleaner for prose bodies. Unlike `cleanText` this keeps line breaks, because
+ * a reflection is multi-paragraph writing and collapsing `\s+` would flatten it into one
+ * run-on block. Runs of blank lines are capped at one, and trailing spaces per line go.
+ */
+function cleanMultiline(value: unknown, maxLength: number): string {
+    return String(value ?? "")
+        .replace(/\u0000/g, "")
+        .replace(/\r\n?/g, "\n")
+        .split("\n")
+        .map(line => line.replace(/[ \t]+/g, " ").trimEnd())
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
         .trim()
         .slice(0, maxLength);
 }
@@ -181,6 +200,25 @@ function normalizeWishlistItem(value: unknown, characterId: string): WishlistIte
     };
 }
 
+function normalizeReflection(value: unknown, characterId: string): ReflectionEntry | null {
+    if (!value || typeof value !== "object") return null;
+    const entry = value as Partial<ReflectionEntry>;
+    const body = cleanMultiline(entry.body, 4000);
+    if (!entry.id || !body) return null;
+    return {
+        id: String(entry.id),
+        characterId,
+        author: entry.author === "character" ? "character" : "user",
+        title: cleanText(entry.title, 120) || undefined,
+        body,
+        relatedAnniversaryId: cleanText(entry.relatedAnniversaryId, 120) || undefined,
+        relatedWishId: cleanText(entry.relatedWishId, 120) || undefined,
+        relatedGiftId: cleanText(entry.relatedGiftId, 200) || undefined,
+        createdAt: String(entry.createdAt ?? nowIso()),
+        updatedAt: String(entry.updatedAt ?? entry.createdAt ?? nowIso()),
+    };
+}
+
 export function loadCoupleSpaceState(characterId: string): CoupleSpaceState {
     if (!characterId || typeof window === "undefined") return createEmptyCoupleSpaceState();
     try {
@@ -198,6 +236,12 @@ export function loadCoupleSpaceState(characterId: string): CoupleSpaceState {
                 ? parsed.wishlist
                     .map(entry => normalizeWishlistItem(entry, characterId))
                     .filter((entry): entry is WishlistItem => entry !== null)
+                : [],
+            // Absent in states saved before stage 3 -- default rather than reject.
+            reflections: Array.isArray(parsed.reflections)
+                ? parsed.reflections
+                    .map(entry => normalizeReflection(entry, characterId))
+                    .filter((entry): entry is ReflectionEntry => entry !== null)
                 : [],
         };
     } catch {
@@ -387,4 +431,79 @@ export function loadWishlist(
     if (options.status) items = items.filter(entry => entry.status === options.status);
     if (options.wantedBy) items = items.filter(entry => entry.wantedBy === options.wantedBy);
     return [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+// ── Reflections ─────────────────────────────────────────────────────────────────────────
+
+export type ReflectionInput = {
+    body: string;
+    title?: string;
+    author?: ReflectionAuthor;
+    relatedAnniversaryId?: string;
+    relatedWishId?: string;
+    relatedGiftId?: string;
+};
+
+export function addReflection(characterId: string, input: ReflectionInput): ReflectionEntry | null {
+    const body = cleanMultiline(input.body, 4000);
+    if (!characterId || !body) return null;
+    const timestamp = nowIso();
+    const reflection: ReflectionEntry = {
+        id: createId(),
+        characterId,
+        author: input.author === "character" ? "character" : "user",
+        title: cleanText(input.title, 120) || undefined,
+        body,
+        relatedAnniversaryId: cleanText(input.relatedAnniversaryId, 120) || undefined,
+        relatedWishId: cleanText(input.relatedWishId, 120) || undefined,
+        relatedGiftId: cleanText(input.relatedGiftId, 200) || undefined,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+    };
+    const state = loadCoupleSpaceState(characterId);
+    state.reflections = [...state.reflections, reflection];
+    saveCoupleSpaceState(characterId, state);
+    return reflection;
+}
+
+export function updateReflection(
+    characterId: string,
+    id: string,
+    patch: Partial<ReflectionInput>,
+): ReflectionEntry | null {
+    const state = loadCoupleSpaceState(characterId);
+    const existing = state.reflections.find(entry => entry.id === id);
+    if (!existing) return null;
+    const nextBody = patch.body !== undefined ? cleanMultiline(patch.body, 4000) : existing.body;
+    if (!nextBody) return null;
+
+    const updated: ReflectionEntry = {
+        ...existing,
+        body: nextBody,
+        title: patch.title !== undefined ? (cleanText(patch.title, 120) || undefined) : existing.title,
+        updatedAt: nowIso(),
+    };
+    state.reflections = state.reflections.map(entry => (entry.id === id ? updated : entry));
+    saveCoupleSpaceState(characterId, state);
+    return updated;
+}
+
+export function deleteReflection(characterId: string, id: string): boolean {
+    const state = loadCoupleSpaceState(characterId);
+    const next = state.reflections.filter(entry => entry.id !== id);
+    if (next.length === state.reflections.length) return false;
+    state.reflections = next;
+    saveCoupleSpaceState(characterId, state);
+    return true;
+}
+
+/** Reflections, newest first. */
+export function loadReflections(
+    characterId: string,
+    options: { author?: ReflectionAuthor; limit?: number } = {},
+): ReflectionEntry[] {
+    let entries = loadCoupleSpaceState(characterId).reflections;
+    if (options.author) entries = entries.filter(entry => entry.author === options.author);
+    entries = [...entries].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return typeof options.limit === "number" ? entries.slice(0, Math.max(0, options.limit)) : entries;
 }

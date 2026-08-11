@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Heart, Gift, Plus, Trash2, Check } from "lucide-react";
 
-import { PageShell, Button, Input, Select, EmptyState, GlassCard, Badge } from "@/components/ui";
+import { PageShell, Button, Input, Textarea, Select, EmptyState, GlassCard, Badge } from "@/components/ui";
 import { loadCharacters } from "@/lib/character-storage";
 import {
     addAnniversary,
@@ -11,7 +11,10 @@ import {
     deleteAnniversary,
     deleteWishlistItem,
     fulfillWishlistItem,
+    addReflection,
+    deleteReflection,
     loadCoupleSpaceState,
+    loadReflections,
     loadUpcomingAnniversaries,
     todayYmd,
 } from "@/lib/couple-space-storage";
@@ -22,10 +25,12 @@ import {
     recordAnniversaryAddedEvent,
     recordWishlistAddedEvent,
     recordWishlistFulfilledEvent,
+    recordReflectionEvent,
+    deleteCoupleSpaceProjectionEventsForReflection,
 } from "@/lib/couple-space-memory";
 import { loadGiftHistory, syncGiftProvenanceFromMessages } from "@/lib/gift-provenance";
 import type { GiftProvenanceRecord } from "@/lib/gift-provenance";
-import type { UpcomingAnniversary, WishlistItem } from "@/lib/couple-space-types";
+import type { ReflectionEntry, UpcomingAnniversary, WishlistItem } from "@/lib/couple-space-types";
 
 // Couple Space is per-character: one space per relationship, selected at the top.
 //
@@ -55,6 +60,8 @@ export function CoupleSpaceApp({ onClose, onNotice }: Props) {
     const [annDate, setAnnDate] = useState(() => todayYmd());
     const [wishTitle, setWishTitle] = useState("");
     const [wishFor, setWishFor] = useState<"character" | "user">("character");
+    const [reflectionTitle, setReflectionTitle] = useState("");
+    const [reflectionBody, setReflectionBody] = useState("");
 
     const characterName = characters.find(c => c.id === characterId)?.name ?? "";
 
@@ -72,6 +79,10 @@ export function CoupleSpaceApp({ onClose, onNotice }: Props) {
     );
     const wishlist: WishlistItem[] = useMemo(
         () => (characterId ? loadCoupleSpaceState(characterId).wishlist : []),
+        [characterId, refreshKey],
+    );
+    const reflections: ReflectionEntry[] = useMemo(
+        () => (characterId ? loadReflections(characterId) : []),
         [characterId, refreshKey],
     );
     const gifts: GiftProvenanceRecord[] = useMemo(
@@ -120,6 +131,23 @@ export function CoupleSpaceApp({ onClose, onNotice }: Props) {
     const handleDeleteWish = (id: string) => {
         if (!deleteWishlistItem(characterId, id)) return;
         deleteCoupleSpaceProjectionEventsForWish(characterId, id);
+        bump();
+    };
+
+    const handleAddReflection = () => {
+        if (!characterId || !reflectionBody.trim()) return;
+        const created = addReflection(characterId, { title: reflectionTitle, body: reflectionBody });
+        if (!created) return;
+        recordReflectionEvent({ characterId, characterName, reflection: created });
+        setReflectionTitle("");
+        setReflectionBody("");
+        bump();
+        onNotice?.("Reflection saved");
+    };
+
+    const handleDeleteReflection = (id: string) => {
+        if (!deleteReflection(characterId, id)) return;
+        deleteCoupleSpaceProjectionEventsForReflection(characterId, id);
         bump();
     };
 
@@ -235,6 +263,46 @@ export function CoupleSpaceApp({ onClose, onNotice }: Props) {
                         <Button onClick={handleAddWish} aria-label="Add wish">
                             <Plus size={16} strokeWidth={1.8} />
                         </Button>
+                    </div>
+                </GlassCard>
+
+                {/* ── Reflections ── */}
+                <GlassCard>
+                    <h3 style={{ margin: "0 0 12px" }}>Reflections</h3>
+                    {reflections.length === 0 ? (
+                        <EmptyState message="Write down what this relationship feels like. Reflections become part of what they remember." />
+                    ) : (
+                        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+                            {reflections.map(entry => (
+                                <li key={entry.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        {entry.title && <div style={{ fontWeight: 500 }}>{entry.title}</div>}
+                                        {/* pre-wrap: reflections are multi-paragraph and the store keeps line breaks */}
+                                        <div style={{ whiteSpace: "pre-wrap", opacity: 0.85, fontSize: 14 }}>{entry.body}</div>
+                                        <div style={{ opacity: 0.55, fontSize: 12, marginTop: 4 }}>
+                                            {entry.author === "character" ? characterName || "Them" : "You"} · {entry.createdAt.slice(0, 10)}
+                                        </div>
+                                    </div>
+                                    <Button variant="ghost" aria-label="Delete reflection" onClick={() => handleDeleteReflection(entry.id)}>
+                                        <Trash2 size={16} strokeWidth={1.6} />
+                                    </Button>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+                        <Input
+                            placeholder="Title (optional)"
+                            value={reflectionTitle}
+                            onChange={event => setReflectionTitle(event.target.value)}
+                        />
+                        <Textarea
+                            placeholder="What do you want to remember about this?"
+                            rows={4}
+                            value={reflectionBody}
+                            onChange={event => setReflectionBody(event.target.value)}
+                        />
+                        <Button onClick={handleAddReflection}>Save reflection</Button>
                     </div>
                 </GlassCard>
 
