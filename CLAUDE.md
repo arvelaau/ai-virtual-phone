@@ -1652,8 +1652,34 @@ Non-vacuity run: restoring the space-strip gives **84/88**, failing exactly E2/E
 
 **Method note:** appending the test block via a bash heredoc failed — a backtick inside a `String.raw` template terminated the literal, and the script died without writing, while the fixture still reported its old 61/61. Redone by writing the block as a plain `.js` file and splicing it. Same lesson as `mascot-prompts.ts`: **no nested template literals through bash; use a file.**
 
+### Bidirectional Couple Space: **DONE** (2026-08-11)
+`_fx-couple-space-tools.mjs` (34/34). `tsc` exit 0. The character can now write into Couple Space, not only read it — `author: "character"` is genuinely reached instead of existing unused in the type.
+
+#### Architecture decision: Couple Space stays OUT of checkphone
+Asked whether checkphone (`checkphone-engine.ts` + `CHECKPHONE_APP_SPECS`) was the more natural home, since it is the system built for "AI generates structured content rendered as app UI". **Answer: no, and the reason is structural, not stylistic.**
+
+checkphone is **snapshot-based and lossy by design**. `generateCheckPhoneNotes(characterId, previousPayload, …)` returns a *complete new payload* that replaces the old one, and continuity across refreshes is carried only by `formatSnapshotSummary` (`:907`) — which emits `title：preview` prose, **capped at 6 items, with no ids**.
+
+That is fine for feed-shaped disposable content ("what's on their phone right now") and fatal for Couple Space, which needs: an anniversary saved months ago preserved byte-exact, `WishlistItem.linkedGiftId` pointing at a real `GiftProvenanceRecord.id`, single-row mutation (`fulfillWishlistItem`), unbounded history, and user-authored records the AI must not overwrite. A checkphone refresh would dangle every id and rewrite the user's own data.
+
+The current design is not ad-hoc — it is the **note-wall pattern** (kv store + projection + `loadNativeTimeline`), which is this repo's shape for *persistent, jointly-authored* content. checkphone is the shape for *ephemeral, AI-authored* content. **Rule of thumb: if a record needs a stable id, it cannot live in checkphone.**
+
+#### The four tools
+English names — a deliberate exception to "tool names stay Chinese", which exists because existing names are matched exactly in stored content. These are new identifiers with no stored data behind them. `AddReflection`, `AddWishlistItem`, `FulfillWish`, `AddAnniversary`, under capability `couple_space` (disabled by default, `mode: "auto"`).
+
+Registration takes **6 edits** in `internal-capability-storage.ts` (id const, schemas+subtools+usage guide, `BUILTIN_INTERNAL_CAPABILITIES`, and all three lookup functions — `getInternalCapabilityToolDefinition`, `…SubToolDefinition`, `…SubToolDefinitions`) plus **3** in `tool-executor.ts` (imports, `isCoupleSpaceToolName` + `executeCoupleSpaceTool`, and the `executeInternalTool` router line). Missing any lookup makes the tool invisible rather than erroring.
+
+`describeWish` / `describeAnniversary` in `couple-space-prompt.ts` now append `[id: …]`, because `FulfillWish` needs a real id and the model would otherwise guess.
+
+#### 🚨 MIXED LINE ENDINGS across this repo
+`lib/internal-capability-storage.ts` and `lib/tool-executor.ts` are **CRLF**; `lib/short-term-assembler.ts` and `lib/couple-space-prompt.ts` are **LF**. A multi-line splice needle written with `\n` matches **zero times** in a CRLF file and the script reports "0 matches" — or, if unguarded, silently no-ops. `scratchpad/splice-lib.mjs` normalises needles to the target file's own convention; use it for every multi-line splice. Both failures this session threw before `write()`, so nothing was half-applied — **keep the write at the end of splice scripts** for exactly that reason.
+
+Non-vacuity run: removing the router line gives **17/34** (B1-B17, C2); stripping `[id: …]` from `describeWish` gives **33/34** (C1).
+
+**Fixture hardening worth copying:** the first control run produced only 4 failures then *crashed*, because the fixture dereferenced `reflections[0].body` on an empty array — later assertions never ran. Optional-chaining the index reads turned it into a clean 17/34. **A fixture that crashes under its own control is not reporting; guard every `[0]` deref.**
+
 ## Still open / not yet done
-- **Couple Space follow-ups**: AI-authored reflections (the deferred LLM decision — the `character` author path is built but nothing calls it), mini-games Route A, and gift resell + character reaction.
+- **Couple Space follow-ups**: gift resell + character reaction (next), then mini-games Route A.
 - **Track 2 game imports** (deferred wholesale during Couple Space): pocket-fishing, cute-pet, executive-diary.
 - **`[系统指令]` / `[事件 …]` short-term timeline labels** (found 2026-08-06 during the offline/online research). Sites: `lib/short-term-assembler.ts:222,313`, `lib/chat-storage.ts:286,318`, `lib/chat-offline-storage.ts:178`. **These are read by the model** — they label system-instruction and offline-event entries inside the short-term event stream — so treat them as protocol, not as UI text: **make every consumer bilingual first (accept the legacy Chinese label AND the new English one), then flip the producers**, same dual-recognition pattern as the rest of this migration. Do not translate them in place; grep for every producer *and* every consumer of each label before touching either side (the `tool-executor` / `FETCH_RESULT_HEADER` / `prompt-sanitizer` regressions were all "one side moved, one consumer left behind").
 - `lib/macro-engine.ts:247` + `lib/chat-time.ts:1` Chinese weekday/date formatting reaching every chat prompt (found 2026-08-05, see above).

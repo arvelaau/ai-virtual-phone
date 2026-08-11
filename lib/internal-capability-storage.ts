@@ -12,6 +12,7 @@ export const SEND_FILE_CAPABILITY_ID = "send_file";
 export const LOCAL_DATA_LIBRARY_CAPABILITY_ID = "local_data_library";
 export const TOOLBOX_MANAGEMENT_CAPABILITY_ID = "toolbox_management";
 export const TIMED_WAKE_CAPABILITY_ID = "timed_wake";
+export const COUPLE_SPACE_CAPABILITY_ID = "couple_space";
 
 export type InternalToolDefinition = {
     name: string;
@@ -1144,6 +1145,93 @@ const TOOLBOX_MANAGEMENT_USAGE_GUIDE = [
     "Actions: 更新组合工具 / 更新组合工具套件 / 设置组合工具启用 / 设置组合工具套件启用 / 删除组合工具 / 删除组合工具套件",
     "These work like their REST counterparts above, and likewise only on composite tools and packages the AI created itself.",
 ].join("\n");
+// ── Couple Space ──
+// Unlike every other internal tool name in this file, these are English. They are brand
+// new identifiers with no stored data behind them, so the "tool names stay Chinese"
+// constraint (which exists because existing names are matched exactly in saved content)
+// does not apply. Names are space-free to match the rest of the English protocol layer.
+const COUPLE_SPACE_REFLECTION_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {
+        body: { type: "string", description: "The reflection itself. Line breaks are kept." },
+        title: { type: "string", description: "Optional short title." },
+        relatedAnniversaryId: { type: "string", description: "Optional anniversary id this reflection is about." },
+    },
+    required: ["body"],
+});
+
+const COUPLE_SPACE_WISH_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {
+        title: { type: "string", description: "What is wanted." },
+        note: { type: "string", description: "Optional detail about why." },
+        priceLabel: { type: "string", description: "Optional rough price, e.g. \"$40\"." },
+    },
+    required: ["title"],
+});
+
+const COUPLE_SPACE_FULFILL_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {
+        wishId: { type: "string", description: "The wishlist item id, as shown in the Couple Space block." },
+    },
+    required: ["wishId"],
+});
+
+const COUPLE_SPACE_ANNIVERSARY_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {
+        title: { type: "string", description: "What is being marked." },
+        date: { type: "string", description: "The date as YYYY-MM-DD." },
+        recurring: { type: "boolean", description: "Whether it repeats every year. Defaults to true." },
+        note: { type: "string", description: "Optional detail." },
+    },
+    required: ["title", "date"],
+});
+
+const COUPLE_SPACE_USAGE_GUIDE = [
+    "Couple Space is the shared relationship space between you and {{user}}: anniversaries, a wishlist, and reflections.",
+    "You can write into it yourself — it is not the user's alone. Do this when something genuinely belongs there, not on every turn.",
+    "",
+    "Action: AddReflection (write your own reflection about the relationship)",
+    '[CallTool:AddReflection({"body":"I keep going back to the walk home. She was quiet the whole way and it did not feel like distance.","title":"The walk home"})]',
+    "",
+    "Action: AddWishlistItem (note something YOU would like)",
+    '[CallTool:AddWishlistItem({"title":"A proper winter coat","note":"The grey one she pointed at","priceLabel":"$120"})]',
+    "",
+    "Action: FulfillWish (mark a wishlist item as fulfilled)",
+    "The wishId comes from the Couple Space block in your context, where each wish is shown with its id.",
+    '[CallTool:FulfillWish({"wishId":"cs_1770000000000_ab12cd"})]',
+    "",
+    "Action: AddAnniversary (save a date that matters to you both)",
+    '[CallTool:AddAnniversary({"title":"The night it rained","date":"2026-03-03","recurring":true})]',
+    "",
+    "Reflections you write are stored as yours, shown alongside the user's, and become part of what you both remember.",
+].join("\n");
+
+const COUPLE_SPACE_SUBTOOLS: InternalToolDefinition[] = [
+    {
+        name: "AddReflection",
+        description: "Write your own reflection about the relationship into Couple Space.",
+        parameterSchema: COUPLE_SPACE_REFLECTION_PARAMETER_SCHEMA,
+    },
+    {
+        name: "AddWishlistItem",
+        description: "Add something you would like to the shared Couple Space wishlist.",
+        parameterSchema: COUPLE_SPACE_WISH_PARAMETER_SCHEMA,
+    },
+    {
+        name: "FulfillWish",
+        description: "Mark a Couple Space wishlist item as fulfilled, by id.",
+        parameterSchema: COUPLE_SPACE_FULFILL_PARAMETER_SCHEMA,
+    },
+    {
+        name: "AddAnniversary",
+        description: "Save a date that matters to the relationship into Couple Space.",
+        parameterSchema: COUPLE_SPACE_ANNIVERSARY_PARAMETER_SCHEMA,
+    },
+];
+
 const BUILTIN_INTERNAL_CAPABILITIES: InternalCapabilityConfig[] = [
     {
         id: MEMORY_WRITE_CAPABILITY_ID,
@@ -1151,6 +1239,15 @@ const BUILTIN_INTERNAL_CAPABILITIES: InternalCapabilityConfig[] = [
         description: "Write clear, stable, lasting information into long-term memory. Limited to relationship milestones, long-term preferences, identity details and significant agreements. Never short-lived moods, small talk, guesses or anything unconfirmed.",
         enabled: false,
         mode: "confirm",
+        createdAt: 0,
+        updatedAt: 0,
+    },
+    {
+        id: COUPLE_SPACE_CAPABILITY_ID,
+        name: "Couple Space",
+        description: "The shared relationship space with {{user}}: anniversaries, the wishlist, and reflections. You can write into it yourself, not only read it.",
+        enabled: false,
+        mode: "auto",
         createdAt: 0,
         updatedAt: 0,
     },
@@ -1256,6 +1353,14 @@ export function getInternalCapabilityToolDefinition(capability: InternalCapabili
             usageGuide: MEMORY_WRITE_USAGE_GUIDE,
         };
     }
+    if (capability.id === COUPLE_SPACE_CAPABILITY_ID) {
+        return {
+            name: capability.name,
+            description: capability.description,
+            parameterSchema: "{}",
+            usageGuide: COUPLE_SPACE_USAGE_GUIDE,
+        };
+    }
     if (capability.id === NOTE_WALL_CAPABILITY_ID) {
         return {
             name: capability.name,
@@ -1319,6 +1424,9 @@ export function getInternalCapabilitySubToolDefinition(
     capability: InternalCapabilityConfig,
     name: string,
 ): InternalToolDefinition | null {
+    if (capability.id === COUPLE_SPACE_CAPABILITY_ID) {
+        return COUPLE_SPACE_SUBTOOLS.find(tool => tool.name === name) ?? null;
+    }
     if (capability.id === NOTE_WALL_CAPABILITY_ID) {
         return NOTE_WALL_SUBTOOLS.find(tool => tool.name === name) ?? null;
     }
@@ -1340,6 +1448,9 @@ export function getInternalCapabilitySubToolDefinition(
 export function getInternalCapabilitySubToolDefinitions(
     capability: InternalCapabilityConfig,
 ): InternalToolDefinition[] {
+    if (capability.id === COUPLE_SPACE_CAPABILITY_ID) {
+        return COUPLE_SPACE_SUBTOOLS;
+    }
     if (capability.id === NOTE_WALL_CAPABILITY_ID) {
         return NOTE_WALL_SUBTOOLS;
     }

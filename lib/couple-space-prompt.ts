@@ -32,17 +32,21 @@ function describeDaysUntil(daysUntil: number): string {
     return `in ${daysUntil} days`;
 }
 
+// Ids are included because the character can now write into Couple Space through the
+// AddReflection / FulfillWish / AddAnniversary tools, and FulfillWish needs a real wish id.
+// Without them the model would have to guess, and a wrong id fails the call.
 function describeAnniversary(entry: UpcomingAnniversary): string {
     const when = formatAnniversaryDateLabel(entry.nextDate);
     const parts = [describeDaysUntil(entry.daysUntil)];
     if (typeof entry.yearsSince === "number" && entry.yearsSince > 0) {
         parts.push(`marking ${entry.yearsSince} ${entry.yearsSince === 1 ? "year" : "years"}`);
     }
-    return `"${entry.anniversary.title}" on ${when} (${parts.join(", ")})`;
+    return `"${entry.anniversary.title}" on ${when} (${parts.join(", ")}) [id: ${entry.anniversary.id}]`;
 }
 
 function describeWish(item: WishlistItem): string {
-    return item.priceLabel ? `${item.title} (${item.priceLabel})` : item.title;
+    const price = item.priceLabel ? ` (${item.priceLabel})` : "";
+    return `${item.title}${price} [id: ${item.id}]`;
 }
 
 /**

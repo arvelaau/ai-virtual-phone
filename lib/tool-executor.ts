@@ -50,6 +50,18 @@ import {
 import type { NoteWallBoard, NoteWallComment, NoteWallNote, NoteWallSize } from "./notewall-types";
 import { findNoteWallPlacement, normalizeNoteWallSize } from "./notewall-utils";
 import { recordNoteWallCommentEvent, recordNoteWallNoteEvent } from "./notewall-memory";
+import {
+    addAnniversary,
+    addReflection,
+    addWishlistItem,
+    fulfillWishlistItem,
+} from "./couple-space-storage";
+import {
+    recordAnniversaryAddedEvent,
+    recordReflectionEvent,
+    recordWishlistAddedEvent,
+    recordWishlistFulfilledEvent,
+} from "./couple-space-memory";
 import { getMusicControlBridge } from "./music-control-bridge";
 import { loadAllTracks, type MusicTrack } from "./music-storage";
 import {
@@ -750,6 +762,7 @@ function normalizeInternalToolResult(result: ToolResult): ToolResult {
 }
 
 async function executeInternalTool(call: ToolCall, context?: ToolExecutionContext): Promise<ToolResult | null> {
+    if (isCoupleSpaceToolName(call.name)) return executeCoupleSpaceTool(call, context);
     if (isNoteWallToolName(call.name)) return executeNoteWallTool(call, context);
     if (isMusicControlToolName(call.name)) return executeMusicControlTool(call, context);
     if (isCalendarToolName(call.name)) return executeCalendarTool(call, context);
@@ -773,6 +786,119 @@ async function executeInternalTool(call: ToolCall, context?: ToolExecutionContex
     }
 
     return executeMemoryWriteTool(call.args, capability, context);
+}
+
+// ── Couple Space ──
+// These make the space genuinely two-way: the character writes reflections, wishes and
+// anniversaries of its own rather than only reading what the user put there. Each writes
+// through the same storage API the UI uses, so records get real ids and the projection
+// recorder runs identically for both authors.
+function isCoupleSpaceToolName(name: string): boolean {
+    return name === "AddReflection"
+        || name === "AddWishlistItem"
+        || name === "FulfillWish"
+        || name === "AddAnniversary";
+}
+
+function coupleSpaceFailure(name: string, error: string, notice: string): ToolResult {
+    return { name, success: false, error, continueConversation: false, persistToHistory: false, userNotice: notice };
+}
+
+async function executeCoupleSpaceTool(call: ToolCall, context?: ToolExecutionContext): Promise<ToolResult> {
+    const characterId = context?.characterId ?? "";
+    if (!characterId) {
+        return coupleSpaceFailure(call.name, "no character in context", "Couple Space is not available here");
+    }
+    const character = getCurrentCharacter(characterId);
+    const args = call.args ?? {};
+
+    try {
+        switch (call.name) {
+            case "AddReflection": {
+                const body = cleanToolMultiline(args.body ?? args.content ?? args.text, 4000);
+                if (!body) return coupleSpaceFailure(call.name, "missing body", "The reflection was empty, so nothing was saved");
+                const reflection = addReflection(characterId, {
+                    body,
+                    title: cleanToolString(args.title ?? args.heading, 120),
+                    author: "character",
+                    relatedAnniversaryId: cleanToolString(args.relatedAnniversaryId ?? args.anniversaryId, 120),
+                });
+                if (!reflection) return coupleSpaceFailure(call.name, "could not save the reflection", "Could not save the reflection");
+                recordReflectionEvent({ characterId, characterName: character.name, reflection });
+                return {
+                    name: call.name,
+                    success: true,
+                    data: `reflection saved: id=${reflection.id}`,
+                    continueConversation: false,
+                    persistToHistory: false,
+                    userNotice: "Added a reflection to Couple Space",
+                };
+            }
+            case "AddWishlistItem": {
+                const title = cleanToolString(args.title ?? args.name ?? args.item, 160);
+                if (!title) return coupleSpaceFailure(call.name, "missing title", "The wish had no title, so nothing was added");
+                const item = addWishlistItem(characterId, {
+                    title,
+                    note: cleanToolString(args.note ?? args.detail, 500),
+                    priceLabel: cleanToolString(args.priceLabel ?? args.price, 80),
+                    wantedBy: "character",
+                });
+                if (!item) return coupleSpaceFailure(call.name, "could not add the wish", "Could not add the wish");
+                recordWishlistAddedEvent({ characterId, characterName: character.name, item });
+                return {
+                    name: call.name,
+                    success: true,
+                    data: `wish added: id=${item.id}`,
+                    continueConversation: false,
+                    persistToHistory: false,
+                    userNotice: "Added to the Couple Space wishlist",
+                };
+            }
+            case "FulfillWish": {
+                const wishId = cleanToolString(args.wishId ?? args.id ?? args.wish_id, 120);
+                if (!wishId) return coupleSpaceFailure(call.name, "missing wishId", "No wish id was given");
+                const updated = fulfillWishlistItem(characterId, wishId);
+                // A wrong id is the most likely mistake here, so say so rather than failing
+                // silently -- the model can re-read the ids from the Couple Space block.
+                if (!updated) return coupleSpaceFailure(call.name, `no wish with id ${wishId}`, "That wish was not found");
+                recordWishlistFulfilledEvent({ characterId, item: updated });
+                return {
+                    name: call.name,
+                    success: true,
+                    data: `wish fulfilled: ${updated.title}`,
+                    continueConversation: false,
+                    persistToHistory: false,
+                    userNotice: `Marked "${updated.title}" as fulfilled`,
+                };
+            }
+            case "AddAnniversary": {
+                const title = cleanToolString(args.title ?? args.name, 120);
+                const date = cleanToolString(args.date ?? args.day, 40);
+                if (!title || !date) return coupleSpaceFailure(call.name, "missing title or date", "An anniversary needs a title and a date");
+                const anniversary = addAnniversary(characterId, {
+                    title,
+                    date,
+                    recurring: args.recurring === undefined ? true : boolArg(args.recurring),
+                    note: cleanToolString(args.note ?? args.detail, 500),
+                });
+                if (!anniversary) return coupleSpaceFailure(call.name, "invalid date, expected YYYY-MM-DD", "The date was not in YYYY-MM-DD form");
+                recordAnniversaryAddedEvent({ characterId, anniversary });
+                return {
+                    name: call.name,
+                    success: true,
+                    data: `anniversary saved: id=${anniversary.id}`,
+                    continueConversation: false,
+                    persistToHistory: false,
+                    userNotice: `Saved "${anniversary.title}" to Couple Space`,
+                };
+            }
+        }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return coupleSpaceFailure(call.name, message, `${call.name} failed: ${message}`);
+    }
+
+    return coupleSpaceFailure(call.name, "unknown Couple Space action", "Unknown Couple Space action");
 }
 
 function isNoteWallToolName(name: string): boolean {
