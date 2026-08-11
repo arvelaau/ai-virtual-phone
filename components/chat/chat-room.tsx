@@ -5205,16 +5205,27 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     <button className="page-back-btn" type="button" onClick={onBack} aria-label="Back">
                         <ChevronLeft size={24} strokeWidth={1.5} />
                     </button>
-                    <span className="page-title" style={{ position: 'relative' }}>
-                        {offlineMode ? "Offline · " : ""}
-                        {session.isGroup
-                            ? `${session.groupName || "Group Chat"}(${(session.participantIds?.length || 0) + (session.isSpectator ? 0 : 1)})`
-                            : (session.alias || character?.name || `User_${session.contactId.slice(-4)}`)}
-                        {(isGenerating || isOfflineGenerating) && (
-                            <span className="chat-typing-indicator">
-                                {offlineMode ? "Generating offline" : "Typing"}<span className="chat-typing-dots"><i/><i/><i/></span>
+                    <span className="page-title chat-header-title-stack" style={{ position: 'relative' }}>
+                        {!session.isGroup && (
+                            <span className="chat-header-avatar" aria-hidden="true">
+                                {character?.avatar ? (
+                                    <img src={character.avatar} alt="" />
+                                ) : (
+                                    <ChatFallbackAvatar />
+                                )}
                             </span>
                         )}
+                        <span className="chat-header-title-text">
+                            {offlineMode ? "Offline · " : ""}
+                            {session.isGroup
+                                ? `${session.groupName || "Group Chat"}(${(session.participantIds?.length || 0) + (session.isSpectator ? 0 : 1)})`
+                                : (session.alias || character?.name || `User_${session.contactId.slice(-4)}`)}
+                            {(isGenerating || isOfflineGenerating) && (
+                                <span className="chat-typing-indicator">
+                                    {offlineMode ? "Generating offline" : "Typing"}<span className="chat-typing-dots"><i/><i/><i/></span>
+                                </span>
+                            )}
+                        </span>
                     </span>
                     <span className="page-header-right">
                         <button className="page-back-btn" type="button" onClick={() => setShowSettings(true)} aria-label="More">
