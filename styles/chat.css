@@ -6796,3 +6796,174 @@
 @keyframes diceAsideReveal {
   to { opacity: 1; }
 }
+
+/* =========================================================================
+   iMessage bubble style (app default)
+   -------------------------------------------------------------------------
+   Every value below is a custom property so it can be overridden from the
+   in-app custom CSS editor without knowing any of these selectors. Override
+   in :root, or scope to one session with .chat-room-main-pane.
+
+   Structure this relies on (see CLAUDE.md for the DOM audit):
+     .chat-msg-wrapper[data-role="user"|"assistant"]
+       [data-consecutive]  present on the 2nd..nth bubble of a run
+       [data-run-end]      present on the LAST bubble of a run (computed in
+                           chat-room.tsx — :has(+ ...) cannot see it, because
+                           each message sits in its own flex container)
+       > .chat-msg-avatar
+       > .chat-msg-content-wrap
+           > .chat-group-sender-name        (group chats only)
+           > .chat-bubble-role-user|assistant
+               > .chat-quote-message > .chat-quote-preview
+   ========================================================================= */
+:root {
+  /* Colours reuse the existing bubble hooks, so anything already themed on
+     --c-bubble-self / --c-bubble-other keeps working. */
+  --chat-bubble-radius: 18px;
+  --chat-bubble-padding: 9px 12px;
+  --chat-bubble-font-size: calc(13.5px * var(--app-text-scale, 1));
+  --chat-bubble-line-height: 1.4;
+  --chat-bubble-min-width: 45px;
+  --chat-bubble-min-height: 36px;
+
+  /* Spacing: tight inside a run, looser when the speaker changes. */
+  --chat-bubble-gap-consecutive: -6px;
+  --chat-bubble-gap-speaker: 10px;
+
+  /* Tail. Set --chat-bubble-tail-display: none to turn tails off entirely.
+     NOTE: these two images are hotlinked to a third-party host by choice —
+     this is a personal fork, and the dependency is accepted. Swap the two
+     URLs (or set them to none) to remove that dependency. */
+  --chat-bubble-tail-display: block;
+  --chat-bubble-tail-size: 30px;
+  --chat-bubble-tail-self: url('https://i.postimg.cc/P51NynBt/image.png');
+  --chat-bubble-tail-other: url('https://i.postimg.cc/25myXXD4/image.png');
+  --chat-bubble-tail-self-bottom: -18px;
+  --chat-bubble-tail-self-right: -2px;
+  --chat-bubble-tail-other-bottom: -13px;
+  --chat-bubble-tail-other-left: 3px;
+
+  /* Avatars stay visible by default; set to none to hide them. */
+  --chat-bubble-text-self: #ffffff;
+  --chat-bubble-text-other: #1c1c1e;
+
+  /* Avatars stay visible by default; set to none to hide them. */
+  --chat-avatar-display: flex;
+
+  /* Quote capsule floating above the bubble. */
+  --chat-quote-max-width: 200px;
+  --chat-quote-font-size: 11px;
+  --chat-quote-offset: 42px;
+  --chat-quote-border-self: #D1D1D6;
+  --chat-quote-border-other: var(--c-bubble-self);
+  --chat-quote-color-self: #8E8E93;
+  --chat-quote-color-other: #1a6fb5;
+}
+
+/* ── Bubble shape ──
+   Two classes deep so this beats Tailwind's .rounded-md on the element
+   itself (both are 0,1,0 — the extra class makes it 0,2,0) without having
+   to touch the JSX className. */
+.chat-msg-wrapper .chat-bubble-role-user,
+.chat-msg-wrapper .chat-bubble-role-assistant {
+  border-radius: var(--chat-bubble-radius);
+  padding: var(--chat-bubble-padding);
+  font-size: var(--chat-bubble-font-size);
+  line-height: var(--chat-bubble-line-height);
+  min-width: var(--chat-bubble-min-width);
+  min-height: var(--chat-bubble-min-height);
+  box-sizing: border-box;
+  border: none;
+  box-shadow: none;
+  position: relative;
+}
+
+.chat-msg-wrapper .chat-bubble-role-user { color: var(--chat-bubble-text-self); }
+.chat-msg-wrapper .chat-bubble-role-assistant { color: var(--chat-bubble-text-other); }
+
+/* The tail hangs outside the bubble box, so text bubbles cannot clip.
+   Media and HTML-preview bubbles keep their own overflow handling — the
+   media rule already sets overflow: visible !important on its own. */
+.chat-msg-wrapper .chat-bubble-role-user:not(.chat-bubble-media):not(.chat-bubble-html-preview),
+.chat-msg-wrapper .chat-bubble-role-assistant:not(.chat-bubble-media):not(.chat-bubble-html-preview) {
+  overflow: visible;
+}
+
+/* ── Run spacing ── */
+.chat-msg-wrapper[data-consecutive] {
+  margin-top: var(--chat-bubble-gap-consecutive);
+}
+.chat-msg-wrapper[data-run-end] {
+  margin-bottom: var(--chat-bubble-gap-speaker);
+}
+
+/* ── Avatar toggle ── */
+.chat-msg-wrapper .chat-msg-avatar {
+  display: var(--chat-avatar-display);
+}
+
+/* ── Tail ──
+   Rendered only on the last bubble of a run. Media bubbles are excluded:
+   they are transparent, so a tail would float unattached. */
+.chat-msg-wrapper[data-run-end] .chat-bubble-role-user:not(.chat-bubble-media):not(.chat-bubble-html-preview)::after,
+.chat-msg-wrapper[data-run-end] .chat-bubble-role-assistant:not(.chat-bubble-media):not(.chat-bubble-html-preview)::after {
+  content: '';
+  display: var(--chat-bubble-tail-display);
+  position: absolute;
+  width: var(--chat-bubble-tail-size);
+  height: var(--chat-bubble-tail-size);
+  pointer-events: none;
+  border: none;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  z-index: 5;
+}
+.chat-msg-wrapper[data-run-end] .chat-bubble-role-user:not(.chat-bubble-media):not(.chat-bubble-html-preview)::after {
+  background-image: var(--chat-bubble-tail-self);
+  bottom: var(--chat-bubble-tail-self-bottom);
+  right: var(--chat-bubble-tail-self-right);
+}
+.chat-msg-wrapper[data-run-end] .chat-bubble-role-assistant:not(.chat-bubble-media):not(.chat-bubble-html-preview)::after {
+  background-image: var(--chat-bubble-tail-other);
+  bottom: var(--chat-bubble-tail-other-bottom);
+  left: var(--chat-bubble-tail-other-left);
+}
+
+/* ── Quote capsule ──
+   Floats above the bubble instead of sitting inside it. Anchored to the
+   bubble rather than at a hardcoded x-offset, so it follows bubble width.
+   The upstream reference also hid sender names inside the quote; that is a
+   no-op here — .chat-quote-preview holds plain text with no name element. */
+.chat-msg-wrapper .chat-bubble-role-user:has(.chat-quote-preview),
+.chat-msg-wrapper .chat-bubble-role-assistant:has(.chat-quote-preview) {
+  margin-top: var(--chat-quote-offset);
+}
+.chat-msg-wrapper .chat-quote-preview {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  max-width: var(--chat-quote-max-width);
+  width: max-content;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  border-radius: 999px;
+  font-size: var(--chat-quote-font-size);
+  padding: 5px 12px;
+  margin: 0;
+  background-color: transparent;
+  z-index: 10;
+  box-sizing: border-box;
+}
+.chat-msg-wrapper .chat-bubble-role-user .chat-quote-preview {
+  right: 0;
+  left: auto;
+  border: 1.5px solid var(--chat-quote-border-self);
+  color: var(--chat-quote-color-self);
+}
+.chat-msg-wrapper .chat-bubble-role-assistant .chat-quote-preview {
+  left: 0;
+  right: auto;
+  border: 1.5px solid var(--chat-quote-border-other);
+  color: var(--chat-quote-color-other);
+}

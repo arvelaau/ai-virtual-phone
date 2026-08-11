@@ -5544,6 +5544,25 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     const showTime = shouldShowTimestamp(msg.createdAt, prevVisibleMsg?.createdAt ?? null);
                     const isConsecutive = prevVisibleMsg && !showTime && uiRole(prevVisibleMsg) === uiRole(msg) && uiRole(msg) !== "system"
                         && (!session.isGroup || prevVisibleMsg.senderCharacterId === msg.senderCharacterId);
+                    // Last bubble of a consecutive run — the iMessage tail hangs off this one only.
+                    // Derived by looking FORWARD with the same rule isConsecutive uses backwards:
+                    // a run ends when the next visible message would not continue it. The sibling
+                    // selector :has(+ ...) cannot express this, because every message sits in its
+                    // own flex container so bubbles are never siblings.
+                    let nextVisibleMsg: RenderChatMessage | null = null;
+                    for (let nextIdx = idx + 1; nextIdx < projectedMessages.length; nextIdx += 1) {
+                        if (voiceCallGroups.memberSet.has(nextIdx)) continue;
+                        const candidate = projectedMessages[nextIdx];
+                        if (isHiddenChatFlowMessage(candidate, getMessageDisplayContent(candidate))) continue;
+                        nextVisibleMsg = candidate;
+                        break;
+                    }
+                    const nextContinuesRun = !!nextVisibleMsg
+                        && !shouldShowTimestamp(nextVisibleMsg.createdAt, msg.createdAt)
+                        && uiRole(nextVisibleMsg) === uiRole(msg)
+                        && uiRole(msg) !== "system"
+                        && (!session.isGroup || nextVisibleMsg.senderCharacterId === msg.senderCharacterId);
+                    const isRunEnd = !nextContinuesRun;
                     // Hide bubbles with no visible content (empty text, stripped music tags, etc.)
                     const visibleContent = getChatFlowVisibleContent(renderMsg, bubbleDisplayContent);
                     const isVisualMedia = isChatVisualMedia(renderMsg);
@@ -5600,6 +5619,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                 data-role={uiRole(msg)}
                                 {...(isEmptyBubble && renderMsg.reasoningText ? { "data-reasoning-empty": "" } : {})}
                                 {...(isConsecutive ? { "data-consecutive": "" } : {})}
+                                {...(isRunEnd ? { "data-run-end": "" } : {})}
                                 {...(activeMessageId === msg.id ? { "data-active": "" } : {})}
                                 {...(highlightMessageId === msg.id ? { "data-highlight": "" } : {})}
                                 {...multiSelectWrapperProps}

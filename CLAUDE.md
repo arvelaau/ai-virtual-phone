@@ -1696,8 +1696,27 @@ Fixed by asserting the *actual* mechanism (E0a/E0b: the builder must not emit th
 
 **Generalises:** when a control changes nothing, the assertion is testing a redundant path, not the real one. Find what actually provides the guarantee and assert *that*. Two of this session's four controls were vacuous on first run (this one and 2c's `.every()`), both caught only by running them.
 
+## iMessage bubble style is now the APP DEFAULT (2026-08-11)
+Shipped in `styles/chat.css` (appended block), `styles/tokens.css`, `components/chat/chat-room.tsx`, `lib/css-examples.ts`. `tsc` exit 0, CSS braces balanced, 26/26 custom properties defined-and-used.
+
+**`.chat-app` overrides `:root` for bubble colours — this nearly shipped broken.** `tokens.css:255` opens a `.chat-app { … }` block that re-declares `--c-bubble-self` / `--c-bubble-other` at `:270-271`. Setting them only in `:root` (`:36,38`) has **no effect inside the chat app**. Both places now carry the iMessage values. Check for a scoped re-declaration before assuming a `:root` token is the effective one.
+
+**Tail-on-last-of-run is solved with `data-run-end`, computed in the TSX.** `:has(+ …)` cannot express it — every message sits in its own `div.flex.flex-col.gap-4`, so bubbles are never siblings, and the only sibling pair inside a container is the reasoning row + the real bubble (a false positive). The render loop already scans **backwards** for `prevVisibleMsg` to derive `isConsecutive`; `data-run-end` mirrors that **forwards** with the identical rule. `[data-consecutive]` = 2nd..nth of a run; `[data-run-end]` = last of a run.
+
+**`overflow: hidden` had to be relaxed** for the tail to hang outside the bubble — scoped to text bubbles via `:not(.chat-bubble-media):not(.chat-bubble-html-preview)`. This is consistent with what was already there: `[data-active]` sets `overflow: visible` (`chat.css:1013`) and `.chat-bubble-media` sets it `!important` (`:1373`).
+
+**Radius without touching the JSX**: bubbles get `rounded-md` from Tailwind in `chat-room.tsx`, same specificity (0,1,0) as a single class. Selectors are written `.chat-msg-wrapper .chat-bubble-role-user` (0,2,0) so `--chat-bubble-radius` wins without editing the className.
+
+**Tail images are HOTLINKED to `i.postimg.cc` by explicit user decision** (2026-08-11). I flagged the third-party dependency; the user reaffirmed — personal self-deploy fork, risk accepted. They are `--chat-bubble-tail-self` / `--chat-bubble-tail-other`, so swapping them for local assets later is a two-line change with no selector edits.
+
+**Skipped as a verified no-op**: the reference CSS hides sender names inside the quote (`[class*="name"]`, `strong`, `b`). `.chat-quote-preview` holds plain text with no name element, and `quotePreview` is built as `quotingMessage.content.slice(0, 50)` — the name is never in there.
+
+26 custom properties cover colour, radius, padding, font-size, min-width/height, run spacing, tail (display/size/images/offsets), avatar visibility (`--chat-avatar-display`, avatars ON by default), and the quote capsule. All documented in `css-examples.ts`.
+
+**Not verified by me: the visual result.** Fixtures cannot check rendering, and the tail offsets came from the reference CSS written against a different DOM — the two `bottom`/`right` values are the most likely thing to need nudging on a real screen.
+
 ## Still open / not yet done
-- **Couple Space follow-ups**: mini-games Route A (next).
+- **Couple Space follow-ups**: mini-games Route A (next), then Track 2 imports.
 - **Track 2 game imports** (deferred wholesale during Couple Space): pocket-fishing, cute-pet, executive-diary.
 - **`[系统指令]` / `[事件 …]` short-term timeline labels** (found 2026-08-06 during the offline/online research). Sites: `lib/short-term-assembler.ts:222,313`, `lib/chat-storage.ts:286,318`, `lib/chat-offline-storage.ts:178`. **These are read by the model** — they label system-instruction and offline-event entries inside the short-term event stream — so treat them as protocol, not as UI text: **make every consumer bilingual first (accept the legacy Chinese label AND the new English one), then flip the producers**, same dual-recognition pattern as the rest of this migration. Do not translate them in place; grep for every producer *and* every consumer of each label before touching either side (the `tool-executor` / `FETCH_RESULT_HEADER` / `prompt-sanitizer` regressions were all "one side moved, one consumer left behind").
 - `lib/macro-engine.ts:247` + `lib/chat-time.ts:1` Chinese weekday/date formatting reaching every chat prompt (found 2026-08-05, see above).
