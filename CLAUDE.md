@@ -1541,6 +1541,41 @@ Also checked rather than assumed: the calendar `location` example now teaches `n
 - **Splice with a tight, unique END anchor.** An end anchor set too far ahead swallowed a `TOOLBOX_REST_TOOL_PROPERTIES` const sitting between the two anchors. `tsc` caught it at once, but only because the const was referenced — a swallowed *string* block would have been silent.
 - **Never chain a destructive checkout after a stash.** `git stash pop && git checkout <file>` discarded the three pieces the pop had just restored. Redone from the scratchpad blocks; keeping each translated block as a plain text file is what made recovery cheap.
 
+## COUPLE SPACE (started 2026-08-11) — feature work, not translation
+Priority set by the user: **Gift provenance → Couple Space shell → Reflection diary.** Mini-games (Route A) and gift resell+reaction come after. Confirmed decisions: **per-character** scope, and **no LLM calls of its own for the shell** (the reflection diary may change that in Stage 3; deferred).
+
+Track 2 (the 3 remaining game imports — pocket-fishing, cute-pet, executive-diary) is **deferred wholesale** until Couple Space is done, to avoid fragmenting the work.
+
+### Design facts established by the audit (re-derive from here, don't re-audit)
+- **The calendar structurally cannot hold anniversaries.** `CalendarWeekPlan` is week-scoped (`weekStart` + items pinned to a literal `YYYY-MM-DD`); there is **no recurrence field anywhere in `calendar-types.ts`**. So "Couple Space owns its own anniversary store, calendar is read-only display" is forced, not a preference.
+- **Projections reach long-term memory for free.** `memory-summarizer.ts:19,85` imports `loadNativeTimeline` + `formatTimelineForSummarization`, so anything registered as a projection in `loadNativeTimeline` flows into both short-term context *and* the long-term summarization pipeline. One projection module buys both.
+- **Two layers are needed, because the data is two shapes.** Standing state (anniversary dates, current wishlist) must be a **macro** — `MacroContext` field + resolver in `macro-engine.ts`, populated in `llm-prompt-assembler.ts` at **4 sites** (`:718`, `:975`, `:2062`, `:2204` — 1:1 and group), consumed by a preset entry, which **requires a `BUILTIN_PRESET_VERSION` bump or it is dead code**. Use the `\x00TRIM\x00` sentinel so the block vanishes when empty. Episodic events (added to wishlist, gift given) are the **projection**.
+- **8 registration points for a new app**: `desktop-config.ts` (IconId union + ICONS + PAGE_N_DEFAULT), `desktop-shell.tsx` (import + `activeApp` lazy mount), `icon-glyph.tsx`, `short-term-assembler.ts` (`sourceApp` union + `sourceDetail` union + `FEATURE_TAG` + the `loadNativeTimeline` block), `macro-engine.ts`, `llm-prompt-assembler.ts`, `builtin-preset.ts`, version bump. Binding Manager registration (`CONTENT_APP_LABELS`, `content-tag-utils.ts`) is only needed if the app makes its own LLM calls — the shell does not.
+- Note the projection `label:` values in `loadNativeTimeline` are **still Chinese** (`便签墙`, `小红书`, `查手机`). Untranslated leftovers, unrelated to this work, but don't copy the pattern for new entries.
+
+### Stage 1 — gift provenance: **DONE** (2026-08-11)
+`lib/gift-provenance.ts` + `_fx-gift-provenance.mjs` (43/43) + `_fx-dexie-stub.mjs`. `tsc` exit 0.
+
+**The finding that shrank the job: ~90% of the data was already captured.** `sendShoppingGiftMessage` (`chat-room.tsx:3412`) already writes ten provenance fields into `mediaData` (`shoppingGiftId`, `giftOrderId`, `giftItemId`, `giftMerchantLabel`, `giftPriceLabel`, `giftPreviewIcon`, `giftTone`, `giftDeliveredAt`, `giftSentAt`, `senderName`, plus `recipientId`/`recipientName` in groups). What was missing was an **index** — `loadSentShoppingGiftIds` (`shopping-gift-utils.ts:55`) walks every session x every message and keeps only a `Set` of ids, discarding recipient, date and price. So Stage 1 is a projection over existing data, not a new capture schema.
+
+**Deliberately ADDITIVE — nothing existing was modified.** `loadSentShoppingGiftIds` is untouched and still scan-based, because it is what stops an already-sent gift being offered again; swapping it for an index read would make every historical gift re-giftable the moment the index was empty. **Messages stay the source of truth for "was this sent"; the index is the source of truth for "what is our gift history".** Fixture C1/C2 pin that the old scan still behaves exactly as before.
+
+**Append-only by design**: syncing never drops a record just because its message was deleted — a gift given stays given even if the chat is cleared. That is the product guarantee B19/B20 exist to protect.
+
+Also records **character→user** gifts (AI-sent `mediaType: "gift"` bubbles, which have no `shoppingGiftId`) keyed as `msg:<messageId>`, so gift history is two-directional without a later migration.
+
+Not hooked into the send path on purpose: `sendRichMessage` returns a boolean, not the message id, so there is nothing to record at that moment. `syncGiftProvenanceFromMessages()` is idempotent and cheap — Stage 2 calls it when Couple Space opens. Only cost is a gift whose message is deleted *before* the first ever sync.
+
+**Two bugs caught in my own code before it ran:**
+1. `cleanText` initially did `.replace(/\s+/g, "")` — a blanket whitespace strip. Invisible in Chinese, but it turns "Blue Ceramic Mug" into "BlueCeramicMug". **Exact instance of the Chinese-sized-limit bug class documented above.** Fixture A5 is the permanent guard.
+2. The NUL-stripping regex was written as a **literal NUL byte embedded in the source** (`cat -A` shows `^@`), not the escape `\u0000`. Behaviour was right, encoding was fragile. Verify with `s.split(String.fromCharCode(0)).length - 1 === 0`.
+
+**Non-vacuity was run, not asserted.** Control 1 (restore the whitespace strip) → **40/43**, failing exactly A5/B13/B20. Control 2 (rebuild instead of merge) → **39/43**, failing exactly B15/B16/B19/B20.
+
+**`_fx-dexie-stub.mjs` is now permanent** (~90 lines: put/bulkPut/get/toArray/delete/bulkDelete/clear/where().equals()/anyOf). Aliasing `dexie` to it via jiti lets a fixture drive the **real** `chat-storage`, `character-storage` and `kv-db` instead of copies of their logic. Reusable by any future storage fixture; the earlier `_fx-annots.mjs` had to invent the same thing and it was deleted.
+
+**Process reminder, hit twice this session:** `node -e "…"` through bash mangles regex escapes — a control that silently does not apply looks exactly like a passing test. Both times the fix was a **script file** written with the Write tool. Always verify the edit landed (`sed -n`) before believing a non-vacuity result.
+
 ## Still open / not yet done
 - **`[系统指令]` / `[事件 …]` short-term timeline labels** (found 2026-08-06 during the offline/online research). Sites: `lib/short-term-assembler.ts:222,313`, `lib/chat-storage.ts:286,318`, `lib/chat-offline-storage.ts:178`. **These are read by the model** — they label system-instruction and offline-event entries inside the short-term event stream — so treat them as protocol, not as UI text: **make every consumer bilingual first (accept the legacy Chinese label AND the new English one), then flip the producers**, same dual-recognition pattern as the rest of this migration. Do not translate them in place; grep for every producer *and* every consumer of each label before touching either side (the `tool-executor` / `FETCH_RESULT_HEADER` / `prompt-sanitizer` regressions were all "one side moved, one consumer left behind").
 - `lib/macro-engine.ts:247` + `lib/chat-time.ts:1` Chinese weekday/date formatting reaching every chat prompt (found 2026-08-05, see above).
