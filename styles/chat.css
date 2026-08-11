@@ -50,6 +50,49 @@
   overflow: hidden;
   --chat-bottom-reserve: 120px;
 }
+/* Taller header to fit the iMessage-style centered avatar above the name.
+   Only applied when .chat-header-avatar is actually rendered (1:1 chats —
+   group chats skip it in the JSX and keep the normal single-line header).
+   This has to live on .page-shell, not on .page-header or .page-body
+   individually: --page-header-content-height is read by .page-body's own
+   padding-top, and .page-header / .page-body are siblings, so the variable
+   has to be set on their shared ancestor to reach both. */
+.chat-app .chat-room-wrapper.page-shell:has(.chat-header-avatar) {
+  --page-header-content-height: 84px;
+}
+/* Centered avatar-over-name header, like native iMessage's conversation
+   title. .page-title is the grid's centered 1fr column already (see
+   .page-header-content in components.css); this just stacks avatar above
+   text inside that same cell instead of changing the grid itself. */
+.chat-header-title-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding-top: 4px;
+}
+.chat-header-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--c-input);
+}
+.chat-header-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.chat-header-title-text {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .chat-app .chat-room-wrapper .page-header {
   position: absolute;
@@ -6814,50 +6857,110 @@
        > .chat-msg-content-wrap
            > .chat-group-sender-name        (group chats only)
            > .chat-bubble-role-user|assistant
-               > .chat-quote-message > .chat-quote-preview
+               > .chat-quote-message (quote messages only)
+                   > .chat-quote-settings (.-user or .-other modifier)
+                       > .chat-quote-color
+                       > .chat-quote-body
+                           > .chat-quote-name
+                           > .chat-quote-text
+                   > (the actual reply text, below the strip)
    ========================================================================= */
 :root {
-  /* Colours reuse the existing bubble hooks, so anything already themed on
-     --c-bubble-self / --c-bubble-other keeps working. */
-  --chat-bubble-radius: 18px;
-  --chat-bubble-padding: 9px 12px;
-  --chat-bubble-font-size: calc(13.5px * var(--app-text-scale, 1));
-  --chat-bubble-line-height: 1.4;
-  --chat-bubble-min-width: 45px;
-  --chat-bubble-min-height: 36px;
+  /* ═══ Bubble shape/color/font — ported straight from the user's actual
+     Echoes WhatsApp export (Echoes-v3-whatsapp-v21.html, #echoes-v3-tweaks
+     block), same source as the quote strip above. Local vars here
+     (--chat-bubble-bg-self/-other) instead of overwriting the global
+     --c-bubble-self/-other tokens, since those are reused elsewhere in the
+     app (context-menu highlight, unread dot, etc.) that this redesign
+     isn't meant to touch. */
+  --chat-bubble-radius: 12px;
+  --chat-bubble-padding: 5.5px 10px 6.5px 10px;
+  --chat-bubble-border: 0.66px solid rgba(0, 0, 0, 0.06);
+  --chat-bubble-font-size: calc(17px * var(--app-text-scale, 1));
+  --chat-bubble-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, sans-serif;
+  --chat-bubble-font-weight: 400;
+  --chat-bubble-letter-spacing: -0.221px;
+  --chat-bubble-line-height: calc(21px * var(--app-text-scale, 1));
+  --chat-bubble-min-width: 88px;
+  --chat-bubble-min-height: 0;
+  /* Reference hardcodes an absolute 293px cap (not a % of row width) —
+     kept literal since the phone frame itself is a fixed 390px
+     (--phone-screen-width in tokens.css), so this maps 1:1. */
+  --chat-bubble-max-width: 293px;
 
-  /* Spacing: tight inside a run, looser when the speaker changes. */
-  --chat-bubble-gap-consecutive: -6px;
+  /* Spacing: tight inside a run, looser when the speaker changes.
+     NOTE: each message sits in its own "flex flex-col gap-4" wrapper, and
+     those wrappers are themselves laid out inside .page-body's "gap-4" —
+     that's a Tailwind 16px gap the JSX applies BEFORE this margin ever runs.
+     So --chat-bubble-gap-consecutive isn't the finished spacing, it's what
+     gets subtracted from that fixed 16px: net gap = 16px + this value.
+     -12.7px is the reference's own consecutive-run margin-top value. */
+  --chat-bubble-gap-consecutive: -12.7px;
   --chat-bubble-gap-speaker: 10px;
 
-  /* Tail. Set --chat-bubble-tail-display: none to turn tails off entirely.
-     NOTE: these two images are hotlinked to a third-party host by choice —
-     this is a personal fork, and the dependency is accepted. Swap the two
-     URLs (or set them to none) to remove that dependency. */
+  /* Tail — reference draws this as a CSS mask (an inline SVG data URI)
+     rather than a bitmap, so "background: inherit" through the mask makes
+     it automatically match whichever bubble color it's attached to. No
+     more hotlinked PNGs. Width/height are NOT equal (15x19), so they're
+     split into two vars instead of one --tail-size like before. */
   --chat-bubble-tail-display: block;
-  --chat-bubble-tail-size: 30px;
-  --chat-bubble-tail-self: url('https://i.postimg.cc/P51NynBt/image.png');
-  --chat-bubble-tail-other: url('https://i.postimg.cc/25myXXD4/image.png');
-  --chat-bubble-tail-self-bottom: -18px;
-  --chat-bubble-tail-self-right: -2px;
-  --chat-bubble-tail-other-bottom: -13px;
-  --chat-bubble-tail-other-left: 3px;
+  --chat-bubble-tail-width: 15px;
+  --chat-bubble-tail-height: 19px;
+  --chat-bubble-tail-self-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2215%22%20height%3D%2219%22%20viewBox%3D%220%200%2015%2019%22%20fill%3D%22none%22%3E%3Cpath%20d%3D%22M7.5%204L7.5%200H0V14C3.65938%2017.2528%2010.6252%2017.8604%2013.1%2017.9739C13.4071%2017.988%2013.5646%2017.6021%2013.3479%2017.3841C11.7002%2015.727%207.5%2010.8328%207.5%204Z%22%20fill%3D%22black%22%2F%3E%3C%2Fsvg%3E");
+  --chat-bubble-tail-other-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2215%22%20height%3D%2219%22%20viewBox%3D%220%200%2015%2019%22%20fill%3D%22none%22%3E%3Cpath%20d%3D%22M7.5%204L7.5%200H15V14C11.3406%2017.2528%204.37479%2017.8604%201.90001%2017.9739C1.59291%2017.988%201.43536%2017.6021%201.65211%2017.3841C3.2998%2015.727%207.5%2010.8328%207.5%204Z%22%20fill%3D%22black%22%2F%3E%3C%2Fsvg%3E");
+  --chat-bubble-tail-self-bottom: 0px;
+  --chat-bubble-tail-self-right: -7.5px;
+  --chat-bubble-tail-other-bottom: 0px;
+  --chat-bubble-tail-other-left: -7.5px;
 
-  /* Avatars stay visible by default; set to none to hide them. */
-  --chat-bubble-text-self: #ffffff;
-  --chat-bubble-text-other: #1c1c1e;
+  /* Bubble fill + text color — WhatsApp green for the user, white for the
+     other side, both with the same near-black text (unlike the old
+     white-on-blue self bubble). */
+  --chat-bubble-bg-self: #D0FECF;
+  --chat-bubble-bg-other: #FFFFFF;
+  --chat-bubble-text-self: #0A0A0A;
+  --chat-bubble-text-other: #0A0A0A;
 
-  /* Avatars stay visible by default; set to none to hide them. */
-  --chat-avatar-display: flex;
+  /* Off by default now that the conversation header carries the avatar
+     (see .chat-header-avatar) — no more per-bubble avatars at all, not
+     just on consecutive ones. Set back to flex to restore them. */
+  --chat-avatar-display: none;
 
-  /* Quote capsule floating above the bubble. */
-  --chat-quote-max-width: 200px;
-  --chat-quote-font-size: 11px;
-  --chat-quote-offset: 42px;
-  --chat-quote-border-self: #D1D1D6;
-  --chat-quote-border-other: var(--c-bubble-self);
-  --chat-quote-color-self: #8E8E93;
-  --chat-quote-color-other: #1a6fb5;
+  /* ═══ Quote strip — REBUILT AGAIN, this time off the user's actual
+     Echoes WhatsApp-style export (Echoes-v3-whatsapp-v21.html), not a
+     hand-measured Figma reference. This is a completely different
+     approach from every earlier round: no floating pill, no connector
+     graphic, no position:absolute at all. It's a plain strip that lives
+     INSIDE the bubble, stacked above the reply text — exactly what
+     .chat-quote-message/.chat-quote-preview originally were before any of
+     this got touched, just restyled to match the reference's exact
+     numbers. Class names below are ported straight from the reference's
+     own CSS (.echoes-quote-settings/-color/-body/-name/-text), so this
+     doc's comments can be checked directly against that file. */
+  --chat-quote-bg: rgba(10, 10, 10, 0.04);
+  --chat-quote-radius: 8px;
+  --chat-quote-bar-width: 4px;
+  --chat-quote-name-size: 16px;
+  --chat-quote-name-letter-spacing: -0.16px;
+  --chat-quote-name-line-height: 19px;
+  --chat-quote-text-size: 14.4px;
+  --chat-quote-text-line-height: 16px;
+  --chat-quote-text-color: #232626;
+  /* Reference hardcodes one accent color (#D42A66) since it's themed per
+     real contact there; we don't have per-character theme colors wired up
+     here, so this reuses the app's existing self/other bubble colors
+     instead — blue when quoting the user, gray when quoting the
+     character, matching every other quote-related color choice earlier
+     in this file. */
+  --chat-quote-accent-user: var(--c-bubble-self);
+  --chat-quote-accent-other: #8E8E93;
+}
+
+/* ── Bubble column width ──
+   Same specificity trick as the radius rule below: two classes deep beats
+   the JSX's own single-class .max-w-[70%] (both 0,1,0 vs this 0,2,0). */
+.chat-msg-wrapper .chat-msg-content-wrap {
+  max-width: var(--chat-bubble-max-width);
 }
 
 /* ── Bubble shape ──
@@ -6869,17 +6972,20 @@
   border-radius: var(--chat-bubble-radius);
   padding: var(--chat-bubble-padding);
   font-size: var(--chat-bubble-font-size);
+  font-family: var(--chat-bubble-font-family);
+  font-weight: var(--chat-bubble-font-weight);
+  letter-spacing: var(--chat-bubble-letter-spacing);
   line-height: var(--chat-bubble-line-height);
   min-width: var(--chat-bubble-min-width);
   min-height: var(--chat-bubble-min-height);
   box-sizing: border-box;
-  border: none;
+  border: var(--chat-bubble-border);
   box-shadow: none;
   position: relative;
 }
 
-.chat-msg-wrapper .chat-bubble-role-user { color: var(--chat-bubble-text-self); }
-.chat-msg-wrapper .chat-bubble-role-assistant { color: var(--chat-bubble-text-other); }
+.chat-msg-wrapper .chat-bubble-role-user { color: var(--chat-bubble-text-self); background: var(--chat-bubble-bg-self); }
+.chat-msg-wrapper .chat-bubble-role-assistant { color: var(--chat-bubble-text-other); background: var(--chat-bubble-bg-other); }
 
 /* The tail hangs outside the bubble box, so text bubbles cannot clip.
    Media and HTML-preview bubbles keep their own overflow handling — the
@@ -6896,6 +7002,15 @@
 .chat-msg-wrapper[data-run-end] {
   margin-bottom: var(--chat-bubble-gap-speaker);
 }
+/* Repeat the avatar only on the last bubble of a run, matching the echoes
+   reference (.echoes-msg-user + .echoes-msg-user .echoes-avatar { display:
+   none }). visibility:hidden, not display:none, so the avatar column's
+   width stays reserved and the run doesn't reflow sideways. Override
+   --chat-avatar-consecutive-visibility: visible to restore per-bubble
+   avatars. */
+.chat-msg-wrapper[data-consecutive] .chat-msg-avatar {
+  visibility: var(--chat-avatar-consecutive-visibility, hidden);
+}
 
 /* ── Avatar toggle ── */
 .chat-msg-wrapper .chat-msg-avatar {
@@ -6903,6 +7018,9 @@
 }
 
 /* ── Tail ──
+   Reference draws this as a CSS mask, not a bitmap: "background: inherit"
+   through an SVG mask means the tail is always exactly the bubble's own
+   fill color, self or other, with zero extra color vars to keep in sync.
    Rendered only on the last bubble of a run. Media bubbles are excluded:
    they are transparent, so a tail would float unattached. */
 .chat-msg-wrapper[data-run-end] .chat-bubble-role-user:not(.chat-bubble-media):not(.chat-bubble-html-preview)::after,
@@ -6910,60 +7028,139 @@
   content: '';
   display: var(--chat-bubble-tail-display);
   position: absolute;
-  width: var(--chat-bubble-tail-size);
-  height: var(--chat-bubble-tail-size);
+  width: var(--chat-bubble-tail-width);
+  height: var(--chat-bubble-tail-height);
   pointer-events: none;
   border: none;
-  background-size: contain;
-  background-repeat: no-repeat;
-  background-position: center;
-  z-index: 5;
+  background: inherit;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  z-index: 1;
 }
 .chat-msg-wrapper[data-run-end] .chat-bubble-role-user:not(.chat-bubble-media):not(.chat-bubble-html-preview)::after {
-  background-image: var(--chat-bubble-tail-self);
+  -webkit-mask-image: var(--chat-bubble-tail-self-mask);
+  mask-image: var(--chat-bubble-tail-self-mask);
   bottom: var(--chat-bubble-tail-self-bottom);
   right: var(--chat-bubble-tail-self-right);
 }
 .chat-msg-wrapper[data-run-end] .chat-bubble-role-assistant:not(.chat-bubble-media):not(.chat-bubble-html-preview)::after {
-  background-image: var(--chat-bubble-tail-other);
+  -webkit-mask-image: var(--chat-bubble-tail-other-mask);
+  mask-image: var(--chat-bubble-tail-other-mask);
   bottom: var(--chat-bubble-tail-other-bottom);
   left: var(--chat-bubble-tail-other-left);
 }
 
-/* ── Quote capsule ──
-   Floats above the bubble instead of sitting inside it. Anchored to the
-   bubble rather than at a hardcoded x-offset, so it follows bubble width.
-   The upstream reference also hid sender names inside the quote; that is a
-   no-op here — .chat-quote-preview holds plain text with no name element. */
-.chat-msg-wrapper .chat-bubble-role-user:has(.chat-quote-preview),
-.chat-msg-wrapper .chat-bubble-role-assistant:has(.chat-quote-preview) {
-  margin-top: var(--chat-quote-offset);
-}
-.chat-msg-wrapper .chat-quote-preview {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  max-width: var(--chat-quote-max-width);
-  width: max-content;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+/* ── Quote strip (WhatsApp reference — .chat-quote-message wraps this +
+   the reply text, both inside the bubble; see message-bubble.tsx) ── */
+.chat-quote-settings {
+  display: flex;
+  align-items: flex-start;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+  background-color: var(--chat-quote-bg);
+  border-radius: var(--chat-quote-radius);
   overflow: hidden;
-  border-radius: 999px;
-  font-size: var(--chat-quote-font-size);
-  padding: 5px 12px;
-  margin: 0;
-  background-color: transparent;
-  z-index: 10;
+  margin-bottom: 4px;
   box-sizing: border-box;
 }
-.chat-msg-wrapper .chat-bubble-role-user .chat-quote-preview {
-  right: 0;
-  left: auto;
-  border: 1.5px solid var(--chat-quote-border-self);
-  color: var(--chat-quote-color-self);
+.chat-quote-color {
+  align-self: stretch;
+  width: var(--chat-quote-bar-width);
+  flex-shrink: 0;
 }
-.chat-msg-wrapper .chat-bubble-role-assistant .chat-quote-preview {
-  left: 0;
-  right: auto;
-  border: 1.5px solid var(--chat-quote-border-other);
-  color: var(--chat-quote-color-other);
+.chat-quote-settings-user .chat-quote-color { background-color: var(--chat-quote-accent-user); }
+.chat-quote-settings-other .chat-quote-color { background-color: var(--chat-quote-accent-other); }
+.chat-quote-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 9.5px 9px 10.5px;
+  flex: 1;
+  min-width: 0;
+}
+.chat-quote-name {
+  align-self: stretch;
+  font-family: var(--chat-bubble-font-family);
+  font-weight: 600;
+  font-size: var(--chat-quote-name-size);
+  letter-spacing: var(--chat-quote-name-letter-spacing);
+  line-height: var(--chat-quote-name-line-height);
+}
+.chat-quote-settings-user .chat-quote-name { color: var(--chat-quote-accent-user); }
+.chat-quote-settings-other .chat-quote-name { color: var(--chat-quote-accent-other); }
+.chat-quote-text {
+  align-self: stretch;
+  font-family: var(--chat-bubble-font-family);
+  font-weight: 400;
+  font-size: var(--chat-quote-text-size);
+  letter-spacing: 0;
+  line-height: var(--chat-quote-text-line-height);
+  color: var(--chat-quote-text-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+/* ── Timestamp + read receipt ──
+   Ported from .echoes-timestamp/.echoes-timestamp-time/-check. Sits
+   absolutely inside the bubble (already position:relative from the shape
+   rule above), bottom-right.
+
+   The spacer: reference's own .echoes-msg-text is ONE flat div holding the
+   raw text directly — no block-level wrapper inside it — so its
+   float:right ::after merges into the SAME inline line as the text
+   automatically. Our text goes through ReactMarkdown, which wraps every
+   paragraph in its own block-level .chat-markdown-paragraph div; putting
+   the ::after on the outer .chat-markdown (the first attempt) landed it
+   AFTER that block box instead of inside its last line, so short messages
+   dropped the timestamp onto its own row instead of hugging it. Targeting
+   :last-child here is what actually reproduces the reference's behavior —
+   the spacer now lives inside the same paragraph as the trailing text. */
+.chat-msg-wrapper .chat-bubble-role-user .chat-markdown-paragraph:last-child::after,
+.chat-msg-wrapper .chat-bubble-role-assistant .chat-markdown-paragraph:last-child::after {
+  content: "";
+  display: inline-block;
+  float: right;
+  height: 21px;
+}
+.chat-msg-wrapper .chat-bubble-role-user .chat-markdown-paragraph:last-child::after { width: 60px; }
+.chat-msg-wrapper .chat-bubble-role-assistant .chat-markdown-paragraph:last-child::after { width: 43px; }
+
+.chat-msg-timestamp {
+  position: absolute;
+  right: 8px;
+  bottom: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 2;
+}
+.chat-msg-wrapper .chat-bubble-role-assistant .chat-msg-timestamp {
+  padding: 2px 3px 2px 0;
+}
+.chat-timestamp-time {
+  color: rgba(0, 0, 0, 0.5);
+  text-align: right;
+  font-family: var(--chat-bubble-font-family);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.6px;
+  white-space: nowrap;
+}
+/* Fill/opacity are set directly on the SVG's own path (fill="black"
+   fillOpacity="0.5"), copied verbatim from the reference — this class only
+   handles layout, not color, so nothing here fights those attributes. */
+.chat-timestamp-check {
+  flex-shrink: 0;
+  display: block;
 }
