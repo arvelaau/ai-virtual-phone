@@ -1576,6 +1576,21 @@ Not hooked into the send path on purpose: `sendRichMessage` returns a boolean, n
 
 **Process reminder, hit twice this session:** `node -e "…"` through bash mangles regex escapes — a control that silently does not apply looks exactly like a passing test. Both times the fix was a **script file** written with the Write tool. Always verify the edit landed (`sed -n`) before believing a non-vacuity result.
 
+### Stage 2a — Couple Space data layer: **DONE** (2026-08-11)
+`lib/couple-space-types.ts`, `lib/couple-space-storage.ts`, `lib/couple-space-memory.ts`, `_fx-couple-space.mjs` (61/61). `tsc` exit 0. No existing file touched yet — registration is 2c.
+
+**`couple-space-storage.ts` must never import `couple-space-memory.ts`.** Storage imports only `kv-db` + types, which keeps it a leaf. The memory module imports `formatChatTimestamp` from `llm-prompt-assembler`, so a storage→memory edge would close a cycle the moment 2b touches the assembler — the same class of bug as the `prompt-sanitizer` → `block-tags` extraction. The UI calls storage CRUD and the record functions side by side, which is exactly what note-wall does (`notewall-storage.ts` does not import `notewall-memory.ts` either).
+
+**2b will follow the `currentSchedule` pattern, not an import.** `llm-prompt-assembler` never computes the schedule itself — `engine.currentSchedule = input.currentSchedule ?? ""` at `:718`, `:975`, `:2062`, `:2204`, with the caller passing the value in. Couple Space standing state does the same, so the assembler gains no new import and no cycle is possible. (`llm-prompt-assembler` does reference `short-term-assembler`, but as `import type`, which is erased.)
+
+**Date math is a pure exported function** (`computeUpcomingAnniversary`) so rollover is testable without storage. All arithmetic runs on `Date.UTC` midnights built from Y/M/D parts — never `new Date(string)` mixed with `new Date(y,m,d)`, which are UTC and local respectively and shift "days until" by one either side of the date line. Recurring **29 February falls back to 28 February** in common years; 1 March would move the date into the wrong month.
+
+**Projection content carries its own `[Couple Space <time>]` head**, matching note-wall. `formatStoredPromptEventContent` (`prompt-time.ts:79`) only *rewrites* an existing `[label]` head and adds nothing when it is absent — so content without the head silently loses its timestamp on time-aware surfaces.
+
+Non-vacuity run, not asserted: removing the roll-forward branch gives **58/61** (A4/A5/A14); a blanket whitespace strip gives **57/61** (C2/C3/C9/C13).
+
+**The NUL trap recurred twice more** while writing this stage (once in a source file, once in CLAUDE.md itself). Writing ` ` in a file body can land as a raw 0x00 byte. `C:\Users\hp\...\scratchpad\denul.mjs` fixes a file in place; check any new file with `s.split(String.fromCharCode(0)).length - 1`.
+
 ## Still open / not yet done
 - **`[系统指令]` / `[事件 …]` short-term timeline labels** (found 2026-08-06 during the offline/online research). Sites: `lib/short-term-assembler.ts:222,313`, `lib/chat-storage.ts:286,318`, `lib/chat-offline-storage.ts:178`. **These are read by the model** — they label system-instruction and offline-event entries inside the short-term event stream — so treat them as protocol, not as UI text: **make every consumer bilingual first (accept the legacy Chinese label AND the new English one), then flip the producers**, same dual-recognition pattern as the rest of this migration. Do not translate them in place; grep for every producer *and* every consumer of each label before touching either side (the `tool-executor` / `FETCH_RESULT_HEADER` / `prompt-sanitizer` regressions were all "one side moved, one consumer left behind").
 - `lib/macro-engine.ts:247` + `lib/chat-time.ts:1` Chinese weekday/date formatting reaching every chat prompt (found 2026-08-05, see above).
