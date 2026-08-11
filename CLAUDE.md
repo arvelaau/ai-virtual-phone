@@ -1678,8 +1678,26 @@ Non-vacuity run: removing the router line gives **17/34** (B1-B17, C2); strippin
 
 **Fixture hardening worth copying:** the first control run produced only 4 failures then *crashed*, because the fixture dereferenced `reflections[0].body` on an empty array — later assertions never ran. Optional-chaining the index reads turned it into a clean 17/34. **A fixture that crashes under its own control is not reporting; guard every `[0]` deref.**
 
+### Gift resell + provenance-aware reaction: **DONE** (2026-08-11)
+`lib/gift-resell.ts` + `_fx-gift-resell.mjs` (31/31). `tsc` exit 0.
+
+**Scope is deliberately narrow: only a gift the CHARACTER gave the user can be resold.** A gift the user sent is no longer theirs, and an ungifted delivered order is just stock — neither carries the relationship weight the feature exists for. `canResellGift` enforces `direction === "character_to_user"` and not already resold.
+
+Provenance is what makes it work: the record already knows *who gave it and when*, so the event the character reads is specific — `The user resold "Blue Ceramic Mug", the gift Luna gave them on 1 May for 12.` — rather than "an object was sold". **No reaction is scripted**; the event flows through the Couple Space projection into short-term context and long-term memory, and the character responds in its own voice or not at all.
+
+Orchestration lives in `gift-resell.ts`, not `gift-provenance.ts`, so the provenance module stays a pure data layer with no wallet or memory dependency. Storage-only `markGiftResold` sits in provenance; the wallet credit (`creditWalletBalance`, category `"Resale"`) and the projection event are the orchestrator's job. Resale value is `GIFT_RESALE_RATE = 0.5` of the parsed price label, exported and shown in the button rather than hidden.
+
+A record is **marked, never removed** — what happened to a gift *is* provenance. The UI shows a `Resold` badge afterwards.
+
+#### 🚨 A vacuous test I only caught by running the control
+I added explicit `resoldAt`/`resaleAmount` carry-over lines to `mergeRecord` and wrote E1-E3 to guard them. **Removing those lines changed nothing — 29/29 still passed.** The reason: `buildGiftProvenanceRecord` **omits** absent keys rather than setting them to `undefined`, so `{...existing, ...incoming}` cannot clobber the fate. The carry-over is redundant today.
+
+Fixed by asserting the *actual* mechanism (E0a/E0b: the builder must not emit these keys), which does discriminate — making the builder emit `resoldAt: undefined` gives **26/31**. The carry-over lines stay as belt-and-braces, with a comment saying so.
+
+**Generalises:** when a control changes nothing, the assertion is testing a redundant path, not the real one. Find what actually provides the guarantee and assert *that*. Two of this session's four controls were vacuous on first run (this one and 2c's `.every()`), both caught only by running them.
+
 ## Still open / not yet done
-- **Couple Space follow-ups**: gift resell + character reaction (next), then mini-games Route A.
+- **Couple Space follow-ups**: mini-games Route A (next).
 - **Track 2 game imports** (deferred wholesale during Couple Space): pocket-fishing, cute-pet, executive-diary.
 - **`[系统指令]` / `[事件 …]` short-term timeline labels** (found 2026-08-06 during the offline/online research). Sites: `lib/short-term-assembler.ts:222,313`, `lib/chat-storage.ts:286,318`, `lib/chat-offline-storage.ts:178`. **These are read by the model** — they label system-instruction and offline-event entries inside the short-term event stream — so treat them as protocol, not as UI text: **make every consumer bilingual first (accept the legacy Chinese label AND the new English one), then flip the producers**, same dual-recognition pattern as the rest of this migration. Do not translate them in place; grep for every producer *and* every consumer of each label before touching either side (the `tool-executor` / `FETCH_RESULT_HEADER` / `prompt-sanitizer` regressions were all "one side moved, one consumer left behind").
 - `lib/macro-engine.ts:247` + `lib/chat-time.ts:1` Chinese weekday/date formatting reaching every chat prompt (found 2026-08-05, see above).

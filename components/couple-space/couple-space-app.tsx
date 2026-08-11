@@ -29,6 +29,7 @@ import {
     deleteCoupleSpaceProjectionEventsForReflection,
 } from "@/lib/couple-space-memory";
 import { loadGiftHistory, syncGiftProvenanceFromMessages } from "@/lib/gift-provenance";
+import { canResellGift, estimateResaleValue, resellGift } from "@/lib/gift-resell";
 import type { GiftProvenanceRecord } from "@/lib/gift-provenance";
 import type { ReflectionEntry, UpcomingAnniversary, WishlistItem } from "@/lib/couple-space-types";
 
@@ -132,6 +133,19 @@ export function CoupleSpaceApp({ onClose, onNotice }: Props) {
         if (!deleteWishlistItem(characterId, id)) return;
         deleteCoupleSpaceProjectionEventsForWish(characterId, id);
         bump();
+    };
+
+    const handleResell = (record: GiftProvenanceRecord) => {
+        const result = resellGift({ characterId, giftId: record.id, characterName });
+        if (!result.ok) {
+            onNotice?.(result.error ?? "Could not resell that gift");
+            return;
+        }
+        bump();
+        // A wallet failure still leaves the gift resold, so the notice has to say both.
+        onNotice?.(result.error
+            ? `Resold, but the wallet was not credited: ${result.error}`
+            : `Resold for ${result.amount}`);
     };
 
     const handleAddReflection = () => {
@@ -326,6 +340,13 @@ export function CoupleSpaceApp({ onClose, onNotice }: Props) {
                                             {record.priceLabel ? ` · ${record.priceLabel}` : ""}
                                         </div>
                                     </div>
+                                    {record.resoldAt ? (
+                                        <Badge>Resold</Badge>
+                                    ) : canResellGift(record) && estimateResaleValue(record.priceLabel) !== null ? (
+                                        <Button variant="ghost" onClick={() => handleResell(record)}>
+                                            {`Resell ~${estimateResaleValue(record.priceLabel)}`}
+                                        </Button>
+                                    ) : null}
                                     <span style={{ opacity: 0.6, fontSize: 12, whiteSpace: "nowrap" }}>
                                         {record.sentAt.slice(0, 10)}
                                     </span>

@@ -51,6 +51,11 @@ export type GiftProvenanceRecord = {
     /** ISO timestamp the underlying order was delivered. */
     deliveredAt?: string;
     senderName?: string;
+    // ── Fate ──
+    // A gift that was resold keeps its record: what happened to it IS provenance, so the
+    // row is marked rather than removed.
+    resoldAt?: string;
+    resaleAmount?: number;
 };
 
 type GiftProvenanceIndex = {
@@ -198,6 +203,13 @@ function mergeRecord(
         // real name with an empty one.
         counterpartName: incoming.counterpartName || existing.counterpartName,
         productName: incoming.productName || existing.productName,
+        // A rescan rebuilds the row from the chat message, which knows nothing about a
+        // later resale. Today the spread above already preserves the fate, because
+        // buildGiftProvenanceRecord OMITS these keys rather than setting them undefined --
+        // that omission is the real mechanism and the fixture asserts it. These two lines
+        // are belt-and-braces in case the builder ever starts emitting the keys.
+        resoldAt: existing.resoldAt ?? incoming.resoldAt,
+        resaleAmount: existing.resaleAmount ?? incoming.resaleAmount,
     };
 }
 
@@ -279,6 +291,24 @@ export function countGiftsExchanged(characterId: string): { given: number; recei
         given: records.filter(record => record.direction === "user_to_character").length,
         received: records.filter(record => record.direction === "character_to_user").length,
     };
+}
+
+/**
+ * Mark a gift as resold. Storage-only: crediting the wallet and telling the character are
+ * orchestrated in lib/gift-resell.ts, which keeps this module a pure data layer.
+ */
+export function markGiftResold(id: string, resaleAmount: number): GiftProvenanceRecord | null {
+    if (!id || typeof window === "undefined") return null;
+    const index = readIndex();
+    const existing = index.records.find(record => record.id === id);
+    if (!existing || existing.resoldAt) return null;
+    const updated: GiftProvenanceRecord = {
+        ...existing,
+        resoldAt: new Date().toISOString(),
+        resaleAmount: Math.max(0, Math.round(resaleAmount * 100) / 100),
+    };
+    writeIndex({ version: 1, records: index.records.map(record => (record.id === id ? updated : record)) });
+    return updated;
 }
 
 /** Test seam: drop the stored index. */

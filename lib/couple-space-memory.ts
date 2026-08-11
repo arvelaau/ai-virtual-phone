@@ -1,6 +1,7 @@
 import { kvGet, kvKeysWithPrefix, kvSet, registerDynamicPrefix } from "./kv-db";
 import { formatChatTimestamp } from "./llm-prompt-assembler";
 import type { Anniversary, ReflectionEntry, WishlistItem } from "./couple-space-types";
+import type { GiftProvenanceRecord } from "./gift-provenance";
 
 // Episodic half of the Couple Space memory wiring.
 //
@@ -177,6 +178,34 @@ export function deleteCoupleSpaceProjectionEventsForReflection(characterId: stri
     const events = loadEventsByKey(key);
     const next = events.filter(entry => entry.id !== `couple_space_reflection_${reflectionId}`);
     if (next.length !== events.length) saveEventsByKey(key, next);
+}
+
+/**
+ * The provenance-aware half of gift resell. The record already knows who gave the gift and
+ * when, so the event names both -- which is the whole point: the character reads that THIS
+ * gift, the one they chose, was sold, not that some object left the house.
+ *
+ * No reaction is scripted. The event reaches short-term context and long-term memory like
+ * any other, and the character responds in its own voice or not at all.
+ */
+export function recordGiftResoldEvent(input: {
+    characterId: string;
+    characterName: string;
+    record: GiftProvenanceRecord;
+    amount: number;
+}): void {
+    const timestamp = input.record.resoldAt || new Date().toISOString();
+    const characterName = cleanEventText(input.characterName, 80) || "them";
+    const product = cleanEventText(input.record.productName, 160) || "a gift";
+    const givenOn = input.record.sentAt ? formatChatTimestamp(input.record.sentAt) : "";
+    const whenText = givenOn ? ` on ${givenOn}` : "";
+    const amountText = Number.isFinite(input.amount) ? ` for ${input.amount}` : "";
+
+    upsertEvent(input.characterId, {
+        id: `couple_space_gift_resold_${input.record.id}`,
+        timestamp,
+        content: `${head(timestamp)} The user resold "${product}", the gift ${characterName} gave them${whenText}${amountText}.`,
+    });
 }
 
 export function deleteCoupleSpaceProjectionEventsForAnniversary(characterId: string, anniversaryId: string): void {
