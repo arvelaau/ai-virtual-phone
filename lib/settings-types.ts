@@ -272,6 +272,12 @@ export type RestToolConfig = {
     builtIn?: boolean;
     directFetch?: boolean;         // true = browser direct fetch, false = server proxy
     createdBy?: "user" | "ai";
+    /**
+     * Optional per-character scoping. Unset or empty means the tool is global and
+     * available to every character -- which is the default and the behaviour of every
+     * tool that predates this field. Filtering is strictly opt-in.
+     */
+    restrictedToCharacterIds?: string[];
     createdAt: number;
     updatedAt: number;
 };

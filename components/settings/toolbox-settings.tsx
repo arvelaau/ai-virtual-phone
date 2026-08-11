@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useContext } from "react";
 import type { ChangeEvent } from "react";
-import { Plus, Trash2, Search, Wrench, AlertCircle, MoreHorizontal, Upload, Download, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Trash2, Search, Wrench, AlertCircle, MoreHorizontal, Upload, Download, ChevronDown, ChevronRight, Check } from "lucide-react";
 import type {
     CompositeToolConfig,
     CompositeToolPackageConfig,
@@ -20,6 +20,7 @@ import {
     loadMcpServers, saveMcpServers, createMcpServer,
 } from "@/lib/tool-storage";
 import { CUSTOM_APPS_UPDATED_EVENT, loadInstalledCustomApps, saveInstalledCustomAppsAsync } from "@/lib/custom-app-storage";
+import { loadCharacters } from "@/lib/character-storage";
 import { loadCustomAppChatTools, type RegisteredCustomAppExtension } from "@/lib/custom-app-sdk-registry";
 import type { CustomAppToolDefinition } from "@/lib/custom-app-types";
 import { downloadFile } from "@/lib/download-utils";
@@ -1246,6 +1247,7 @@ export function ToolboxSettings() {
             {/* ── REST tool edit modal ── */}
             {editRest && (() => {
                 // Unified setter: updates draft or persisted storage
+                const scopeCharacters = loadCharacters();
                 const setR = (updates: Partial<RestToolConfig>) => {
                     if (isNewRest) setDraftRest(prev => prev ? { ...prev, ...updates } : prev);
                     else updateRestTool(editRest.id, updates);
@@ -1343,6 +1345,59 @@ export function ToolboxSettings() {
                                     <span className="menu-desc ml-1">When left empty, falls back to the old behavior: AI parameters and fixed parameters are merged and sent directly as the POST JSON.</span>
                                 </div>
                             )}
+                            <div className="flex flex-col gap-1">
+                                <label className="menu-desc ml-1">Available to</label>
+                                {/* Per-character scoping. "All characters" means the field stays
+                                    unset, which is how every pre-existing tool behaves. Reuses the
+                                    binding-sheet option styling from Binding Manager. */}
+                                <div className="binding-sheet-options">
+                                    <button
+                                        type="button"
+                                        className="binding-sheet-option"
+                                        data-selected={!editRest.restrictedToCharacterIds || editRest.restrictedToCharacterIds.length === 0}
+                                        aria-pressed={!editRest.restrictedToCharacterIds || editRest.restrictedToCharacterIds.length === 0}
+                                        onClick={() => setR({ restrictedToCharacterIds: undefined })}
+                                    >
+                                        <span className="binding-sheet-check">
+                                            {(!editRest.restrictedToCharacterIds || editRest.restrictedToCharacterIds.length === 0) && <Check size={15} />}
+                                        </span>
+                                        <span className="binding-sheet-option-text">All characters</span>
+                                    </button>
+                                    {scopeCharacters.length === 0 ? (
+                                        <div className="binding-sheet-empty">No characters yet.</div>
+                                    ) : (
+                                        scopeCharacters.map(character => {
+                                            const selected = (editRest.restrictedToCharacterIds || []).includes(character.id);
+                                            return (
+                                                <button
+                                                    key={character.id}
+                                                    type="button"
+                                                    className="binding-sheet-option"
+                                                    data-selected={selected}
+                                                    aria-pressed={selected}
+                                                    onClick={() => {
+                                                        const current = editRest.restrictedToCharacterIds || [];
+                                                        const next = selected
+                                                            ? current.filter(id => id !== character.id)
+                                                            : [...current, character.id];
+                                                        // Empty goes back to undefined so "restricted to nobody"
+                                                        // can never be stored -- that would hide the tool from
+                                                        // everyone, which is not a state the UI should produce.
+                                                        setR({ restrictedToCharacterIds: next.length > 0 ? next : undefined });
+                                                    }}
+                                                >
+                                                    <span className="binding-sheet-check">{selected && <Check size={15} />}</span>
+                                                    <span className="binding-sheet-option-text">{character.name}</span>
+                                                </button>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                                <span className="menu-desc ml-1">
+                                    Leave on &quot;All characters&quot; to keep this tool global. Pick one or more to
+                                    restrict it — only those characters will see or be able to call it in 1:1 chat.
+                                </span>
+                            </div>
                             <div className="flex flex-col gap-1">
                                 <label className="menu-desc ml-1">AI Parameter Definition (JSON Schema)</label>
                                 <Textarea className="font-mono ts-11" rows={4} value={editRest.parameterSchema}

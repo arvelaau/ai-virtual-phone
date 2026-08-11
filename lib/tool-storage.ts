@@ -360,7 +360,26 @@ export type EnabledTool = {
     mcpTools?: McpDiscoveredTool[];
 };
 
-export function getEnabledTools(appId?: string): EnabledTool[] {
+/**
+ * Per-character scoping for REST tools. Opt-in only: a tool with no
+ * restrictedToCharacterIds (the default, and every tool created before the field
+ * existed) is available to everyone, exactly as before.
+ *
+ * When a tool IS restricted but the caller has no character context, it is hidden. The
+ * restriction is explicit user intent, so an unknown caller is treated as not-permitted
+ * rather than permitted -- otherwise every context that omits characterId would leak it.
+ */
+export function isRestToolAvailableToCharacter(
+    tool: Pick<RestToolConfig, "restrictedToCharacterIds">,
+    characterId?: string,
+): boolean {
+    const restricted = tool.restrictedToCharacterIds;
+    if (!restricted || restricted.length === 0) return true;
+    if (!characterId) return false;
+    return restricted.includes(characterId);
+}
+
+export function getEnabledTools(appId?: string, characterId?: string): EnabledTool[] {
     const tools: EnabledTool[] = [];
 
     const restTools = loadRestTools();
@@ -372,6 +391,7 @@ export function getEnabledTools(appId?: string): EnabledTool[] {
 
     for (const t of restTools) {
         if (!t.enabled) continue;
+        if (!isRestToolAvailableToCharacter(t, characterId)) continue;
         if (t.packageId && restPackageIds.has(t.packageId)) continue;
         tools.push({
             name: t.name,
@@ -384,7 +404,10 @@ export function getEnabledTools(appId?: string): EnabledTool[] {
 
     for (const pkg of restPackages) {
         if (!pkg.enabled) continue;
-        const children = restTools.filter(tool => tool.enabled && tool.packageId === pkg.id);
+        const children = restTools.filter(tool =>
+            tool.enabled
+            && tool.packageId === pkg.id
+            && isRestToolAvailableToCharacter(tool, characterId));
         if (children.length === 0) continue;
         tools.push({
             name: pkg.name,
@@ -486,8 +509,13 @@ export function getEnabledTools(appId?: string): EnabledTool[] {
     return tools;
 }
 
-export function findEnabledToolForSchema(name: string, appId?: string, macroContext?: ToolNameMacroContext): EnabledTool | undefined {
-    const direct = getEnabledTools(appId).find(t => toolNameMatches(t.name, name, macroContext));
+export function findEnabledToolForSchema(
+    name: string,
+    appId?: string,
+    macroContext?: ToolNameMacroContext,
+    characterId?: string,
+): EnabledTool | undefined {
+    const direct = getEnabledTools(appId, characterId).find(t => toolNameMatches(t.name, name, macroContext));
     if (direct) return direct;
 
     const compositePackages = loadCompositeToolPackages().filter(pkg => pkg.enabled);
@@ -508,6 +536,7 @@ export function findEnabledToolForSchema(name: string, appId?: string, macroCont
     const packageIds = new Set(packages.map(pkg => pkg.id));
     for (const tool of loadRestTools()) {
         if (!tool.enabled || !tool.packageId || !packageIds.has(tool.packageId)) continue;
+        if (!isRestToolAvailableToCharacter(tool, characterId)) continue;
         if (!toolNameMatches(tool.name, name, macroContext)) continue;
         return {
             name: tool.name,

@@ -1808,7 +1808,7 @@ export async function buildChatPromptMessages(
     const isOfflineMode = options?.appTags?.includes("offline") === true;
     const effectiveAppTags = mergeAppTags(options?.appTags, promptProfile?.appTags, resolvedAppId);
     const toolsAllowed = options?.toolsAllowed !== false && !isOfflineMode;
-    const enabledTools = toolsAllowed ? getEnabledTools(resolvedAppId) : [];
+    const enabledTools = toolsAllowed ? getEnabledTools(resolvedAppId, character.id) : [];
     const toolsEnabled = enabledTools.length > 0
         && (options?.forceEnableTools === true || presetIncludesToolsMacro(preset, resolvedAppId, effectiveAppTags));
     const usesNativeActions = Boolean(toolsEnabled && nativeToolProtocolForConfig(config));
@@ -2008,7 +2008,7 @@ async function generateNativeChatCompletion(
     },
 ): Promise<ChatCompletionResult> {
     const { session, llmMessages, character, config, preset, regexes, userIdentity, options, callbacks } = params;
-    const enabledTools = getEnabledTools(options?.appId ?? "chat");
+    const enabledTools = getEnabledTools(options?.appId ?? "chat", character.id);
     const requestAppTags = mergeAppTags(options?.appTags, options?.promptProfile?.appTags, options?.appId ?? "chat");
     const persistedSession = loadChatSessions().find(item => item.id === session.id);
     let expandedSourceIds = normalizeNativeExpandedToolSourceIds(
@@ -2251,7 +2251,7 @@ export async function generateChatCompletion(
     const { llmMessages, character, config, preset, regexes, userIdentity, toolsEnabled } = await buildChatPromptMessages(session, history, options);
     const requestAppTags = mergeAppTags(options?.appTags, options?.promptProfile?.appTags, options?.appId ?? "chat");
 
-    if (toolsEnabled && nativeToolProtocolForConfig(config) && getEnabledTools(options?.appId ?? "chat").length > 0) {
+    if (toolsEnabled && nativeToolProtocolForConfig(config) && getEnabledTools(options?.appId ?? "chat", character.id).length > 0) {
         return generateNativeChatCompletion({
             session,
             llmMessages,
@@ -2346,7 +2346,7 @@ export async function generateChatCompletion(
                 const tool = findEnabledToolForSchema(fetch.name, options?.appId ?? "chat", {
                     characterName: character.name,
                     userName: userIdentity?.name ?? "User",
-                });
+                }, character.id);
                 const schemaContent = tool
                     ? formatToolSchema(tool, {
                         characterName: character.name,
@@ -2592,7 +2592,7 @@ export async function previewPromptRequestSnapshot(
 
     const { llmMessages, character, config, preset, userIdentity, toolsEnabled } = await buildChatPromptMessages(session, effectiveHistory, options);
     const requestMessages = toLlmRequestMessages(llmMessages);
-    const enabledTools = toolsEnabled ? getEnabledTools(options?.appId ?? "chat") : [];
+    const enabledTools = toolsEnabled ? getEnabledTools(options?.appId ?? "chat", character.id) : [];
     const meta = { characterName: character.name, userName: userIdentity?.name };
 
     if (nativeToolProtocolForConfig(config) && enabledTools.length > 0) {
