@@ -14,6 +14,7 @@ export type IconId =
   | "checkphone"
   | "shopping"
   | "calendar"
+  | "couplespace"
   | "interview_magazine"
   | "vnmode"
   | "mapmode"
@@ -47,6 +48,7 @@ export const PAGE_2_DEFAULT: IconId[] = [
   "appmarket",
   "xiaohongshu",
   "dwelling",
+  "couplespace",
   "story",
   "vnmode",
   "mapmode"
@@ -59,6 +61,7 @@ export const DOCK_DEFAULT: IconId[] = ["settings", "theme", "resources", "charac
 
 export const ICONS: Record<IconId, IconMeta> = {
   chat: { id: "chat", label: "Chat", tone: "var(--c-icon-green)", placeholder: false },
+  couplespace: { id: "couplespace", label: "Couple Space", tone: "var(--c-icon-rose, #d98f9b)", placeholder: false },
   diary: { id: "diary", label: "Notes", tone: "var(--c-icon-violet)", placeholder: false },
   music: { id: "music", label: "Music", tone: "var(--c-icon-coral)", placeholder: false },
   reading: { id: "reading", label: "Reading", tone: "var(--c-icon-amber)", placeholder: false },

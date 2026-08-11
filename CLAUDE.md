@@ -1610,6 +1610,25 @@ Regression-checked after the bump: `_fx-checkphone-fields` 131/131, `_fx-checkph
 
 **Still to do (2c):** the app itself and the 4 registration points that make it visible — `desktop-config.ts`, `desktop-shell.tsx`, `icon-glyph.tsx`, and the `loadNativeTimeline` projection block in `short-term-assembler.ts` (`sourceApp` union + `sourceDetail` + `FEATURE_TAG`). **Until that projection block lands, the 2a episodic events are written but never read.**
 
+### Stage 2c — Couple Space registration + UI: **DONE** (2026-08-11)
+`components/couple-space/couple-space-app.tsx` + `_fx-couple-space-timeline.mjs` (17/17). `tsc` exit 0. **Stage 2 is complete.**
+
+**The projection registration is the part that mattered.** Until this landed the 2a events were written and never read, with nothing erroring — only a behavioural test catches that. `short-term-assembler.ts` gained: the import, `sourceApp`/`sourceDetail` unions, `FEATURE_ORDER.couple_space` (2.55, between notewall and custom_app), `FEATURE_TAG.couple_space`, the `loadNativeTimeline` block, and **two** `raw.push` collection sites — `prepareShortTermContext` **and** `prepareGroupShortTermContext` are independent and both had to be edited. Control 2 (drop only the 1:1 site) proves the fixture distinguishes them.
+
+A new `recent_*` tag is safe: only `recent_story` is referenced anywhere in `builtin-preset.ts`, so the rest are generic XML wrappers the model just reads.
+
+Desktop registration: `desktop-config.ts` (`IconId` union, `ICONS` entry, `PAGE_2_DEFAULT`), `icon-glyph.tsx` (`mdiHeart`, already imported — it also appears in the custom-app fallback list, which is a different map, so reuse is fine), `desktop-shell.tsx` (import + one `activeApp === "couplespace"` branch next to calendar). **`desktop-shell.tsx` involvement is 2 lines and nowhere near the message-state code** — the chat-history instrumentation (`750368a`) touches only `chat-room.tsx`, verified before editing.
+
+The app calls storage CRUD and the projection recorders **side by side**, since storage may not import memory (2a). It also runs `syncGiftProvenanceFromMessages()` on open, which is how gift history stays current without touching the send path.
+
+**Do not guess UI primitive props.** `EmptyState` takes `message`, not `title`/`description`; `Select` has no `label`. Five `tsc` errors from assuming. `ButtonVariant` does include `ghost`.
+
+Non-vacuity run: removing the `loadNativeTimeline` block gives **7/17**; removing only the 1:1 `raw.push` gives **16/17** (B1 alone). The first run also exposed a **vacuous assertion of my own** — A6 used `.every()`, which is true on an empty array, so it passed while everything around it failed. Adding a length guard took control 1 from 10 failures to 11. **Any `.every()`/`.some()` assertion needs a length guard or it cannot fail.**
+
+All ten repo fixtures re-run green afterwards.
+
+**Stage 3 (reflection diary) is what remains**, plus the deferred mini-games (Route A) and gift resell + character reaction. The Stage-3 LLM-calls decision was explicitly deferred to that stage.
+
 ## Still open / not yet done
 - **`[系统指令]` / `[事件 …]` short-term timeline labels** (found 2026-08-06 during the offline/online research). Sites: `lib/short-term-assembler.ts:222,313`, `lib/chat-storage.ts:286,318`, `lib/chat-offline-storage.ts:178`. **These are read by the model** — they label system-instruction and offline-event entries inside the short-term event stream — so treat them as protocol, not as UI text: **make every consumer bilingual first (accept the legacy Chinese label AND the new English one), then flip the producers**, same dual-recognition pattern as the rest of this migration. Do not translate them in place; grep for every producer *and* every consumer of each label before touching either side (the `tool-executor` / `FETCH_RESULT_HEADER` / `prompt-sanitizer` regressions were all "one side moved, one consumer left behind").
 - `lib/macro-engine.ts:247` + `lib/chat-time.ts:1` Chinese weekday/date formatting reaching every chat prompt (found 2026-08-05, see above).
