@@ -2449,11 +2449,26 @@ function getCurrentCharacter(characterId: string): { id: string; name: string } 
     return { id: characterId, name: character?.name || "角色" };
 }
 
+// Some models (observed with a smaller test model firing two tool calls back to back,
+// e.g. AddWishlistItem immediately followed by AddReflection) fail to close the first
+// call's JSON cleanly and instead glue the raw start of the next call's tokens onto the
+// tail of a string argument -- e.g. `...Quest`}<|tool_call>call:addreflection_1pz9i8{body:`.
+// That glued text is syntactically valid *inside* a JSON string, so JSON.parse() has no
+// way to know it wasn't meant to be there; this trims it defensively before it reaches
+// storage/UI. Cuts at the earliest sign of a leaked tool-call token or a stray closing
+// artifact, rather than only at length, so partial garbage doesn't linger mid-string.
+const STRAY_TOOL_CALL_RE = /\s*`?\}?\s*<\|[^|>]*\|?>[\s\S]*$|\s*`\}[\s\S]*$|\bcall:[a-zA-Z_]+_[a-zA-Z0-9]+\{[\s\S]*$/;
+
+function stripStrayToolCallArtifacts(text: string): string {
+    return text.replace(STRAY_TOOL_CALL_RE, "").trimEnd();
+}
+
 function cleanToolString(value: unknown, maxLength: number): string {
-    return String(value ?? "")
-        .replace(/\u0000/g, "")
-        .trim()
-        .slice(0, maxLength);
+    return stripStrayToolCallArtifacts(
+        String(value ?? "")
+            .replace(/\u0000/g, "")
+            .trim(),
+    ).slice(0, maxLength);
 }
 
 function cleanToolMultiline(value: unknown, maxLength: number): string {
