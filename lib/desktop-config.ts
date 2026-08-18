@@ -26,7 +26,8 @@ export type IconId =
   | "theme"
   | "resources"
   | "characters"
-  | "worldbuilder";
+  | "worldbuilder"
+  | "mixology";
 
 export type DesktopIconId = IconId | CustomAppIconId;
 
@@ -55,12 +56,13 @@ export const PAGE_2_DEFAULT: IconId[] = [
 ];
 
 // Default icons for page three (centred; see createDefaultDesktopIconLayout for placement)
-export const PAGE_3_DEFAULT: IconId[] = ["worldbuilder"];
+export const PAGE_3_DEFAULT: IconId[] = ["worldbuilder", "mixology"];
 
 export const DOCK_DEFAULT: IconId[] = ["settings", "theme", "resources", "characters"];
 
 export const ICONS: Record<IconId, IconMeta> = {
   chat: { id: "chat", label: "Chat", tone: "var(--c-icon-green)", placeholder: false },
+  mixology: { id: "mixology", label: "House Special", tone: "var(--c-icon-violet)", placeholder: false },
   couplespace: { id: "couplespace", label: "Couple Space", tone: "var(--c-icon-rose, #d98f9b)", placeholder: false },
   diary: { id: "diary", label: "Notes", tone: "var(--c-icon-violet)", placeholder: false },
   music: { id: "music", label: "Music", tone: "var(--c-icon-coral)", placeholder: false },
