@@ -1291,6 +1291,8 @@ Real divergence from our baseline: **129 files, +23024 / −5191**, 149 commits,
 | **Store the post first, attach the photo after** | `1976054` | `attachMomentPhotoInBackground`. **Architecture check done first, as asked:** our UI needed no change — `moment-post-card`'s retry affordance keys off `photoDescription && !photoUrl`, not the status field, so a `"pending"` post already renders a working retry button. The only required change was widening the type union, which had only `"failed" | "generated"`. |
 | **Fault-tolerant SSE parsing** (upstream `03e24e9`) | `e8f5473` | `lib/sse-json.ts` + both streaming paths. See below. |
 | **`<style>` protection swallowing the block closer** (upstream `812841a`) | `30dff08` | Adapted to bilingual, not copied. See below. |
+| **Inline HTML card height ratchet** (upstream `ff51207`) | `6863c61` | See below. |
+| **Deleted friends resurrect** (upstream `9eac832`, minus its reverted half) | `724cc22` | See below. |
 
 **`BUILTIN_PRESET_VERSION` is now 275**, bumped to activate the three Moments rules. Bumped ahead of "after D2" deliberately: nothing left in D2 touched `builtin-preset.ts` (`mascot-tools.ts` and `mascot-prompts.ts` are not part of the preset), so no second bump was coming from that work.
 
@@ -1740,11 +1742,11 @@ Also new upstream: PWA manifest injector, per-session custom CSS, sticker search
 **No collision with our recent work.** `styles/chat.css` has 11 upstream commits but zero bubble-tail/iMessage work (no `data-run-end`, no tail). `lib/tool-storage.ts` has **0** upstream commits, so the REST scoping in `186182c` is untouched. `upstream/test` is down to 14 files of mobile-shell work.
 
 ### Four bugs upstream fixed that we demonstrably had — verified against our tree, not assumed
-Ported: 1 and 2. **Still open: 3 and 4.**
+**All four ported** (1 and 2 first, then 3 and 4).
 1. `03e24e9` SSE parsing — **ported, `e8f5473`**
 2. `812841a` `[StatusPanel]` closer swallowed — **ported (adapted), `30dff08`**
-3. `9eac832` **deleted friends come back.** We have `restoreContactsForPrivateSessions` at `chat-storage.ts:665`, called from `:905` and `:929`, with no tombstone. It fires only when contacts ≤ half the private sessions with messages, so it is invisible with many friends and reproduces every time with one or two. Second symptom: the resurrected contact makes `getPendingFriendRequests` delete the AI's later friend request as "expired" before the user ever sees it. Upstream's fix records a tombstone (`ai_phone_removed_contacts_v1`) that `addChatContact` clears, so every re-add path releases it.
-4. `ff51207` **inline HTML card height only grows.** Same root cause as the story-mode ratchet we already ported in `90a33f7`, but a **different code path** — `buildChatHtmlDocument` in `message-bubble.tsx`, still `Math.max(body.scrollHeight, documentElement.scrollHeight, 80)`. `documentElement.scrollHeight` is at least the iframe viewport, which is the height the parent set last time, so it measures itself.
+3. `9eac832` — **ported, `724cc22`** (tombstone only; upstream's `purgeCharacterChatData` half was reverted upstream by `7713154`). **deleted friends come back.** We have `restoreContactsForPrivateSessions` at `chat-storage.ts:665`, called from `:905` and `:929`, with no tombstone. It fires only when contacts ≤ half the private sessions with messages, so it is invisible with many friends and reproduces every time with one or two. Second symptom: the resurrected contact makes `getPendingFriendRequests` delete the AI's later friend request as "expired" before the user ever sees it. Upstream's fix records a tombstone (`ai_phone_removed_contacts_v1`) that `addChatContact` clears, so every re-add path releases it.
+4. `ff51207` — **ported, `6863c61`**. **inline HTML card height only grows.** Same root cause as the story-mode ratchet we already ported in `90a33f7`, but a **different code path** — `buildChatHtmlDocument` in `message-bubble.tsx`, still `Math.max(body.scrollHeight, documentElement.scrollHeight, 80)`. `documentElement.scrollHeight` is at least the iframe viewport, which is the height the parent set last time, so it measures itself.
 
 **Not applicable:** `5c73e66` (regex preview iframe sandbox) — we have no preview iframe in `regex-manager.tsx`; that is a newer upstream feature.
 
@@ -1768,8 +1770,33 @@ Non-vacuity measured: dropping instead of carrying → 17/22 (B1 B2 B3 B5 B6). *
 
 Note the "reply survives" assertions do **not** discriminate: when the block leaks, the reply text is still present, just glued into the same bubble behind literal tags. The "no literal tag leaks" assertions are the ones that catch it. Both are kept.
 
+### `6863c61` — inline HTML card height ratchet
+`_fx-html-height.mjs`, 13/13, kept. `buildChatHtmlDocument` measured `Math.max(body.scrollHeight, documentElement.scrollHeight, 80)`, and `documentElement.scrollHeight` is at least the iframe viewport — which is the height the parent set from our own last report. The measurement included itself, so it could grow and never shrink.
+
+**`story-html-renderer.tsx` carries a SECOND copy of this bridge**, and our earlier port `90a33f7` fixed only that one. Worth remembering: a shared-looking browser bridge in this repo is usually duplicated, not shared.
+
+Went beyond upstream on one point — added the **zero-width bail** the story renderer already has, so a frame that is not laid out yet reports nothing instead of locking in garbage, and does not burn its 12-send budget while hidden. **Known residue, deliberate:** a card whose CSS sets `body{height:100vh}` is still circular; forcing `height:auto` would silently reflow already-generated cards.
+
+`buildChatHtmlDocument` is now **exported** for the fixture — the measurement exists only as injected script text, so the only way to test it is to pull the script back out and run it against a fake DOM that models the self-reference.
+
+**Two vacuous assertions of mine, both caught only by running the control**, both in the same test:
+1. It first matched the literal `"documentElement.scrollHeight"`, which the old code never spelled that way (it was `var d=document.documentElement` … `d.scrollHeight`).
+2. Then its slice index went negative — the marker sits at index ~599, so `slice(idx - 600)` is `slice(-1)`, which JS reads as *last 1 character*. It was asserting on `">"`.
+
+**Generalises: a source-scraping assertion needs `Math.max(0, …)` on any computed slice start, and should match the identifier rather than an exact spelling.**
+
+### `724cc22` — deleted friends resurrect
+`_fx-contact-tombstone.mjs`, 25/25, kept, driving the real `chat-storage` through `_fx-dexie-stub.mjs`. Tombstone key `ai_phone_removed_contacts_v1`; the rescue skips tombstoned ids, `removeChatContact` marks, `addChatContact` unmarks. Verified `removeChatContact` is the only removal path before relying on that.
+
+**Only half of upstream's commit was taken.** `9eac832` also made deleting a character card hard-delete its sessions and messages; upstream **reverted that four commits later** (`7713154`) as half-deleting, since Moments, long-term memory and group history stayed. The net upstream state is the tombstone alone. *Check whether a commit was later reverted before porting it.*
+
+Second symptom, fixed transitively and now pinned by fixture group C: `getPendingFriendRequests` (`friend-request-storage.ts:73`) treats a request from an existing contact as stale and **deletes it from storage**, so once the friend resurrected, the AI's post-removal request was erased before the user saw it.
+
+**Three controls, failing in two directions** — the useful part. Removing the rescue filter → 16/25; removing the mark → 15/25. But removing the **unmark** → 21/25 on a *different* set (D2 E4 F1 F3): the opposite over-correction, where anyone ever removed stays tombstoned and the rescue can never help them again after a genuine data loss. **F1/F3 exist only to catch that**, and a fixture for a "skip this case" fix is incomplete without the mirror assertions that the skip stays narrow.
+
+Setup detail worth copying: contacts must be added **before** messages, because `addChatContact` calls `loadChatContacts`, which runs the rescue — seeding messages first makes the rescue fire during setup and mint a `contact_recovered_*` entry, putting the bug's own fingerprint in the fixture's baseline. Also `await hydrateChatStorage()` first, or `saveChatContacts` silently does an additive write and the "table was wiped" scenario does nothing.
+
 ## Still open / not yet done
-- **Two upstream bugs confirmed present, not yet ported** — `9eac832` (deleted friends resurrect, `chat-storage.ts:665`) and `ff51207` (inline HTML card height ratchet in `message-bubble.tsx`). Both diagnosed against our tree in the 2026-08-18 upstream re-check above.
 - **Couple Space follow-ups**: mini-games Route A (next), then Track 2 imports.
 - **Track 2 game imports** (deferred wholesale during Couple Space): pocket-fishing, cute-pet, executive-diary.
 - **`[系统指令]` / `[事件 …]` short-term timeline labels** (found 2026-08-06 during the offline/online research). Sites: `lib/short-term-assembler.ts:222,313`, `lib/chat-storage.ts:286,318`, `lib/chat-offline-storage.ts:178`. **These are read by the model** — they label system-instruction and offline-event entries inside the short-term event stream — so treat them as protocol, not as UI text: **make every consumer bilingual first (accept the legacy Chinese label AND the new English one), then flip the producers**, same dual-recognition pattern as the rest of this migration. Do not translate them in place; grep for every producer *and* every consumer of each label before touching either side (the `tool-executor` / `FETCH_RESULT_HEADER` / `prompt-sanitizer` regressions were all "one side moved, one consumer left behind").
