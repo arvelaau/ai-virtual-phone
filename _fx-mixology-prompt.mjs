@@ -158,6 +158,60 @@ for (const kind of ["base", "glass"]) {
 check("E3 the checklist reference matches the glassware label exactly",
     out.system.includes("Output requirements"), null);
 
+// ── F. the cheat sheet must describe the prompt the assembler actually builds ──
+//
+// mixology-preview's STRUCTURE_ROWS tells an author which section their material lands in,
+// and every `section` there is a HAND-COPIED literal of an assembler heading -- nothing reads
+// one from the other. If they drift, the sheet confidently names a section the prompt does
+// not contain. Same for mixology-editor's KIND_GUIDE `where` strings.
+{
+    const fs = await import("node:fs");
+    const preview = fs.readFileSync("components/mixology/mixology-preview.tsx", "utf8");
+    const rows = [...preview.matchAll(/\{\s*section:\s*"([^"]+)"/g)].map(m => m[1]);
+    check("F1 the cheat sheet has its full set of rows", rows.length >= 11, rows.length);
+
+    // Build a prompt in which EVERY optional section is present. The card needs the World &
+    // plot fields populated too -- with them empty the assembler correctly drops that whole
+    // section, and the row would look like drift when it is only an under-filled fixture.
+    const everyKind = A.assembleMixPrompt({
+        character: {
+            ...card,
+            worldview: "A city.", cognition: "Barely.", relations: "A regular.",
+            plot: "Closing time.", extra: "The manager works days.",
+            examples: [{ role: "user", text: "hi" }],
+        },
+        materials: Object.fromEntries(["base", "flavor", "glass", "strength"].map(k =>
+            [k, [{ id: k, kind: k, name: k, content: "x", createdAt: 0, updatedAt: 0 }]])),
+    });
+    const withBlocks = A.assembleMixPrompt({
+        character: card,
+        materials: {
+            ticket: [{ id: "t", kind: "ticket", name: "t", contract: "a: 1", renderHtml: "<i></i>", createdAt: 0, updatedAt: 0 }],
+            encore: [{ id: "e", kind: "encore", name: "e", contract: "c", renderHtml: "<i></i>", createdAt: 0, updatedAt: 0 }],
+            persona: [{ id: "p", kind: "persona", name: "p", content: "me", createdAt: 0, updatedAt: 0 }],
+        },
+    });
+    const allPrompt = `${everyKind.system}\n${everyKind.postHistory}\n${withBlocks.system}\n${withBlocks.postHistory}`;
+
+    for (const row of rows) {
+        if (!row.startsWith("## ")) continue;
+        check(`F  cheat sheet row "${row}" is a heading the assembler emits`,
+            allPrompt.includes(row), row);
+    }
+    check("F2 the post-history row matches what the assembler emits",
+        rows.some(r => !r.startsWith("## ")) && allPrompt.includes("[Highest priority requirements]"),
+        everyKind.postHistory.slice(0, 60));
+    check("F3 the cheat sheet carries no CJK", !/[一-鿿]/.test(preview), null);
+
+    // The editor's per-kind guidance names the same sections in prose.
+    const editor = fs.readFileSync("components/mixology/mixology-editor.tsx", "utf8");
+    check("F4 the editor guidance carries no CJK", !/[一-鿿]/.test(editor), null);
+    for (const name of ["Roleplay rules", "Output requirements", "Status panel", "Skit"]) {
+        check(`F  editor guidance names the section "${name}" as the assembler spells it`,
+            editor.includes(name), name);
+    }
+}
+
 console.log(`\n${pass}/${pass + fail} passed`);
 console.log(
     "\nNon-vacuity, measured:\n" +
