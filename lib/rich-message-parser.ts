@@ -96,11 +96,36 @@ export { BLOCK_TAG_STATUS_PANEL, BLOCK_TAG_INNER } from "./block-tags";
 import {
     BLOCK_TAG_STATUS_PANEL,
     BLOCK_TAG_INNER,
+    blockCloserAlternationSource,
     closedBlockRegex,
     orphanCloserRegex,
     stripReasoningTags,
     unclosedBlockRegex,
 } from "./block-tags";
+
+/**
+ * `<style>…</style>` plus the HTML that follows it, protected from the rest of the
+ * parser as one placeholder.
+ *
+ * The lookahead lists every way that run is allowed to END. The block-closer branch is
+ * NOT optional: when the model follows the contract and writes raw HTML inside
+ * [StatusPanel], there is usually only a single newline between the HTML and the closing
+ * tag — no blank line to stop at — so without it the protection runs all the way to `$`
+ * and swallows `[/StatusPanel]` along with the chat reply after it. The closer is then
+ * gone before extractBracketBlock runs, no pair matches, and the whole thing (literal
+ * tags included) leaks into the bubble. "It only works if I leave a blank line" was
+ * exactly this. Same defect for [InnerThoughts].
+ *
+ * Derived from the alias arrays rather than written out, because this fork teaches the
+ * English tags while saved history still holds the Chinese ones — a Chinese-only stop
+ * condition (upstream's) would fix nothing here.
+ *
+ * Rebuilt per call: it carries `g`, and a shared instance is a lastIndex hazard.
+ */
+function htmlProtectionRegex(): RegExp {
+    const closer = blockCloserAlternationSource(BLOCK_TAG_STATUS_PANEL, BLOCK_TAG_INNER);
+    return new RegExp(`<style[\\s\\S]*?<\\/style>[\\s\\S]*?(?=\\n\\n[^<\\x00]|\\s*${closer}|$)`, "gi");
+}
 
 function parseMuteMinutes(num?: string, unit?: string): number {
     const n = parseInt(num || "", 10);
@@ -714,8 +739,8 @@ export function parseAIResponse(rawText: string, previousState: StateValue[]): P
         htmlBlockPlaceholders.push({ placeholder, original: match });
         return placeholder;
     });
-    // Protect <style>...</style> and following HTML until next double-newline + non-HTML
-    protected_ = protected_.replace(/<style[\s\S]*?<\/style>[\s\S]*?(?=\n\n[^<\x00]|$)/gi, (match) => {
+    // Protect <style>...</style> and the HTML after it (see htmlProtectionRegex)
+    protected_ = protected_.replace(htmlProtectionRegex(), (match) => {
         const placeholder = `\x00HTML_BLOCK_${htmlBlockPlaceholders.length}\x00`;
         htmlBlockPlaceholders.push({ placeholder, original: match });
         return placeholder;

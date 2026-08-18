@@ -78,3 +78,15 @@ export function unclosedBlockRegex(tags: readonly string[]): RegExp {
 export function orphanCloserRegex(tags: readonly string[]): RegExp {
     return new RegExp(`\\[\\/(?:${aliasAlternation(tags)})\\]`, "g");
 }
+
+/**
+ * Regex SOURCE (not a RegExp) matching the closing tag of any of the given blocks,
+ * e.g. `\[\/(?:内心|InnerThoughts|状态栏|StatusPanel)\]`.
+ *
+ * Exists so a caller that needs a block closer as one branch of a larger pattern — the
+ * `<style>` HTML-protection lookahead in rich-message-parser — derives it from the same
+ * alias arrays as everything else, instead of hardcoding one language's spelling.
+ */
+export function blockCloserAlternationSource(...tagLists: readonly (readonly string[])[]): string {
+    return `\\[\\/(?:${aliasAlternation(tagLists.flat())})\\]`;
+}
