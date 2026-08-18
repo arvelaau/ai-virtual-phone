@@ -51,11 +51,11 @@ export const MIX_SLOT_ORDER: MixMaterialKind[] = [
  * contain. See the lockstep note in CLAUDE.md.
  */
 export const MIX_KIND_SECTION_LABELS: Record<MixMaterialKind, string> = {
-    character: "Character Info",
-    persona: "User Info",
-    base: "Roleplay Rules",
-    flavor: "Prose Style",
-    glass: "Output Requirements",
+    character: "Character info",
+    persona: "User info",
+    base: "Roleplay rules",
+    flavor: "Prose style",
+    glass: "Output requirements",
     strength: "Highest priority",
     ticket: "Status panel",
     garnish: "Interface style",
