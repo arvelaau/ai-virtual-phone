@@ -1798,6 +1798,53 @@ Second symptom, fixed transitively and now pinned by fixture group C: `getPendin
 
 Setup detail worth copying: contacts must be added **before** messages, because `addChatContact` calls `loadChatContacts`, which runs the rescue — seeding messages first makes the rescue fire during setup and mint a `contact_recovered_*` entry, putting the bug's own fingerprint in the fixture's baseline. Also `await hydrateChatStorage()` first, or `saveChatContacts` silently does an additive write and the "table was wiped" scenario does nothing.
 
+## MIXOLOGY (独家特调) PORT — AUDIT (2026-08-18), execution started
+User chose this over the calendar rewrite and the QoL batch. **Read this before touching anything.**
+
+### What the app actually is
+A **cocktail metaphor for composing a roleplay session** — in effect a far more approachable modular preset composer, with sandboxed rendering and hooks.
+
+Eleven **material** kinds, one slot each: `character` (角色卡, the character card — a material like any other), `persona` (面具, the user's own persona/mask), `base` (基底, roleplay master rules), `flavor` (风味, prose style), `glass` (杯型, output format), `strength` (苦精 bitters — tail reinforcement, closest to generation so highest weight), `ticket` (小票, a status-data card = output contract + render code), `garnish` (外观, UI CSS), `encore` (尾调, an interactive HTML sketch attached to a card), `filter` (滤网, regex cleanup that never enters the prompt), `mechanism` (机括, sandboxed hook logic + a persistent UI panel).
+
+The player collects materials into a **cabinet**, picks one per slot at the **bar** to mix a named, saveable, shareable **blend**, and a **session** is one run of character card + blend. Five tabs: `menu | hall | bar | cabinet | games`.
+
+### Size
+| area | files | lines | CJK |
+|---|---|---|---|
+| `lib/mixology/` | 14 | 3,376 | 502 |
+| `components/mixology/` | 11 | 5,036 | 800 |
+| `styles/mixology.css` | 1 | 2,704 | 105 |
+| `app/api/mixology/` | 2 | 902 | 52 |
+| `docs/mixology-supabase.sql` | 1 | 151 | 18 |
+
+### Finding 1 — the dependency surface is tiny, and all of it exists here
+Only **7 imports** reach outside its own tree, and all 10 named symbols resolve in our repo: `ApiConfig` (settings-types), `LLMMessage` (llm-prompt-assembler — note: NOT chat-engine), `ChatEngineError` + `sendLLMRequest` (chat-engine), `downloadFile` (download-utils), `fetchCurrentAccount` (account-client), `kvGet`/`kvSet`/`registerKvMigration` (kv-db), `loadApiConfigs`/`loadBindingConfig` (settings-storage). Nothing needs to be back-ported first.
+
+### Finding 2 — near-zero protocol risk, the opposite of checkphone
+The corrected detector finds **5 hits total** across 25 files (checkphone had 482):
+- `assembler.ts:88` — `{{状态.name}}`, a mixology-local template macro. **The one real protocol item**; needs dual recognition so blends written before the port keep resolving.
+- `assembler.ts:160` — a checklist line naming a section (`「正文输出要求」`); coherence lockstep with that section's own heading.
+- `builtin.ts:31,50` — `tags: ["官方"]` on the two built-in recipes. Check for an allow-list before translating (the `GAME_ALLOWED_TAGS` precedent).
+- `mixology-app.tsx:717` — `cloudBadge === "已上架"`, producer and consumer both local to that file; translate in lockstep.
+
+**Zero "output in Chinese" orders** (`grep 中文` → one code comment in `transfer.ts` about filename sanitising). That breaks the run of five engines that each had one.
+
+### Finding 3 — the cloud half degrades exactly like something we already ship
+`app/api/mixology/hall/route.ts` uses the **same** `missing_supabase_env` → 503 pattern as our existing `app/api/game-hall/games/route.ts`. So without Supabase config the `hall` tab fails the way Game Hall already fails here — a known, accepted state, not a new broken surface. The other four tabs are entirely local. Porting the hall is therefore worth doing for completeness, but it is the only part that ships non-functional on this deployment.
+
+### Finding 4 — registration is the same 4-point pattern as Couple Space
+`lib/desktop-config.ts` (IconId union :31, ICONS entry :125, `PAGE_3_DEFAULT` :71), `components/icon-glyph.tsx:68` (`mdiGlassCocktail`), `components/desktop-shell.tsx` (import :37 + `activeApp === "mixology"` branch :3929), `app/globals.css:12` (`@import "../styles/mixology.css"`). Note upstream's `PAGE_3_DEFAULT` also lists `qa` and `resource_hub`, which we do NOT have — take only the `mixology` entry.
+
+### Stage plan (dependency order; translate on the way in, commit per stage)
+1. **core data** — `types.ts`, `storage.ts`, `state.ts`, `transfer.ts`, `builtin.ts`
+2. **prompt layer** — `assembler.ts`, `engine.ts`, `prose.ts` (holds the `{{状态.X}}` macro)
+3. **sandbox** — `mechanism-protocol.ts`, `mechanism-runtime.ts`, `css-scope.ts`, `frame-height.ts`
+4. **components** — 11 files, the bulk
+5. **hall** — `hall-client.ts`, `hall-parts.ts`, both API routes, the SQL doc
+6. **CSS + registration** — last, so nothing is reachable until it works
+
+Registration last is deliberate: a half-ported app that is already on the home screen is worse than one that is not yet reachable.
+
 ## Still open / not yet done
 - **Couple Space mini-games, "Route A"** — ⚠️ **this name is referenced three times in this file and never DEFINED.** No scope, no design, no integration point was ever written down; the only surviving description is "a custom app via existing directives", from a session transcript rather than from here. Do not start it as if it were a specified task — it needs a design decision from the user first. Recorded 2026-08-18.
 - **Track 2 game imports** — the 3 remaining of 6 user-contributed games (imports 1-3 landed as `81eb207`, `d66b1dc`, `cff6995`): pocket-fishing (156 CJK / 590 lines), cute-pet (155 / 1497), executive-diary (577 / 1929, and it holds 6 of the 8 "write in Chinese" orders plus a gender-inference guard that needs adapting to English convention). Source files are untracked in `pending-game-imports/`; the 3 already-imported ones are tracked, which is how to tell them apart.
