@@ -662,12 +662,72 @@ function normalizeChatSessions(sessions: ChatSession[]): NormalizedSessionList {
     return { items: normalized, changed, redirects };
 }
 
+// ── Tombstones for friends the user removed on purpose ──────────────────────
+//
+// Removing a friend is "drop the contact, keep the session" — the session has to survive
+// so that adding them back picks the history up again. But
+// restoreContactsForPrivateSessions below is a DATA-RESCUE path: it sees "a session with
+// no contact", concludes the contact table was lost, and rebuilds the contact from the
+// session. So a friend the user just removed came straight back, and because the chat
+// list, the contacts page and Moments all filter on contacts, they came back in all three
+// at once.
+//
+// It only triggers when contacts are at most half the private sessions with messages, so
+// with a lot of friends it never showed and with one or two it happened every time.
+//
+// A tombstone records the deletion as deliberate so the rescue skips it. Clearing lives in
+// addChatContact, which every re-add path goes through (accepting a friend request, search
+// and add, an engine re-establishing contact), so none of them can forget to.
+const REMOVED_CONTACTS_KEY = "ai_phone_removed_contacts_v1";
+registerKvMigration(REMOVED_CONTACTS_KEY);
+
+function loadRemovedContactIds(): Set<string> {
+    if (typeof window === "undefined") return new Set<string>();
+    try {
+        const raw = kvGet(REMOVED_CONTACTS_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        const ids: string[] = Array.isArray(parsed)
+            ? parsed.filter((id: unknown): id is string => typeof id === "string" && !!id)
+            : [];
+        return new Set<string>(ids);
+    } catch {
+        return new Set<string>();
+    }
+}
+
+function saveRemovedContactIds(ids: Set<string>): void {
+    if (typeof window === "undefined") return;
+    kvSet(REMOVED_CONTACTS_KEY, JSON.stringify([...ids]));
+}
+
+function markContactRemoved(characterId: string): void {
+    if (!characterId) return;
+    const ids = loadRemovedContactIds();
+    if (ids.has(characterId)) return;
+    ids.add(characterId);
+    saveRemovedContactIds(ids);
+}
+
+function unmarkContactRemoved(characterId: string): void {
+    if (!characterId) return;
+    const ids = loadRemovedContactIds();
+    if (!ids.delete(characterId)) return;
+    saveRemovedContactIds(ids);
+}
+
+/** Exported for the fixture and for callers that need to know a removal was deliberate. */
+export function isContactRemovedByUser(characterId: string): boolean {
+    return loadRemovedContactIds().has(characterId);
+}
+
 function restoreContactsForPrivateSessions(contacts: ChatContact[], sessions: ChatSession[]): NormalizedList<ChatContact> {
     const characterIds = new Set(loadCharacters().map(character => character.id));
+    const removedByUser = loadRemovedContactIds();
     const privateSessionsWithMessages = sessions.filter(session =>
         !session.isGroup
         && session.contactId
         && characterIds.has(session.contactId)
+        && !removedByUser.has(session.contactId)
         && Boolean(getLastVisibleSessionMessage(session.id))
     );
     if (privateSessionsWithMessages.length === 0 || contacts.length >= privateSessionsWithMessages.length) {
@@ -946,6 +1006,11 @@ export function saveChatContacts(contacts: ChatContact[]) {
 }
 
 export function addChatContact(characterId: string): ChatContact | null {
+    // Every "add them back" path lands here — accepting a friend request, search and add,
+    // an engine re-establishing contact — so clearing the tombstone here covers all of
+    // them. Deliberately BEFORE the already-exists check: if a contact somehow exists
+    // while still tombstoned, the tombstone is the stale half and should go.
+    unmarkContactRemoved(characterId);
     const contacts = loadChatContacts();
     if (contacts.find(c => c.characterId === characterId)) return null; // already exists
 
@@ -961,6 +1026,9 @@ export function addChatContact(characterId: string): ChatContact | null {
 export function removeChatContact(characterId: string) {
     const contacts = loadChatContacts();
     saveChatContacts(contacts.filter(c => c.characterId !== characterId));
+    // Mark AFTER the save: loadChatContacts above runs the rescue pass, and marking first
+    // would change what that pass sees mid-call.
+    markContactRemoved(characterId);
 }
 
 // ── CRUD for Sessions ─────────────────────────
