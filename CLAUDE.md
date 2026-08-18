@@ -1289,6 +1289,8 @@ Real divergence from our baseline: **129 files, +23024 / −5191**, 149 commits,
 | **Zero-width chars saved as empty bubbles** | `f61f34c` | `isInvisibleOrWhitespaceOnly()` in `rich-message-parser.ts`. Zero-width chars are **not** deleted (U+200D joins composite emoji) — they only count as blank when deciding emptiness. |
 | **3 Moments anti-hallucination rules** | `f5860a4` | Written into our English entries. Version bump deferred at the time; **activated in `275`**. |
 | **Store the post first, attach the photo after** | `1976054` | `attachMomentPhotoInBackground`. **Architecture check done first, as asked:** our UI needed no change — `moment-post-card`'s retry affordance keys off `photoDescription && !photoUrl`, not the status field, so a `"pending"` post already renders a working retry button. The only required change was widening the type union, which had only `"failed" | "generated"`. |
+| **Fault-tolerant SSE parsing** (upstream `03e24e9`) | `e8f5473` | `lib/sse-json.ts` + both streaming paths. See below. |
+| **`<style>` protection swallowing the block closer** (upstream `812841a`) | `30dff08` | Adapted to bilingual, not copied. See below. |
 
 **`BUILTIN_PRESET_VERSION` is now 275**, bumped to activate the three Moments rules. Bumped ahead of "after D2" deliberately: nothing left in D2 touched `builtin-preset.ts` (`mascot-tools.ts` and `mascot-prompts.ts` are not part of the preset), so no second bump was coming from that work.
 
@@ -1715,7 +1717,59 @@ Shipped in `styles/chat.css` (appended block), `styles/tokens.css`, `components/
 
 **Not verified by me: the visual result.** Fixtures cannot check rendering, and the tail offsets came from the reference CSS written against a different DOM — the two `bottom`/`right` values are the most likely thing to need nudging on a real screen.
 
+## UPSTREAM RE-CHECK (2026-08-18): 472 new commits in 10 days
+`upstream/main` went `54a3d07 → 69ac5df` (2026-08-07 → 08-17). Divergence from our baseline roughly doubled: **129 → 258 files, +23k → +58.7k lines, 105 new files.** Still fetch-only; nothing merged, nothing pushed.
+
+**⚠️ `grep -c $'\r$'` is NOT a valid EOL check.** It reported "2637/2637 CRLF" for `lib/chat-engine.ts`, which is actually **LF**. The CR gets swallowed at the tool boundary, leaving the pattern `$`, which matches every line — so an LF file reads as 100% CRLF and you "fix" it in the wrong direction. Use a byte-level count instead:
+```
+node -e "const b=require('fs').readFileSync(P);let lf=0,crlf=0;for(let i=0;i<b.length;i++)if(b[i]===0x0a){(i>0&&b[i-1]===0x0d)?crlf++:lf++};console.log({crlf,lf})"
+```
+This also means the mixed-line-endings note earlier in this file should be trusted only where it came from an actual splice failure, not from that grep. `splice-lib.mjs` detects correctly on its own — let it.
+
+### New feature clusters (none ported)
+| cluster | commits | what |
+|---|---|---|
+| 特调 / Mixology | 83 | whole new app: `lib/mixology/*` (15 files), `components/mixology/*`, sandboxed 机括 hook runtime, Supabase hall |
+| resource-hub | 77 | whole new app: pixel avatars/icons/stickers, rich editor, upload/review/flowers |
+| 工坊 / QA Workshop | 62 | the one already logged as not-ported, now with a GitHub write agent + `lib/agent-computer.ts` |
+| calendar rewrite | 26 | split into `month-page`/`detail-page`/`event-edit-modal` + `lib/lunar.ts`; `calendar-app.tsx` −769 |
+| custom status bar | ~8 | `lib/chat-status-region.ts`, user-defined status-bar contract wired into the macro/preset pipeline |
+
+Also new upstream: PWA manifest injector, per-session custom CSS, sticker search suggest, call vibration, character version storage, preset entry import, weixin as a real Supabase edge function.
+
+**No collision with our recent work.** `styles/chat.css` has 11 upstream commits but zero bubble-tail/iMessage work (no `data-run-end`, no tail). `lib/tool-storage.ts` has **0** upstream commits, so the REST scoping in `186182c` is untouched. `upstream/test` is down to 14 files of mobile-shell work.
+
+### Four bugs upstream fixed that we demonstrably had — verified against our tree, not assumed
+Ported: 1 and 2. **Still open: 3 and 4.**
+1. `03e24e9` SSE parsing — **ported, `e8f5473`**
+2. `812841a` `[StatusPanel]` closer swallowed — **ported (adapted), `30dff08`**
+3. `9eac832` **deleted friends come back.** We have `restoreContactsForPrivateSessions` at `chat-storage.ts:665`, called from `:905` and `:929`, with no tombstone. It fires only when contacts ≤ half the private sessions with messages, so it is invisible with many friends and reproduces every time with one or two. Second symptom: the resurrected contact makes `getPendingFriendRequests` delete the AI's later friend request as "expired" before the user ever sees it. Upstream's fix records a tombstone (`ai_phone_removed_contacts_v1`) that `addChatContact` clears, so every re-add path releases it.
+4. `ff51207` **inline HTML card height only grows.** Same root cause as the story-mode ratchet we already ported in `90a33f7`, but a **different code path** — `buildChatHtmlDocument` in `message-bubble.tsx`, still `Math.max(body.scrollHeight, documentElement.scrollHeight, 80)`. `documentElement.scrollHeight` is at least the iframe viewport, which is the height the parent set last time, so it measures itself.
+
+**Not applicable:** `5c73e66` (regex preview iframe sandbox) — we have no preview iframe in `regex-manager.tsx`; that is a newer upstream feature.
+
+**Considered, not ported:** `43e9570` removes the assembler's legacy hardcoded fallback (−256 lines in `llm-prompt-assembler.ts`). Real bug — a preset with no `prompt_order` silently injects a full persona set regardless of its own entries — but that file is the spine of all Phase-D work and the Couple Space `{{coupleSpace}}` wiring, so it is not a drop-in. `72e6ea2` (a truncated native tool call no longer kills the round) touches the same streaming region as #1 and would pair naturally with it.
+
+### `e8f5473` — fault-tolerant SSE parsing
+`lib/sse-json.ts`, 22/22 fixture (`_fx-sse-json.mjs`, kept). Both streaming paths in `chat-engine.ts` had their own naive parse and **failed differently**: `readSseStream` caught and dropped the line (silent character loss), while `sendLLMToolStreamRequest` had a **bare `JSON.parse` with no try/catch**, so one split line threw and killed the whole round. Tool-call argument lines are the longest thing on that stream, which is why that was the common failure. Both now share one parser — the duplicated parse is exactly what let them diverge.
+
+Two details worth keeping:
+- **No `.trim()` on the data line.** Per the SSE spec at most one space after the colon is the separator; trimming eats a payload space sitting exactly on a split boundary, turning `hello world` into `helloworld`. Fixture B2 is the permanent guard, and it is the only assertion that fails if `.trim()` comes back.
+- **`rawResponse` now accumulates raw event text**, not data payloads. Once a record can span events, a "data line" is not a meaningful unit. Verified the only consumers are debug displays (`cocreate-engine.ts:392` collects it unparsed, `user-profile-panel.tsx:661` renders it).
+
+Non-vacuity measured: dropping instead of carrying → 17/22 (B1 B2 B3 B5 B6). **Not B4** — its two fragments arrive in the same event, so the bare-line join in `pushEvent` handles it without ever needing carry, a genuinely separate mechanism. **Not C1/C2** either: those assert stop-loss, which "drop everything" also satisfies, so they are regression guards rather than proof.
+
+### `30dff08` — `<style>` protection swallowing `[/StatusPanel]`
+`_fx-html-protect.mjs`, 29/29, kept. The protection run had two stop conditions (blank line + non-`<`, or `$`). When the model writes raw HTML inside `[StatusPanel]` there is normally only a single newline before the closer, so it ran to `$` and swallowed `[/StatusPanel]` **plus the chat reply after it**; the closer was gone before `extractBracketBlock` ran, nothing paired, and the literal tags leaked into the bubble. The user-discovered workaround — "add a blank line" — was just giving it somewhere to stop.
+
+**Adapted, not copied, and the control proves why.** Upstream hardcodes the closer as `(?:状态栏|内心)`. Running upstream's fix verbatim against our fixture gives **25/29, failing exactly the English cases** — because this fork teaches `[StatusPanel]`/`[InnerThoughts]`. The stop condition is now generated from `BLOCK_TAG_STATUS_PANEL`/`BLOCK_TAG_INNER` through a new `blockCloserAlternationSource` in the leaf module `block-tags.ts`, alongside every other tag-derived regex. Pre-fix control gives 20/29.
+
+**Seventh instance of "one side moved, one consumer left behind"** — and the first where the left-behind consumer was *upstream's own fix*. Any future port of a protocol-adjacent upstream patch has to be checked against our English tags before it is applied.
+
+Note the "reply survives" assertions do **not** discriminate: when the block leaks, the reply text is still present, just glued into the same bubble behind literal tags. The "no literal tag leaks" assertions are the ones that catch it. Both are kept.
+
 ## Still open / not yet done
+- **Two upstream bugs confirmed present, not yet ported** — `9eac832` (deleted friends resurrect, `chat-storage.ts:665`) and `ff51207` (inline HTML card height ratchet in `message-bubble.tsx`). Both diagnosed against our tree in the 2026-08-18 upstream re-check above.
 - **Couple Space follow-ups**: mini-games Route A (next), then Track 2 imports.
 - **Track 2 game imports** (deferred wholesale during Couple Space): pocket-fishing, cute-pet, executive-diary.
 - **`[系统指令]` / `[事件 …]` short-term timeline labels** (found 2026-08-06 during the offline/online research). Sites: `lib/short-term-assembler.ts:222,313`, `lib/chat-storage.ts:286,318`, `lib/chat-offline-storage.ts:178`. **These are read by the model** — they label system-instruction and offline-event entries inside the short-term event stream — so treat them as protocol, not as UI text: **make every consumer bilingual first (accept the legacy Chinese label AND the new English one), then flip the producers**, same dual-recognition pattern as the rest of this migration. Do not translate them in place; grep for every producer *and* every consumer of each label before touching either side (the `tool-executor` / `FETCH_RESULT_HEADER` / `prompt-sanitizer` regressions were all "one side moved, one consumer left behind").
