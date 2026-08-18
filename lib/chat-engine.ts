@@ -1,5 +1,6 @@
 // lib/chat-engine.ts
 
+import { createSseJsonParser } from "./sse-json";
 import { loadCharacters } from "./character-storage";
 import { buildScreenEffectPromptHint } from "./chat-screen-effects";
 import { emitChatPluginEvent, runChatPluginTransform } from "./chat-plugin-hooks";
@@ -701,31 +702,30 @@ async function readSseStream(
     let rawResponse = "";
     const contentStripper = createStreamingTimestampStripper();
 
-    const handleEvent = async (eventText: string) => {
-        const dataLines = eventText
-            .split("\n")
-            .map((line) => line.trim())
-            .filter((line) => line.startsWith("data:"))
-            .map((line) => line.slice(5).trim());
-        for (const dataLine of dataLines) {
-            if (!dataLine || dataLine === "[DONE]") continue;
-            rawResponse += `${dataLine}\n`;
-            try {
-                const parsed = JSON.parse(dataLine) as unknown;
-                const parts = parseProviderStreamDelta(providerKind, parsed);
-                if (parts.reasoning) {
-                    await callbacks?.onReasoningDelta?.(parts.reasoning);
-                }
-                if (parts.content) {
-                    const cleanDelta = contentStripper.push(parts.content);
-                    if (cleanDelta) {
-                        content += cleanDelta;
-                        await callbacks?.onDelta?.(cleanDelta);
-                    }
-                }
-            } catch {
-                // Some relays send keepalive or non-JSON event data. Ignore it.
+    // Fault-tolerant parse: a relay that cuts a long JSON line in half used to make
+    // this silently drop the whole delta (the catch below). See sse-json.ts.
+    const sseParser = createSseJsonParser();
+    const handleParsed = async (parsed: unknown) => {
+        const parts = parseProviderStreamDelta(providerKind, parsed);
+        if (parts.reasoning) {
+            await callbacks?.onReasoningDelta?.(parts.reasoning);
+        }
+        if (parts.content) {
+            const cleanDelta = contentStripper.push(parts.content);
+            if (cleanDelta) {
+                content += cleanDelta;
+                await callbacks?.onDelta?.(cleanDelta);
             }
+        }
+    };
+    // rawResponse now holds the raw event text rather than just the data payloads:
+    // once records can span events, a "data line" is no longer a meaningful unit, and
+    // the raw wire text is what makes a split visible when debugging. Only the debug
+    // log panel reads this.
+    const handleEvent = async (eventText: string) => {
+        rawResponse += `${eventText}\n`;
+        for (const parsed of sseParser.pushEvent(eventText)) {
+            await handleParsed(parsed);
         }
     };
 
@@ -742,6 +742,9 @@ async function readSseStream(
     buffer += decoder.decode();
     if (buffer.trim()) {
         await handleEvent(buffer);
+    }
+    for (const parsed of sseParser.flush()) {
+        await handleParsed(parsed);
     }
     const finalContent = contentStripper.flush();
     if (finalContent) {
@@ -1088,6 +1091,43 @@ export async function sendLLMToolStreamRequest(
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
+        // Fault-tolerant parse: tool-call argument lines are the longest thing on this
+        // stream, so they are what a relay is most likely to cut in half. This used to be
+        // a bare JSON.parse -- one Unterminated string threw and killed the whole round.
+        const sseParser = createSseJsonParser();
+        const handleParsedDelta = async (data: unknown) => {
+            const delta = parseProviderStreamDelta(request.providerKind, data);
+            if (delta.reasoning) {
+                reasoning += delta.reasoning;
+                await callbacks?.onReasoningDelta?.(delta.reasoning);
+            }
+            if (delta.content) {
+                const cleanDelta = contentStripper.push(delta.content);
+                if (cleanDelta) {
+                    content += cleanDelta;
+                    emitChatPluginEvent("llm.streamChunk", { chunk: cleanDelta, sessionId: options?.debugSessionId, purpose: pluginPurpose });
+                    await callbacks?.onDelta?.(cleanDelta);
+                }
+            }
+            for (const toolDelta of delta.toolCallDeltas || []) {
+                mergeToolCallDelta(toolDrafts, toolDelta);
+                if (!firedToolCallStarts.has(toolDelta.index)) {
+                    const draft = toolDrafts.get(toolDelta.index);
+                    if (draft?.name) {
+                        firedToolCallStarts.add(toolDelta.index);
+                        if (!draft.id) {
+                            draft.id = `tool_${Date.now()}_${toolDelta.index}`;
+                            toolDrafts.set(toolDelta.index, draft);
+                        }
+                        await callbacks?.onToolCallStart?.({
+                            id: draft.id,
+                            name: draft.name,
+                            index: toolDelta.index,
+                        });
+                    }
+                }
+            }
+        };
         while (true) {
             const { value, done } = await reader.read();
             if (done) break;
@@ -1095,49 +1135,22 @@ export async function sendLLMToolStreamRequest(
             const parsed = parseSseEvents(buffer);
             buffer = parsed.rest;
             for (const event of parsed.events) {
-                const dataLines = event.split("\n")
-                    .filter((line) => line.startsWith("data:"))
-                    .map((line) => line.slice(5).trim());
-                for (const dataLine of dataLines) {
-                    if (!dataLine || dataLine === "[DONE]") continue;
-                    rawResponse += `${dataLine}\n`;
-                    const data = JSON.parse(dataLine) as unknown;
-                    const delta = parseProviderStreamDelta(request.providerKind, data);
-                    if (delta.reasoning) {
-                        reasoning += delta.reasoning;
-                        await callbacks?.onReasoningDelta?.(delta.reasoning);
-                    }
-                    if (delta.content) {
-                        const cleanDelta = contentStripper.push(delta.content);
-                        if (cleanDelta) {
-                            content += cleanDelta;
-                            emitChatPluginEvent("llm.streamChunk", { chunk: cleanDelta, sessionId: options?.debugSessionId, purpose: pluginPurpose });
-                            await callbacks?.onDelta?.(cleanDelta);
-                        }
-                    }
-                    for (const toolDelta of delta.toolCallDeltas || []) {
-                        mergeToolCallDelta(toolDrafts, toolDelta);
-                        if (!firedToolCallStarts.has(toolDelta.index)) {
-                            const draft = toolDrafts.get(toolDelta.index);
-                            if (draft?.name) {
-                                firedToolCallStarts.add(toolDelta.index);
-                                if (!draft.id) {
-                                    draft.id = `tool_${Date.now()}_${toolDelta.index}`;
-                                    toolDrafts.set(toolDelta.index, draft);
-                                }
-                                await callbacks?.onToolCallStart?.({
-                                    id: draft.id,
-                                    name: draft.name,
-                                    index: toolDelta.index,
-                                });
-                            }
-                        }
-                    }
+                rawResponse += `${event}\n`;
+                for (const data of sseParser.pushEvent(event)) {
+                    await handleParsedDelta(data);
                 }
             }
         }
 
-        if (buffer.trim()) rawResponse += buffer.trim();
+        if (buffer.trim()) {
+            rawResponse += buffer.trim();
+            for (const data of sseParser.pushEvent(buffer)) {
+                await handleParsedDelta(data);
+            }
+        }
+        for (const data of sseParser.flush()) {
+            await handleParsedDelta(data);
+        }
         const finalContent = contentStripper.flush();
         if (finalContent) {
             content += finalContent;
