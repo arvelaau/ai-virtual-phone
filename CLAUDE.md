@@ -1845,6 +1845,40 @@ The corrected detector finds **5 hits total** across 25 files (checkphone had 48
 
 Registration last is deliberate: a half-ported app that is already on the home screen is worse than one that is not yet reachable.
 
+### ✅ MIXOLOGY PORT COMPLETE (2026-08-18) — 8 commits, ~8,400 lines
+`f347142` (audit) → `54ef4b1` `4d4778a` `ec872f4` `38c9906` `38dbad9` `c1a8538` `2696526` `d06cd52` `a9a0b7a`.
+`tsc` 0 errors at every stage; all 19 repo fixtures green. Two new permanent fixtures: **`_fx-mixology-prompt.mjs` (58/58)** and **`_fx-mixology-sandbox.mjs` (36/36)**.
+
+**⚠️ NOT SMOKE TESTED.** Everything is verified by tsc, fixtures and source comparison; none of it has been run in the app. The `hall` tab will report "not open yet" (`missing_supabase_env` → 503, same as Game Hall). The other four tabs are local.
+
+#### What survives in Chinese, and why
+| where | kept | reason |
+|---|---|---|
+| `assembler.ts` | `{{状态.X}}` alongside `{{state.X}}` | materials are shared through the hall, so a Chinese-authored blend must keep resolving. **Not** legacy-data compat — there is no stored mixology data in this fork. |
+| `prose.ts` | `状态栏\|小票`, `小剧场\|尾调` alongside `StatusPanel\|Skit`; the taught 「」 and 【】 markers | same hall reason, plus 「」/【】 are structural tokens |
+| `types.ts`, `state.ts`, `slot-editor.tsx` | full-width separators `，、｜＃`, `；｜`, `：` | user-typed tag separators and model-written receipt separators |
+
+#### The lockstep, and how it is pinned
+`assembler.ts` emits `## Output requirements` etc. Those exact strings are **hand-copied** into `types.ts`'s `MIX_KIND_SECTION_LABELS`, `mixology-preview.tsx`'s `STRUCTURE_ROWS` cheat sheet, and `mixology-editor.tsx`'s `KIND_GUIDE` — nothing reads one from another. Drift means the app tells an author their material lands in a section the prompt does not contain. Fixture group F asserts every `## ` row is a heading the assembler actually emits; **verified to fail from both sides** (renaming a row → 57/58, renaming the heading → 54/58).
+
+#### Bugs found by translating rather than copying
+- **`parseMixTags` / the keyword field shredded multi-word input** — both split on whitespace unconditionally, invisible in Chinese, turning `"slice of life"` into three tags. Third and fourth instances of the defect first found in `xiaohongshu-engine.ts`'s `parseTags`.
+- **`builtin.ts`'s header instructed a version bump that does nothing.** Traced before believing it: `listMixBuiltins()` rebuilds on every call and never persists, `MIX_BUILTIN_VERSION` has zero consumers, `BUILTIN_VERSION_KEY` is registered but never read or written. **Exact inverse of the `BUILTIN_PRESET_VERSION` trap** — there a bump was needed and assumed unnecessary; here a comment claims one is needed and it is not.
+- **The regex-search placeholder was not a valid regex.** Its body is `\*\*`, which JS parses as unrecognized escapes, so a field labelled "Search (regex)" rendered `**|--+`. Now renders `\*\*|--+`.
+- **Two translated strings landed in BARE JSX attributes**, where `\"` terminates the attribute rather than escaping. Upstream had no quotes there; the English introduced them. tsc caught it.
+
+#### `frame-height.ts` solves something we had left open
+It addresses the **same viewport-unit feedback loop** recorded as known residue in the `message-bubble.tsx` port (`6863c61`), and does it differently: rather than changing *what* is measured, it detects the ratchet's signature ("reported = current + the same constant", 4 rounds running) and freezes for that round only. That handles the case the measurement fix explicitly could not — a canvas whose own CSS is written in `vh`. Worth reusing if the chat-card residue ever matters.
+
+#### Method notes worth reusing
+- **Verbatim copy + targeted substitution** for anything with embedded browser code, CRC tables or byte offsets (`transfer.ts`, `mechanism-runtime.ts`, `css-scope.ts`, the four leaf components). Verified afterwards by diffing with comments stripped: `storage.ts`, `frame-height.ts` and `mixology.css` came back **byte-identical**, and `mechanism-runtime.ts`/`css-scope.ts` differ by exactly one inline comment each.
+- **Literal-dictionary keyed by index, escaping derived not typed** (`mixology-editor.tsx`, 134 literals). Six of them carry escaped quotes and embedded HTML, and hand-counting backslashes got them wrong three times running. Moving the data to plain rendered English in JSON ended it. **But the quote-pairing matcher desyncs on some JSX** — it produced 28 bogus "literals" on `mixology-game.tsx`, where direct exact-match pairs were the right tool.
+- **Collect all anchor failures and report them together** rather than exiting on the first; on an 800-line file the one-at-a-time loop costs an iteration each.
+- Every `clean*` helper needs a fixture assertion that a multi-word English string survives it, and a raw-NUL check. `cleanText` in `mechanism-protocol.ts` came out with a literal 0x00 byte instead of the `\u0000` escape — behaviour right, encoding fragile. **Fifth instance.** `scratchpad/denul.mjs` is the reusable fix; never do it through `node -e`.
+
+#### Deliberately NOT ported from upstream
+The `PAGE_3_DEFAULT` entries for `qa` and `resource_hub` — those apps do not exist in this fork.
+
 ## Still open / not yet done
 - **Couple Space mini-games, "Route A"** — ⚠️ **this name is referenced three times in this file and never DEFINED.** No scope, no design, no integration point was ever written down; the only surviving description is "a custom app via existing directives", from a session transcript rather than from here. Do not start it as if it were a specified task — it needs a design decision from the user first. Recorded 2026-08-18.
 - **Track 2 game imports** — the 3 remaining of 6 user-contributed games (imports 1-3 landed as `81eb207`, `d66b1dc`, `cff6995`): pocket-fishing (156 CJK / 590 lines), cute-pet (155 / 1497), executive-diary (577 / 1929, and it holds 6 of the 8 "write in Chinese" orders plus a gender-inference guard that needs adapting to English convention). Source files are untracked in `pending-game-imports/`; the 3 already-imported ones are tracked, which is how to tell them apart.
