@@ -275,19 +275,36 @@ function HtmlFullscreenModal({ html, onClose, onActionSelect }: { html: string; 
     );
 }
 
-function buildChatHtmlDocument(html: string, inline = false): string {
+// Exported for _fx-html-height.mjs: the measurement runs inside the iframe as injected
+// script text, so the only way to test it is to pull the script back out and execute it.
+export function buildChatHtmlDocument(html: string, inline = false): string {
     const action = `document.addEventListener("click",function(e){
                 var t=e.target.closest("[data-action]");
                 if(t){e.preventDefault();window.parent.postMessage({type:"_chat_action",text:t.getAttribute("data-action")},"*")}
             },true);`;
+    // Measure BODY only. documentElement.scrollHeight is at least the iframe viewport,
+    // and that viewport is the height the parent set from our own last report — so
+    // including it measures ourselves and the height ratchets: it can grow and can never
+    // shrink back. Symptom is a band of blank space under the card once the content gets
+    // shorter (a <details> closed, a list filtered). body's height comes from the content,
+    // so it moves both ways. Same defect and same fix as story-html-renderer.tsx, which is
+    // a separate copy of this bridge.
+    //
+    // A zero-width frame (not laid out yet, or display:none) measures garbage, so bail
+    // instead of reporting it and leave the previous height standing.
+    //
+    // Known residue: a card whose CSS sets body{height:100vh} or min-height in vh is still
+    // circular, because those resolve against the iframe we just sized. Not forced to auto
+    // here -- that would silently reflow already-generated cards.
     const resize = inline ? `
             var n=0;
             var send=function(){
                 if(n>=12)return;
-                n++;
                 var b=document.body;
-                var d=document.documentElement;
-                var h=Math.max(b?b.scrollHeight:0,d?d.scrollHeight:0,80);
+                if(!b)return;
+                if(window.innerWidth<50)return;
+                n++;
+                var h=Math.max(Math.ceil(b.getBoundingClientRect().height),b.scrollHeight||0,80);
                 window.parent.postMessage({type:"_chat_inline_html_resize",h:h},"*");
             };
             window.addEventListener("load",send);
