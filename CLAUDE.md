@@ -1879,6 +1879,31 @@ It addresses the **same viewport-unit feedback loop** recorded as known residue 
 #### Deliberately NOT ported from upstream
 The `PAGE_3_DEFAULT` entries for `qa` and `resource_hub` — those apps do not exist in this fork.
 
+### UPSTREAM RE-CHECK (2026-08-19): 36 commits in ~22 hours
+`upstream/main` `69ac5df → de1a5c7`. Two clusters plus strays.
+
+| cluster | commits | verdict |
+|---|---|---|
+| Mixology refinements | 15 | upstream iterating on the app ported the day before — **2 bug fixes taken (`ccc7f63`)**, the rest deferred |
+| Supabase egress reduction | 12 | cloud-only (CDN caching, lightweight list endpoints, RPCs) — **no effect without Supabase** |
+| `0664fcc` backup/restore | 1 | +960 lines across 10 files incl. `qa-chat-store.ts` we do not have. A refactor, not a targeted fix. **Not taken.** |
+| `5415677` checkphone numeric parsing (`k/w/M/B/千/万/亿`) | 1 | touches an engine we own heavily — worth a look if checkphone numbers ever misparse |
+| `de98183` + `5559e36` wording change | 2 | **made then reverted upstream** — skip. Second time a revert-check has paid off (the first was `9eac832`/`7713154`). |
+
+#### Taken: `ccc7f63` — two real bugs we shipped
+Both verified present in our tree before porting.
+
+**`ef9ac69`** — after sending, the user's bubble waited for the model AND the view jumped back to the title page. Showing the user's message immediately relies on `generateMixReply` storing the turn **before its first await**; wiring in the mechanism hooks put `await runBeforeSendHooks` ahead of `saveMixSession`, so the caller's synchronous read-back saw a snapshot with no user turn. **We inherited this precisely because the port was faithful** — it is upstream's own regression from the mechanism work that stage 3 copied verbatim. Fixed with an `onUserTurn` callback, a `commit()` the engine can call, and pinning the resting point on speak. The entry effect now keys on `sessionId` alone; it previously also depended on `busy` and `turns.length`, so sending flipped `busy` first, read "nobody has spoken", and scrolled to the top.
+
+**`87fde5f`** — entering a session with history stranded you mid-canvas. Every sandboxed iframe in the scroll area reports height asynchronously; at mount they are ~24px, and when the real height lands the content below is pushed down while scroll stays put. **Chrome hides this via scroll anchoring; iOS Safari does not** — so it is invisible on desktop. The session screen now listens for the resize message directly and settles two frames later. Sturdier than a per-component `onHeight` for two reasons: the receipt/skit frames never had one, and `RichFrame`'s fired synchronously right after `setHeight`, before React committed — settling against the old `scrollHeight` and achieving nothing.
+
+#### Deferred, and why
+The **prompt-structure commits** (`d1309d8` headings shift a level, `dc66af8` char/user names fold into the preamble, `246333e` editor box titles = prompt titles, `f21ced6` mask terminology) are a coherent set that would move the exact headings pinned by fixture group F. Portable, but the lockstep has to move with them — a separate decision from the bug fixes, not a drive-by.
+
+The **mechanism panel rework** (`6578464` free placement, `de1a5c7`, `76d8cb9` preview, `db4be40`) is a 4-commit feature change to a part that currently works. `a169fb8` (streaming output) is a real improvement and the most tempting of the deferred set.
+
+`440d1da` splits mixology onto its own `MIXOLOGY_SUPABASE_*` env with no fallback to the main DB — irrelevant while the hall is 503, but worth taking **before** anyone ever configures Supabase, since it changes which database the data lands in.
+
 ## Still open / not yet done
 - **Couple Space mini-games, "Route A"** — ⚠️ **this name is referenced three times in this file and never DEFINED.** No scope, no design, no integration point was ever written down; the only surviving description is "a custom app via existing directives", from a session transcript rather than from here. Do not start it as if it were a specified task — it needs a design decision from the user first. Recorded 2026-08-18.
 - **Track 2 game imports** — the 3 remaining of 6 user-contributed games (imports 1-3 landed as `81eb207`, `d66b1dc`, `cff6995`): pocket-fishing (156 CJK / 590 lines), cute-pet (155 / 1497), executive-diary (577 / 1929, and it holds 6 of the 8 "write in Chinese" orders plus a gender-inference guard that needs adapting to English convention). Source files are untracked in `pending-game-imports/`; the 3 already-imported ones are tracked, which is how to tell them apart.
