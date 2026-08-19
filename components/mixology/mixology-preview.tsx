@@ -1,16 +1,21 @@
 "use client";
 
-// House Special -- the workshop preview. Receipt / garnish / encore are the three kinds you
-// have to SEE to judge, so they are tried on in place inside the editor: the receipt renders
-// against sample data, the garnish is laid over sample prose, and the encore runs in its
-// sandbox.
+// House Special -- the workshop preview. These are the kinds you have to SEE to judge, so
+// they are tried on in place inside the editor: the receipt renders against sample data, the
+// garnish is laid over sample prose, the encore runs in its sandbox, and a mechanism is set
+// down on a fake session screen where its interface can be dragged and clicked and its hooks
+// run once on the spot to see what comes back.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Play, X } from "lucide-react";
 import { MixProseView } from "./prose-view";
 import { MixRichText } from "./rich-text";
 import { MixTicketFrame } from "./ticket-frame";
+import { MixMechanismPanel } from "./mechanism-panel";
 import { scopeMixCss } from "@/lib/mixology/css-scope";
+import { MIX_HOOK_LABELS, type MixHook } from "@/lib/mixology/mechanism-protocol";
+import { disposeMixSandboxesForMaterial, runMixHook } from "@/lib/mixology/mechanism-runtime";
+import type { MixPanelLayout, MixState } from "@/lib/mixology/types";
 
 /** Sample prose for the garnish preview. It exercises all five prose markers, so an author
  *  can see every one of them styled at a glance. */
@@ -25,7 +30,8 @@ export type MixPreviewTarget =
     | { kind: "ticket"; html: string; raw: string }
     | { kind: "garnish"; css: string }
     | { kind: "encore"; html: string; raw?: string }
-    | { kind: "canvas"; html: string; cover?: string };
+    | { kind: "canvas"; html: string; cover?: string }
+    | { kind: "mechanism"; name: string; html: string; layout: MixPanelLayout; script: string };
 
 /** The preview body: what "seeing it" means for each of the four kinds */
 function MixPreviewBody({ target }: { target: MixPreviewTarget }) {
@@ -93,6 +99,8 @@ function MixPreviewBody({ target }: { target: MixPreviewTarget }) {
             </>
         ) : null}
 
+        {target.kind === "mechanism" ? <MixMechanismStage target={target} /> : null}
+
         {target.kind === "encore" ? (
             <>
                 <div className="mix-detail-label">{target.raw?.trim() ? "Rendered with the preview sample data" : "The static sketch, running"}</div>
@@ -105,6 +113,174 @@ function MixPreviewBody({ target }: { target: MixPreviewTarget }) {
     );
 }
 
+
+/** The fake session used to try a mechanism out: the prose and the names are hardcoded, and
+ *  exist only to give the panel a stage with realistic proportions */
+const MECH_SAMPLE = [
+    "[After closing]",
+    "He turns the last glass upside down on the rack, without looking back.",
+    "「You have been quiet today.」",
+].join("\n");
+const MECH_CHAR = "Cheng Jibai";
+const MECH_USER = "A-Lan";
+/** The sample text fed in when trying a hook */
+const MECH_SAY = "I push the glass back. 「I do not feel like talking today.」";
+const MECH_REPLY = "[The bar]\nHe does not answer, only dims the lights two notches.\n「Then sit.」";
+/** The fake session id used for trying out: entirely separate from any real session's sandbox */
+const MECH_SESSION = "mixpreview";
+const MECH_MATERIAL = "mixpreview-mech";
+
+function short(value: string, max = 220): string {
+    const text = value.replace(/\s+/g, " ").trim();
+    return text.length > max ? text.slice(0, max) + "…" : text;
+}
+
+/**
+ * Trying a mechanism out.
+ * The top half is a stage drawn to the session screen's proportions, with the panel landing on
+ * it by its own placement -- draggable, clickable, and with mix.setStore / mix.say genuinely
+ * handled, so the author can see exactly where it lands and how big it is.
+ * The bottom half runs the hooks: a sample payload goes into the sandbox and whatever comes
+ * back is laid out as-is.
+ * The storage is shared -- write it in a hook and the interface sees it immediately, which is
+ * exactly how the two halves of a mechanism work together.
+ */
+function MixMechanismStage({ target }: { target: Extract<MixPreviewTarget, { kind: "mechanism" }> }) {
+    /**
+     * The stage is drawn to the session screen's real aspect ratio. Hardcode a ratio and the
+     * same percentage placement lands somewhere different here than it does in a session --
+     * which is where most "the preview does not match the real thing" comes from.
+     */
+    const shellRef = useRef<HTMLDivElement | null>(null);
+    const [ratio, setRatio] = useState("9 / 19.5");
+    useEffect(() => {
+        const app = shellRef.current?.closest(".mixology-app") ?? (typeof document !== "undefined" ? document.querySelector(".mixology-app") : null);
+        const rect = app?.getBoundingClientRect();
+        if (rect?.width && rect.height) setRatio(`${Math.round(rect.width)} / ${Math.round(rect.height)}`);
+    }, []);
+    const [store, setStore] = useState<Record<string, string>>({});
+    const [state, setState] = useState<MixState>({});
+    const [box, setBox] = useState<Partial<MixPanelLayout> | null>(null);
+    const [said, setSaid] = useState<string[]>([]);
+    const [turn, setTurn] = useState(0);
+    const [running, setRunning] = useState<MixHook | "">("");
+    const [result, setResult] = useState<{ hook: MixHook; lines: string[] } | null>(null);
+
+    // Code changed: drop the old sandbox, or what runs is still the previous version
+    useEffect(() => {
+        disposeMixSandboxesForMaterial(MECH_MATERIAL);
+        return () => disposeMixSandboxesForMaterial(MECH_MATERIAL);
+    }, [target.script]);
+
+    const layout = useMemo(() => ({ ...target.layout, ...(box ?? {}) }), [target.layout, box]);
+
+    const fire = useCallback(async (hook: MixHook) => {
+        if (!target.script.trim()) return;
+        setRunning(hook);
+        const payload = {
+            hook,
+            turnCount: turn,
+            state,
+            store,
+            charName: MECH_CHAR,
+            userName: MECH_USER,
+            text: hook === "beforeSend" ? MECH_SAY : hook === "afterReply" ? MECH_REPLY : undefined,
+            ticketRaw: hook === "afterReply" ? "Warmth: 61\nPlace: the bar" : undefined,
+            encoreRaw: undefined,
+        };
+        const out = await runMixHook(MECH_SESSION, MECH_MATERIAL, target.script, hook, payload);
+        const lines: string[] = [];
+        if (typeof out.text === "string") lines.push(`Prose rewritten\n${short(out.text, 400)}`);
+        if (out.note) lines.push(`Passing note - ${out.note.length} chars\n${short(out.note, 600)}`);
+        if (out.state) lines.push(`Remembered values - ${Object.entries(out.state).map(([k, v]) => `${k}=${v}`).join(", ")}`);
+        if (out.store) {
+            lines.push(`Storage - ${Object.entries(out.store).map(([k, v]) => `${k} (${v.length} chars)`).join(", ") || "cleared"}`);
+            setStore(out.store);
+        }
+        if (out.state) setState((prev) => ({ ...prev, ...out.state }));
+        if (!lines.length) lines.push("Nothing returned.");
+        setResult({ hook, lines });
+        setRunning("");
+        if (hook === "afterReply") setTurn((n) => n + 1);
+    }, [target.script, turn, state, store]);
+
+    const hasPanel = target.html.trim().length > 0;
+
+    return (
+        <>
+            {hasPanel ? (
+            <>
+            <div className="mix-detail-label">Interface</div>
+            <div className="mix-mech-stage" ref={shellRef} style={{ aspectRatio: ratio }}>
+                <div className="mix-mech-bar">{MECH_CHAR}</div>
+                <div className="mix-mech-prose"><MixProseView text={MECH_SAMPLE} /></div>
+                <div className="mix-mech-input" />
+                <div className="mix-panel-layer">
+                    {target.html.trim() ? (
+                        <MixMechanismPanel
+                            materialId={MECH_MATERIAL}
+                            name={target.name || "Mechanism"}
+                            layout={layout}
+                            html={target.html}
+                            state={state}
+                            store={store}
+                            onStore={(_id, next) => setStore(next)}
+                            onState={(patch) => setState((prev) => ({ ...prev, ...patch }))}
+                            onSay={(text) => setSaid((prev) => [...prev.slice(-2), text])}
+                            onBox={(_id, next) => setBox(next)}
+                        />
+                    ) : null}
+                </div>
+            </div>
+            {box ? (
+                <div className="mix-mech-hint">
+                    Dragged &middot; <button type="button" className="mix-mech-reset" onClick={() => setBox(null)}>put back</button>
+                </div>
+            ) : null}
+            </>
+            ) : null}
+
+            <div className="mix-detail-label" style={hasPanel ? { marginTop: 14 } : undefined}>Hooks &middot; turn {turn}</div>
+            <div className="mix-dock-row">
+                {(Object.keys(MIX_HOOK_LABELS) as MixHook[]).map((hook) => (
+                    <button
+                        type="button"
+                        className="mix-dock-chip"
+                        key={hook}
+                        disabled={!target.script.trim() || Boolean(running)}
+                        data-on={result?.hook === hook ? "true" : undefined}
+                        onClick={() => void fire(hook)}
+                    >
+                        {running === hook ? "running..." : MIX_HOOK_LABELS[hook]}
+                    </button>
+                ))}
+                <button type="button" className="mix-dock-chip" onClick={() => { setStore({}); setState({}); setSaid([]); setTurn(0); setResult(null); }}>
+                    Reset
+                </button>
+            </div>
+            {!target.script.trim() ? <div className="mix-mech-hint">No hook logic written.</div> : null}
+            {result ? (
+                <div className="mix-detail-value" data-code="true">
+                    {result.lines.join("\n\n")}
+                </div>
+            ) : null}
+
+            {Object.keys(store).length || Object.keys(state).length || said.length ? (
+                <>
+                    <div className="mix-detail-label" style={{ marginTop: 14 }}>Current state</div>
+                    <div className="mix-detail-value" data-code="true">
+                        {[
+                            `Storage - ${Object.keys(store).length ? Object.entries(store).map(([k, v]) => `${k} = ${short(v, 90)}`).join("\n     ") : "empty"}`,
+                            `Remembered values - ${Object.keys(state).length ? Object.entries(state).map(([k, v]) => `${k}=${v}`).join(", ") : "empty"}`,
+                            said.length ? `The interface said - ${said.map((t) => short(t, 90)).join("\n     ")}` : "",
+                        ].filter(Boolean).join("\n")}
+                    </div>
+                </>
+            ) : null}
+        </>
+    );
+}
+
 /** A key standing in for "the content changed", used to debounce refreshes so the sandbox is
  *  not rebuilt on every keystroke */
 function previewKey(target: MixPreviewTarget): string {
@@ -113,6 +289,7 @@ function previewKey(target: MixPreviewTarget): string {
         case "garnish": return `g${target.css}`;
         case "encore": return `e${target.html}${target.raw ?? ""}`;
         case "canvas": return `c${target.html}${target.cover ?? ""}`;
+        case "mechanism": return `m${target.html}${target.script}${JSON.stringify(target.layout)}`;
     }
 }
 

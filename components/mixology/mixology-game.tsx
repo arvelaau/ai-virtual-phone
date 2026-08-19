@@ -13,7 +13,7 @@ import { getMixMaterial, getMixSession, listMixPickables, resolveMixRecipeMateri
 import { applyMixMacros, MIX_DEFAULT_USER_NAME } from "@/lib/mixology/assembler";
 import { buildMixConditionContext, pickActiveMixMaterials } from "@/lib/mixology/state";
 import { scopeMixCss } from "@/lib/mixology/css-scope";
-import { MIX_KIND_LABELS, MIX_SLOT_ORDER, mixEncoreRenderHtml, mixSlotEntries, type MixCharacterCard, type MixFilterRule, type MixMaterialKind, type MixMechanismMaterial, type MixSession, type MixSlotEntry, type MixState, type MixTurn } from "@/lib/mixology/types";
+import { MIX_KIND_LABELS, MIX_SLOT_ORDER, mixEncoreRenderHtml, mixPanelLayoutOf, mixSlotEntries, type MixCharacterCard, type MixFilterRule, type MixMaterialKind, type MixMechanismMaterial, type MixPanelLayout, type MixSession, type MixSlotEntry, type MixState, type MixTurn } from "@/lib/mixology/types";
 import { applyMixFilterRules, mixStreamText } from "@/lib/mixology/prose";
 import { MixProseView } from "./prose-view";
 import { MixRichText } from "./rich-text";
@@ -210,18 +210,56 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     }, [session]);
 
     /**
-     * Mechanisms whose condition held AND that have a dock: these are the panels meant to stay
-     * pinned beside the screen.
-     * Capped at 3 -- one iframe each, which on a phone eats memory and runs out of screen.
+     * Mechanisms whose condition held AND that have an interface: these are the panels meant
+     * to stay on the session screen.
+     * Capped at 3 -- one iframe each, which on a phone eats memory.
+     * The placement is the one the material wrote for itself; anything the player dragged
+     * during this session wins over it.
      */
     const panels = useMemo(() => {
-        if (!session) return [] as MixMechanismMaterial[];
+        if (!session) return [] as { material: MixMechanismMaterial; layout: MixPanelLayout }[];
         const { entries } = resolveMixRecipeMaterials(session.recipe);
         const active = pickActiveMixMaterials(entries, buildMixConditionContext(session));
         return (active.mechanism ?? [])
-            .filter((m): m is MixMechanismMaterial => m.kind === "mechanism" && Boolean(m.dock) && Boolean(m.panelHtml?.trim()))
+            .filter((m): m is MixMechanismMaterial => m.kind === "mechanism" && Boolean(m.panelHtml?.trim()))
+            .map((material) => {
+                const base = mixPanelLayoutOf(material);
+                if (!base) return null;
+                const moved = session.panelBox?.[material.id];
+                return { material, layout: moved ? { ...base, ...moved } : base };
+            })
+            .filter((item): item is { material: MixMechanismMaterial; layout: MixPanelLayout } => item !== null)
             .slice(0, MIX_PANEL_MAX);
     }, [session]);
+
+    /**
+     * The escape hatch for mechanism interfaces. With placement handed entirely to the
+     * creator, a material that papers a panel over the whole screen -- leaving even the input
+     * box unreachable -- is theoretically possible. It is not guarded against by constraining
+     * layout, but by these two: hide them all, or put them back.
+     */
+    const [panelsHidden, setPanelsHidden] = useState(false);
+
+    /** Throw away every placement dragged during this session, back to what the material wrote */
+    const resetPanelBoxes = useCallback(() => {
+        const current = getMixSession(sessionId);
+        if (!current?.panelBox) return;
+        const next = { ...current };
+        delete next.panelBox;
+        saveMixSession(next);
+        setSession(getMixSession(sessionId));
+    }, [sessionId]);
+
+    /** Remembered for this session after the player drags or resizes a panel, and never
+     *  written back to the material */
+    const handlePanelBox = useCallback((materialId: string, box: { x: number; y: number; w: number; h: number }) => {
+        const current = getMixSession(sessionId);
+        if (!current) return;
+        const previous = current.panelBox?.[materialId];
+        if (previous && previous.x === box.x && previous.y === box.y && previous.w === box.w && previous.h === box.h) return;
+        saveMixSession({ ...current, panelBox: { ...(current.panelBox ?? {}), [materialId]: { ...(previous ?? {}), ...box } } });
+        setSession(getMixSession(sessionId));
+    }, [sessionId]);
 
     /** A panel writing its own storage */
     const handlePanelStore = useCallback((materialId: string, store: Record<string, string>) => {
@@ -552,20 +590,21 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                     </div>
                 ) : null}
             </div>
-            {panels.length ? (
+            {panels.length && !panelsHidden ? (
                 <div className="mix-panel-layer">
-                    {panels.map((material) => (
+                    {panels.map(({ material, layout }) => (
                         <MixMechanismPanel
                             key={material.id}
                             materialId={material.id}
                             name={material.name}
-                            dock={material.dock!}
+                            layout={layout}
                             html={material.panelHtml ?? ""}
                             state={session.state ?? {}}
                             store={session.mechanismStore?.[material.id] ?? {}}
                             onStore={handlePanelStore}
                             onState={handlePanelState}
                             onSay={handlePanelSay}
+                            onBox={handlePanelBox}
                         />
                     ))}
                 </div>
@@ -620,6 +659,16 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                         </div>
                         <div className="mix-sheet-body">
                             <div className="mix-struct-note">This changes only this session, takes effect on the next generation, and leaves what is already written untouched. The blend saved at the bar is unaffected.</div>
+                            {panels.length ? (
+                                <div className="mix-panel-ops">
+                                    <button type="button" className="mix-dock-chip" data-on={panelsHidden ? "true" : undefined} onClick={() => setPanelsHidden((v) => !v)}>
+                                        {panelsHidden ? "Show mechanism panels" : "Hide mechanism panels"}
+                                    </button>
+                                    <button type="button" className="mix-dock-chip" onClick={() => { resetPanelBoxes(); onToast("Mechanism panels put back."); }}>
+                                        Reset positions
+                                    </button>
+                                </div>
+                            ) : null}
                             <div className="mix-bar-hint">Swipe to move between slots &middot; tap a slot to swap its material</div>
                             <div className="mix-wheel" ref={wheelRef} onScroll={handleWheelScroll}>
                                 {MIX_SLOT_ORDER.map((kind) => {

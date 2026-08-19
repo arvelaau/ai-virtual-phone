@@ -321,8 +321,12 @@ export type MixFilterMaterial = MixMaterialMeta & {
     rules: MixFilterRule[];
 };
 
-/** Where a mechanism docks: which edge of the session screen its panel hangs on. The app
- *  decides the exact placement; the creator only picks a side. */
+/**
+ * Where a mechanism docks. This was the first way of placing a panel -- four hardcoded spots,
+ * and the creator could only pick one of them. It survives for exactly two reasons: recognising
+ * older materials, and offering a few handy starting points for free placement.
+ * New materials use MixPanelLayout below.
+ */
 export type MixDock = "left" | "right" | "bottom" | "float";
 
 export const MIX_DOCK_LABELS: Record<MixDock, string> = {
@@ -333,20 +337,174 @@ export const MIX_DOCK_LABELS: Record<MixDock, string> = {
 };
 
 /**
+ * Placement of a persistent panel. Position and size are both a PERCENTAGE of the session
+ * screen, not pixels -- the same mechanism has to land in the same relative spot on an iPhone
+ * SE and on an iPad, and hardcoded pixels cannot do that.
+ *
+ * Only two boundaries remain, and both exist to stop a panel locking the session up, not to
+ * constrain layout:
+ *   1. at least MIX_PANEL_KEEP_IN of the panel stays on screen, so it cannot be dragged away;
+ *   2. it sits below the app's own dialogs.
+ * Everything else -- where it is drawn, how big, whether it can be dragged, whether the app
+ * draws any shell at all -- is the creator's call.
+ */
+export type MixPanelLayout = {
+    /** Top-left corner, as a percentage of the session screen's width/height */
+    x: number;
+    y: number;
+    /** Width and height, likewise percentages */
+    w: number;
+    h: number;
+    /** Height follows the content and h degrades to a cap: for panels that stretch, like a
+     *  small capsule */
+    autoHeight?: boolean;
+    /** Whether the player can drag it around (a dragged position is remembered for this
+     *  session only, and never written back to the material) */
+    drag?: boolean;
+    /** Whether the player can resize it */
+    resize?: boolean;
+    /** Whether the app draws the handle bar carrying the name and the collapse arrow;
+     *  none = the shell is entirely the creator's to draw */
+    chrome?: "bar" | "none";
+    /** Whether the app draws the backing plate (rounded dark fill, border, shadow). Turn it
+     *  off when the panel draws its own background. */
+    plate?: boolean;
+    /**
+     * The width to lay out against, in pixels. Set it and everything inside the panel is laid
+     * out at that width, then the app scales the whole thing to the panel's real size --
+     * required when drawing something like a 390-wide phone or a card, because otherwise the
+     * same CSS crams together in a small panel and stretches thin in a large one, and the
+     * preview never matches the real thing. Leave it unset and the panel lays out against its
+     * own actual pixel size.
+     */
+    designWidth?: number;
+    /** Ordering when several panels overlap on one screen, 0-9 */
+    z?: number;
+    /** Start the session collapsed (only meaningful when chrome is "bar") */
+    collapsed?: boolean;
+};
+
+/** Drag it off the edge and you can never get it back, so this much always stays on screen
+ *  (percentage) no matter how it is dragged */
+export const MIX_PANEL_KEEP_IN = 8;
+/** Minimum panel size: any smaller and it cannot be hit */
+export const MIX_PANEL_MIN_W = 8;
+export const MIX_PANEL_MIN_H = 4;
+/** Ceiling on ordering: higher than this would cover the app's own dialogs */
+export const MIX_PANEL_MAX_Z = 9;
+
+/** The placement each of the four legacy docks maps to, which doubles as the set of starting
+ *  points offered in the editor */
+export const MIX_DOCK_PRESETS: Record<MixDock, MixPanelLayout> = {
+    left: { x: 2, y: 12, w: 38, h: 52, drag: true, chrome: "bar", plate: true },
+    right: { x: 60, y: 12, w: 38, h: 52, drag: true, chrome: "bar", plate: true },
+    bottom: { x: 3, y: 58, w: 94, h: 34, drag: true, chrome: "bar", plate: true },
+    float: { x: 55, y: 66, w: 45, h: 26, drag: true, chrome: "bar", plate: true, collapsed: true },
+};
+
+function clampNum(value: unknown, min: number, max: number, fallback: number): number {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return fallback;
+    return Math.min(max, Math.max(min, Math.round(num * 100) / 100));
+}
+
+/**
+ * Normalise a placement. Imported JSON, records fetched from the cloud, and requests the panel
+ * itself postMessages up all pass through here -- out-of-range values are clamped back in,
+ * unrecognised fields are dropped.
+ */
+export function normalizeMixPanelLayout(value: unknown): MixPanelLayout | undefined {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+    const record = value as Record<string, unknown>;
+    const w = clampNum(record.w, MIX_PANEL_MIN_W, 100, 40);
+    const h = clampNum(record.h, MIX_PANEL_MIN_H, 100, 30);
+    // Negatives and values past 100 are allowed: part of a panel may sit off screen, as long as
+    // a KEEP_IN-sized piece of it stays visible
+    const x = clampNum(record.x, MIX_PANEL_KEEP_IN - w, 100 - MIX_PANEL_KEEP_IN, 4);
+    const y = clampNum(record.y, MIX_PANEL_KEEP_IN - h, 100 - MIX_PANEL_KEEP_IN, 12);
+    const layout: MixPanelLayout = { x, y, w, h };
+    if (record.autoHeight === true) layout.autoHeight = true;
+    if (record.drag !== false) layout.drag = true;
+    if (record.resize === true) layout.resize = true;
+    layout.chrome = record.chrome === "none" ? "none" : "bar";
+    layout.plate = record.plate !== false;
+    const design = clampNum(record.designWidth, 120, 1600, 0);
+    if (design) layout.designWidth = Math.round(design);
+    const z = clampNum(record.z, 0, MIX_PANEL_MAX_Z, 0);
+    if (z) layout.z = z;
+    if (record.collapsed === true) layout.collapsed = true;
+    return layout;
+}
+
+/**
+ * The starting values used when interface code was written but no placement was.
+ * Placement is something the interface sets for itself in code, via mix.move / mix.size /
+ * mix.chrome and friends; this is only where it stands for the frame before that code has run.
+ * The app draws nothing, and the box is deliberately neutral.
+ */
+export const MIX_PANEL_DEFAULT_LAYOUT: MixPanelLayout = {
+    x: 6, y: 14, w: 88, h: 44, drag: true, chrome: "none", plate: false,
+};
+
+/**
+ * Which placement a mechanism is finally drawn with.
+ * Its own if it has one; a converted legacy dock if that is all there is; and failing both, if
+ * it has interface code at all, the neutral starting values, leaving the interface code to move
+ * itself -- interface code means there is an interface, with nothing extra to declare.
+ */
+export function mixPanelLayoutOf(material: { layout?: MixPanelLayout; dock?: MixDock; panelHtml?: string }): MixPanelLayout | undefined {
+    const own = normalizeMixPanelLayout(material.layout);
+    if (own) return own;
+    if (material.dock) return { ...MIX_DOCK_PRESETS[material.dock] };
+    return material.panelHtml?.trim() ? { ...MIX_PANEL_DEFAULT_LAYOUT } : undefined;
+}
+
+/** One line describing a placement, for the detail page */
+export function mixPanelLayoutSummary(layout: MixPanelLayout): string {
+    const parts = [
+        `${layout.x}% from left / ${layout.y}% from top`,
+        `${layout.w}% x ${layout.autoHeight ? "auto" : `${layout.h}%`}`,
+    ];
+    if (layout.designWidth) parts.push(`laid out at ${layout.designWidth}px wide`);
+    const flags: string[] = [];
+    if (layout.drag !== false) flags.push("draggable");
+    if (layout.resize) flags.push("resizable");
+    if ((layout.chrome ?? "bar") === "none") flags.push("no shell");
+    if (layout.plate === false) flags.push("no plate");
+    if (flags.length) parts.push(flags.join(", "));
+    return parts.join(" · ");
+}
+
+/**
+ * Convert a free placement back to the nearest legacy dock. It is written alongside on publish,
+ * so an older client receiving this mechanism can still hang it somewhere roughly right rather
+ * than not showing it at all.
+ */
+export function mixNearestDock(layout: MixPanelLayout): MixDock {
+    if (layout.w >= 70) return "bottom";
+    if (layout.h <= 34 && layout.y >= 50) return "float";
+    return layout.x + layout.w / 2 < 50 ? "left" : "right";
+}
+
+/**
  * Mechanism: two halves, either of which may be empty.
  * - Hooks: called at a few fixed points in the pipeline, handed a payload and handing one
  *   back. They run in a sandbox with no network and no reach into the host page, behind a
  *   timeout breaker.
- * - Persistent panel: a piece of HTML pinned to a dock, alive across turns, with its own
- *   storage.
+ * - Persistent panel: a piece of HTML pinned at coordinates and a size of its own choosing,
+ *   alive across turns, with its own storage.
  * Both halves share one storage bucket, so they can see each other for free.
  */
 export type MixMechanismMaterial = MixMaterialMeta & {
     kind: "mechanism";
     /** Hook code, defining onSessionStart / onBeforeSend / onAfterReply / onSessionEnd */
     script?: string;
-    /** Dock for the persistent panel; without it this mechanism has no interface */
+    /** @deprecated The first version's four docks, kept only to recognise older materials.
+     *  New materials write `layout`. */
     dock?: MixDock;
+    /** Where the persistent panel is drawn, how big, and whether it can be dragged. Without
+     *  this and without a dock, this mechanism has no interface. */
+    layout?: MixPanelLayout;
     /** The panel's HTML (CSS/JS included), run inside a sandboxed iframe */
     panelHtml?: string;
 };
@@ -483,6 +641,13 @@ export type MixSession = {
      * can notice the turn number went backwards and reset itself.
      */
     mechanismStore?: Record<string, Record<string, string>>;
+    /**
+     * Panel positions the player has dragged or resized themselves (materialId -> placement),
+     * good for this session only.
+     * Never written back to the material: the material is its author's work, and a player
+     * nudging something on their own screen should not edit somebody else's work.
+     */
+    panelBox?: Record<string, MixPanelLayout>;
     createdAt: number;
     updatedAt: number;
 };

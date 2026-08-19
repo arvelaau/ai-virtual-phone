@@ -77,12 +77,29 @@ export function normalizePartCondition(value: unknown): PartCondition | undefine
 /**
  * A mechanism is the only material that, once downloaded, RUNS EVERY TURN ON SOMEBODY ELSE'S
  * DEVICE AND CAN REWRITE THE CONVERSATION. So on top of the general payload ceiling it gets
- * its own: the code cannot be arbitrarily long, and the dock has to be one of the four known
- * values. Keeping it tight also makes it harder to smuggle a large obfuscated blob through.
+ * its own: the code cannot be arbitrarily long, and the panel placement has to be something
+ * recognisable. Keeping it tight also makes it harder to smuggle a large obfuscated blob
+ * through.
  */
 const MAX_MECHANISM_SCRIPT = 40_000;
 const MAX_MECHANISM_PANEL = 200_000;
 const MECHANISM_DOCKS: readonly string[] = ["left", "right", "bottom", "float"];
+
+/**
+ * Panel placement: shape only, no clamping. Out-of-range numbers are the downloader's
+ * `normalizeMixPanelLayout` to clamp -- this module deliberately imports nothing app-side so it
+ * stays unit-testable away from the runtime.
+ */
+function isPanelLayout(value: unknown): boolean {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const record = value as Record<string, unknown>;
+    for (const key of ["x", "y", "w", "h"]) {
+        if (!Number.isFinite(Number(record[key]))) return false;
+    }
+    if (record.chrome !== undefined && record.chrome !== "bar" && record.chrome !== "none") return false;
+    if (record.z !== undefined && !Number.isFinite(Number(record.z))) return false;
+    return true;
+}
 
 export function validateMechanismPayload(payload: unknown): string | null {
     if (!payload || typeof payload !== "object") return "missing_payload";
@@ -95,8 +112,16 @@ export function validateMechanismPayload(payload: unknown): string | null {
     if (record.dock !== undefined && record.dock !== null && !MECHANISM_DOCKS.includes(String(record.dock))) {
         return "invalid_dock";
     }
-    // A panel requires a dock, or the downloader has no idea where to hang it
-    if (panel.trim() && !record.dock) return "A mechanism with a panel needs a dock.";
+    // Placement is pure data (percentage coordinates and a few switches), and the downloader
+    // clamps it again on arrival; all this blocks is something that is not a placement at all.
+    if (record.layout !== undefined && record.layout !== null && !isPanelLayout(record.layout)) {
+        return "invalid_layout";
+    }
+    // A panel has to say where it is drawn: new materials write `layout`, old ones `dock`.
+    // With neither there is nothing to place it by.
+    if (panel.trim() && !record.dock && !record.layout) {
+        return "A mechanism with a panel needs to say where it is drawn.";
+    }
     return null;
 }
 

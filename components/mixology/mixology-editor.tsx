@@ -13,8 +13,7 @@ import type {
     MixTextMaterial,
     MixTicketVar,
 } from "@/lib/mixology/types";
-import { createMixId, formatMixTags, MIX_DOCK_LABELS, MIX_KIND_LABELS, MIX_TAG_MAX, mixKindHasCover, parseMixTags } from "@/lib/mixology/types";
-import type { MixDock } from "@/lib/mixology/types";
+import { createMixId, formatMixTags, MIX_KIND_LABELS, MIX_PANEL_DEFAULT_LAYOUT, MIX_TAG_MAX, mixKindHasCover, mixPanelLayoutOf, parseMixTags } from "@/lib/mixology/types";
 import { applyMixFilterRules } from "@/lib/mixology/prose";
 import { MixPreviewInline, MixStructureSheet } from "./mixology-preview";
 
@@ -61,7 +60,7 @@ const KIND_GUIDE: Record<MixMaterialKind, { what: string; where: string }> = {
         where: "The contract goes into the prompt; the render code runs in the interface only.",
     },
     mechanism: {
-        what: "A mechanism goes here: a piece of logic that runs in a sandbox, plus a panel pinned beside the session screen. The two halves are usually written together -- they share one storage bucket and can see each other, so something the panel noted down can be used by the hook before the next send -- but writing only one half is fine. The logic is called at a few fixed moments (session start, before sending, after a reply arrives, leaving the session), each time receiving a payload and handing one back.",
+        what: "A mechanism goes here: a piece of logic that runs in a sandbox, plus an interface that stays on the session screen, drawn wherever and at whatever size its own code asks for. The two halves are usually written together -- they share one storage bucket and can see each other, so something the panel noted down can be used by the hook before the next send -- but writing only one half is fine. The logic is called at a few fixed moments (session start, before sending, after a reply arrives, leaving the session), each time receiving a payload and handing one back.",
         where: "Never enters the prompt. It runs in a sandbox with no network and no reach into the app itself, and is cut off on timeout -- that turn then proceeds as if there were no mechanism.",
     },
     filter: {
@@ -174,7 +173,11 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
     const [previewRaw, setPreviewRaw] = useState(initial?.kind === "ticket" ? initial.previewRaw ?? "" : "");
     const [vars, setVars] = useState<MixTicketVar[]>(initial?.kind === "ticket" ? initial.vars ?? [] : []);
     const [script, setScript] = useState(initial?.kind === "mechanism" ? initial.script ?? "" : "");
-    const [dock, setDock] = useState<MixDock | "">(initial?.kind === "mechanism" ? initial.dock ?? "" : "");
+    // Placement is not a form field: the interface code sets it itself via mix.move /
+    // mix.size / mix.chrome and friends. Whatever an older material carries is preserved
+    // as-is, so renaming one does not wipe the position somebody arranged.
+    const keptLayout = initial?.kind === "mechanism" ? initial.layout : undefined;
+    const keptDock = initial?.kind === "mechanism" ? initial.dock : undefined;
     const [panelHtml, setPanelHtml] = useState(initial?.kind === "mechanism" ? initial.panelHtml ?? "" : "");
 
     /**
@@ -299,7 +302,8 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                 ...meta,
                 kind: "mechanism",
                 script: script.trim() || undefined,
-                dock: dock || undefined,
+                layout: keptLayout,
+                dock: keptDock,
                 panelHtml: panelHtml.trim() || undefined,
             });
             return;
@@ -632,34 +636,27 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                             placeholder={"Each function receives a ctx and returns an object (return nothing to change nothing).\nctx: { turnCount, state, store, charName, userName, text, ticketRaw, encoreRaw }\nmay return: { text, note, state, store }\n\ne.g. turn a player typing \"/roll\" into an instruction carrying the result\nfunction onBeforeSend(ctx) {\n  if (ctx.text !== \"/roll\") return;\n  var n = 1 + Math.floor(Math.random() * 20);\n  return { text: \"(I rolled a \" + n + \")\" };\n}\n\ne.g. count how many turns running affection has gone up\nfunction onAfterReply(ctx) {\n  var up = Number(ctx.store.streak || 0);\n  return { store: { streak: String(up + 1) } };\n}"}
                         />
                     </Field>
-                    <Field label="Persistent panel" hint="may be left empty. Pick a dock and the panel stays pinned beside the session screen; the hooks above can read whatever storage it writes">
-                        <div className="mix-dock-row">
-                            <button type="button" className="mix-dock-chip" data-on={dock === "" ? "true" : undefined} onClick={() => setDock("")}>No panel</button>
-                            {(Object.keys(MIX_DOCK_LABELS) as MixDock[]).map((value) => (
-                                <button
-                                    type="button"
-                                    className="mix-dock-chip"
-                                    data-on={dock === value ? "true" : undefined}
-                                    key={value}
-                                    onClick={() => setDock(value)}
-                                >
-                                    {MIX_DOCK_LABELS[value]}
-                                </button>
-                            ))}
-                        </div>
+                    <Field label="Interface code" hint="HTML + CSS + JS, run inside the sandbox. Where it is drawn, how big, and whether the app draws any shell are all written here with window.mix">
+                        <textarea
+                            className="mix-textarea"
+                            data-code="true"
+                            style={{ minHeight: 160 }}
+                            value={panelHtml}
+                            onChange={(e) => setPanelHtml(e.target.value)}
+                            placeholder={"<div style=\"padding:10px\">This is the persistent panel</div>\n\nwindow.mix\n  move(x, y) / size(w, h)         move and resize yourself (percentages of the session screen)\n  design(px)                      the width to lay out against, scaled to the panel afterwards; 0 = follow the panel\n  fit(px)                         report how tall the content is\n  chrome(on) / plate(on)          whether the app draws its title bar / backing plate, both off by default\n  drag(on) / resize(on)           whether the player may drag or resize it\n  z(n)                            stacking order 0-9\n  grab()                          call on pointerdown on your own title bar, and the app takes the drag from there\n  setStore(obj) / setState(obj)   write storage / write remembered values\n  say(text)                       say something as the player\nwindow.MIX_STATE / window.MIX_STORE  the current values\nwindow.onMixSync(state, store)       called back when the values change"}
+                        />
                     </Field>
-                    {dock ? (
-                        <Field label="Panel code" hint="HTML + CSS + JS, run inside the sandbox">
-                            <textarea
-                                className="mix-textarea"
-                                data-code="true"
-                                style={{ minHeight: 160 }}
-                                value={panelHtml}
-                                onChange={(e) => setPanelHtml(e.target.value)}
-                                placeholder={"e.g.\n<div style=\"padding:10px;color:#d9b06a\">This is the persistent panel</div>"}
-                            />
-                        </Field>
-                    ) : null}
+                    <MixPreviewInline
+                        label="Try it on"
+                        target={{
+                            kind: "mechanism",
+                            name,
+                            html: panelHtml,
+                            layout: mixPanelLayoutOf({ layout: keptLayout, dock: keptDock, panelHtml }) ?? MIX_PANEL_DEFAULT_LAYOUT,
+                            script,
+                        }}
+                        disabled={!panelHtml.trim() && !script.trim()}
+                    />
                     <div className="mix-struct-note" style={{ marginTop: 10 }}>
                         Hooks run in a sandbox with no network and no reach into the app itself, and are cut off on timeout -- that turn then proceeds as if there were no mechanism.
                         The storage belongs to this mechanism alone, one bucket per session, still there after leaving and coming back. Hooks and panel share that one bucket,

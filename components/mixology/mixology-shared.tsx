@@ -19,7 +19,7 @@ import {
     UserRound,
 } from "lucide-react";
 import type { MixCharacterCard, MixMaterial, MixMaterialKind } from "@/lib/mixology/types";
-import { MIX_DOCK_LABELS, MIX_KIND_LABELS, mixEncoreRenderHtml, mixKindHasCover, mixKindRunsActiveCode, normalizeMixTags } from "@/lib/mixology/types";
+import { MIX_KIND_LABELS, mixEncoreRenderHtml, mixKindHasCover, mixKindRunsActiveCode, mixPanelLayoutOf, mixPanelLayoutSummary, normalizeMixTags } from "@/lib/mixology/types";
 import { applyMixMacros, MIX_DEFAULT_USER_NAME } from "@/lib/mixology/assembler";
 import { MixRichText } from "./rich-text";
 
@@ -305,11 +305,12 @@ export function MaterialDetail({ material }: { material: MixMaterial }) {
         );
     }
     if (material.kind === "mechanism") {
+        const layout = mixPanelLayoutOf(material);
         return (
             <>
                 <DetailField label="Hook" value={material.hook} />
                 <DetailField label="Hook logic" value={material.script} code />
-                {material.dock ? <DetailField label="Persistent panel" value={`Docked: ${MIX_DOCK_LABELS[material.dock]}`} /> : null}
+                {layout ? <DetailField label="Panel placement" value={mixPanelLayoutSummary(layout)} /> : null}
                 <DetailField label="Panel code" value={material.panelHtml} code />
             </>
         );
