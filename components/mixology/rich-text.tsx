@@ -28,16 +28,12 @@ const FRAME_MIN_HEIGHT = 24;
  */
 const FRAME_MAX_HEIGHT = 12000;
 
-function RichFrame({ html, inert, onHeight }: { html: string; inert?: boolean; onHeight?: (height: number) => void }) {
+function RichFrame({ html, inert }: { html: string; inert?: boolean }) {
     const iframeRef = useRef<HTMLIFrameElement | null>(null);
     const [frameId] = useState(() => `mrf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
     const [height, setHeight] = useState(FRAME_MIN_HEIGHT);
     const trackerRef = useRef(createMixFrameHeightTracker(FRAME_MIN_HEIGHT));
     const heightRef = useRef(FRAME_MIN_HEIGHT);
-    // Keep the callback in a ref so the height listener is attached once, and is not
-    // reattached just because the parent passed a freshly created function
-    const onHeightRef = useRef(onHeight);
-    useEffect(() => { onHeightRef.current = onHeight; }, [onHeight]);
 
     const srcDoc = useMemo(() => {
         // Light text on a transparent background by default, so content is readable floating
@@ -68,14 +64,11 @@ function RichFrame({ html, inert, onHeight }: { html: string; inert?: boolean; o
                 min: FRAME_MIN_HEIGHT,
                 max: FRAME_MAX_HEIGHT,
             });
-            // Only notify outward when the height genuinely changed. Animation inside the canvas
-            // makes the MutationObserver report continuously, and calling back every time would
-            // fire the caller's "hold the scroll position" logic over and over -- dragging the
-            // user back whenever they tried to scroll.
+            // Do not re-render when the height did not actually change: animation inside the
+            // canvas makes the MutationObserver report continuously.
             if (applied === null || applied === heightRef.current) return;
             heightRef.current = applied;
             setHeight(applied);
-            onHeightRef.current?.(applied);
         };
         window.addEventListener("message", handleMessage);
         return () => window.removeEventListener("message", handleMessage);
@@ -103,12 +96,12 @@ function RichFrame({ html, inert, onHeight }: { html: string; inert?: boolean; o
 /**
  * inert: for use as a preview inside a button (choosing an opening line), letting the click
  * pass through to the wrapper.
- * onHeight: called once after the canvas has measured itself and the host has sized the
- * iframe -- and only when the height actually changed.
- * The opening canvas grows asynchronously, so a caller that wants to hold a scroll position
- * has to wait for this and settle again afterwards.
+ *
+ * The canvas grows asynchronously: once measured, the bridge inside the iframe postMessages the
+ * height out. A host that needs to hold a scroll position listens for that message directly --
+ * see components/mixology/mixology-game.tsx.
  */
-export function MixRichText({ text, inert, onHeight }: { text: string; inert?: boolean; onHeight?: (height: number) => void }) {
-    if (mixTextHasHtml(text)) return <RichFrame html={text} inert={inert} onHeight={onHeight} />;
+export function MixRichText({ text, inert }: { text: string; inert?: boolean }) {
+    if (mixTextHasHtml(text)) return <RichFrame html={text} inert={inert} />;
     return <div className="mix-detail-value">{text}</div>;
 }

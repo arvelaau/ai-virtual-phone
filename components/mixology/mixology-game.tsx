@@ -254,24 +254,51 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         el.scrollTop = stickRef.current === "top" ? 0 : el.scrollHeight;
     }, []);
 
-    /** Whether anyone has spoken in this session -- one with only its opening line counts as
-     *  not started */
-    const chatted = useMemo(() => (session?.turns ?? []).some((turn) => turn.role === "user"), [session?.turns]);
-
+    /**
+     * Choose the resting point ONCE on entering a session: one nobody has spoken in rests at the
+     * top of the title page (an opening canvas is meant to be read from the start), one that has
+     * been played rests on the latest message.
+     * Keyed on sessionId alone -- it decides and then lets go, so scrolling (free) and speaking
+     * (bottom) can both change it without this effect overwriting them again.
+     * It used to also depend on busy and turns.length: sending flips busy true first, and the
+     * user's turn is not stored until the before-pouring hook has run, so on that tick this read
+     * "nobody has spoken" and yanked the player back to the title page.
+     */
     useEffect(() => {
-        stickRef.current = chatted ? "bottom" : "top";
+        const entered = getMixSession(sessionId);
+        stickRef.current = (entered?.turns ?? []).some((turn) => turn.role === "user") ? "bottom" : "top";
         applyStick();
-    }, [sessionId, chatted, session?.turns.length, busy, applyStick]);
+    }, [sessionId, applyStick]);
+
+    /** Content grew (a new turn arrived, the generating state changed): settle again */
+    useEffect(() => {
+        applyStick();
+    }, [session?.turns.length, busy, applyStick]);
 
     /**
-     * The opening canvas is a sandboxed iframe whose height it reports asynchronously: at the
-     * moment it mounts it is only tens of pixels tall, and once it grows to a few thousand,
-     * everything below is pushed down. Chrome compensates via scroll anchoring; iOS Safari has
-     * no such feature, so the scroll position stays put and ends up stranded in the middle of
-     * the canvas -- neither at the top nor the bottom.
-     * So the resting point is applied again once the canvas has reported its height.
+     * Every sandboxed iframe in the scroll area -- the opening canvas, each turn's receipt and
+     * skit, and the static sketch at the end -- measures itself inside and postMessages its
+     * height out. At mount they are only tens of pixels tall, and when the real height arrives
+     * the content below is pushed down while the scroll position stays put. Chrome compensates
+     * via scroll anchoring; iOS Safari does not, so it ends up stranded in the middle -- neither
+     * at the top nor the bottom.
+     *
+     * Listening for that message here is sturdier than hanging an onHeight callback off each
+     * component: the receipt and skit frames never had one, and RichFrame's fired synchronously
+     * straight after setHeight -- before React had committed the new height, so the scroll
+     * settled against the OLD scrollHeight and achieved nothing.
+     * Waiting two frames covers both the React commit and the browser's relayout.
      */
-    const handleCanvasHeight = useCallback(() => { applyStick(); }, [applyStick]);
+    useEffect(() => {
+        const onFrameResize = (event: MessageEvent) => {
+            const data = event.data as Record<string, unknown> | null;
+            if (!data || data.type !== "resize") return;
+            if (data.source !== "mix-rich-frame" && data.source !== "mix-ticket-frame") return;
+            requestAnimationFrame(() => requestAnimationFrame(applyStick));
+        };
+        window.addEventListener("message", onFrameResize);
+        return () => window.removeEventListener("message", onFrameResize);
+    }, [applyStick]);
 
     /** Once the user scrolls themselves, let go -- do not drag them back while the canvas grows */
     const handleScroll = useCallback(() => {
@@ -326,22 +353,23 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         );
     }
 
-    const run = async (action: (signal: AbortSignal) => Promise<unknown>) => {
+    const run = async (action: (signal: AbortSignal, commit: () => void) => Promise<unknown>) => {
         if (busy) return;
         const controller = new AbortController();
         abortRef.current = controller;
         setBusy(true);
         busyRef.current = true;
+        const commit = () => setSession(getMixSession(sessionId));
         try {
-            const pending = action(controller.signal);
-            // The engine's synchronous half has already been stored (a redo deleted the old
-            // turn, a send wrote the user's message), so read it back immediately and let the
-            // interface move now rather than waiting for the model to return
-            setSession(getMixSession(sessionId));
+            const pending = action(controller.signal, commit);
+            // Redo and rewind store before their first await, so read back immediately and let the
+            // interface move now. The SEND path stores later than this tick -- the before-pouring
+            // hook is async -- so its refresh comes from the engine calling commit().
+            commit();
             await pending;
-            setSession(getMixSession(sessionId));
+            commit();
         } catch (error) {
-            setSession(getMixSession(sessionId));
+            commit();
             const message = error instanceof Error ? error.message : "Generation failed. Please try again.";
             if (!controller.signal.aborted) onToast(message);
         } finally {
@@ -354,14 +382,19 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         const text = input.trim();
         if (!text) return;
         setInput("");
-        void run((signal) => generateMixReply(sessionId, text, signal));
+        // Pin the resting point the moment they speak: the user's turn is not stored until the
+        // before-pouring hook has run, and until then the interface still looks like nobody has
+        // spoken -- without pinning, that yanks them back to the title page.
+        stickRef.current = "bottom";
+        void run((signal, commit) => generateMixReply(sessionId, text, signal, commit));
     };
 
     /** A panel speaking as the player. It takes exactly the same path as the input box; this
      *  is not a privileged channel. */
     const handlePanelSay = useCallback((text: string) => {
         if (busyRef.current) return;
-        void run((signal) => generateMixReply(sessionId, text, signal));
+        stickRef.current = "bottom";
+        void run((signal, commit) => generateMixReply(sessionId, text, signal, commit));
     }, [sessionId]);
 
     const copyTurn = (turn: MixTurn) => {
@@ -446,7 +479,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
             <div className="mix-game-scroll" ref={scrollRef} onScroll={handleScroll}>
                 {assets.canvasHtml ? (
                     <div className="mix-game-canvas">
-                        <MixRichText text={assets.canvasHtml} onHeight={handleCanvasHeight} />
+                        <MixRichText text={assets.canvasHtml} />
                     </div>
                 ) : null}
                 {session.turns.map((turn, idx) => {

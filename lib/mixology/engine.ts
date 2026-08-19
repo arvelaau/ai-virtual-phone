@@ -429,6 +429,7 @@ export async function generateMixReply(
     sessionId: string,
     userText: string,
     signal?: AbortSignal,
+    onUserTurn?: () => void,
 ): Promise<MixReplyResult> {
     const current = getMixSession(sessionId);
     if (!current) throw new ChatEngineError("That session does not exist.");
@@ -447,6 +448,9 @@ export async function generateMixReply(
     };
     const withUser: MixSession = { ...before.session, turns: [...before.session.turns, userTurn] };
     saveMixSession(withUser);
+    // The before-pouring hook is awaited, so this store lands a tick LATER than the caller's
+    // synchronous read-back. Announce it, or the user's bubble waits for the model to return.
+    onUserTurn?.();
     // This path has already run its before-pouring hook; do not fire it again in runMixGeneration
     return runMixGeneration(withUser, before.note, signal, true);
 }
