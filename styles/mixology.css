@@ -1303,6 +1303,24 @@
     transform: scale(0.9);
 }
 
+/* The passage being written: the same typography as stored prose, with only a caret at the
+   end to show it is not finished */
+.mix-live-turn .mix-prose > :last-child::after {
+    content: "";
+    display: inline-block;
+    width: 2px;
+    height: 0.95em;
+    margin-left: 3px;
+    vertical-align: -0.12em;
+    background: var(--mix-violet);
+    animation: mixCaret 1s steps(1, end) infinite;
+}
+
+@keyframes mixCaret {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+}
+
 /* AI turn wrapper: grouping only, no layout of its own */
 .mix-assistant-turn {
     margin: 0 0 6px;

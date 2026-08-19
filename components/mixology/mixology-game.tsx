@@ -14,7 +14,7 @@ import { applyMixMacros, MIX_DEFAULT_USER_NAME } from "@/lib/mixology/assembler"
 import { buildMixConditionContext, pickActiveMixMaterials } from "@/lib/mixology/state";
 import { scopeMixCss } from "@/lib/mixology/css-scope";
 import { MIX_KIND_LABELS, MIX_SLOT_ORDER, mixEncoreRenderHtml, mixSlotEntries, type MixCharacterCard, type MixFilterRule, type MixMaterialKind, type MixMechanismMaterial, type MixSession, type MixSlotEntry, type MixState, type MixTurn } from "@/lib/mixology/types";
-import { applyMixFilterRules } from "@/lib/mixology/prose";
+import { applyMixFilterRules, mixStreamText } from "@/lib/mixology/prose";
 import { MixProseView } from "./prose-view";
 import { MixRichText } from "./rich-text";
 import { KindGlyph, MixConfirm } from "./mixology-shared";
@@ -124,6 +124,14 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     const [input, setInput] = useState("");
     const [busy, setBusy] = useState(false);
     const busyRef = useRef(false);
+    /**
+     * The passage currently being written. The model calls back with a small piece at a time,
+     * and re-rendering once per token is wasteful -- so it accumulates in a ref and is pushed
+     * to the interface once per frame.
+     */
+    const [live, setLive] = useState("");
+    const liveRef = useRef("");
+    const liveFrameRef = useRef(0);
     const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null);
     const [confirm, setConfirm] = useState<{ type: "rewind" | "edit"; turnId: string } | null>(null);
     const [recipeOpen, setRecipeOpen] = useState(false);
@@ -270,10 +278,11 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         applyStick();
     }, [sessionId, applyStick]);
 
-    /** Content grew (a new turn arrived, the generating state changed): settle again */
+    /** Content grew (a new turn arrived, the generating state changed, streaming wrote more):
+     *  settle again */
     useEffect(() => {
         applyStick();
-    }, [session?.turns.length, busy, applyStick]);
+    }, [session?.turns.length, busy, live, applyStick]);
 
     /**
      * Every sandboxed iframe in the scroll area -- the opening canvas, each turn's receipt and
@@ -353,15 +362,25 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         );
     }
 
-    const run = async (action: (signal: AbortSignal, commit: () => void) => Promise<unknown>) => {
+    const run = async (action: (signal: AbortSignal, commit: () => void, onDelta: (chunk: string) => void) => Promise<unknown>) => {
         if (busy) return;
         const controller = new AbortController();
         abortRef.current = controller;
         setBusy(true);
         busyRef.current = true;
         const commit = () => setSession(getMixSession(sessionId));
+        liveRef.current = "";
+        setLive("");
+        const onDelta = (chunk: string) => {
+            liveRef.current += chunk;
+            if (liveFrameRef.current) return;
+            liveFrameRef.current = window.requestAnimationFrame(() => {
+                liveFrameRef.current = 0;
+                setLive(liveRef.current);
+            });
+        };
         try {
-            const pending = action(controller.signal, commit);
+            const pending = action(controller.signal, commit, onDelta);
             // Redo and rewind store before their first await, so read back immediately and let the
             // interface move now. The SEND path stores later than this tick -- the before-pouring
             // hook is async -- so its refresh comes from the engine calling commit().
@@ -373,6 +392,12 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
             const message = error instanceof Error ? error.message : "Generation failed. Please try again.";
             if (!controller.signal.aborted) onToast(message);
         } finally {
+            if (liveFrameRef.current) {
+                window.cancelAnimationFrame(liveFrameRef.current);
+                liveFrameRef.current = 0;
+            }
+            liveRef.current = "";
+            setLive("");
             busyRef.current = false;
             setBusy(false);
         }
@@ -386,7 +411,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         // before-pouring hook has run, and until then the interface still looks like nobody has
         // spoken -- without pinning, that yanks them back to the title page.
         stickRef.current = "bottom";
-        void run((signal, commit) => generateMixReply(sessionId, text, signal, commit));
+        void run((signal, commit, onDelta) => generateMixReply(sessionId, text, signal, commit, onDelta));
     };
 
     /** A panel speaking as the player. It takes exactly the same path as the input box; this
@@ -394,7 +419,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     const handlePanelSay = useCallback((text: string) => {
         if (busyRef.current) return;
         stickRef.current = "bottom";
-        void run((signal, commit) => generateMixReply(sessionId, text, signal, commit));
+        void run((signal, commit, onDelta) => generateMixReply(sessionId, text, signal, commit, onDelta));
     }, [sessionId]);
 
     const copyTurn = (turn: MixTurn) => {
@@ -439,7 +464,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         // Editing a player line regenerates the reply straight away; editing a character reply
         // stops here
         if (target?.role === "user") {
-            void run((signal) => regenerateMixTail(sessionId, signal));
+            void run((signal, _commit, onDelta) => regenerateMixTail(sessionId, signal, onDelta));
         }
     };
 
@@ -507,11 +532,20 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                         </div>
                     );
                 })}
-                {busy ? (
-                    <div className="mix-game-thinking" aria-label="Generating">
-                        <span /><span /><span />
-                    </div>
-                ) : null}
+                {busy ? (() => {
+                    // The display-only strainer runs during streaming too, so what appears while
+                    // writing matches what is stored afterwards
+                    const shown = applyMixFilterRules(mixStreamText(live), assets.filterRules, "display");
+                    return shown ? (
+                        <div className="mix-live-turn">
+                            <MixProseView text={shown} />
+                        </div>
+                    ) : (
+                        <div className="mix-game-thinking" aria-label="Generating">
+                            <span /><span /><span />
+                        </div>
+                    );
+                })() : null}
                 {assets.encoreStaticHtml ? (
                     <div className="mix-encore-inline">
                         <MixRichText text={assets.encoreStaticHtml} />
@@ -540,7 +574,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                 <button
                     type="button"
                     className="mix-icon-btn"
-                    onClick={() => void run((signal) => rerollMixReply(sessionId, signal))}
+                    onClick={() => void run((signal, _commit, onDelta) => rerollMixReply(sessionId, signal, onDelta))}
                     disabled={!canReroll}
                     aria-label="Redo"
                     title="Redo"
@@ -564,7 +598,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                 <button
                     type="button"
                     className="mix-icon-btn"
-                    onClick={() => void run((signal) => continueMix(sessionId, signal))}
+                    onClick={() => void run((signal, _commit, onDelta) => continueMix(sessionId, signal, onDelta))}
                     disabled={busy}
                     aria-label="Continue"
                     title="Continue"

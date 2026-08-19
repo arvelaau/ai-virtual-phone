@@ -114,6 +114,29 @@ export function extractMixBlocks(rawInput: string): { text: string; ticketRaw?: 
     return { text, ticketRaw, encoreRaw };
 }
 
+/**
+ * The part of a partial reply that is safe to show while it is still being written.
+ *
+ * The status-panel and skit blocks are handled by extractMixBlocks, which recognises a block
+ * that has been OPENED but not closed -- so half a status panel never leaks into the prose.
+ * A mechanism's marker line is only stripped after the turn completes, so during streaming it
+ * would appear and then vanish; to avoid that flicker, a trailing line starting with 〔 or [
+ * is withheld. It is either the start of a block or a marker line, and neither ends up being
+ * prose.
+ */
+export function mixStreamText(partial: string): string {
+    const lines = extractMixBlocks(String(partial ?? "")).text.split("\n");
+    // Peel back from the end: blank lines, and lines opening with 〔 or [, are withheld.
+    // A COMPLETE block has already been taken by extractMixBlocks, so anything still here is
+    // unfinished.
+    while (lines.length) {
+        const tail = lines[lines.length - 1].trim();
+        if (tail === "" || /^[〔[]/.test(tail)) { lines.pop(); continue; }
+        break;
+    }
+    return lines.join("\n");
+}
+
 /** Back-compat entry point: only the status panel matters */
 export function extractMixTicket(raw: string): { text: string; ticketRaw?: string } {
     const result = extractMixBlocks(raw);

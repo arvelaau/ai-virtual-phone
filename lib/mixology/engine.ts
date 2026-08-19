@@ -6,7 +6,7 @@
 // The API comes from the global default binding, unrelated to any character binding -- a
 // House Special session is its own world.
 
-import { ChatEngineError, sendLLMRequest } from "../chat-engine";
+import { ChatEngineError, sendLLMRequest, sendLLMStreamRequest } from "../chat-engine";
 import type { LLMMessage } from "../llm-prompt-assembler";
 import { loadApiConfigs, loadBindingConfig } from "../settings-storage";
 import type { ApiConfig } from "../settings-types";
@@ -343,11 +343,19 @@ async function runBeforeSendHooks(session: MixSession, text?: string): Promise<{
     return { session: next, text: result.text, note: result.notes.join("\n") || undefined };
 }
 
+/**
+ * One generation. Passing onDelta switches it to streaming: the model reports a piece at a
+ * time and the interface can write as it goes.
+ * Streaming only changes HOW THE WAIT LOOKS. Storing, block splitting, the strainer and the
+ * mechanism hooks all still run on the COMPLETE prose -- half a status-panel block or a
+ * half-written marker line must never be treated as a result.
+ */
 async function runMixGeneration(
     session: MixSession,
     nudge: string | undefined,
     signal?: AbortSignal,
     skipBeforeSend = false,
+    onDelta?: (text: string) => void,
 ): Promise<MixReplyResult> {
     const apiConfig = resolveMixApiConfig();
     if (!apiConfig) {
@@ -368,14 +376,26 @@ async function runMixGeneration(
     const combinedNudge = [nudge, extraNote].filter(Boolean).join("\n\n") || undefined;
     const { prompt: assembled, ticket, active } = assembleFromSession(working);
     const messages = buildMixMessages(working, assembled, combinedNudge);
-    const raw = await sendLLMRequest(
-        apiConfig,
-        null,
-        messages,
-        [],
-        { characterName: working.charName, userName: working.userName || MIX_DEFAULT_USER_NAME },
-        { appId: MIX_PROMPT_APP_ID, appTags: MIX_PROMPT_TAGS, skipOutputRegex: true, signal },
-    );
+    const meta = { characterName: working.charName, userName: working.userName || MIX_DEFAULT_USER_NAME };
+    const llmOptions = { appId: MIX_PROMPT_APP_ID, appTags: MIX_PROMPT_TAGS, skipOutputRegex: true, signal };
+    let raw: string;
+    if (onDelta) {
+        let got = false;
+        try {
+            const streamed = await sendLLMStreamRequest(apiConfig, null, messages, [], meta, llmOptions, {
+                onDelta: (chunk) => { got = true; onDelta(chunk); },
+            });
+            raw = streamed.content;
+        } catch (error) {
+            // Nothing arrived at all before it failed: most likely this endpoint does not support
+            // SSE, or a proxy in the middle took it apart. Retry once as an ordinary request.
+            // If characters HAD already arrived, the failure is real -- rethrow it.
+            if (got || (error instanceof Error && signal?.aborted)) throw error;
+            raw = await sendLLMRequest(apiConfig, null, messages, [], meta, llmOptions);
+        }
+    } else {
+        raw = await sendLLMRequest(apiConfig, null, messages, [], meta, llmOptions);
+    }
     const extracted = extractMixBlocks(raw);
     const { encoreRaw } = extracted;
     let { ticketRaw } = extracted;
@@ -430,6 +450,7 @@ export async function generateMixReply(
     userText: string,
     signal?: AbortSignal,
     onUserTurn?: () => void,
+    onDelta?: (text: string) => void,
 ): Promise<MixReplyResult> {
     const current = getMixSession(sessionId);
     if (!current) throw new ChatEngineError("That session does not exist.");
@@ -452,7 +473,7 @@ export async function generateMixReply(
     // synchronous read-back. Announce it, or the user's bubble waits for the model to return.
     onUserTurn?.();
     // This path has already run its before-pouring hook; do not fire it again in runMixGeneration
-    return runMixGeneration(withUser, before.note, signal, true);
+    return runMixGeneration(withUser, before.note, signal, true, onDelta);
 }
 
 /** This session's receipt material, which is where remembered values are declared. With several
@@ -475,7 +496,7 @@ function withRolledBackState(session: MixSession, turns: MixTurn[]): MixSession 
 }
 
 /** Redo: throw away the last assistant reply and generate again (never the opening line) */
-export async function rerollMixReply(sessionId: string, signal?: AbortSignal): Promise<MixReplyResult> {
+export async function rerollMixReply(sessionId: string, signal?: AbortSignal, onDelta?: (text: string) => void): Promise<MixReplyResult> {
     const current = getMixSession(sessionId);
     if (!current) throw new ChatEngineError("That session does not exist.");
     const last = current.turns[current.turns.length - 1];
@@ -490,14 +511,14 @@ export async function rerollMixReply(sessionId: string, signal?: AbortSignal): P
     const nudge = beforeLast?.role === "assistant"
         ? "(Continue from the above and move the story on, but write it differently -- do not repeat yourself.)"
         : undefined;
-    return runMixGeneration(trimmedSession, nudge, signal);
+    return runMixGeneration(trimmedSession, nudge, signal, false, onDelta);
 }
 
 /** Continue: say nothing and let the character write on (the nudge is never stored) */
-export async function continueMix(sessionId: string, signal?: AbortSignal): Promise<MixReplyResult> {
+export async function continueMix(sessionId: string, signal?: AbortSignal, onDelta?: (text: string) => void): Promise<MixReplyResult> {
     const current = getMixSession(sessionId);
     if (!current) throw new ChatEngineError("That session does not exist.");
-    return runMixGeneration(current, "(Continue straight on from the above and move the story forward; do not repeat anything already written.)", signal);
+    return runMixGeneration(current, "(Continue straight on from the above and move the story forward; do not repeat anything already written.)", signal, false, onDelta);
 }
 
 /**
@@ -582,10 +603,10 @@ export function editMixTurn(sessionId: string, turnId: string, newText: string):
 }
 
 /** Generate a reply against the current history (the regenerate after editing a player line) */
-export async function regenerateMixTail(sessionId: string, signal?: AbortSignal): Promise<MixReplyResult> {
+export async function regenerateMixTail(sessionId: string, signal?: AbortSignal, onDelta?: (text: string) => void): Promise<MixReplyResult> {
     const current = getMixSession(sessionId);
     if (!current) throw new ChatEngineError("That session does not exist.");
-    return runMixGeneration(current, undefined, signal);
+    return runMixGeneration(current, undefined, signal, false, onDelta);
 }
 
 /** Take back the last turn: delete the last player line and every reply after it */

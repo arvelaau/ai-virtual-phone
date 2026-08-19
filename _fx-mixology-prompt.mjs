@@ -74,6 +74,44 @@ check("B6 dialogue keeps its own delimiters AND is typed as dialogue",
 check("B8 narration and dialogue split into separate segments",
     seg('She shrugged. "Fine." He left.').filter(s => s.type === "narration").length >= 2);
 
+// ── B9. mixStreamText: what is safe to show mid-stream ──
+//
+// This runs on PARTIAL text arriving token by token, so anything it lets through is on screen
+// for a moment even if it is not really prose. A leaked half-block is visible; a withheld line
+// that turns out to be prose only appears a beat late. So it errs toward withholding.
+{
+    const st = (partial) => P.mixStreamText(partial);
+    eq("B9a plain prose passes through", st("She looked up."), "She looked up.");
+    // A block that has been OPENED but not closed must not leak.
+    check("B9b a half-written status panel does not leak",
+        !st("She left.\n[StatusPanel]\naffection: 6").includes("affection"),
+        st("She left.\n[StatusPanel]\naffection: 6"));
+    check("B9c ...and the prose before it still shows",
+        st("She left.\n[StatusPanel]\naffection: 6").includes("She left."));
+    // A completed block is removed as usual.
+    eq("B9d a completed block is stripped",
+        st("[StatusPanel]\na: 1\n[/StatusPanel]\n\nShe left."), "She left.");
+    // A trailing line opening with a bracket is withheld: it is either a block opening or a
+    // mechanism marker line, and neither ends up as prose. Showing it then removing it flickers.
+    check("B9e a trailing bracket line is withheld", st("Rain.\n[Sk") === "Rain.", st("Rain.\n[Sk"));
+    check("B9f a trailing 〔 line is withheld", st("Rain.\n〔note") === "Rain.", st("Rain.\n〔note"));
+    // A bracket MID-line is ordinary prose and must survive.
+    check("B9g a bracket inside a line is left alone",
+        st("He read [The Hobbit] again.") === "He read [The Hobbit] again.",
+        st("He read [The Hobbit] again."));
+    eq("B9h empty input is safe", st(""), "");
+    eq("B9i null-ish input is safe", st(undefined), "");
+    // Feeding a reply one character at a time must never expose block content at ANY frame.
+    {
+        const full = "She paused.\n\n[StatusPanel]\naffection: 61\n[/StatusPanel]";
+        let leaked = 0;
+        for (let i = 1; i <= full.length; i++) {
+            if (/affection|StatusPanel/.test(st(full.slice(0, i)))) leaked += 1;
+        }
+        check("B9j no frame of a char-by-char stream leaks block content", leaked === 0, leaked);
+    }
+}
+
 // ── C. block extraction, English and legacy names ──
 for (const [label, open, close] of [
     ["taught English", "[StatusPanel]", "[/StatusPanel]"],
