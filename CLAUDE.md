@@ -1902,7 +1902,13 @@ The **prompt-structure commits** (`d1309d8` headings shift a level, `dc66af8` ch
 
 The **mechanism panel rework** (`6578464` free placement, `de1a5c7`, `76d8cb9` preview, `db4be40`) is a 4-commit feature change to a part that currently works. `a169fb8` (streaming output) is a real improvement and the most tempting of the deferred set.
 
-`440d1da` splits mixology onto its own `MIXOLOGY_SUPABASE_*` env with no fallback to the main DB — irrelevant while the hall is 503, but worth taking **before** anyone ever configures Supabase, since it changes which database the data lands in.
+`440d1da` — **PORTED (`41f6228`)**, taken now for exactly the timing reason: it changes WHICH DATABASE House Special data lands in, so it had to be in place before anyone configures Supabase rather than after there is data in the wrong one.
+
+New `lib/server/mixology-supabase.ts` reads `MIXOLOGY_SUPABASE_URL` / `MIXOLOGY_SUPABASE_SERVICE_ROLE_KEY` with **no fallback**. Both mixology routes go through it and their inlined main-database config is gone — verified afterwards that no main-database env reference remains anywhere under `app/api/mixology`, which is the point of funnelling through one module: a stray one is greppable. The account/session line is untouched (`getCurrentAccount` still uses the main project).
+
+**The load-bearing detail is the error string.** It is `mixology_missing_supabase_env` — prefixed, but preserving the `missing_supabase_env` SUBSTRING, because `mixology-hall.tsx:300` matches `/missing_supabase_env/` to tell "local deployment, no cloud backend" apart from a transient network error. Verified the regex still matches, so this deployment keeps reporting "not open yet" instead of hard-failing.
+
+**Scope:** upstream's commit also rewires `app/api/mixology/cover/` and `hall-list/`, which this fork does not have — they came from the egress cluster skipped as cloud-only. Only the two routes we have were touched.
 
 ## Still open / not yet done
 - **Couple Space mini-games, "Route A"** — ⚠️ **this name is referenced three times in this file and never DEFINED.** No scope, no design, no integration point was ever written down; the only surviving description is "a custom app via existing directives", from a session transcript rather than from here. Do not start it as if it were a specified task — it needs a design decision from the user first. Recorded 2026-08-18.
