@@ -109,10 +109,10 @@ function MixPreviewBody({ target }: { target: MixPreviewTarget }) {
  *  not rebuilt on every keystroke */
 function previewKey(target: MixPreviewTarget): string {
     switch (target.kind) {
-        case "ticket": return `t${target.html}${target.raw}`;
-        case "garnish": return `g${target.css}`;
-        case "encore": return `e${target.html}${target.raw ?? ""}`;
-        case "canvas": return `c${target.html}${target.cover ?? ""}`;
+        case "ticket": return `t${target.html}${target.raw}`;
+        case "garnish": return `g${target.css}`;
+        case "encore": return `e${target.html}${target.raw ?? ""}`;
+        case "canvas": return `c${target.html}${target.cover ?? ""}`;
     }
 }
 
