@@ -1904,7 +1904,9 @@ The **prompt-structure commits** — **PORTED (`3ac3afb`)**. Sections moved `##`
 
 Group F also got stronger: the editor no longer names sections in prose, so that assertion would have been meaningless. It was replaced with the new invariant, which is directly testable — each editor box label must appear as a `##` heading in the assembled prompt. 58 → 65.
 
-The **mechanism panel rework** (`6578464` free placement, `de1a5c7`, `76d8cb9` preview, `db4be40`) is a 4-commit feature change to a part that currently works. `a169fb8` (streaming output) is a real improvement and the most tempting of the deferred set.
+The **mechanism panel rework** — **PORTED (`0b699b5`)**, see its own section below. `a169fb8` (streaming output) — **PORTED (`3371bcc`)**.
+
+**The deferred set is now empty.** Everything upstream that this fork wants has been taken; what remains unported is the "not ported (decide per feature)" list — whole Chinese-language apps, not fixes.
 
 `440d1da` — **PORTED (`41f6228`)**, taken now for exactly the timing reason: it changes WHICH DATABASE House Special data lands in, so it had to be in place before anyone configures Supabase rather than after there is data in the wrong one.
 
@@ -1913,6 +1915,59 @@ New `lib/server/mixology-supabase.ts` reads `MIXOLOGY_SUPABASE_URL` / `MIXOLOGY_
 **The load-bearing detail is the error string.** It is `mixology_missing_supabase_env` — prefixed, but preserving the `missing_supabase_env` SUBSTRING, because `mixology-hall.tsx:300` matches `/missing_supabase_env/` to tell "local deployment, no cloud backend" apart from a transient network error. Verified the regex still matches, so this deployment keeps reporting "not open yet" instead of hard-failing.
 
 **Scope:** upstream's commit also rewires `app/api/mixology/cover/` and `hall-list/`, which this fork does not have — they came from the egress cluster skipped as cloud-only. Only the two routes we have were touched.
+
+
+### Mixology mechanism panel: free placement — **PORTED** (`0b699b5`), 91/91, `_fx-mixology-panel.mjs` kept
+Net state of a five-commit upstream cluster (`6578464`, `76d8cb9`, `374e6ca`, `de1a5c7`, `db4be40`). `tsc` 0 errors; all 20 repo fixtures green afterwards.
+
+**Ported as NET STATE, not replayed** — `de1a5c7` deletes the visual placement area `6578464` had just added to the editor, calling it a design mistake that fought `mix.move`/`mix.size` for the same job. Replaying both would have written ~186 lines of editor UI and then deleted them. Third time this pattern has come up (`9eac832`/`7713154`, `de98183`/`5559e36`), so it is now the default: **for any multi-commit cluster, diff first..last and check for internal reversals before writing anything.**
+
+**What changed for authors.** A mechanism used to pick one of four docks and the app decided the rest. Now it declares its own geometry in its own interface code, as percentages of the session screen (`MixPanelLayout`) rather than pixels, so one mechanism lands in the same relative place on a phone and a tablet.
+
+**The sandbox whitelist grew from 5 actions to 10** — `box`, `fit`, `design`, `flag`, `grab`/`drag`/`dragEnd` on top of `setStore`/`setState`/`say`/`setOpen`. All five new capabilities are **geometry and appearance only**: a panel positioning and styling itself. None widens data access or adds a route to the conversation. Every one keeps a host-side clamp, and the fixture pins each:
+- a `MIX_PANEL_KEEP_IN`-sized piece always stays on screen, so nothing can be dragged beyond recovery — **but a panel IS allowed to hang off an edge**, which is legitimate layout (A5 exists so a future "tidy-up" cannot turn the clamp into "must be fully on screen");
+- `z` capped below the app's own dialogs;
+- `fit` capped at 4000px, so an interface that writes a height feedback loop cannot make the host lay out an element hundreds of thousands of pixels tall;
+- `designWidth` clamped 120–1600; `say` still capped at 2000 chars;
+- `normalizeMixPanelLayout` drops unrecognised fields, so a payload cannot smuggle keys into an object the host spreads into a style.
+
+**CSP and iframe sandbox are byte-unchanged**: `default-src 'none'`, no `connect-src`, `allow-scripts` with no `allow-same-origin`. G4b/G5/G6 assert this so a later geometry change cannot quietly loosen it.
+
+**Escape hatches, because placement is now the material's.** Two controls in the session sheet — hide every mechanism panel, and reset dragged positions. That is the answer to "a downloaded panel covered the whole screen", instead of constraining layout.
+
+**A dragged position is stored on the SESSION (`panelBox`), never written back to the material.** The material is its author's work; a player nudging their own screen must not edit it. G11 asserts the game never calls `saveMixMaterial`.
+
+**Back-compat is kept, not migrated.** `dock` survives as `@deprecated`, the four presets remain, and `mixPanelLayoutOf` resolves *own layout → legacy dock → a neutral default when there is interface code but no placement → undefined*. The editor preserves whatever an older material carried rather than rewriting it, so renaming a material cannot wipe a position somebody arranged. Publish validation accepts either.
+
+**`hall-parts.ts` checks SHAPE ONLY and deliberately does not clamp** — the downloader clamps again on arrival, and rejecting out-of-range here would block a legitimate half-off-screen panel. E9+E10 assert both halves of that split (validation passes it, the normaliser then clamps it). Control 3 confirms it: make validation clamp and E9 fails alone.
+
+**`transfer.ts` and `hall-client.ts` needed no change** — verified they pass the material whole rather than enumerating mechanism fields, so `layout` survives export/import and publish for free.
+
+**`mixNearestDock` is ported but unused, exactly as upstream.** Its purpose is to be written alongside on publish so an older client can still place the panel roughly right; nothing calls it yet. Recorded so nobody treats it as load-bearing — F5 asserts all four presets round-trip through it, so it stays correct if it is ever wired.
+
+**Editor**: the dock picker is gone. The interface-code field is always shown with the `window.mix` API in its placeholder, followed by a "try it on" preview that sets the panel on a stage drawn to the **real session screen's measured aspect ratio** (hardcoding a ratio is upstream's stated reason preview and reality used to disagree) and can run each hook once against sample data, sharing one storage bucket with the panel.
+
+**Not verified here: the drag/resize math**, which needs a real DOM and a pointer. The two paths are deliberately different — a mouse goes via a host capture layer, a finger via the sandbox reporting its own frame coordinates, because an opaque-origin iframe gives frame coordinates from `screenX` and the two do not line up. Both compute from one snapshot and one start point. That is the part a human still has to try.
+
+**Non-vacuity, run not asserted**: remove the KEEP_IN clamp → 86/91 (A1–A4, E10); drop legacy-dock resolution → 86/91 (C2.×4, C10); make validation clamp → 90/91 (E9 alone).
+
+### 🚨 A NEW CONTROL-CHARACTER VARIANT: U+0001, and the NUL checker cannot see it (`6b989bd`)
+Found while re-anchoring a splice against `mixology-preview.tsx`: `cat -A` rendered `^A` where the source should have read `` `t${target.html}${target.raw}` ``. Seven literal **SOH (0x01)** bytes were sitting inside those template literals, committed during the stage-4 Mixology port.
+
+Behaviour was unaffected — `previewKey` only builds a string compared against itself to debounce sandbox rebuilds — so nothing would ever have surfaced it. Restored to upstream's form (no separator).
+
+**This is the fifth variant of the same trap** (blanket `\s+` strip, literal NUL ×2, literal space, now literal SOH), and the important part is that **`denul.mjs` reported the file clean, correctly — it only looks for 0x00.** Replace that check with a full C0 sweep:
+```
+node -e "const b=require('fs').readFileSync(P);for(let i=0;i<b.length;i++){const c=b[i];if(c<0x09||(c>0x0d&&c<0x20)||c===0x7f)console.log(i,c)}"
+```
+A repo-wide run over all 560 `.ts/.tsx/.css/.mjs/.js/.md` files reports clean, so this was the only instance. `_fx-mixology-panel.mjs` G16 now guards the three files the rework touched.
+
+**And one fixture assertion of my own was a false positive worth recording**: G4 first tested `!/connect-src/.test(panelSrc)` against the WHOLE FILE, which fails on the *comment* that says "there is still no connect-src". It now extracts the actual `Content-Security-Policy content="…"` directive and tests that. **A source-scraping security assertion must read the directive, not the file** — prose about a policy is not the policy.
+
+### Process note: `git add -A` swept in the deliberately-untracked game imports
+The three files in `pending-game-imports/` are untracked ON PURPOSE — per the "Still open" section that is exactly how a pending import is told apart from an imported one (the three already imported are tracked). `git add -A` staged them into the panel commit; caught on the `--stat` and amended out.
+
+**Use `git add <paths>` in this repo, not `-A`**, or check `--stat` before the commit lands.
 
 ## Still open / not yet done
 - **Couple Space mini-games, "Route A"** — ⚠️ **this name is referenced three times in this file and never DEFINED.** No scope, no design, no integration point was ever written down; the only surviving description is "a custom app via existing directives", from a session transcript rather than from here. Do not start it as if it were a specified task — it needs a design decision from the user first. Recorded 2026-08-18.
