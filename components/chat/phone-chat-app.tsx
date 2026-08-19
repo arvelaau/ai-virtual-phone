@@ -90,9 +90,10 @@ export const PhoneChatApp = memo(function PhoneChatApp({ onClose, initialSession
         return () => window.removeEventListener(CHAT_OPEN_SESSION_EVENT, handler);
     }, []);
 
-    // 名片点击「加好友」：关会话、切联系人 tab，待添加角色经 prop 交给列表打开添加页
+    // Tapping Add friend on a contact card: close the session, switch to the contacts tab, and
+    // hand the character waiting to be added to the list via a prop so it opens the add page
     const [pendingAddContactId, setPendingAddContactId] = useState<string | null>(null);
-    // 名片来源的原聊天室：添加页按返回时回到这里
+    // The chat room the contact card came from: Back on the add page returns here
     const addContactReturnSessionRef = useRef<string | null>(null);
     const activeSessionIdRef = useRef<string | null>(null);
     activeSessionIdRef.current = activeSession?.id ?? null;
@@ -127,7 +128,7 @@ export const PhoneChatApp = memo(function PhoneChatApp({ onClose, initialSession
             notifyMascotPageContext({
                 page: "chat",
                 mode: "chatting",
-                label: `聊天 · ${(activeSession as Record<string, unknown>).alias as string || char?.name || "对话"}`,
+                label: `Chat · ${(activeSession as Record<string, unknown>).alias as string || char?.name || "conversation"}`,
                 fields: { sessionId: activeSession.id, contactId: activeSession.contactId },
             });
         }
@@ -139,7 +140,7 @@ export const PhoneChatApp = memo(function PhoneChatApp({ onClose, initialSession
         notifyMascotPageContext({
             page: "chat",
             mode: "chatting",
-            label: `聊天 · ${getMascotSettingsSnapshot().nickname || "AI助手"}`,
+            label: `Chat · ${getMascotSettingsSnapshot().nickname || "AI assistant"}`,
             fields: { sessionId: "mascot", contactId: "mascot" },
         });
     }, [activeMascot]); // eslint-disable-line react-hooks/exhaustive-deps
