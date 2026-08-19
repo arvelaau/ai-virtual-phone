@@ -68,6 +68,7 @@ NEXT_PUBLIC_SELF_HOSTED_MODE=true
 |---|---|
 | `NEXT_PUBLIC_SELF_HOSTED_MODE` | `true`=单机模式（推荐自部署开启）；`false`=启用账号/激活码门禁（需配 Supabase） |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | 你自己的 Supabase 项目，启用云端功能时必填（服务端专用，勿放进 NEXT_PUBLIC） |
+| `MIXOLOGY_SUPABASE_URL` / `MIXOLOGY_SUPABASE_SERVICE_ROLE_KEY` | A separate Supabase project used only by House Special (materials / blends / likes / saves / comments). No fallback to the main project: leave empty and the House Special cloud stays closed. |
 | `ACCOUNT_GATE_SECRET` | 账号门禁签名密钥，启用账号系统时设为随机长字符串 |
 | `VERIFY_ADMIN_KEY` | 成年审核/激活码管理后台密钥 |
 | `APP_MARKET_ADMIN_KEY` | 应用市场审核后台密钥（不填回退用 `VERIFY_ADMIN_KEY`） |

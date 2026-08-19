@@ -1,4 +1,6 @@
 -- Supabase SQL for House Special (mixology): the materials page, the hall, and social.
+-- Run this in the SEPARATE Supabase project pointed at by MIXOLOGY_SUPABASE_URL /
+-- MIXOLOGY_SUPABASE_SERVICE_ROLE_KEY, not the main one.
 -- Run this once in the Supabase SQL editor.
 --
 -- mixology_items    materials page: shared materials (eleven kinds; payload is the full

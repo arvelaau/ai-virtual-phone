@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getCurrentAccount } from "@/lib/server/account-auth";
+import { getMixologySupabaseConfig, mixologyRestFetch } from "@/lib/server/mixology-supabase";
 import { normalizeRecipeParts as normalizeParts, validateMechanismPayload, type RecipePartRef } from "@/lib/mixology/hall-parts";
 
 // House Special -- the materials/blends API. Materials (mixology_items) and blends
@@ -49,21 +50,6 @@ const CDN_LIST_CACHE_HEADERS = {
   "Netlify-Vary": "query",
 } as const;
 
-function getSupabaseConfig(): { url: string; key: string } | null {
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
-  if (!url || !key) return null;
-  return { url: url.replace(/\/$/, ""), key };
-}
-
-function supabaseHeaders(config: { key: string }): HeadersInit {
-  return {
-    apikey: config.key,
-    Authorization: `Bearer ${config.key}`,
-    "Content-Type": "application/json",
-  };
-}
-
 function cleanText(value: unknown, maxLength: number): string {
   return String(value ?? "").replace(/\u0000/g, "").trim().slice(0, maxLength);
 }
@@ -105,39 +91,17 @@ async function supabaseFetch<T>(
   path: string,
   init?: RequestInit,
 ): Promise<{ ok: true; data: T; status: number } | { ok: false; error: string; status: number }> {
-  const config = getSupabaseConfig();
-  if (!config) return { ok: false, error: "missing_supabase_env", status: 503 };
-  const response = await fetch(`${config.url}/rest/v1/${path}`, {
-    ...init,
-    headers: {
-      ...supabaseHeaders(config),
-      ...(init?.headers ?? {}),
-    },
-    cache: "no-store",
-  });
-  const text = await response.text();
-  let data: unknown = null;
-  if (text) {
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = text;
-    }
+  // House Special talks to the House Special database only -- mixologyRestFetch has no
+  // fallback to the main one.
+  const result = await mixologyRestFetch<T>(path, init);
+  if (!result.ok && isMissingTableError(result.error)) {
+    return {
+      ok: false,
+      error: "The House Special sharing tables have not been created yet. Run docs/mixology-supabase.sql in the SQL editor of the House Special Supabase project.",
+      status: result.status,
+    };
   }
-  if (!response.ok) {
-    const message = typeof data === "object" && data && "message" in data
-      ? String((data as { message?: unknown }).message)
-      : text || response.statusText;
-    if (isMissingTableError(message)) {
-      return {
-        ok: false,
-        error: "The House Special sharing tables have not been created yet. Run docs/mixology-supabase.sql in the Supabase SQL editor first.",
-        status: response.status,
-      };
-    }
-    return { ok: false, error: message, status: response.status };
-  }
-  return { ok: true, data: data as T, status: response.status };
+  return result;
 }
 
 function parseType(value: unknown): HallType | null {
@@ -328,7 +292,7 @@ export async function GET(request: Request) {
     // CDN wholesale. "My publications" filters by account and is not cached.
     return NextResponse.json({ ok: true, entries }, isMine ? undefined : { headers: CDN_LIST_CACHE_HEADERS });
   } catch (err) {
-    return NextResponse.json({ ok: false, error: formatSupabaseError(err), entries: [] }, { status: getSupabaseConfig() ? 500 : 503 });
+    return NextResponse.json({ ok: false, error: formatSupabaseError(err), entries: [] }, { status: getMixologySupabaseConfig() ? 500 : 503 });
   }
 }
 
@@ -415,7 +379,7 @@ export async function POST(request: Request) {
     if (!insert.ok) return NextResponse.json({ ok: false, error: insert.error }, { status: insert.status });
     return NextResponse.json({ ok: true, entry: normalizeEntry("recipe", insert.data[0], { withPayload: true }) });
   } catch (err) {
-    return NextResponse.json({ ok: false, error: formatSupabaseError(err) }, { status: getSupabaseConfig() ? 400 : 503 });
+    return NextResponse.json({ ok: false, error: formatSupabaseError(err) }, { status: getMixologySupabaseConfig() ? 400 : 503 });
   }
 }
 
@@ -500,7 +464,7 @@ export async function PUT(request: Request) {
     }
     return NextResponse.json({ ok: true, entry: normalizeEntry(type, result.data[0], { withPayload: true }) });
   } catch (err) {
-    return NextResponse.json({ ok: false, error: formatSupabaseError(err) }, { status: getSupabaseConfig() ? 400 : 503 });
+    return NextResponse.json({ ok: false, error: formatSupabaseError(err) }, { status: getMixologySupabaseConfig() ? 400 : 503 });
   }
 }
 
@@ -588,7 +552,7 @@ export async function PATCH(request: Request) {
     if (!update.ok) return NextResponse.json({ ok: false, error: update.error }, { status: update.status });
     return NextResponse.json({ ok: true, liked, saved, likeCount, saveCount });
   } catch (err) {
-    return NextResponse.json({ ok: false, error: formatSupabaseError(err) }, { status: getSupabaseConfig() ? 400 : 503 });
+    return NextResponse.json({ ok: false, error: formatSupabaseError(err) }, { status: getMixologySupabaseConfig() ? 400 : 503 });
   }
 }
 
@@ -615,6 +579,6 @@ export async function DELETE(request: Request) {
     }
     return NextResponse.json({ ok: true, id });
   } catch (err) {
-    return NextResponse.json({ ok: false, error: formatSupabaseError(err) }, { status: getSupabaseConfig() ? 400 : 503 });
+    return NextResponse.json({ ok: false, error: formatSupabaseError(err) }, { status: getMixologySupabaseConfig() ? 400 : 503 });
   }
 }
