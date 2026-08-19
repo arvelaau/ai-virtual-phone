@@ -54,7 +54,7 @@ export type MixAssembleInput = {
      * pick-one slots look only at the first.
      */
     materials: Partial<Record<MixMaterialKind, MixMaterial[]>>;
-    /** The name the player steps into; empty uses the default */
+    /** The user's name; empty uses the default */
     userName?: string;
     /** Which opening was chosen; out of range falls back to 0 */
     openingIndex?: number;
@@ -89,8 +89,8 @@ function escapeForHtml(value: string): string {
  *
  * escapeHtml: turn on when the result is going to be inserted into HTML, which is what the
  * opening canvas does. It escapes only the values being substituted in, never the tags the
- * author wrote themselves. The player types their own name, but a player called "<b>" can
- * still wreck the canvas's structure, so anything going into HTML is escaped.
+ * author wrote themselves. The user types their own name, but a name like "<b>" can still
+ * wreck the canvas's structure, so anything going into HTML is escaped.
  */
 export function applyMixMacros(
     text: string,
@@ -116,42 +116,60 @@ export function applyMixMacros(
     });
 }
 
-/** Concatenate a stack of materials in order (used by the stacking slots) */
-function stackText(materials: MixMaterial[] | undefined): string {
-    return (materials ?? [])
-        .map((m) => {
-            const content = (m as MixTextMaterial).content;
-            return typeof content === "string" ? content.trim() : "";
-        })
-        .filter(Boolean)
-        .join("\n\n");
+/**
+ * The body of one slot, as a single section.
+ * With ONE material stacked, its text follows the # section heading directly -- that heading is
+ * already the slot's name on screen. With several, each gets a ## of its own titled with the
+ * material's name, which is how the stack is labelled at the bar anyway.
+ */
+function stackBody(materials: MixMaterial[] | undefined, apply: (text: string) => string): string {
+    const items = (materials ?? [])
+        .map((m) => ({
+            name: m.name?.trim() ?? "",
+            text: typeof (m as MixTextMaterial).content === "string" ? (m as MixTextMaterial).content.trim() : "",
+        }))
+        .filter((item) => item.text);
+    if (!items.length) return "";
+    if (items.length === 1) return apply(items[0].text);
+    return items.map((item, i) => `## ${apply(item.name || `Item ${i + 1}`)}\n${apply(item.text)}`).join("\n\n");
 }
 
-/** Emit a "Label: content" line when there is a value, or null when empty (filtered above) */
+/**
+ * One input box = one level-two heading. The heading is the very label shown on that box in
+ * the editor, so what an author sees while writing matches what the model receives.
+ * An empty box drops the whole block rather than leaving a bare heading.
+ */
 function field(label: string, value: string | undefined): string | null {
     const trimmed = value?.trim();
     if (!trimmed) return null;
-    return `${label}: ${trimmed}`;
+    return `## ${label}\n${trimmed}`;
 }
 
 function sectionBlock(title: string, lines: (string | null)[]): string | null {
     const kept = lines.filter((l): l is string => Boolean(l));
     if (!kept.length) return null;
-    return `## ${title}\n${kept.join("\n\n")}`;
+    return `# ${title}\n${kept.join("\n\n")}`;
 }
 
-const PREAMBLE = [
-    "This is an immersive roleplay. Below are the roleplay rules, the character information ",
-    "and the output requirements, in that order; follow all of them. The later a requirement ",
-    "appears, the higher its priority.",
-].join("");
+/**
+ * The preamble. Its FIRST sentence says who you are playing -- the single most important thing
+ * in the whole prompt, and far safer at the very top than buried in any one field.
+ */
+function preamble(charName: string): string {
+    return [
+        `This is an immersive roleplay. The character you are playing is ${charName}.`,
+        " Below are the roleplay rules, the character information and the output requirements, in that order; follow all of them. The later a requirement appears, the higher its priority.",
+        "\n(# marks a section and ## an entry within it; anything deeper comes from the creator's own structure.)",
+    ].join("");
+}
 
 // The prose marker protocol is the app's own rendering protocol: built in and always
 // present. It goes at the head of this section with the user's glassware content after it,
 // and it does NOT disappear when materials are missing, because both the garnish CSS and
 // the prose renderer depend on these four markers.
 const PROSE_PROTOCOL = [
-    "Prose marker rules (the interface renders by these, so follow them exactly):",
+    "## Prose marker rules (built in)",
+    "The interface renders by these, so follow them exactly:",
     "- Wrap anything spoken aloud in 「」. Wrap unspoken inner voice in * *.",
     "- When the scene or the time changes, mark it on its own line with 【】.",
     "- A word that needs stressing may be wrapped in ~ ~.",
@@ -164,8 +182,8 @@ function ticketSection(ticket: MixTicketMaterial, charName: string, userName: st
     const contract = ticket.contract.trim();
     if (!contract) return null;
     return [
-        "## Status panel",
-        `Output format: at the very start of every reply, put ${MIX_TICKET_OPEN} on the first line, then fill in this turn's actual data line by line as "Output contents" requires, close it with ${MIX_TICKET_CLOSE} alone on its own line, then leave a blank line before the prose. Never omit this section on any turn.`,
+        "# Status panel",
+        `Output format: at the very start of every reply, put ${MIX_TICKET_OPEN} on the first line, then fill in this turn's actual data line by line as "Output contract" requires, close it with ${MIX_TICKET_CLOSE} alone on its own line, then leave a blank line before the prose. Never omit this section on any turn.`,
         "Output contents:",
         applyMixMacros(contract, charName, userName, state),
     ].join("\n");
@@ -177,8 +195,8 @@ function encoreSection(encore: MixEncoreMaterial, charName: string, userName: st
     const contract = encore.contract?.trim();
     if (!contract) return null;
     return [
-        "## Skit",
-        `Output format: place it at the very end of the reply, after the prose, with the whole block wrapped in ${MIX_ENCORE_OPEN}...${MIX_ENCORE_CLOSE}. Whether to output it at all is decided by the conditions in "Output contents"; when it does not apply, omit the section entirely rather than emitting an empty shell.`,
+        "# Skit",
+        `Output format: place it at the very end of the reply, after the prose, with the whole block wrapped in ${MIX_ENCORE_OPEN}...${MIX_ENCORE_CLOSE}. Whether to output it at all is decided by the conditions in "Output contract"; when it does not apply, omit the section entirely rather than emitting an empty shell.`,
         "Output contents:",
         applyMixMacros(contract, charName, userName, state),
     ].join("\n");
@@ -195,7 +213,7 @@ function checklistSection(withTicket: boolean, withEncore: boolean): string | nu
     if (withEncore) {
         items.push(`- If this turn meets the conditions under "Skit", it has been emitted as a ${MIX_ENCORE_OPEN}...${MIX_ENCORE_CLOSE} block.`);
     }
-    return ["## Output format check", "Go through these before sending each reply:", ...items].join("\n");
+    return ["# Output format check", "Go through these before sending each reply:", ...items].join("\n");
 }
 
 function exampleSection(card: MixCharacterCard, charName: string, userName: string): string | null {
@@ -204,7 +222,7 @@ function exampleSection(card: MixCharacterCard, charName: string, userName: stri
     const lines = examples.map((e) =>
         `${e.role === "user" ? userName : charName}: ${applyMixMacros(e.text.trim(), charName, userName)}`,
     );
-    return `## Sample dialogue\nThese only demonstrate the prose style; they are not events that have happened:\n${lines.join("\n")}`;
+    return `# Sample dialogue\nThese only demonstrate the prose style; they are not events that have happened:\n${lines.join("\n")}`;
 }
 
 export function assembleMixPrompt(input: MixAssembleInput): MixAssembledPrompt {
@@ -217,7 +235,7 @@ export function assembleMixPrompt(input: MixAssembleInput): MixAssembledPrompt {
         return found as T | undefined;
     };
     const persona = firstOf<MixPersonaMaterial>("persona");
-    // The name to step into: explicitly passed in > the mask's own name > the default
+    // The user's name: explicitly passed in > whatever the mask supplies > the default
     const userName = input.userName?.trim() || persona?.userName?.trim() || MIX_DEFAULT_USER_NAME;
     const ticket = firstOf<MixTicketMaterial>("ticket");
     const encore = firstOf<MixEncoreMaterial>("encore");
@@ -225,16 +243,16 @@ export function assembleMixPrompt(input: MixAssembleInput): MixAssembledPrompt {
     const apply = (text: string) => applyMixMacros(text, charName, userName, input.state);
 
     // Stacking slots: everything in the stack whose condition held, joined in order
-    const baseText = stackText(m.base);
-    const flavorText = stackText(m.flavor);
-    const glassText = stackText(m.glass);
-    const strengthText = stackText(m.strength);
+    const baseText = stackBody(m.base, apply);
+    const flavorText = stackBody(m.flavor, apply);
+    const glassText = stackBody(m.glass, apply);
+    const strengthText = stackBody(m.strength, apply);
 
     const sections: (string | null)[] = [
-        PREAMBLE,
-        baseText ? `## Roleplay rules\n${apply(baseText)}` : null,
+        preamble(charName),
+        baseText ? `# Roleplay rules\n${baseText}` : null,
         sectionBlock("Character info", [
-            `Character name: ${charName}`,
+            `## Character name\n${charName}`,
             field("Basics", card.baseInfo),
             field("Personality", card.personality),
             field("Appearance", card.appearance),
@@ -243,18 +261,29 @@ export function assembleMixPrompt(input: MixAssembleInput): MixAssembledPrompt {
         // User info: who {{user}} is. Supplied by the mask material, so the model knows what
         // to call the person opposite and how to read them.
         persona && persona.content.trim()
-            ? `## User info\n${userName} is played by the user, the person opposite ${charName}.\n${apply(persona.content.trim())}`
+            ? [
+                // The heading is "Name", not "Your name": inside the prompt "you" means the MODEL,
+                // so the on-screen wording would point at the wrong party here. Every other
+                // heading matches the interface exactly.
+                persona.userName?.trim()
+                    ? `# User info\n## Name\n${apply(persona.userName.trim())}`
+                    : "# User info",
+                `## User persona\n${apply(persona.content.trim())}`,
+            ].join("\n\n")
             : null,
         sectionBlock("World & plot", [
             field("Worldview", card.worldview),
-            field(`What ${charName} initially knows about ${userName}`, card.cognition),
+            // Word for word the label on that box in the editor; the {{user}} inside it is
+            // substituted along with everything else below
+            field("Initial awareness of {{user}}", card.cognition),
             field("Relationships & identity", card.relations),
             field("Current scene", card.plot),
             field("Extra setting", card.extra),
         ].map((l) => (l ? apply(l) : l))),
-        flavorText ? `## Prose style\n${apply(flavorText)}` : null,
-        // The built-in protocol first, the user's glassware content after it
-        `## Output requirements\n${PROSE_PROTOCOL}${glassText ? `\n${apply(glassText)}` : ""}`,
+        flavorText ? `# Prose style\n${flavorText}` : null,
+        // The built-in protocol first, the author's own output requirements after it, each its
+        // own ## entry
+        `# Output requirements\n${PROSE_PROTOCOL}${glassText ? `\n\n## Output requirements\n${glassText}` : ""}`,
         ticket ? ticketSection(ticket, charName, userName, input.state) : null,
         encore ? encoreSection(encore, charName, userName, input.state) : null,
         exampleSection(card, charName, userName),
@@ -273,7 +302,7 @@ export function assembleMixPrompt(input: MixAssembleInput): MixAssembledPrompt {
     return {
         system: sections.filter((s): s is string => Boolean(s)).join("\n\n"),
         postHistory: strengthText
-            ? `[Highest priority requirements]\n${apply(strengthText)}`
+            ? `[Highest priority requirements]\n${strengthText}`
             : "",
         opening,
         hasTicket: Boolean(ticket?.contract.trim() && ticket?.renderHtml.trim()),

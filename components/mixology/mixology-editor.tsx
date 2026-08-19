@@ -26,39 +26,39 @@ const OPENING_SEPARATOR = "\n---\n";
 const KIND_GUIDE: Record<MixMaterialKind, { what: string; where: string }> = {
     character: {
         what: "Character information goes here: who they are, how they look, their personality, the world they live in, their starting relationship with the player, plus opening lines and sample dialogue.",
-        where: "Split across three prompt sections: Character info, World & plot, and Sample dialogue.",
+        where: "Goes into three sections: Character info, World & plot, and Sample dialogue.",
     },
     persona: {
-        what: "The user persona goes here: who {{user}} is -- identity, personality, appearance, and the user's side of the relationship with {{char}}. You can also give a name to step into, which replaces every {{user}}.",
-        where: "Enters the User info section, after Character info. The name you step into replaces every {{user}} in the prompt.",
+        what: "The user persona goes here: who {{user}} is -- identity, personality, appearance, and your side of the relationship with {{char}}.",
+        where: "Goes into the User info section; setting a name replaces every {{user}}.",
     },
     base: {
         what: "The roleplay charter goes here: how to stay in character, whether the model may speak for the player, whether conflict and negative feeling are allowed. This constrains attitude, not prose.",
-        where: "Enters the first prompt section, Roleplay rules.",
+        where: "Goes into the first section of the prompt.",
     },
     flavor: {
         what: "Prose style goes here: sentence length, narrative viewpoint, whether to lean on action or interiority. This constrains how it is written, and carries no character setting.",
-        where: "Enters the Prose style section.",
+        where: "Goes into the Prose style section.",
     },
     glass: {
         what: "Output requirements go here: how many paragraphs per turn, the pace of the narration, how to end a turn. The prose marker rules (「」 speech, * * inner voice, 【】 scene, ~ ~ emphasis) are built in at the head of this section, so there is no need to restate them.",
-        where: "Enters the Output requirements section, directly after the built-in marker rules.",
+        where: "Follows the built-in prose marker rules.",
     },
     strength: {
         what: "The highest-priority requirements go here: one or two rules that absolutely must hold. Because they sit after the whole conversation and just before generation, the model follows them most closely -- and the more you add, the more they dilute each other.",
-        where: "Enters the Highest priority requirements section AFTER the chat history. It is the only material placed there.",
+        where: "Placed after the whole conversation and just before generation, where the model can least ignore it.",
     },
     ticket: {
         what: "The status panel goes here: a data card carried alongside every turn -- affection, current mood, what they are carrying, whatever you decide. The contract decides what the model reports; the render code decides how the card looks.",
-        where: "The contract enters the Status panel section. The render code never enters the prompt and runs in the interface only.",
+        where: "The contract goes into the prompt; the render code runs in the interface only.",
     },
     garnish: {
         what: "Interface styling goes here, as CSS: prose colors, the dialogue typeface, the shape of a bubble. Writing body / html / :root all mean the session screen itself.",
-        where: "Never enters the prompt: it only changes presentation and costs no context. Styles apply inside the session screen alone and cannot reach the rest of the app.",
+        where: "Never enters the prompt: it only changes presentation and costs no context.",
     },
     encore: {
         what: "The skit goes here: an extra scene beside the prose -- an onlooker's view, a social post, a stretch of security footage. The output contract decides when the AI writes one and what goes in it; the render code decides how it looks. Leave the contract empty and it is simply a static sketch (a journal page, a shift rota).",
-        where: "The contract enters the Skit section. The render code never enters the prompt and runs in the interface only.",
+        where: "The contract goes into the prompt; the render code runs in the interface only.",
     },
     mechanism: {
         what: "A mechanism goes here: a piece of logic that runs in a sandbox, plus a panel pinned beside the session screen. The two halves are usually written together -- they share one storage bucket and can see each other, so something the panel noted down can be used by the hook before the next send -- but writing only one half is fine. The logic is called at a few fixed moments (session start, before sending, after a reply arrives, leaving the session), each time receiving a payload and handing one back.",
@@ -69,6 +69,14 @@ const KIND_GUIDE: Record<MixMaterialKind, { what: string; where: string }> = {
         where: "Never enters the prompt. It runs after the status-panel and skit blocks have been split out, touches the prose only, and cannot damage the block data.",
     },
 };
+
+/**
+ * Which heading level a creator should use when subdividing a box.
+ * The app itself owns # (a section) and ## (a box), so everything from ### down is theirs.
+ * Not shown for the kinds that never reach the prompt (garnish / mechanism / strainer).
+ */
+const HEADING_NOTE = "To add a subheading inside a box, start it with ### (# and ## are taken by the app).";
+const HEADING_NOTE_KINDS: MixMaterialKind[] = ["character", "persona", "base", "flavor", "glass", "strength", "ticket", "encore"];
 
 /** Field name and example for the text kinds (base / flavor / glassware / bitters) */
 const TEXT_FIELD_COPY: Record<"base" | "flavor" | "glass" | "strength", { label: string; placeholder: string }> = {
@@ -356,6 +364,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
             <div className="mix-guide">
                 <div className="mix-guide-what">{guide.what}</div>
                 <div className="mix-guide-where">{guide.where}</div>
+                {HEADING_NOTE_KINDS.includes(kind) ? <div className="mix-guide-level">{HEADING_NOTE}</div> : null}
                 <button type="button" className="mix-guide-link" onClick={() => setStructureOpen(true)}>
                     <FileText size={12} style={{ verticalAlign: "-2px" }} /> See the full prompt structure
                 </button>
@@ -416,7 +425,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                     <Field label="Appearance"><textarea className="mix-textarea" value={appearance} onChange={(e) => setAppearance(e.target.value)} placeholder="e.g. tall and thin, uniform sleeves always pushed to the elbow, an old piercing in the left ear" /></Field>
                     <Field label="Background"><textarea className="mix-textarea" value={background} onChange={(e) => setBackground(e.target.value)} placeholder="e.g. moved here three years ago, studies by day, works nights to pay the fees" /></Field>
                     <Field label="Worldview"><textarea className="mix-textarea" value={worldview} onChange={(e) => setWorldview(e.target.value)} placeholder="What world this happens in. e.g. an ordinary modern city, nothing supernatural" /></Field>
-                    <Field label="Initial awareness of the user"><textarea className="mix-textarea" value={cognition} onChange={(e) => setCognition(e.target.value)} placeholder="How much the character knows about you at the start. e.g. knows only that you come in three times a week; does not know your name" /></Field>
+                    <Field label={"Initial awareness of {{user}}"}><textarea className="mix-textarea" value={cognition} onChange={(e) => setCognition(e.target.value)} placeholder="How much the character knows about you at the start. e.g. knows only that you come in three times a week; does not know your name" /></Field>
                     <Field label="Relationships & identity"><textarea className="mix-textarea" value={relations} onChange={(e) => setRelations(e.target.value)} placeholder="Which roles the player can step into and the relationship under each. e.g. a regular (an unspoken understanding) / a new colleague (he shows you the ropes)" /></Field>
                     <Field label="Current scene"><textarea className="mix-textarea" value={plot} onChange={(e) => setPlot(e.target.value)} placeholder="The moment the story opens on. e.g. a rainy night, ten minutes to closing, only the two of you left in the shop" /></Field>
                     <Field label="Extra setting"><textarea className="mix-textarea" value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="Supporting cast, private terms, places. e.g. the manager only works days; 'locker three' is a code between them" /></Field>
@@ -493,7 +502,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
             ) : null}
             {kind === "persona" ? (
                 <>
-                    <Field label="Name to step into" hint="optional. Replaces {{user}} in the prompt; left empty it falls back to the default">
+                    <Field label="Your name" hint="optional. The character will call you this; left empty it falls back to the default">
                         <input className="mix-input" value={personaUserName} onChange={(e) => setPersonaUserName(e.target.value)} placeholder="e.g. Ash" />
                     </Field>
                     <Field label="User persona" hint="required. {{char}} / {{user}} may be used">

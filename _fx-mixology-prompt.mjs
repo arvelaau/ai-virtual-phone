@@ -110,8 +110,9 @@ const card = {
     check("D1 opening returned separately, not in the system prompt",
         out.opening === "The door opens." && !out.system.includes("The door opens."), out.opening);
     check("D2 the prose protocol is always present", out.system.includes("Output requirements"), null);
-    check("D3 an empty slot leaves no empty heading", !out.system.includes("## Prose style"), null);
-    check("D4 a filled character field appears", out.system.includes("Personality: Guarded."), null);
+    check("D3 an empty slot leaves no empty heading", !out.system.includes("# Prose style"), null);
+    // One box = one ## block, titled with the very label the editor shows on that box.
+    check("D4 a filled character field is its own ## block", out.system.includes("## Personality\nGuarded."), null);
     eq("D5 no bitters means empty postHistory", out.postHistory, "");
     eq("D6 no receipt means hasTicket false", out.hasTicket, false);
 }
@@ -153,7 +154,7 @@ for (const kind of ["base", "glass"]) {
         A.assembleMixPrompt({
             character: card,
             materials: { [kind]: [{ id: "m", kind, name: "m", content: "x", createdAt: 0, updatedAt: 0 }] },
-        }).system.includes(`## ${label}`), label);
+        }).system.includes(`# ${label}`), label);
 }
 check("E3 the checklist reference matches the glassware label exactly",
     out.system.includes("Output requirements"), null);
@@ -193,23 +194,42 @@ check("E3 the checklist reference matches the glassware label exactly",
     });
     const allPrompt = `${everyKind.system}\n${everyKind.postHistory}\n${withBlocks.system}\n${withBlocks.postHistory}`;
 
+    // The app owns two heading levels: # for a section, ## for one box inside it.
+    // NOTE the count guard. This loop filters rows, so a change to the heading level makes the
+    // assertions SILENTLY DISAPPEAR rather than fail -- which is what happened when the level
+    // moved from ## to #: the suite went 58 -> 48 with only four visible failures.
+    let sectionRows = 0;
     for (const row of rows) {
-        if (!row.startsWith("## ")) continue;
+        if (!row.startsWith("# ")) continue;
+        sectionRows += 1;
         check(`F  cheat sheet row "${row}" is a heading the assembler emits`,
             allPrompt.includes(row), row);
     }
+    check("F1b every section row was actually checked (guards against the filter silently emptying)",
+        sectionRows >= 10, sectionRows);
     check("F2 the post-history row matches what the assembler emits",
-        rows.some(r => !r.startsWith("## ")) && allPrompt.includes("[Highest priority requirements]"),
+        rows.some(r => !r.startsWith("# ")) && allPrompt.includes("[Highest priority requirements]"),
         everyKind.postHistory.slice(0, 60));
     check("F3 the cheat sheet carries no CJK", !/[一-鿿]/.test(preview), null);
 
     // The editor's per-kind guidance names the same sections in prose.
     const editor = fs.readFileSync("components/mixology/mixology-editor.tsx", "utf8");
     check("F4 the editor guidance carries no CJK", !/[一-鿿]/.test(editor), null);
-    for (const name of ["Roleplay rules", "Output requirements", "Status panel", "Skit"]) {
-        check(`F  editor guidance names the section "${name}" as the assembler spells it`,
-            editor.includes(name), name);
+    // The editor no longer names sections in its guidance prose -- the invariant that replaced
+    // it is stronger and directly testable: a box's LABEL is the ## heading the prompt gets.
+    const boxCard = {
+        ...card, baseInfo: "b", personality: "p", appearance: "a", background: "bg",
+        worldview: "w", cognition: "c", relations: "r", plot: "pl", extra: "e",
+    };
+    const boxPrompt = A.assembleMixPrompt({ character: boxCard, materials: {} }).system;
+    for (const label of ["Basics", "Personality", "Appearance", "Background", "Worldview",
+                         "Initial awareness of", "Relationships & identity", "Current scene", "Extra setting"]) {
+        check(`F  editor box label "${label}" is a ## heading in the prompt`,
+            boxPrompt.includes(`## ${label}`) && editor.includes(label), label);
     }
+    // The heading-level note has to state the levels the app actually uses.
+    check("F5 the editor tells creators to start their own subheadings at ###",
+        editor.includes("###") && editor.includes("HEADING_NOTE_KINDS"), null);
 }
 
 console.log(`\n${pass}/${pass + fail} passed`);

@@ -247,7 +247,7 @@ export function MaterialDetail({ material }: { material: MixMaterial }) {
                 <DetailField label="Appearance" value={card.appearance} />
                 <DetailField label="Background" value={card.background} />
                 <DetailField label="Worldview" value={card.worldview} />
-                <DetailField label="Initial awareness" value={card.cognition} />
+                <DetailField label="Initial awareness of {{user}}" value={card.cognition} />
                 <DetailField label="Relationships & identity" value={card.relations} />
                 <DetailField label="Current scene" value={card.plot} />
                 <DetailField label="Extra setting" value={card.extra} />
@@ -259,7 +259,7 @@ export function MaterialDetail({ material }: { material: MixMaterial }) {
         return (
             <>
                 <DetailField label="Hook" value={material.hook} />
-                <DetailField label="Name to step into" value={material.userName} />
+                <DetailField label="Your name" value={material.userName} />
                 <DetailField label="User persona" value={material.content} />
             </>
         );

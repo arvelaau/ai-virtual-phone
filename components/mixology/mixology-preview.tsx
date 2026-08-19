@@ -196,16 +196,16 @@ export function MixPreviewInline({
 
 const STRUCTURE_ROWS: { section: string; from: string; kind?: string }[] = [
     { section: "(fixed preamble)", from: "Built in: states that this is roleplay, and that later means higher priority" },
-    { section: "## Roleplay rules", from: "Base spirit", kind: "base" },
-    { section: "## Character info", from: "Character card: name / basics / personality / appearance / background", kind: "character" },
-    { section: "## User info", from: "Mask: the name to step into + the user persona (only present if written)", kind: "persona" },
-    { section: "## World & plot", from: "Character card: worldview / initial awareness / relationships & identity / current scene / extra setting", kind: "character" },
-    { section: "## Prose style", from: "Flavor", kind: "flavor" },
-    { section: "## Output requirements", from: "The built-in prose marker rules first, then the glassware content", kind: "glass" },
-    { section: "## Status panel", from: "The receipt's output contract (format note first, content requirements after; wrapper is [StatusPanel]...[/StatusPanel])", kind: "ticket" },
-    { section: "## Skit", from: "The encore's output contract (only present if a contract was written; wrapper is [Skit]...[/Skit])", kind: "encore" },
-    { section: "## Sample dialogue", from: "Character card: sample dialogue", kind: "character" },
-    { section: "## Output format check", from: "The built-in closing checklist (appears when a status panel or skit is in play)" },
+    { section: "# Roleplay rules", from: "Base spirit (stack several and each gets a ## titled with its name)", kind: "base" },
+    { section: "# Character info", from: "Character card, one ## per box: name / basics / personality / appearance / background", kind: "character" },
+    { section: "# User info", from: "Mask, one ## per box: name / user persona (only present if written)", kind: "persona" },
+    { section: "# World & plot", from: "Character card, one ## per box: worldview / initial awareness of {{user}} / relationships & identity / current scene / extra setting", kind: "character" },
+    { section: "# Prose style", from: "Flavor (stack several and each gets a ## titled with its name)", kind: "flavor" },
+    { section: "# Output requirements", from: "Two ## entries: the built-in prose marker rules first, then the glassware content", kind: "glass" },
+    { section: "# Status panel", from: "Format note first, then the receipt's Output contract as a ##; wrapper is [StatusPanel]...[/StatusPanel]", kind: "ticket" },
+    { section: "# Skit", from: "Format note first, then the encore's Output contract as a ##; wrapper is [Skit]...[/Skit]", kind: "encore" },
+    { section: "# Sample dialogue", from: "Character card: sample dialogue", kind: "character" },
+    { section: "# Output format check", from: "The built-in closing checklist (appears when a status panel or skit is in play)" },
 ];
 
 export function MixStructureSheet({ highlight, onClose }: { highlight?: string; onClose: () => void }) {
@@ -218,8 +218,8 @@ export function MixStructureSheet({ highlight, onClose }: { highlight?: string; 
                 </div>
                 <div className="mix-sheet-body">
                     <div className="mix-struct-note">
-                        Headings are Markdown level two (<code>##</code>). <b>A field you leave empty drops its whole section</b>, so there are never empty headings;
-                        <code>{"{{char}}"}</code> / <code>{"{{user}}"}</code> in your text become the character name and the name the player stepped into.
+                        <b>The box titles in the editor ARE the headings in the prompt.</b> A box you leave empty drops its whole block;
+                        <code>{"{{char}}"}</code> / <code>{"{{user}}"}</code> in your text become the character's name and the name you set.
                         <br />
                         Also, <b>the bar words are only for you</b> -- base spirit, glassware and receipt never appear in the prompt.
                         What the model receives is always plain wording it understands immediately: &quot;Roleplay rules&quot;, &quot;Output requirements&quot;, &quot;Status panel&quot;.
@@ -248,9 +248,8 @@ export function MixStructureSheet({ highlight, onClose }: { highlight?: string; 
 
                     <div className="mix-detail-label" style={{ marginTop: 16 }}>Parts that never enter the prompt</div>
                     <div className="mix-struct-note" data-on={highlight === "filter" ? "true" : undefined}>
-                        The <b>garnish</b> CSS, the <b>receipt and encore</b> render code and the <b>opening canvas</b> all run in the interface only.
-                        None of it is sent to the model, so none of it costs context however long you write it. The <b>opening line</b> is not in the system prompt either -- it is sent separately, as the session's first character message.
-                        The <b>strainer</b> rules clean the prose after the status-panel and skit blocks have been split out: &quot;display only&quot; affects rendering alone, while &quot;enters context&quot; cleans before storing (so the history sent back to the model is clean too). Neither enters the prompt.
+                        The <b>garnish</b> CSS, the <b>receipt and encore</b> render code, the <b>opening canvas</b> and the <b>strainer</b> rules all run in the interface only, so none of them costs context however long you write them. The <b>opening line</b> is sent separately as the session's first character message, so it is not in the system prompt either.
+                        On the strainer specifically: &quot;display only&quot; affects rendering alone, while &quot;enters context&quot; cleans before storing, so the history sent back to the model is clean too.
                     </div>
                 </div>
             </div>

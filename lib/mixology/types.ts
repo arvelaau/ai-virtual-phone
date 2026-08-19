@@ -234,11 +234,11 @@ export type MixTextMaterial = MixMaterialMeta & {
     content: string;
 };
 
-/** Mask (the user's persona): who {{user}} is — the name to step into plus the persona
- *  text, assembled into the "User Info" section. */
+/** Mask (the user's persona): who {{user}} is — a name plus the persona text, assembled
+ *  into the "User info" section. */
 export type MixPersonaMaterial = MixMaterialMeta & {
     kind: "persona";
-    /** The name the player steps into, replacing {{user}}. Empty falls back to the default. */
+    /** The user's name, replacing {{user}}. Empty falls back to the default. */
     userName?: string;
     content: string;
 };
@@ -467,7 +467,7 @@ export type MixSession = {
     /** Snapshot of the character name (for list display; unaffected if the card is later
      *  deleted from the cabinet) */
     charName: string;
-    /** The name the player stepped into ({{user}}); empty uses the default */
+    /** The user's name ({{user}}); empty uses the default */
     userName?: string;
     /** Which opening was chosen */
     openingIndex: number;
