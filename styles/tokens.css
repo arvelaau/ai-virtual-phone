@@ -33,10 +33,10 @@
   /* 输入框底色 */
   --c-input-border: rgba(224, 226, 229, 0);
   /* 输入框边框 */
-  --c-bubble-self: #259CFC;
-  /* own bubble — iMessage blue */
-  --c-bubble-other: #E9E9EA;
-  /* other bubble — iMessage grey */
+  --c-bubble-self: #95EC69;
+  /* 己方气泡 */
+  --c-bubble-other: #FFFFFF;
+  /* 对方气泡 */
 
   /* ── 功能色 3 ── */
   --c-success: #34C759;
@@ -267,10 +267,8 @@
   --c-icon: #A0A3A8;
   --c-input: #EBEBEB;
   --c-input-border: #DADBDF;
-  /* iMessage defaults. This .chat-app block WINS over the :root values above for
-     everything inside the chat app, so the bubble colours must be set here too. */
-  --c-bubble-self: #259CFC;
-  --c-bubble-other: #E9E9EA;
+  --c-bubble-self: var(--c-action-blue, #246bfd);
+  --c-bubble-other: #FFFFFF;
   --c-success: #34C759;
   --c-danger: #FF3B30;
   --c-warning: #FF9500;

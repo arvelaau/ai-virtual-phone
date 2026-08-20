@@ -106,7 +106,7 @@ export const MessageBubble = memo(function MessageBubble({ msg, onUpdate, charNa
         case "dice":
             return <DiceBubble msg={msg} />;
         case "quote":
-            return <QuoteBubble msg={msg} displayContent={displayContent} defaultTranslationExpanded={defaultTranslationExpanded} charName={charName} userName={userName} />;
+            return <QuoteBubble msg={msg} displayContent={displayContent} defaultTranslationExpanded={defaultTranslationExpanded} />;
         case "music_share":
             return <MusicShareBubble msg={msg} onPlay={onMusicPlay} />;
         case "media_file":
@@ -124,7 +124,6 @@ export const MessageBubble = memo(function MessageBubble({ msg, onUpdate, charNa
             return (
                 <>
                     {textBubble}
-                    {!msg.isTyping && <ChatBubbleTimestamp msg={msg} />}
                     <ChatPluginSlot name="message.footer" slotProps={{ sessionId: msg.sessionId, message: msg }} className="chat-plugin-message-footer" />
                 </>
             );
@@ -634,45 +633,6 @@ export const BilingualTextBlock = memo(function BilingualTextBlock({
 
 function TextBubble({ content, onActionSelect, defaultTranslationExpanded = false }: { content: string; onActionSelect?: (text: string) => void; defaultTranslationExpanded?: boolean }) {
     return <BilingualTextBlock text={content} onActionSelect={onActionSelect} mode="markdown" defaultExpanded={defaultTranslationExpanded} />;
-}
-
-// ── Timestamp + read receipt (WhatsApp-style, bottom-right of the bubble) ──
-// Ported from the Echoes reference's .echoes-timestamp: absolutely positioned
-// inside the bubble (which is already position:relative — see chat.css), with
-// a matching ::after spacer on .chat-markdown reserving room on the text's
-// last line so the wrapped copy never runs under it. Read-receipt checks only
-// render on the user's own outgoing bubbles — traced directly in the
-// reference's own minified bundle to `Fe=te.senderId===w` (Fe = "this
-// message is mine") gating the check's render, same condition as here.
-//
-// The check icon itself is the reference's *exact* inline SVG (single path,
-// two overlapping check-strokes drawn as one shape — not two separately
-// stacked check glyphs like lucide's CheckCheck, which is why the earlier
-// lucide-based version looked like only one stroke). Copied verbatim:
-// viewBox 0 0 17 17, fill black @ 50% opacity, no status-based recoloring.
-function ChatBubbleTimestamp({ msg }: { msg: ChatMessage }) {
-    const time = useMemo(() => {
-        const d = new Date(msg.createdAt);
-        if (Number.isNaN(d.getTime())) return "";
-        return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    }, [msg.createdAt]);
-    if (!time) return null;
-
-    const isUser = msg.role === "user";
-    return (
-        <span className="chat-msg-timestamp" aria-hidden="true">
-            <span className="chat-timestamp-time">{time}</span>
-            {isUser && (
-                <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 17 17" fill="none" className="chat-timestamp-check">
-                    <path
-                        d="M9.62635 3.84736C9.87369 3.53921 10.3239 3.48898 10.6322 3.73603C10.9404 3.98339 10.9907 4.43458 10.7435 4.74287L4.55799 12.4479C4.43077 12.6063 4.24224 12.7034 4.03944 12.7145C3.83647 12.7256 3.63832 12.6492 3.49452 12.5056L0.994517 10.0065C0.715091 9.72712 0.714346 9.27341 0.993541 8.99384C1.273 8.71455 1.72673 8.71461 2.00624 8.99384L3.94178 10.9284L9.62635 3.84736ZM13.7123 3.84638C13.9598 3.53844 14.411 3.48966 14.7191 3.73701C15.0267 3.98433 15.0761 4.43377 14.8295 4.74189L8.64393 12.447C8.51665 12.6055 8.32841 12.7034 8.12538 12.7145C7.92229 12.7256 7.72428 12.6494 7.58045 12.5056L6.58045 11.5065C6.30104 11.2271 6.30031 10.7734 6.57948 10.4938C6.85881 10.2145 7.31259 10.2139 7.59217 10.4929L8.02772 10.9284L13.7123 3.84638Z"
-                        fill="black"
-                        fillOpacity="0.5"
-                    />
-                </svg>
-            )}
-        </span>
-    );
 }
 
 // ── Red Packet ─────────────────────────────
@@ -1570,32 +1530,16 @@ function StickerBubble({ msg, characterId }: { msg: ChatMessage; characterId?: s
 
 // ── Quote ─────────────────────────────
 
-function QuoteBubble({ msg, displayContent, defaultTranslationExpanded = false, charName, userName }: { msg: ChatMessage; displayContent?: string; defaultTranslationExpanded?: boolean; charName?: string; userName?: string }) {
-    // WhatsApp-style reply strip, back to living INSIDE the bubble (not a
-    // floating pill outside it — that whole approach, across many rounds,
-    // was chasing the wrong reference). Structure and class names ported
-    // directly from the user's own Echoes WhatsApp build:
-    // .echoes-quote-settings > .echoes-quote-color + .echoes-quote-body >
-    // .echoes-quote-name + .echoes-quote-text. quoteRole tells us whether
-    // the quoted line came from the user or the character, so the name
-    // label can say who — the source data itself only ever stored the
-    // quoted text, never a name.
+function QuoteBubble({ msg, displayContent, defaultTranslationExpanded = false }: { msg: ChatMessage; displayContent?: string; defaultTranslationExpanded?: boolean }) {
     const d = msg.mediaData;
-    const quotedIsUser = d?.quoteRole === "user";
-    const quoteName = quotedIsUser ? (userName || "You") : (charName || "Them");
     return (
         <div className="chat-quote-message max-w-full">
             {d?.quotePreview && (
-                <div className={`chat-quote-settings ${quotedIsUser ? "chat-quote-settings-user" : "chat-quote-settings-other"}`}>
-                    <div className="chat-quote-color" />
-                    <div className="chat-quote-body">
-                        <div className="chat-quote-name">{quoteName}</div>
-                        <div className="chat-quote-text">{d.quotePreview}</div>
-                    </div>
+                <div className="chat-quote-preview bg-black/[0.06] border-l-[3px] border-l-black/15 px-2.5 py-1.5 ts-12 text-[var(--c-icon)] mb-1.5 rounded-r-[6px] truncate max-w-full">
+                    {d.quotePreview}
                 </div>
             )}
             {msg.content && <TextBubble content={displayContent ?? msg.content} defaultTranslationExpanded={defaultTranslationExpanded} />}
-            {!msg.isTyping && <ChatBubbleTimestamp msg={msg} />}
         </div>
     );
 }

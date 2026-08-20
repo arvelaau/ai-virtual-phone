@@ -93,55 +93,12 @@ export const CHAT_SESSION_CSS_EXAMPLE = `/* ═══ Individual chat room CSS e
 }
 */
 
-/* ── iMessage bubble defaults ──
-   The app now ships an iMessage-style bubble. Everything about it is a
-   custom property, so you can retune it without rewriting any selector.
-   Put these in :root to change them everywhere.
-*/
-/*
-:root {
-  --chat-bubble-radius: 18px;
-  --chat-bubble-padding: 9px 12px;
-  --chat-bubble-font-size: calc(13.5px * var(--app-text-scale, 1));
-  --chat-bubble-line-height: 1.4;
-  --chat-bubble-min-width: 45px;
-  --chat-bubble-min-height: 36px;
-  --chat-bubble-text-self: #ffffff;
-  --chat-bubble-text-other: #1c1c1e;
-
-  /* spacing inside a run vs. when the speaker changes */
-  --chat-bubble-gap-consecutive: -6px;
-  --chat-bubble-gap-speaker: 10px;
-
-  /* the little tail. set display to none to switch tails off */
-  --chat-bubble-tail-display: block;
-  --chat-bubble-tail-size: 30px;
-  --chat-bubble-tail-self: url("...");
-  --chat-bubble-tail-other: url("...");
-
-  /* hide avatars entirely with: none */
-  --chat-avatar-display: flex;
-
-  /* reply capsule floating above the bubble */
-  --chat-quote-max-width: 200px;
-  --chat-quote-font-size: 11px;
-  --chat-quote-offset: 42px;
-}
-*/
-
-/* The tail is drawn only on the LAST bubble of a consecutive run. That run
-   end is marked by [data-run-end] on .chat-msg-wrapper, computed in
-   chat-room.tsx — a CSS sibling selector cannot find it, because every
-   message sits in its own flex container. [data-consecutive] marks the
-   2nd..nth bubble of a run. */
-/*
-.chat-msg-wrapper[data-run-end] .chat-bubble-role-user::after { display: none; }
-*/
-
 /* ── Bubbles ── */
 .chat-bubble-role-user {
   background: var(--c-bubble-self);
   color: #fff;
+  border-radius: 6px;
+  padding: 10px 14px;
 }
 
 .chat-bubble-role-assistant {
