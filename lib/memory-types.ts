@@ -61,7 +61,11 @@ Event log:
 {{events}}
 
 Requirements:
-- Describe the interactions between {{char}} and the user in the third person
+- Describe in the third person what {{char}} did and what happened to {{char}}
+- Cover the interactions between {{char}} and the user
+- Name every other character who took part, and say what they did. Do not collapse a scene
+  into {{char}} and the user alone when someone else was there — who was present is itself
+  worth remembering
 - Preserve key facts: names mentioned, promises made, emotional shifts, relationship milestones
 - Preserve specific details the user shared (birthdays, preferences, habits)
 - Preserve key information from non-chat events such as Moments posts
@@ -69,6 +73,40 @@ Requirements:
 - Do not include any formatting markup
 
 Summary:`;
+
+/**
+ * Superseded defaults, kept forever and recognised on load.
+ *
+ * `summarizationPrompt` is written into the user's stored MemoryConfig the moment ANY memory
+ * setting is saved, and loadMemoryConfig spreads stored values over the defaults -- so editing
+ * the constant above reaches nobody who has ever touched that page. Byte-matching a stored
+ * prompt against this list is what lets an untouched prompt be upgraded while a genuinely
+ * customised one is left alone.
+ *
+ * Same mechanism as loadInterviewHostPrompt and the shopping prompts. NEVER delete an entry:
+ * doing so strands everyone still carrying it.
+ */
+export const SUPERSEDED_SUMMARIZATION_PROMPTS: readonly string[] = [
+    // v1 — framed every scene as {{char}} <-> user, so other characters present were routinely
+    // dropped from the summary entirely
+    `You are a memory-organizing assistant. Based on the event log below, write a concise, factual summary.
+
+Character: {{char}}
+Time span: {{earliest}} to {{latest}}
+
+Event log:
+{{events}}
+
+Requirements:
+- Describe the interactions between {{char}} and the user in the third person
+- Preserve key facts: names mentioned, promises made, emotional shifts, relationship milestones
+- Preserve specific details the user shared (birthdays, preferences, habits)
+- Preserve key information from non-chat events such as Moments posts
+- 100-200 words
+- Do not include any formatting markup
+
+Summary:`,
+];
 
 /**
  * Default core-memory summarization prompt template.

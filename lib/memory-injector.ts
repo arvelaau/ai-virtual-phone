@@ -10,10 +10,16 @@ import { borrowedFromName } from "./memory-sharing";
  * so this just formats the selected entries.
  *
  * Borrowed memories (shared memory, see lib/memory-sharing.ts) are grouped into their own
- * section and attributed by name. That attribution is REQUIRED, not cosmetic: another
- * character's memories are written in that character's first person ("I took her to the
- * pier"), so folded in unlabelled the model reads them as its own experience and will claim
- * things it never did. The heading only appears when something was actually borrowed.
+ * section and attributed by name.
+ *
+ * The attribution is REQUIRED, not cosmetic. Folded in unlabelled, another character's memory
+ * reads as this character's own experience, and the model will claim things it never did or
+ * knowledge it never had. The default summarization prompt writes in the THIRD person, so the
+ * usual failure is a character treating hearsay as first-hand rather than literal "I"
+ * confusion -- but summarizationPrompt is user-editable, so first-person accounts do occur,
+ * and the heading covers both.
+ *
+ * The heading only appears when something was actually borrowed.
  */
 export function formatLongTermMemories(memories: MemoryEntry[]): string {
     if (memories.length === 0) return "";

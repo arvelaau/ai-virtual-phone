@@ -135,6 +135,62 @@ const eq = (name, got, want) => ok(name, Object.is(got, want), `got ${JSON.strin
         selectBorrowableMemories(ON, { id: "c_zed", name: "Zed", worldId: "w1" }, owners).length, 0);
 }
 
+// ── P. the summarization prompt, and its superseded-default upgrade ───────────
+//
+// Shared memory can only surface what the summarizer wrote down. v1 framed every scene as
+// {{char}} <-> user, so other characters present were routinely dropped and the name filter
+// had almost nothing to match. The prompt is the real source of yield here.
+{
+    const { DEFAULT_SUMMARIZATION_PROMPT, SUPERSEDED_SUMMARIZATION_PROMPTS } = TYPES;
+
+    ok("P1 the current prompt asks for other characters by name",
+        /Name every other character/i.test(DEFAULT_SUMMARIZATION_PROMPT));
+    ok("P2 and says not to collapse a scene to char + user",
+        /Do not collapse a scene/i.test(DEFAULT_SUMMARIZATION_PROMPT));
+    ok("P3 the char <-> user interaction is still covered",
+        /interactions between \{\{char\}\} and the user/i.test(DEFAULT_SUMMARIZATION_PROMPT));
+    ok("P4 placeholders survive",
+        ["{{char}}", "{{earliest}}", "{{latest}}", "{{events}}"].every((m) => DEFAULT_SUMMARIZATION_PROMPT.includes(m)));
+
+    // The upgrade path. Without it, changing the constant reaches only users who have never
+    // saved a memory setting -- and the shared-memory toggle itself is a memory setting.
+    ok("P5 there is at least one superseded prompt recorded", SUPERSEDED_SUMMARIZATION_PROMPTS.length >= 1);
+    ok("P6 the superseded v1 is the char<->user framing",
+        SUPERSEDED_SUMMARIZATION_PROMPTS.some((t) => /Describe the interactions between \{\{char\}\} and the user in the third person/.test(t)));
+    ok("P7 v1 genuinely lacked the other-character rule",
+        SUPERSEDED_SUMMARIZATION_PROMPTS.every((t) => !/Name every other character/i.test(t)));
+    ok("P8 the current default is NOT in the superseded list",
+        !SUPERSEDED_SUMMARIZATION_PROMPTS.includes(DEFAULT_SUMMARIZATION_PROMPT));
+
+    // Behavioural: the upgrade itself
+    const STORE = jiti(path.join(root, "lib/memory-storage.ts"));
+    const { upgradeSupersededPrompts } = STORE;
+    const v1 = SUPERSEDED_SUMMARIZATION_PROMPTS[0];
+
+    const upgraded = upgradeSupersededPrompts({ ...DEFAULT_MEMORY_CONFIG, summarizationPrompt: v1 });
+    eq("P9 a stored v1 prompt is upgraded", upgraded.summarizationPrompt, DEFAULT_SUMMARIZATION_PROMPT);
+
+    const custom = "My own prompt about {{char}}.";
+    eq("P10 a genuinely customised prompt is left alone",
+        upgradeSupersededPrompts({ ...DEFAULT_MEMORY_CONFIG, summarizationPrompt: custom }).summarizationPrompt, custom);
+
+    eq("P11 the current default is left alone",
+        upgradeSupersededPrompts({ ...DEFAULT_MEMORY_CONFIG, summarizationPrompt: DEFAULT_SUMMARIZATION_PROMPT }).summarizationPrompt,
+        DEFAULT_SUMMARIZATION_PROMPT);
+
+    ok("P12 every other setting survives the upgrade",
+        upgradeSupersededPrompts({ ...DEFAULT_MEMORY_CONFIG, summarizationPrompt: v1, maxLongTermEntries: 42 }).maxLongTermEntries === 42);
+
+    // Source, SCOPED to loadMemoryConfig's own body. Testing the whole file would match the
+    // function's own definition and pass even with the call site deleted -- which is exactly
+    // how the first version of this assertion went vacuous.
+    const store = fs2.readFileSync(path.join(root, "lib/memory-storage.ts"), "utf8");
+    const fnStart = store.indexOf("export function loadMemoryConfig");
+    const body = store.slice(fnStart, store.indexOf("\n}", fnStart));
+    ok("P13 loadMemoryConfig actually calls the upgrade",
+        /upgradeSupersededPrompts\(/.test(body), body.slice(-200));
+}
+
 // ── W. worlds: the same name in two worlds is two different people ────────────
 //
 // Names are the identifier this feature matches on, so without a world scope "Alice" in
@@ -242,7 +298,7 @@ const eq = (name, got, want) => ok(name, Object.is(got, want), `got ${JSON.strin
 // Guard against the whole file silently skipping a group: the count is pinned, so a group
 // that stops running fails loudly instead of shrinking the suite.
 // Counted before this guard itself runs, so the total printed below is EXPECTED + 1.
-const EXPECTED = 75;
+const EXPECTED = 88;
 ok(`Z1 ${EXPECTED} assertions ran before this guard`, pass + fail === EXPECTED, `ran ${pass + fail}`);
 
 console.log(`\n${pass}/${pass + fail} passed`);

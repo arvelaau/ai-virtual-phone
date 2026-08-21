@@ -2,7 +2,7 @@
 // IndexedDB persistence for long-term memory entries + short-term events + localStorage config.
 
 import type { MemoryEntry, MemoryConfig } from "./memory-types";
-import { DEFAULT_MEMORY_CONFIG } from "./memory-types";
+import { DEFAULT_MEMORY_CONFIG, DEFAULT_SUMMARIZATION_PROMPT, SUPERSEDED_SUMMARIZATION_PROMPTS } from "./memory-types";
 import { kvGet, kvSet, registerKvMigration, registerDynamicPrefix } from "./kv-db";
 import { openIndexedDbAtLeast } from "./idb-open";
 
@@ -180,10 +180,26 @@ export function loadMemoryConfig(): MemoryConfig {
     try {
         const raw = kvGet(CONFIG_KEY);
         if (!raw) return { ...DEFAULT_MEMORY_CONFIG };
-        return { ...DEFAULT_MEMORY_CONFIG, ...JSON.parse(raw) };
+        return upgradeSupersededPrompts({ ...DEFAULT_MEMORY_CONFIG, ...JSON.parse(raw) });
     } catch {
         return { ...DEFAULT_MEMORY_CONFIG };
     }
+}
+
+/**
+ * A stored prompt that byte-matches a superseded default was never customised -- the whole
+ * config object is written on every save, so it got there by accident rather than intent.
+ * Upgrade those to the current default; leave anything else exactly as the user wrote it.
+ *
+ * Without this, changing DEFAULT_SUMMARIZATION_PROMPT reaches only users who have never opened
+ * the memory settings, which is close to nobody.
+ */
+export function upgradeSupersededPrompts(config: MemoryConfig): MemoryConfig {
+    const stored = config.summarizationPrompt;
+    if (typeof stored === "string" && SUPERSEDED_SUMMARIZATION_PROMPTS.includes(stored)) {
+        return { ...config, summarizationPrompt: DEFAULT_SUMMARIZATION_PROMPT };
+    }
+    return config;
 }
 
 export function saveMemoryConfig(config: MemoryConfig): void {
