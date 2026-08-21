@@ -2040,6 +2040,57 @@ borrow core too → 64/65 (E6).
 and how it is labelled, not whether the model handles the secondhand framing well. Enable the
 toggle, then use the Prompt Viewer to see the borrowed block in context.
 
+
+### World scoping — **DONE** (`d8393e9`), 76/76
+User-reported gap in `b3ec89e`: the filter matched on **name alone**, so two different
+characters sharing a name in two different worlds mixed memories. "Alice" in world A picked up
+every memory naming "Alice" written in world B, despite being a different person with a
+different persona. Borrowing is now scoped to the world group.
+
+**The trap: `Character.worldId` is a DEAD FIELD.** It is declared in `character-types.ts:30`
+with a comment about world canvases, and is **never written or read by anything** — every other
+`worldId` hit in `lib/` belongs to `map-rpg`/`map-storage`, an unrelated adventure concept.
+Filtering on it would have silently matched nothing and looked like it worked. Real membership
+lives on `CharacterWorldGroup.memberIds` (`character-world-storage.ts`).
+
+**Why this needs no config and no migration**: `loadCharacterWorldGroups()` → `normalizeGroups`
+sweeps any character not in a group into `world_default`, so **every character always resolves
+to exactly one world**. Users who never set up worlds see no change; users who did are scoped
+automatically.
+
+It also matches the existing precedent — `formatCharacterRelationsForPrompt` scopes the
+`characterRelations` prompt marker by the same world group, so "who may know about whom" now
+uses one axis across the app.
+
+**Worldbook overlap was considered and rejected** as the axis, even though the report was
+phrased in terms of worldbooks: `worldBookIds` lives on `BindingSlot` (`settings-types.ts:221`),
+i.e. per character *per app scope*, so one character can carry different worldbooks for chat vs
+story. World groups are the app's actual "which world does this character live in" primitive.
+
+Fails closed on a missing world instead of falling back to sharing with everyone, and the
+wrapper skips other worlds *before* reading their memories, so storage cost drops too.
+`selectBorrowableMemories` now takes a `MemoryViewer` object rather than loose id/name args.
+
+**Known residue, deliberate and pinned by W9**: two characters sharing a name *within one
+world* are genuinely ambiguous and still cross. The name is the identifier, so nothing at this
+layer can separate them.
+
+Controls: remove the cross-world guard → 70/76 (W1,W3,W4,W5,W6,W8); treat a missing world as a
+wildcard → 75/76 (W7).
+
+**Second vacuous control in this one feature.** The first attempt at control 2 replaced the
+missing world with a sentinel (`"__any__"`) that still matched no real world, so it returned
+`[]` anyway and passed 76/76. Rewritten to model the regression it was actually guarding
+against — treating an absent world as a wildcard. Together with the group-C incident that makes
+**two rewrites in one feature**, and the standing lesson holds: *a control that changes nothing
+is testing a redundant path, not the guarantee you meant.*
+
+**Unrelated finding, NOT acted on**: `formatCharacterRelationsForPrompt`
+(`character-world-storage.ts:324-352`) builds **Chinese** prompt text (`当前世界观：`,
+`世界观描述：`, `同世界角色：`, `（已是用户好友）`) and feeds it into the `characterRelations`
+marker on every assembled prompt. `character-world-storage.ts` was never on any translation
+list. Add it to the queue.
+
 ### Multi-character Story — planned, NOT built
 `STORY-MULTI-CHARACTER-PLAN.md` at the repo root. Superseded in practice by the above (the user
 chose shared memory instead), but the research stands and the plan is phased. Its central
