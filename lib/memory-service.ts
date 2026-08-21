@@ -5,17 +5,42 @@ import type { MemoryConfig, MemoryEntry } from "./memory-types";
 import { loadMemoryEntriesByType } from "./memory-storage";
 import { resolveAuxiliaryApiConfig } from "./settings-storage";
 import { generateEmbedding, resolveEmbeddingModel, cosineSimilarity } from "./memory-embedding";
+import { gatherBorrowedMemories } from "./memory-sharing";
 import { estimateTokens } from "./token-counter";
 
 /**
  * Retrieve relevant long-term memories for prompt injection.
+ *
+ * Two independent halves, each with its own budget so neither can crowd out the other:
+ *   - the character's OWN memories, selected by the three strategies below;
+ *   - memories BORROWED from other characters that mention this one by name, when shared
+ *     memory is enabled (off by default). See lib/memory-sharing.ts.
+ *
+ * Borrowing is evaluated even when this character has no memories of its own, so a character
+ * that has never been summarized can still hear about itself.
+ */
+export async function retrieveMemoriesForPrompt(
+    characterId: string,
+    currentContext: string,
+    config: MemoryConfig
+): Promise<MemoryEntry[]> {
+    const [own, borrowedAll] = await Promise.all([
+        selectOwnLongTermMemories(characterId, currentContext, config),
+        gatherBorrowedMemories(characterId, config),
+    ]);
+    const borrowed = fillByBudget(borrowedAll, config.sharedMemoryTokenBudget);
+    return [...own, ...borrowed];
+}
+
+/**
+ * The character's own long-term memories.
  * Strategy:
  *   1. Total tokens <= longTermTokenBudget → return all
  *   2. Over budget + embedding API configured → vector-rank, fill until budget
  *   3. Over budget + no embedding → time-sorted (newest first), fill until budget
  * Embedding API is resolved from auxiliary binding (global, not per-character).
  */
-export async function retrieveMemoriesForPrompt(
+async function selectOwnLongTermMemories(
     characterId: string,
     currentContext: string,
     config: MemoryConfig

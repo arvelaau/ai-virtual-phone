@@ -924,6 +924,23 @@ export function MemoryBankPage({ view, selectedCharId, onSelectChar, onNotice }:
                             }} />
                         </div>
                     </div>
+                    <div className="menu-item">
+                        <MemorySettingsIcon icon={Users} color={BINDING_ACCENTS.voice} />
+                        <div className="menu-label-group">
+                            <span className="menu-label">Shared Memory</span>
+                            <span className="menu-desc">
+                                Let a character pick up other characters&apos; long-term memories, but only the ones
+                                that mention them by name. Nothing is copied &mdash; turn it off and it is gone.
+                            </span>
+                        </div>
+                        <div className="menu-right">
+                            <Toggle checked={config.sharedMemoryEnabled ?? false} onChange={(v) => {
+                                const next = { ...config, sharedMemoryEnabled: v };
+                                setConfig(next);
+                                saveMemoryConfig(next);
+                            }} />
+                        </div>
+                    </div>
                 </div>
 
                 {/* Token budget sliders */}

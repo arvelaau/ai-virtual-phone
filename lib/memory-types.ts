@@ -29,6 +29,18 @@ export type MemoryConfig = {
     summarizationPrompt: string;            // user-editable prompt template for memory summarization
     coreMemoryPrompt: string;               // user-editable prompt template for core-memory extraction
     vnSummaryPrompt: string;                // user-editable prompt for VN chapter summarization
+    /**
+     * Shared memory: let a character pick up OTHER characters' long-term memories, but only
+     * the ones that mention this character by name.
+     *
+     * Read-time only -- nothing is copied into anyone's store, so turning this off restores
+     * the previous behaviour exactly. Deliberately opt-in (default false): it creates a
+     * controlled leak between characters, and the name filter is the only thing bounding it,
+     * so it fails closed.
+     */
+    sharedMemoryEnabled: boolean;
+    /** Separate budget, so borrowed memories can never crowd out the character's own */
+    sharedMemoryTokenBudget: number;
 };
 
 export type MemorySearchResult = {
@@ -106,4 +118,6 @@ export const DEFAULT_MEMORY_CONFIG: MemoryConfig = {
     summarizationPrompt: DEFAULT_SUMMARIZATION_PROMPT,
     coreMemoryPrompt: DEFAULT_CORE_MEMORY_PROMPT,
     vnSummaryPrompt: "",
+    sharedMemoryEnabled: false,
+    sharedMemoryTokenBudget: 20000,
 };
