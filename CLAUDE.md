@@ -2091,6 +2091,65 @@ is testing a redundant path, not the guarantee you meant.*
 marker on every assembled prompt. `character-world-storage.ts` was never on any translation
 list. Add it to the queue.
 
+
+### Yield: the summarizer, then narrative summaries — **DONE** (`611feea`, `4ef925f`), 107/107
+User asked why sharing draws on long-term memory when long-term is condensed from short-term
+and rarely names another character. The premise was right, and the root cause was **not** the
+choice of store.
+
+**`DEFAULT_SUMMARIZATION_PROMPT` v1 framed every scene as `{{char}}` ↔ user** — literally
+`Describe the interactions between {{char}} and the user in the third person`. Anyone else
+present got compressed out, so the name filter had nothing to match. The prompt now demands
+every other character who took part, by name, and forbids collapsing a scene when someone else
+was there. That improves each character's own memory too.
+
+**The versioned-defaults trap applied, and it is worth re-reading.** `saveMemoryConfig` writes
+the whole config object and `loadMemoryConfig` spreads stored over defaults, so
+`summarizationPrompt` is frozen for anyone who has ever saved a memory setting — **including
+the shared-memory toggle added one commit earlier**. v1 is therefore kept forever in
+`SUPERSEDED_SUMMARIZATION_PROMPTS` and upgraded on load by byte-match; a genuinely customised
+prompt is untouched. Same mechanism as `loadInterviewHostPrompt` and the shopping prompts.
+**Existing long-term memories do not retroactively gain names** — only new summaries. Regenerate
+from the memory bank page to backfill.
+
+**Second source: already-summarized narrative projections.** Story (`storySummary` per turn), VN
+(`chapter.summaryContent`) and offline chat (`turn.summary`) all project `[Event <ts>] <summary>`
+capped at 500 chars by their own loaders. The qualifying property is **"already a summary", not
+"which app"** — raw-transcript projections stay out, because borrowing those means one character
+reading another's actual conversations. `N12` asserts none appear.
+
+`selectBorrowableMemories` was **not** touched: narrative rows are shaped as `MemoryEntry` and
+appended to the same owner bundle, so name filter, world scope, attribution, sort and budget all
+apply identically. The rows are synthetic and never stored, so editing the underlying beat takes
+effect immediately.
+
+### 🚨 FIVE vacuous controls in one feature — the pattern is the lesson
+Every one passed while the guarantee was broken, and every one was caught only by *running* the
+control rather than reasoning about it:
+
+| # | control | why it lied |
+|---|---|---|
+| 1 | remove fail-closed | drove the storage wrapper; under Node the character list is empty, so `[]` came back anyway |
+| 2 | missing world → sentinel | the sentinel still matched no real world, so the result was `[]` regardless |
+| 3 | remove the upgrade call | `/upgradeSupersededPrompts\(/` over the whole file is satisfied by the function's own definition |
+| 4 | stop feeding narrative in | group N drives the selector with hand-built rows, so the wrapper's wiring is never exercised |
+| 5 | drop the provenance stamp | same reason as 4 — the builder is never exercised |
+
+Two fixes generalise:
+- **Split pure decision from storage IO.** `selectBorrowableMemories` /
+  `upgradeSupersededPrompts` are exported and driven directly; the wrappers stay thin. A
+  storage-backed function cannot be driven under Node, so anything asserted only through it is
+  untestable and will pass on emptiness.
+- **Scope every source-scraping assertion to the function body it is about**, and assert the
+  body was actually located (`N18`). An unscoped match is satisfied by the definition itself; a
+  missing end anchor slices to `-1` and matches almost the whole file.
+
+**And a third escaping instance**: three assertions written through a generator script emitted
+`\\(` into a regex *literal* — literal-backslash-then-group, which matches nothing. Two were
+passing vacuously. Rewritten as plain `.includes()`, since none needed a regex. Same family as
+the `new RegExp(\`…\`)` bug already recorded above. **Do not build regexes through a generator
+script; write them with the Edit tool or use string matching.**
+
 ### Multi-character Story — planned, NOT built
 `STORY-MULTI-CHARACTER-PLAN.md` at the repo root. Superseded in practice by the above (the user
 chose shared memory instead), but the research stands and the plan is phased. Its central
