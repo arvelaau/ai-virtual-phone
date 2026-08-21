@@ -16,6 +16,9 @@ import type { MemoryConfig, MemoryEntry } from "./memory-types";
 import { getAllCharacterIdsWithMemories, loadMemoryEntriesByType } from "./memory-storage";
 import { loadCharacters } from "./character-storage";
 import { loadCharacterWorldGroups } from "./character-world-storage";
+import { loadStoryProjectionEntries } from "./story-storage";
+import { loadVnProjectionEntries } from "./vn-storage";
+import { loadChatOfflineProjectionEntries } from "./chat-offline-storage";
 
 /** Minimum name length to match on. A one-character name would hit almost every sentence. */
 const MIN_NAME_LENGTH = 2;
@@ -145,11 +148,70 @@ export function selectBorrowableMemories(
 }
 
 /**
- * Storage-facing wrapper: gather every other character's long-term memories, then delegate the
+ * Narrative sources that project ALREADY-SUMMARIZED text into the short-term timeline.
+ *
+ * The qualifying property is "already a summary", not "which app". Each of these stores a
+ * summary the model itself wrote -- story's `<summary>` tag per turn, a VN chapter summary, an
+ * offline turn's summary -- and each is capped at 500 characters by its own loader before it
+ * ever reaches here. That is what makes them safe to lend: borrowing a raw chat transcript
+ * would mean one character reading another's actual conversations, and would blow the budget.
+ *
+ * Raw-transcript projections are deliberately NOT in this list.
+ */
+const NARRATIVE_PROJECTION_SOURCES: readonly {
+    app: MemoryEntry["sourceApp"];
+    load: (characterId: string) => { id: string; timestamp: string; content: string }[];
+}[] = [
+    { app: "story", load: (id) => loadStoryProjectionEntries(id) },
+    { app: "vn", load: (id) => loadVnProjectionEntries(id) },
+    { app: "chat", load: (id) => loadChatOfflineProjectionEntries(id) },
+];
+
+/**
+ * Narrative summaries for one character, shaped as MemoryEntry so they flow through exactly
+ * the same name filter, world scope, attribution and budget as long-term memories.
+ *
+ * These are SYNTHETIC and never stored -- they are rebuilt from their source on every call, so
+ * editing or deleting the underlying story beat takes effect immediately. `type` is set to
+ * "long_term" because that is how they behave for injection; the real provenance is in
+ * `metadata.narrativeSource`.
+ */
+function loadNarrativeSummaries(characterId: string): MemoryEntry[] {
+    const out: MemoryEntry[] = [];
+    for (const source of NARRATIVE_PROJECTION_SOURCES) {
+        let entries: { id: string; timestamp: string; content: string }[] = [];
+        try {
+            entries = source.load(characterId) ?? [];
+        } catch {
+            // A feature the user has never opened may not have hydrated its store. Skip it
+            // rather than failing the whole borrow.
+            continue;
+        }
+        for (const entry of entries) {
+            if (!entry?.content?.trim()) continue;
+            out.push({
+                id: entry.id,
+                characterId,
+                sourceApp: source.app,
+                type: "long_term",
+                content: entry.content,
+                importance: 0.6,
+                createdAt: entry.timestamp,
+                updatedAt: entry.timestamp,
+                metadata: { narrativeSource: source.app },
+            });
+        }
+    }
+    return out;
+}
+
+/**
+ * Storage-facing wrapper: gather every other character's borrowable memories, then delegate the
  * decision to `selectBorrowableMemories`.
  *
- * long_term only. Core memories are identity- and relationship-level, and sharing those is a
- * much bigger decision that is deliberately out of scope for layer 1.
+ * Two sources, both already condensed: settled long-term memories, and the narrative summaries
+ * above. Core memories are excluded -- they are identity- and relationship-level, and sharing
+ * those is a much bigger decision that stays out of scope.
  */
 export async function gatherBorrowedMemories(
     viewerId: string,
@@ -190,7 +252,10 @@ export async function gatherBorrowedMemories(
             ownerId,
             ownerName,
             worldId: ownerWorldId,
-            entries: await loadMemoryEntriesByType(ownerId, "long_term"),
+            entries: [
+                ...(await loadMemoryEntriesByType(ownerId, "long_term")),
+                ...loadNarrativeSummaries(ownerId),
+            ],
         });
     }
 

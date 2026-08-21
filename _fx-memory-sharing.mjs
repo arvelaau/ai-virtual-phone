@@ -191,6 +191,96 @@ const eq = (name, got, want) => ok(name, Object.is(got, want), `got ${JSON.strin
         /upgradeSupersededPrompts\(/.test(body), body.slice(-200));
 }
 
+// ── N. narrative summaries as a second borrowable source ─────────────────────
+//
+// Long-term memory alone yields little: the summarizer condenses hard, so another character
+// is often not named. Story / VN / offline projections are ALREADY summaries written by the
+// model (each capped at 500 chars by its own loader), which makes them safe to lend where a
+// raw chat transcript would not be.
+{
+    const { selectBorrowableMemories } = SH;
+    const ON = { sharedMemoryEnabled: true };
+    const BO = { id: "c_bo", name: "Bo", worldId: "w1" };
+
+    // Shaped exactly as loadNarrativeSummaries builds them
+    const narrative = (id, app, content, ts) => ({
+        id, characterId: "c_alice", sourceApp: app, type: "long_term", content,
+        importance: 0.6, createdAt: ts, updatedAt: ts, metadata: { narrativeSource: app },
+    });
+    const longTerm = (id, content, ts) => ({
+        id, characterId: "c_alice", sourceApp: "chat", type: "long_term", content,
+        importance: 0.8, createdAt: ts, updatedAt: ts, metadata: {},
+    });
+
+    const alice = {
+        ownerId: "c_alice", ownerName: "Alice", worldId: "w1",
+        entries: [
+            longTerm("lt1", "Alice and the user talked for hours.", "2026-08-01T10:00:00Z"),
+            narrative("st1", "story", "[Event 2 Aug 20:10] Bo showed up at the harbour and refused to explain himself.", "2026-08-02T10:00:00Z"),
+            narrative("vn1", "vn", "[Event 3 Aug 09:00] The chapter closed with Bo walking out.", "2026-08-03T10:00:00Z"),
+            narrative("of1", "chat", "[Event 4 Aug 21:00] Spent the evening avoiding Bo's calls.", "2026-08-04T10:00:00Z"),
+            narrative("st2", "story", "[Event 5 Aug 11:00] A quiet chapter, nobody else around.", "2026-08-05T10:00:00Z"),
+        ],
+    };
+
+    const got = selectBorrowableMemories(ON, BO, [alice]);
+    const ids = got.map((e) => e.id).sort();
+    eq("N1 all three narrative sources can be borrowed", ids.join(","), "of1,st1,vn1");
+    ok("N2 the long-term entry that never names Bo did not cross", !got.some((e) => e.id === "lt1"));
+    ok("N3 the narrative beat with nobody else did not cross", !got.some((e) => e.id === "st2"));
+
+    // narrative entries go through the SAME attribution as long-term ones
+    eq("N4 narrative summaries are attributed too", borrowedFromName(got.find((e) => e.id === "st1")), "Alice");
+    ok("N5 provenance is preserved", got.find((e) => e.id === "st1").metadata.narrativeSource === "story");
+
+    // and the same world scope
+    eq("N6 narrative does not cross worlds",
+        selectBorrowableMemories(ON, { ...BO, worldId: "w9" }, [alice]).length, 0);
+
+    // and they render with the same secondhand framing
+    const rendered = formatLongTermMemories(got);
+    ok("N7 rendered under the secondhand heading", rendered.includes("secondhand"));
+    ok("N8 the [Event ...] stamp survives into the prompt", /\[Event 2 Aug 20:10\]/.test(rendered));
+
+    // source rules
+    const shr = fs2.readFileSync(path.join(root, "lib/memory-sharing.ts"), "utf8");
+    const table = shr.slice(shr.indexOf("NARRATIVE_PROJECTION_SOURCES"), shr.indexOf("function loadNarrativeSummaries"));
+    ok("N9 story is a source", /loadStoryProjectionEntries/.test(table));
+    ok("N10 vn is a source", /loadVnProjectionEntries/.test(table));
+    ok("N11 offline chat is a source", /loadChatOfflineProjectionEntries/.test(table));
+    // The rule is "already a summary". A raw-transcript projection must never be added here.
+    ok("N12 no raw-transcript projection is borrowed",
+        !/loadCheckPhoneProjectionEntries|loadXiaohongshuProjectionEntries|loadNoteWallProjectionEntries|loadGameProjectionEntries/.test(shr));
+    ok("N13 a failing source is skipped, not fatal", /catch \{/.test(shr.slice(shr.indexOf("function loadNarrativeSummaries"))));
+    ok("N14 synthetic entries are never written back", !/saveMemoryEntry/.test(shr));
+
+    // The assertions above drive selectBorrowableMemories with hand-built entries, which
+    // proves the SELECTOR handles narrative rows but says nothing about the wrapper actually
+    // loading them or the builder shaping them. Both are storage-backed and return [] under
+    // Node, so they are asserted at source, each SCOPED to its own function body -- an
+    // unscoped match would be satisfied by the function's own definition.
+    const fnBody = (name) => {
+        const start = shr.indexOf(name);
+        if (start < 0) return "";
+        const end = shr.indexOf("\n}", start);
+        // A missing end anchor would slice to -1, i.e. almost the whole file, and every
+        // assertion below would match somewhere and pass vacuously.
+        if (end < 0) return "";
+        return shr.slice(start, end);
+    };
+    const wrapper = fnBody("export async function gatherBorrowedMemories");
+    ok("N15 the wrapper actually loads narrative summaries",
+        wrapper.includes("loadNarrativeSummaries(ownerId)"), wrapper.slice(-220));
+    const builder = fnBody("function loadNarrativeSummaries");
+    ok("N16 the builder stamps provenance",
+        builder.includes("narrativeSource: source.app"), builder.slice(-220));
+    ok("N17 the builder walks every declared source",
+        builder.includes("for (const source of NARRATIVE_PROJECTION_SOURCES)"), builder.slice(0, 220));
+    // Guard the guards: an empty slice would make all three above pass on nothing.
+    ok("N18 both function bodies were actually located", wrapper.length > 200 && builder.length > 200,
+        `wrapper ${wrapper.length}, builder ${builder.length}`);
+}
+
 // ── W. worlds: the same name in two worlds is two different people ────────────
 //
 // Names are the identifier this feature matches on, so without a world scope "Alice" in
@@ -298,7 +388,7 @@ const eq = (name, got, want) => ok(name, Object.is(got, want), `got ${JSON.strin
 // Guard against the whole file silently skipping a group: the count is pinned, so a group
 // that stops running fails loudly instead of shrinking the suite.
 // Counted before this guard itself runs, so the total printed below is EXPECTED + 1.
-const EXPECTED = 88;
+const EXPECTED = 106;
 ok(`Z1 ${EXPECTED} assertions ran before this guard`, pass + fail === EXPECTED, `ran ${pass + fail}`);
 
 console.log(`\n${pass}/${pass + fail} passed`);
