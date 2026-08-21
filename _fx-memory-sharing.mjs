@@ -8,6 +8,7 @@
 import { createJiti } from "jiti";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import fs2 from "node:fs";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const jiti = createJiti(import.meta.url, { alias: { "@": root }, interopDefault: true });
@@ -74,30 +75,31 @@ const eq = (name, got, want) => ok(name, Object.is(got, want), `got ${JSON.strin
         metadata: { summarizedEvents: 3 },
     });
     const alice = {
-        ownerId: "c_alice", ownerName: "Alice",
+        ownerId: "c_alice", ownerName: "Alice", worldId: "w1",
         entries: [
             entry("m1", "Bo and I closed the bar together.", "2026-08-01T10:00:00Z"),
             entry("m2", "I called her Sayang for the first time.", "2026-08-02T10:00:00Z"),
         ],
     };
     const cara = {
-        ownerId: "c_cara", ownerName: "Cara",
+        ownerId: "c_cara", ownerName: "Cara", worldId: "w1",
         entries: [entry("m3", "Ran into Bo at the pier.", "2026-08-03T10:00:00Z")],
     };
     const viewerOwn = {
-        ownerId: "c_bo", ownerName: "Bo",
+        ownerId: "c_bo", ownerName: "Bo", worldId: "w1",
         entries: [entry("m4", "Bo is me, this should never be borrowed.", "2026-08-04T10:00:00Z")],
     };
     const owners = [alice, cara, viewerOwn];
+    const BO = { id: "c_bo", name: "Bo", worldId: "w1" };
 
     ok("C1 disabled by default", DEFAULT_MEMORY_CONFIG.sharedMemoryEnabled === false);
     ok("C2 has its own budget", typeof DEFAULT_MEMORY_CONFIG.sharedMemoryTokenBudget === "number"
         && DEFAULT_MEMORY_CONFIG.sharedMemoryTokenBudget > 0);
 
     // fail closed -- and now it genuinely discriminates, because ON returns rows
-    const off = selectBorrowableMemories(OFF, "c_bo", "Bo", owners);
+    const off = selectBorrowableMemories(OFF, BO, owners);
     eq("C3 disabled borrows nothing", off.length, 0);
-    const on = selectBorrowableMemories(ON, "c_bo", "Bo", owners);
+    const on = selectBorrowableMemories(ON, BO, owners);
     ok("C4 enabled does borrow", on.length > 0, `got ${on.length}`);
 
     // the filter: only memories naming Bo cross
@@ -121,16 +123,65 @@ const eq = (name, got, want) => ok(name, Object.is(got, want), `got ${JSON.strin
     eq("C15 sorted newest first", on[0].id, "m3");
 
     // guards
-    eq("C16 no viewer id borrows nothing", selectBorrowableMemories(ON, "", "Bo", owners).length, 0);
-    eq("C17 no viewer name borrows nothing", selectBorrowableMemories(ON, "c_bo", "  ", owners).length, 0);
-    eq("C18 one-character viewer name borrows nothing", selectBorrowableMemories(ON, "c_bo", "B", owners).length, 0);
+    eq("C16 no viewer id borrows nothing", selectBorrowableMemories(ON, { ...BO, id: "" }, owners).length, 0);
+    eq("C17 no viewer name borrows nothing", selectBorrowableMemories(ON, { ...BO, name: "  " }, owners).length, 0);
+    eq("C18 one-character viewer name borrows nothing", selectBorrowableMemories(ON, { ...BO, name: "B" }, owners).length, 0);
     eq("C19 an owner with no name is skipped",
-        selectBorrowableMemories(ON, "c_bo", "Bo", [{ ownerId: "ghost", ownerName: "", entries: alice.entries }]).length, 0);
-    eq("C20 no owners at all is fine", selectBorrowableMemories(ON, "c_bo", "Bo", []).length, 0);
+        selectBorrowableMemories(ON, BO, [{ ownerId: "ghost", ownerName: "", worldId: "w1", entries: alice.entries }]).length, 0);
+    eq("C20 no owners at all is fine", selectBorrowableMemories(ON, BO, []).length, 0);
 
     // a viewer nobody has ever mentioned gets nothing -- the name filter IS the sharing circle
     eq("C21 an unmentioned character borrows nothing",
-        selectBorrowableMemories(ON, "c_zed", "Zed", owners).length, 0);
+        selectBorrowableMemories(ON, { id: "c_zed", name: "Zed", worldId: "w1" }, owners).length, 0);
+}
+
+// ── W. worlds: the same name in two worlds is two different people ────────────
+//
+// Names are the identifier this feature matches on, so without a world scope "Alice" in
+// world A would borrow every memory naming "Alice" written in world B. Character.worldId is
+// a DEAD field (declared, never written) -- membership lives on the world group.
+{
+    const { selectBorrowableMemories } = SH;
+    const ON = { sharedMemoryEnabled: true };
+    const mem = (id, content) => ({
+        id, content, createdAt: "2026-08-10T10:00:00Z", updatedAt: "2026-08-10T10:00:00Z",
+        characterId: "x", type: "long_term", sourceApp: "chat", importance: 0.8,
+    });
+
+    // Two DIFFERENT characters both called Alice, one per world, plus a narrator in each.
+    const narratorW1 = { ownerId: "n1", ownerName: "Nara", worldId: "w1", entries: [mem("w1a", "Alice lent me her coat.")] };
+    const narratorW2 = { ownerId: "n2", ownerName: "Nero", worldId: "w2", entries: [mem("w2a", "Alice betrayed the guild.")] };
+    const owners = [narratorW1, narratorW2];
+
+    const aliceW1 = { id: "c_a1", name: "Alice", worldId: "w1" };
+    const aliceW2 = { id: "c_a2", name: "Alice", worldId: "w2" };
+
+    const got1 = selectBorrowableMemories(ON, aliceW1, owners);
+    eq("W1 world-1 Alice borrows one memory", got1.length, 1);
+    eq("W2 and it is the one from her own world", got1[0].id, "w1a");
+    ok("W3 the other world's memory did NOT cross", !got1.some((e) => e.id === "w2a"));
+
+    const got2 = selectBorrowableMemories(ON, aliceW2, owners);
+    eq("W4 world-2 Alice borrows one memory", got2.length, 1);
+    eq("W5 and it is hers", got2[0].id, "w2a");
+    ok("W6 symmetric: world 1 did not leak into world 2", !got2.some((e) => e.id === "w1a"));
+
+    // fail closed on a missing world rather than falling back to "share with everyone"
+    eq("W7 viewer with no world borrows nothing",
+        selectBorrowableMemories(ON, { id: "c_a1", name: "Alice", worldId: "" }, owners).length, 0);
+    eq("W8 owner with no world is skipped",
+        selectBorrowableMemories(ON, aliceW1, [{ ownerId: "n3", ownerName: "Nyx", worldId: "", entries: [mem("z", "Alice waved.")] }]).length, 0);
+
+    // same world, same name: genuinely ambiguous and deliberately still shared -- recorded so
+    // it is a known residue rather than a surprise
+    const twin = { ownerId: "c_a2", ownerName: "Alice", worldId: "w1", entries: [mem("tw", "Alice and I argued.")] };
+    eq("W9 same name in the SAME world still crosses (known residue)",
+        selectBorrowableMemories(ON, aliceW1, [twin]).length, 1);
+
+    // the wrapper must read world membership from the group, not the dead field
+    const shr = fs2.readFileSync(path.join(root, "lib/memory-sharing.ts"), "utf8");
+    ok("W10 wrapper uses the world GROUP", /loadCharacterWorldGroups()/.test(shr));
+    ok("W11 wrapper does not use the dead Character.worldId", !/\.worldId\b(?!\?)/.test(shr.split("loadCharacterWorldGroups")[0]));
 }
 
 // ── D. attribution in the rendered prompt (the POV bug) ───────────────────────
@@ -191,7 +242,7 @@ const eq = (name, got, want) => ok(name, Object.is(got, want), `got ${JSON.strin
 // Guard against the whole file silently skipping a group: the count is pinned, so a group
 // that stops running fails loudly instead of shrinking the suite.
 // Counted before this guard itself runs, so the total printed below is EXPECTED + 1.
-const EXPECTED = 64;
+const EXPECTED = 75;
 ok(`Z1 ${EXPECTED} assertions ran before this guard`, pass + fail === EXPECTED, `ran ${pass + fail}`);
 
 console.log(`\n${pass}/${pass + fail} passed`);

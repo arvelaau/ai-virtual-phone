@@ -15,6 +15,7 @@
 import type { MemoryConfig, MemoryEntry } from "./memory-types";
 import { getAllCharacterIdsWithMemories, loadMemoryEntriesByType } from "./memory-storage";
 import { loadCharacters } from "./character-storage";
+import { loadCharacterWorldGroups } from "./character-world-storage";
 
 /** Minimum name length to match on. A one-character name would hit almost every sentence. */
 const MIN_NAME_LENGTH = 2;
@@ -66,10 +67,19 @@ export function borrowedFromName(entry: MemoryEntry): string | null {
     return typeof name === "string" && name.trim() ? name : null;
 }
 
+/** The character doing the borrowing */
+export type MemoryViewer = {
+    id: string;
+    name: string;
+    /** World group id. Memory never crosses worlds -- see selectBorrowableMemories. */
+    worldId: string;
+};
+
 /** One other character's long-term memories, as handed to the selector below */
 export type MemoryOwnerBundle = {
     ownerId: string;
     ownerName: string;
+    worldId: string;
     entries: MemoryEntry[];
 };
 
@@ -92,19 +102,26 @@ export type MemoryOwnerBundle = {
  */
 export function selectBorrowableMemories(
     config: Pick<MemoryConfig, "sharedMemoryEnabled">,
-    viewerId: string,
-    viewerName: string,
+    viewer: MemoryViewer,
     owners: MemoryOwnerBundle[],
 ): MemoryEntry[] {
     if (!config?.sharedMemoryEnabled) return [];
-    if (!viewerId) return [];
-    const name = viewerName?.trim();
+    if (!viewer?.id) return [];
+    const name = viewer.name?.trim();
     if (!name || name.length < MIN_NAME_LENGTH) return [];
+    // No world means something is wrong upstream -- every character is normalised into one,
+    // defaulting to world_default. Borrow nothing rather than fall back to "share with all".
+    const viewerWorld = viewer.worldId?.trim();
+    if (!viewerWorld) return [];
 
     const borrowed: MemoryEntry[] = [];
     for (const owner of owners) {
         if (!owner) continue;
-        if (owner.ownerId === viewerId) continue;
+        if (owner.ownerId === viewer.id) continue;
+        // Memory never crosses worlds. Names are the identifier here, and two different
+        // characters in two different worlds may legitimately share one -- "Alice" in world A
+        // and "Alice" in world B are different people, and without this their memories mix.
+        if (owner.worldId?.trim() !== viewerWorld) continue;
         // A memory whose character no longer exists is skipped: with no name there is nothing
         // to attribute it to, and unattributed borrowed memory is exactly the POV bug.
         const ownerName = owner.ownerName?.trim();
@@ -146,6 +163,17 @@ export async function gatherBorrowedMemories(
     const viewerName = viewer?.name?.trim();
     if (!viewerName || viewerName.length < MIN_NAME_LENGTH) return [];
 
+    // World membership lives on the world GROUP, not on Character.worldId -- that field is
+    // declared in character-types.ts but never written or read by anything, so filtering on it
+    // would silently match nothing. loadCharacterWorldGroups() normalises every character into
+    // exactly one group, defaulting to world_default, so this is always resolvable.
+    const worldById = new Map<string, string>();
+    for (const group of loadCharacterWorldGroups()) {
+        for (const memberId of group.memberIds) worldById.set(memberId, group.id);
+    }
+    const viewerWorldId = worldById.get(viewerId);
+    if (!viewerWorldId) return [];
+
     const nameById = new Map(characters.map((item) => [item.id, item.name]));
     const ownerIds = await getAllCharacterIdsWithMemories();
 
@@ -154,8 +182,21 @@ export async function gatherBorrowedMemories(
         if (ownerId === viewerId) continue;
         const ownerName = nameById.get(ownerId)?.trim();
         if (!ownerName) continue;
-        owners.push({ ownerId, ownerName, entries: await loadMemoryEntriesByType(ownerId, "long_term") });
+        // Skip the storage read entirely for other worlds -- the selector would drop them
+        // anyway, and long-term memory sets are the expensive part of this call.
+        const ownerWorldId = worldById.get(ownerId);
+        if (!ownerWorldId || ownerWorldId !== viewerWorldId) continue;
+        owners.push({
+            ownerId,
+            ownerName,
+            worldId: ownerWorldId,
+            entries: await loadMemoryEntriesByType(ownerId, "long_term"),
+        });
     }
 
-    return selectBorrowableMemories(config, viewerId, viewerName, owners);
+    return selectBorrowableMemories(
+        config,
+        { id: viewerId, name: viewerName, worldId: viewerWorldId },
+        owners,
+    );
 }
