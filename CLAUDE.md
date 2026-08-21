@@ -1968,6 +1968,87 @@ The three files in `pending-game-imports/` are untracked ON PURPOSE — per the 
 
 **Use `git add <paths>` in this repo, not `-A`**, or check `--stat` before the commit lands.
 
+
+## SHARED MEMORY, layer 1 — **DONE** (`b3ec89e`), 65/65, `_fx-memory-sharing.mjs` kept
+A character can pick up another character's long-term memories, but only the ones that mention
+it **by name**. Off by default (`MemoryConfig.sharedMemoryEnabled`), toggle in the Memory Bank
+page next to Vector Recall.
+
+**Read-time, not write-time — and that was the design decision that mattered.** The obvious
+reading of the request ("when I generate a summary") is write-time: fold X's matching memories
+into Y's store during summarization. Read-time won on four counts: no duplication, no staleness
+when the source memory is edited or deleted, no timing gap for a character that never gets
+summarized, and — the deciding one — **turning the toggle off restores the previous behaviour
+exactly, with no cleanup**, which matters for a feature being tried out. Cost is one scan per
+prompt build, bounded by `maxLongTermEntries`.
+
+### Where it lives
+- `lib/memory-sharing.ts` (new) — the matcher and the decision
+- `lib/memory-service.ts` — `retrieveMemoriesForPrompt` split into `selectOwnLongTermMemories`
+  (the three existing strategies, unchanged) + borrowing, combined at the end
+- `lib/memory-injector.ts` — `formatLongTermMemories` groups and attributes borrowed entries
+- `lib/memory-types.ts` — `sharedMemoryEnabled` (default **false**) + `sharedMemoryTokenBudget`
+
+**`retrieveMemoriesForPrompt` is the single choke point**, so every surface (chat, story,
+moments, group, …) inherits this without its own wiring.
+
+### Deliberate scope limits
+- **`long_term` only, never `core`.** Core memories are identity- and relationship-level; that
+  is a much bigger decision. The fixture asserts `"core"` appears nowhere in the module.
+- **Name match only — no keyword layer.** `"brothers"` in X's memory may mean X and Z, not the
+  viewer, and no substring rule can tell. Layer 2 was explicitly deferred; fixture B9 pins that
+  a group word does *not* match, so it fails loudly if layer 2 ever half-ships.
+- **The name filter IS the sharing circle.** A character nobody has ever mentioned borrows
+  nothing, so no per-pair circle config was needed.
+
+### The attribution is required, not cosmetic
+Another character's memories are written in **that character's first person** ("I took her to
+the pier"). Folded in unlabelled, the model reads them as its own experience and claims things
+it never did. Borrowed entries are therefore grouped under a heading that states any "I" inside
+refers to the named speaker, and each line is prefixed `- (Name)`. The heading only appears when
+something was actually borrowed, so the own-only output is byte-identical to before.
+
+### Two implementation details worth keeping
+- **No regex lookbehind.** `(?<!…)` is unsupported on older Safari, a real target for a
+  phone-shaped app. Matching is a hand-rolled scan: Latin names need word boundaries so `Al`
+  does not match `alliance`; CJK has no separators so a plain substring is the correct rule.
+  The script-range test is written with `\uXXXX` escapes, not literal CJK.
+- **Own and borrowed have separate budgets**, so borrowed entries can never crowd out the
+  character's own, and the "no memories yet" early return had to move into the inner selector
+  or a brand-new character could never hear about itself.
+
+### 🚨 The first version of the fixture's group C was VACUOUS — caught only by running the control
+It drove the storage wrapper `gatherBorrowedMemories`. Under Node the character list comes back
+empty, so **removing the fail-closed guard still returned `[]`** and the control passed 48/48 —
+the assertion was passing for the wrong reason, on a redundant path.
+
+Fix: the decision is now a **pure `selectBorrowableMemories(config, viewerId, viewerName,
+owners)`** with the storage wrapper as a thin shell. Same split as
+`formatMascotUserIdentityRule`, and for the same reason — a resolver that reads storage cannot
+be driven by a fixture, so the safety properties were untestable until they were separated.
+Group C now drives real data and covers fail-closed, self-exclusion, the filter, attribution,
+copy-never-mutate and sort order.
+
+**Generalises: when a control changes nothing, the assertion is testing a redundant path.** That
+is now the third instance in this project (after the gift-resell carry-over and 2c's `.every()`).
+
+All five controls discriminate: drop the word-boundary rule → 63/65 (B1,B3); remove attribution
+→ 63/65 (D7,D10); long-term budget for borrowed → 64/65 (E3); remove fail-closed → 64/65 (C3);
+borrow core too → 64/65 (E6).
+
+**Not verified by me: how it reads in an actual generation.** The fixture proves what crosses
+and how it is labelled, not whether the model handles the secondhand framing well. Enable the
+toggle, then use the Prompt Viewer to see the borrowed block in context.
+
+### Multi-character Story — planned, NOT built
+`STORY-MULTI-CHARACTER-PLAN.md` at the repo root. Superseded in practice by the above (the user
+chose shared memory instead), but the research stands and the plan is phased. Its central
+finding is worth knowing regardless: **`buildStoryPromptMessages(characterId, history, …)`
+already resolves everything per-character**, so story is one `characterIds: string[]` migration
+plus a speaker field away from multi-character, and **group chat is the wrong model to copy** —
+it makes ONE call voicing every character, which makes knowledge isolation structurally
+impossible there.
+
 ## Still open / not yet done
 - **Couple Space mini-games, "Route A"** — ⚠️ **this name is referenced three times in this file and never DEFINED.** No scope, no design, no integration point was ever written down; the only surviving description is "a custom app via existing directives", from a session transcript rather than from here. Do not start it as if it were a specified task — it needs a design decision from the user first. Recorded 2026-08-18.
 - **Track 2 game imports** — the 3 remaining of 6 user-contributed games (imports 1-3 landed as `81eb207`, `d66b1dc`, `cff6995`): pocket-fishing (156 CJK / 590 lines), cute-pet (155 / 1497), executive-diary (577 / 1929, and it holds 6 of the 8 "write in Chinese" orders plus a gender-inference guard that needs adapting to English convention). Source files are untracked in `pending-game-imports/`; the 3 already-imported ones are tracked, which is how to tell them apart.
