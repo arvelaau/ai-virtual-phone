@@ -59,7 +59,7 @@ export async function runSummarizationPipeline(
     characterName: string,
     options?: {
         force?: boolean;
-        /** 手动指定总结起点（覆盖进度水位线）；force 为真时忽略 */
+        /** Manual start point for the summary, overriding the stored progress mark; ignored when force is set */
         sinceTimestamp?: string;
     }
 ): Promise<{ success: boolean; error?: string }> {
@@ -68,7 +68,7 @@ export async function runSummarizationPipeline(
     // Resolve API from auxiliary binding
     const apiConfig = resolveAuxiliaryApiConfig("memorySummaryApiConfigId");
     if (!apiConfig) {
-        return { success: false, error: "未配置记忆总结 API（请在绑定配置 → 辅助API绑定中设置）" };
+        return { success: false, error: "No memory-summary API configured. Set one in Settings -> Binding Manager -> Auxiliary API." };
     }
 
     // Read native app data (chat messages, moments) directly — no separate event log
@@ -79,11 +79,13 @@ export async function runSummarizationPipeline(
 
     if (allEntries.length < 4) {
         if (!options?.force) resetEventCounter(characterId);
-        return { success: false, error: allEntries.length === 0 ? "没有可总结的事件" : "事件不足 4 条" };
+        return { success: false, error: allEntries.length === 0
+                ? "This character has no events of its own to summarize yet. Long-term memory is built from what THIS character took part in; what other characters wrote about them is read at prompt time instead, and appears under \"Heard secondhand\"."
+                : "Fewer than 4 events to summarize." };
     }
 
     const formatted = formatTimelineForSummarization(allEntries);
-    if (!formatted) return { success: false, error: "格式化事件数据失败" };
+    if (!formatted) return { success: false, error: "Could not format the event data." };
 
     const { eventsText, earliest, latest } = formatted;
 
@@ -103,12 +105,12 @@ export async function runSummarizationPipeline(
     );
 
     if (!result.content) {
-        return { success: false, error: result.error || "LLM 返回了空内容" };
+        return { success: false, error: result.error || "The model returned empty content." };
     }
 
     if (result.wasTruncated) {
         console.warn("[MemorySummarizer] Summary generation truncated:", result.finishReason);
-        return { success: false, error: "记忆总结结果疑似被截断，已取消入库，请稍后重试或提高模型输出上限" };
+        return { success: false, error: "The summary looks truncated, so it was not saved. Retry, or raise the model's output limit." };
     }
 
     const summary = result.content;

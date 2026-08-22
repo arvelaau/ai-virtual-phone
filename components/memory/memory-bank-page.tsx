@@ -21,6 +21,7 @@ import {
     getLastSummarizedTimestamp,
     getLastCoreSummarizedTimestamp,
 } from "@/lib/memory-storage";
+import { borrowedFromName, gatherBorrowedMemories } from "@/lib/memory-sharing";
 import { hydrateChatStorage } from "@/lib/chat-storage";
 import { loadNativeTimeline, type NativeTimelineEntry } from "@/lib/short-term-assembler";
 import { runSummarizationPipeline } from "@/lib/memory-summarizer";
@@ -171,6 +172,8 @@ export function MemoryBankPage({ view, selectedCharId, onSelectChar, onNotice }:
     const [activeTab, setActiveTab] = useState<MemoryTab>("short");
     const [coreEntries, setCoreEntries] = useState<MemoryEntry[]>([]);
     const [longTermEntries, setLongTermEntries] = useState<MemoryEntry[]>([]);
+    /** Borrowed from other characters in the same world, read-only and never stored here */
+    const [borrowedEntries, setBorrowedEntries] = useState<MemoryEntry[]>([]);
     const [shortTermEvents, setShortTermEvents] = useState<NativeTimelineEntry[]>([]);
     const [sharedEvents, setSharedEvents] = useState<NativeTimelineEntry[]>([]);
     const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -250,15 +253,21 @@ export function MemoryBankPage({ view, selectedCharId, onSelectChar, onNotice }:
         setLoading(true);
         try {
             await hydrateChatStorage();
-            const [core, lt] = await Promise.all([
+            const [core, lt, borrowed] = await Promise.all([
                 loadMemoryEntriesByType(charId, "core"),
                 loadMemoryEntriesByType(charId, "long_term"),
+                // Shared memory is read-time only, so these are never in this character's own
+                // store. Without showing them here, a character who knows things purely
+                // through other people looks completely empty.
+                gatherBorrowedMemories(charId, loadMemoryConfig()).catch(() => []),
             ]);
             setCoreEntries(core);
             setLongTermEntries(lt);
+            setBorrowedEntries(borrowed);
         } catch {
             setCoreEntries([]);
             setLongTermEntries([]);
+            setBorrowedEntries([]);
         }
         // Native timeline is sync (localStorage) — no await needed.
         // 只取最近一段（全量可能几万条），防止解析+渲染把 iOS Safari 内存顶爆
@@ -679,7 +688,36 @@ export function MemoryBankPage({ view, selectedCharId, onSelectChar, onNotice }:
                         renderMemoryEntries("core", coreEntries, "No core memories yet. They're extracted automatically once enough long-term memories accumulate, or you can add one manually.")
                     ) : (
                         /* ── Long-term: Summarized Memories ── */
-                        renderMemoryEntries("long_term", longTermEntries, "No long-term memories yet. Use manual summarize on the settings page, or add one directly.")
+                        <>
+                            {renderMemoryEntries("long_term", longTermEntries, "No long-term memories yet. Use manual summarize on the settings page, or add one directly.")}
+                            {borrowedEntries.length > 0 ? (
+                                <>
+                                    <p className="menu-group-desc mx-2" style={{ marginTop: 18 }}>
+                                        Heard secondhand &middot; {borrowedEntries.length}
+                                    </p>
+                                    <p className="ts-11 text-secondary mx-2" style={{ marginBottom: 8, lineHeight: 1.6 }}>
+                                        What other characters in this world have written that names {characters.find(c => c.character.id === selectedCharId)?.character.name || "this character"}.
+                                        These belong to whoever wrote them and are not stored here &mdash; they are read at prompt time, so editing or
+                                        deleting the original changes this list immediately.
+                                    </p>
+                                    {borrowedEntries.map(entry => (
+                                        <div key={entry.id} className="g-card memory-report-card">
+                                            <div className="mem-report-head">
+                                                <span className="ts-11 text-secondary" style={{ letterSpacing: "1px" }}>
+                                                    [ DATE: {relativeTime(entry.createdAt)} ]
+                                                </span>
+                                                <div className="mem-report-actions">
+                                                    <span className="mem-origin-badge">
+                                                        {borrowedFromName(entry) || "BORROWED"}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <p className="ts-13" style={{ lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{entry.content}</p>
+                                        </div>
+                                    ))}
+                                </>
+                            ) : null}
+                        </>
                     )}
                     </MemoryDetailBoundary>
                 </div>
