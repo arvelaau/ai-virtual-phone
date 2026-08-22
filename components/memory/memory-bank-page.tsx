@@ -21,7 +21,7 @@ import {
     getLastSummarizedTimestamp,
     getLastCoreSummarizedTimestamp,
 } from "@/lib/memory-storage";
-import { borrowedFromName, gatherBorrowedMemories } from "@/lib/memory-sharing";
+import { borrowedFromName, gatherBorrowedMemories, gatherBorrowedShortTermEvents } from "@/lib/memory-sharing";
 import { hydrateChatStorage } from "@/lib/chat-storage";
 import { loadNativeTimeline, type NativeTimelineEntry } from "@/lib/short-term-assembler";
 import { runSummarizationPipeline } from "@/lib/memory-summarizer";
@@ -276,11 +276,18 @@ export function MemoryBankPage({ view, selectedCharId, onSelectChar, onNotice }:
             !(e.sourceApp === "moments" && e.postAuthorType === "user")
             && !(e.sourceApp === "interview_magazine" && e.sourceDetail === "interview_shared_issue")
         ));
-        setSharedEvents(timeline.filter(e =>
-            (e.sourceApp === "moments" && e.postAuthorType === "user") ||
-            (e.sourceApp === "chat" && e.sourceDetail === "group") ||
-            (e.sourceApp === "interview_magazine" && e.sourceDetail === "interview_shared_issue")
-        ));
+        // The character's OWN events that happened in a shared setting, plus -- when shared
+        // memory is on -- events from world mates that name this character. The second group
+        // is what a manual summary will actually draw on, so it belongs in the same view;
+        // otherwise there is no way to see what is about to be summarized.
+        setSharedEvents([
+            ...timeline.filter(e =>
+                (e.sourceApp === "moments" && e.postAuthorType === "user") ||
+                (e.sourceApp === "chat" && e.sourceDetail === "group") ||
+                (e.sourceApp === "interview_magazine" && e.sourceDetail === "interview_shared_issue")
+            ),
+            ...gatherBorrowedShortTermEvents(charId, loadMemoryConfig()),
+        ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()));
         setLoading(false);
     }, []);
 
@@ -333,18 +340,12 @@ export function MemoryBankPage({ view, selectedCharId, onSelectChar, onNotice }:
             const sinceTimestamp = typeof range === "number"
                 ? new Date(Date.now() - range * 86400000).toISOString()
                 : undefined;
-            const afterTimestamp = range === "all"
-                ? undefined
-                : sinceTimestamp ?? getLastSummarizedTimestamp(selectedCharId) ?? undefined;
-            const timelineCount = loadNativeTimeline(
-                selectedCharId,
-                afterTimestamp ? { afterTimestamp } : undefined,
-            ).length;
-            if (timelineCount < 4) {
-                showNotice("Fewer than 4 events in the selected range");
-                return;
-            }
-
+            // No pre-count here. This used to load the character's OWN timeline and bail at
+            // fewer than 4 entries, which meant runSummarizationPipeline -- the only place
+            // that also counts events borrowed from world mates -- was never reached, so
+            // shared memory could never contribute to a manual summary. The pipeline applies
+            // the same threshold over the full set and returns a specific error, which is
+            // surfaced below; duplicating the check here is what let the two drift apart.
             const result = await runSummarizationPipeline(
                 selectedCharId,
                 selectedChar?.name ?? "",
