@@ -60,7 +60,30 @@ const STORY_ACTION_CLOSER_ANYWHERE = /\[\/\s*(?:Message|消息)\s*\]/i;
 export function isCompleteStoryMessage(action: { content: string; rawText?: string }): boolean {
     if (!action.rawText || !STORY_ACTION_CLOSER.test(action.rawText)) return false;
     if (STORY_ACTION_CLOSER_ANYWHERE.test(action.content)) return false;
-    return Boolean(action.content.trim());
+    if (!action.content.trim()) return false;
+    // A message that contains the story's own XML fields is the model having wrapped the whole
+    // turn in [Message]…[/Message]. Properly closed, so the checks above pass it, but what
+    // arrives in chat is the entire scene. Reported by the user, reproduced as shape E.
+    if (STORY_XML_FIELD.test(action.content)) return false;
+    return true;
+}
+
+/** `<content>` / `<summary>` and their closers -- the story turn's own structure. */
+const STORY_XML_FIELD = /<\/?\s*(?:content|summary)\s*>/i;
+
+/**
+ * A story turn must still have a story in it.
+ *
+ * The other way the whole scene ends up in chat: the model opens [Message] at the very top and
+ * closes it at the very end, so the prose sits inside the block. That block IS well formed, so
+ * no amount of tag checking catches it -- but stripping it leaves nothing to render, and a
+ * story turn with no story is definitionally wrong. Reproduced as shape F.
+ *
+ * Checked against the text AFTER the actions are stripped, so it can only be judged here
+ * rather than inside isCompleteStoryMessage.
+ */
+export function storyTextSurvives(cleanText: string): boolean {
+    return cleanText.replace(/<\/?\s*(?:content|summary)\s*>/gi, "").trim().length > 0;
 }
 
 export type StoryGenerationResult = {
@@ -203,6 +226,12 @@ export async function generateStoryCompletion(
   const { cleanText, actions } = parseActionTags(rawOutput);
   const chatMessages = actions.filter(
     action => action.type === STORY_DISPATCHABLE_ACTION && isCompleteStoryMessage(action));
+  // If stripping the actions left no story behind, the model wrapped the turn in the tag
+  // rather than appending it. Send nothing: what it produced is a scene, not a message.
+  if (chatMessages.length && !storyTextSurvives(cleanText)) {
+    console.warn("[StoryEngine] [Message] swallowed the whole turn — nothing sent to chat");
+    chatMessages.length = 0;
+  }
   if (chatMessages.length) {
     // Fire and forget, exactly as chat and moments do: a failed side-effect must never take
     // the story turn down with it. parseAndSaveResponse inside the dispatcher runs the full

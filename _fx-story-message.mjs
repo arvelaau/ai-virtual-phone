@@ -17,7 +17,7 @@ const jiti = createJiti(import.meta.url, { alias: { "@": root }, interopDefault:
 
 const AP = jiti(path.join(root, "lib/action-parser.ts"));
 const { parseActionTags } = AP;
-const { isCompleteStoryMessage } = jiti(path.join(root, "lib/story-engine.ts"));
+const { isCompleteStoryMessage, storyTextSurvives } = jiti(path.join(root, "lib/story-engine.ts"));
 
 let pass = 0, fail = 0;
 const ok = (n, c, x) => { if (c) pass++; else { fail++; console.log(`  FAIL ${n}${x === undefined ? "" : ` -- ${JSON.stringify(x).slice(0, 200)}`}`); } };
@@ -95,6 +95,66 @@ She messaged him.
 
     // an empty block is not a message
     eq("G10 an empty block does not fire", fires(STORY("[Message]\n\n[/Message]")).length, 0);
+}
+
+// ── W. the whole turn must never end up in chat ──────────────────────────────
+//
+// User-reported: the message sent, but so did the entire narration. Both causes are blocks
+// that are PROPERLY CLOSED, so no amount of tag checking catches them. Reproduced as two
+// shapes, and both leave the story itself empty -- which is the tell, and the second guard.
+{
+    const PROSE = "She reached for her phone without looking up.\nThe bar was empty.";
+    // what the engine does, in order
+    const run = (raw) => {
+        const { cleanText, actions } = parseActionTags(raw);
+        let fired = actions.filter((a) => a.type === "消息" && isCompleteStoryMessage(a));
+        if (fired.length && !storyTextSurvives(cleanText)) fired = [];
+        return { fired, cleanText };
+    };
+    const leaks = (r) => r.fired.some((a) => a.content.includes("She reached for her phone"));
+
+    // E: the model wrapped the whole turn in the tag
+    const wrapped = run(`[Message]\n<content>\n${PROSE}\n</content>\n<summary>\ns\n</summary>\n[/Message]`);
+    eq("W1 a block containing the XML fields does not fire", wrapped.fired.length, 0);
+    ok("W2 so the narration cannot reach chat", !leaks(wrapped));
+
+    // The case that ISOLATES the XML-field guard: the story survives, so the swallowed-turn
+    // guard never fires, but the model has repeated a chunk of the turn inside the block. Only
+    // the XML check stops that reaching chat. (Shape E is caught by both, so it cannot tell the
+    // two guards apart -- removing the XML check still passed 69/69 until this case existed.)
+    const duplicated = run(
+        `<content>\n${PROSE}\n</content>\n<summary>\ns\n</summary>\n[Message]\nhey\n<content>\n${PROSE}\n</content>\n[/Message]`);
+    eq("W0a a block repeating the XML fields does not fire", duplicated.fired.length, 0);
+    ok("W0b even though the story itself survived", storyTextSurvives(duplicated.cleanText));
+
+    // F: opened at the top, closed at the very end, no XML at all
+    const topToBottom = run(`[Message]\n${PROSE}\nhey\n[/Message]`);
+    eq("W3 a block that swallows the turn does not fire", topToBottom.fired.length, 0);
+    ok("W4 so the narration cannot reach chat", !leaks(topToBottom));
+    ok("W5 and the tell is an empty story", !storyTextSurvives(topToBottom.cleanText));
+
+    // the legitimate shapes must be untouched by both guards
+    const taught = run(`<content>\n${PROSE}\n</content>\n<summary>\ns\n</summary>\n[Message]\nhey\n[/Message]`);
+    eq("W6 the taught shape still fires", taught.fired.length, 1);
+    eq("W7 with only the message", taught.fired[0].content.trim(), "hey");
+    const inside = run(`<content>\n${PROSE}\n[Message]\nhey\n[/Message]\n</content>\n<summary>\ns\n</summary>`);
+    eq("W8 a block inside <content> still fires", inside.fired.length, 1);
+    const before = run(`[Message]\nhey\n[/Message]\n<content>\n${PROSE}\n</content>`);
+    eq("W9 a block before the story still fires", before.fired.length, 1);
+    const noXml = run(`${PROSE}\n[Message]\nhey\n[/Message]`);
+    eq("W10 prose with no XML still fires", noXml.fired.length, 1);
+    ok("W11 and none of those leak the narration",
+        !leaks(taught) && !leaks(inside) && !leaks(before) && !leaks(noXml));
+
+    // storyTextSurvives must not be fooled by the XML skeleton alone
+    ok("W12 empty XML fields do not count as story", !storyTextSurvives("<content>\n</content>"));
+    ok("W13 real prose does count", storyTextSurvives(`<content>\n${PROSE}\n</content>`));
+
+    // wiring: the engine must apply the swallowed-turn guard, not just define it
+    const eng = fs.readFileSync(path.join(root, "lib/story-engine.ts"), "utf8");
+    const s = eng.indexOf("export async function generateStoryCompletion");
+    const body = s >= 0 ? eng.slice(s, eng.indexOf("\n}", s)) : "";
+    ok("W14 the engine applies the swallowed-turn guard", body.includes("storyTextSurvives(cleanText)"), body.length);
 }
 
 // ── C. what must NOT happen ──────────────────────────────────────────────────
@@ -192,7 +252,7 @@ She typed "hey" and hit send, then stared at the ceiling.
     ok("P11 the version was bumped past 279", v && Number(v[1]) >= 280, v && v[1]);
 }
 
-const EXPECTED = 54;
+const EXPECTED = 70;
 ok(`Z1 ${EXPECTED} assertions ran before this guard`, pass + fail === EXPECTED, `ran ${pass + fail}`);
 console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail ? 1 : 0);
