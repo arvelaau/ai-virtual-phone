@@ -36,7 +36,7 @@ She messaged him.
     const { cleanText, actions } = parseActionTags(raw);
     eq("A1 one action found", actions.length, 1);
     eq("A2 canonical type is the Chinese name", actions[0].type, "消息");
-    eq("A3 content is what arrives", actions[0].content.trim(), "hey");
+    eq("A3 content is what arrives", actions[0]?.content.trim(), "hey");
     ok("A4 the tag is stripped from the story text", !/\[\/?Message\]/i.test(cleanText), cleanText);
     ok("A5 the prose survives", cleanText.includes("She reached for her phone"));
     ok("A6 the XML fields survive", cleanText.includes("<content>") && cleanText.includes("<summary>"));
@@ -47,12 +47,12 @@ She messaged him.
 {
     const multi = parseActionTags(STORY("[Message]\nhey\nyou up?\n[/Message]"));
     eq("B1 several lines stay one action", multi.actions.length, 1);
-    ok("B2 both lines carried", multi.actions[0].content.includes("hey") && multi.actions[0].content.includes("you up?"));
+    ok("B2 both lines carried", multi.actions[0]?.content.includes("hey") && multi.actions[0]?.content.includes("you up?"));
 
     // legacy Chinese alias must still parse -- a Chinese-leaning model may write it
     const legacy = parseActionTags(STORY("[消息]\n在吗\n[/消息]"));
     eq("B3 legacy alias parses", legacy.actions.length, 1);
-    eq("B4 and normalises to the same type", legacy.actions[0].type, "消息");
+    eq("B4 and normalises to the same type", legacy.actions[0]?.type, "消息");
 
     // two separate blocks in one turn
     const two = parseActionTags(STORY("[Message]\nfirst\n[/Message]\n[Message]\nsecond\n[/Message]"));
@@ -71,7 +71,7 @@ She messaged him.
 
     const good = STORY("[Message]\nhey\n[/Message]");
     eq("G1 a properly closed block fires", fires(good).length, 1);
-    eq("G2 with the right content", fires(good)[0].content.trim(), "hey");
+    eq("G2 with the right content", fires(good)[0]?.content.trim(), "hey");
 
     // unclosed: the parser still yields an action, the guard refuses it
     const unclosed = STORY("[Message]\nhey");
@@ -81,13 +81,13 @@ She messaged him.
     // the dangerous one: opened at the very top, never closed
     const swallowed = "[Message]\nShe reached for her phone.\nA long stretch of prose follows.\nAnd more.";
     ok("G5 the parser would have swallowed the whole story",
-        only(swallowed)[0].content.includes("A long stretch of prose"), only(swallowed)[0]?.content);
+        only(swallowed)[0]?.content.includes("A long stretch of prose"), only(swallowed)[0]?.content);
     eq("G6 the guard stops it", fires(swallowed).length, 0);
 
     // mismatched aliases pair through the same fallback and leave the stray closer in the body
     const mismatched = STORY("[Message]\nhey\n[/消息]");
     ok("G7 a mismatched pair leaves the closer inside the content",
-        only(mismatched)[0].content.includes("[/消息]"), only(mismatched)[0]?.content);
+        only(mismatched)[0]?.content.includes("[/消息]"), only(mismatched)[0]?.content);
     eq("G8 the guard refuses that too", fires(mismatched).length, 0);
 
     // legacy-on-both-sides is a proper pair and must still work
@@ -136,7 +136,7 @@ She messaged him.
     // the legitimate shapes must be untouched by both guards
     const taught = run(`<content>\n${PROSE}\n</content>\n<summary>\ns\n</summary>\n[Message]\nhey\n[/Message]`);
     eq("W6 the taught shape still fires", taught.fired.length, 1);
-    eq("W7 with only the message", taught.fired[0].content.trim(), "hey");
+    eq("W7 with only the message", taught.fired[0]?.content.trim(), "hey");
     const inside = run(`<content>\n${PROSE}\n[Message]\nhey\n[/Message]\n</content>\n<summary>\ns\n</summary>`);
     eq("W8 a block inside <content> still fires", inside.fired.length, 1);
     const before = run(`[Message]\nhey\n[/Message]\n<content>\n${PROSE}\n</content>`);
@@ -150,11 +150,51 @@ She messaged him.
     ok("W12 empty XML fields do not count as story", !storyTextSurvives("<content>\n</content>"));
     ok("W13 real prose does count", storyTextSurvives(`<content>\n${PROSE}\n</content>`));
 
+    // ── reasoning vs content: the two are NOT the same, and the guard must tell them apart ──
+    //
+    // contextExcludedTags (default think,thinking) is stripped before anything reaches the
+    // model, so it is reasoning and must NOT count as the story surviving. FOLD tags are
+    // different: they are content the reader sees, merely collapsed. A user who adds <forum>
+    // is writing forum posts, and a turn made entirely of them is a real turn.
+    ok("W15 a <think> block alone is not a story",
+        !storyTextSurvives("<think>\nweighing it up\n</think>", "think,thinking"));
+    ok("W16 <thinking> too", !storyTextSurvives("<thinking>\nhmm\n</thinking>", "think,thinking"));
+    ok("W17 a custom FOLD tag DOES count as story",
+        storyTextSurvives("<forum>\n@Post floor=1\nbody\n</forum>", "think,thinking"));
+    ok("W18 reasoning plus a fold tag counts, on the fold tag",
+        storyTextSurvives("<think>\nhmm\n</think>\n<forum>\nbody\n</forum>", "think,thinking"));
+
+    // the hole this closed: reasoning alongside a [Message] holding the whole prose
+    const reasoningOnly = (() => {
+        const raw = `<think>\nShe should text him.\n</think>\n[Message]\n${PROSE}\nhey\n[/Message]`;
+        const { cleanText, actions } = parseActionTags(raw);
+        let f = actions.filter((a) => a.type === "消息" && isCompleteStoryMessage(a));
+        if (f.length && !storyTextSurvives(cleanText, "think,thinking")) f = [];
+        return f;
+    })();
+    eq("W19 reasoning does not rescue a turn-swallowing block", reasoningOnly.length, 0);
+
+    // and a turn that is only a fold tag still gets to send its message
+    const forumTurn = (() => {
+        const raw = "<forum>\n@Post floor=1\nbody\n</forum>\n[Message]\nhey\n[/Message]";
+        const { cleanText, actions } = parseActionTags(raw);
+        let f = actions.filter((a) => a.type === "消息" && isCompleteStoryMessage(a));
+        if (f.length && !storyTextSurvives(cleanText, "think,thinking")) f = [];
+        return f;
+    })();
+    eq("W20 a fold-tag-only turn still sends its message", forumTurn.length, 1);
+    eq("W21 and sends only the message", forumTurn[0]?.content.trim(), "hey");
+
+    // the engine must pass the session's setting, not a hardcoded list
+    ok("W22 the engine passes the session's excluded tags",
+        fs.readFileSync(path.join(root, "lib/story-engine.ts"), "utf8")
+            .includes("storyTextSurvives(cleanText, effectiveContextExcludedTags)"));
+
     // wiring: the engine must apply the swallowed-turn guard, not just define it
     const eng = fs.readFileSync(path.join(root, "lib/story-engine.ts"), "utf8");
     const s = eng.indexOf("export async function generateStoryCompletion");
     const body = s >= 0 ? eng.slice(s, eng.indexOf("\n}", s)) : "";
-    ok("W14 the engine applies the swallowed-turn guard", body.includes("storyTextSurvives(cleanText)"), body.length);
+    ok("W14 the engine applies the swallowed-turn guard", body.includes("storyTextSurvives(cleanText"), body.length);
 }
 
 // ── C. what must NOT happen ──────────────────────────────────────────────────
@@ -182,7 +222,7 @@ She typed "hey" and hit send, then stared at the ceiling.
     eq("D1 both are parsed", actions.length, 2);
     const dispatchable = actions.filter((a) => a.type === "消息");
     eq("D2 only one is dispatchable from story", dispatchable.length, 1);
-    eq("D3 and it is the message", dispatchable[0].content.trim(), "hey");
+    eq("D3 and it is the message", dispatchable[0]?.content.trim(), "hey");
     ok("D4 the non-dispatched tag is still stripped from the story",
         !/\[\/?Moments\]/i.test(cleanText), cleanText);
     ok("D5 its body does not leak into the story either", !cleanText.includes("a post"), cleanText);
@@ -252,7 +292,7 @@ She typed "hey" and hit send, then stared at the ceiling.
     ok("P11 the version was bumped past 279", v && Number(v[1]) >= 280, v && v[1]);
 }
 
-const EXPECTED = 70;
+const EXPECTED = 78;
 ok(`Z1 ${EXPECTED} assertions ran before this guard`, pass + fail === EXPECTED, `ran ${pass + fail}`);
 console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail ? 1 : 0);

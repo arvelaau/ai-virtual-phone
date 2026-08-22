@@ -81,9 +81,20 @@ const STORY_XML_FIELD = /<\/?\s*(?:content|summary)\s*>/i;
  *
  * Checked against the text AFTER the actions are stripped, so it can only be judged here
  * rather than inside isCompleteStoryMessage.
+ *
+ * `contextExcludedTags` is the SESSION's own setting (default `think,thinking`) -- the blocks
+ * that are stripped before anything reaches the model, i.e. reasoning rather than story. Those
+ * must not count as the story surviving, or `<think>…</think>` alongside a [Message] holding
+ * the whole prose would pass the guard.
+ *
+ * FOLD tags are deliberately NOT stripped here. A fold tag is content the reader sees, merely
+ * collapsed -- a user who adds `<forum>` to foldTags is writing forum posts, and a turn made
+ * entirely of them is a real turn. Only the context-excluded set is discounted, so the rule
+ * follows whatever that session configured rather than a hardcoded list.
  */
-export function storyTextSurvives(cleanText: string): boolean {
-    return cleanText.replace(/<\/?\s*(?:content|summary)\s*>/gi, "").trim().length > 0;
+export function storyTextSurvives(cleanText: string, contextExcludedTags?: string): boolean {
+    const withoutReasoning = stripContextExcludedTags(cleanText, contextExcludedTags);
+    return withoutReasoning.replace(/<\/?\s*(?:content|summary)\s*>/gi, "").trim().length > 0;
 }
 
 export type StoryGenerationResult = {
@@ -228,7 +239,7 @@ export async function generateStoryCompletion(
     action => action.type === STORY_DISPATCHABLE_ACTION && isCompleteStoryMessage(action));
   // If stripping the actions left no story behind, the model wrapped the turn in the tag
   // rather than appending it. Send nothing: what it produced is a scene, not a message.
-  if (chatMessages.length && !storyTextSurvives(cleanText)) {
+  if (chatMessages.length && !storyTextSurvives(cleanText, effectiveContextExcludedTags)) {
     console.warn("[StoryEngine] [Message] swallowed the whole turn — nothing sent to chat");
     chatMessages.length = 0;
   }
