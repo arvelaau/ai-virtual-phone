@@ -2316,16 +2316,27 @@ shared-memory vacuous controls: testing a function is not testing its wiring.
 whether the message really lands in chat needs a human.
 
 **Known and accepted**: the sent message enters the character's short-term timeline, which story
-reads next turn — so the story sees what it sent. Correct, but worth knowing. Chat → story is
-NOT wired; that is a separate design.
+reads next turn — so the story sees what it sent. Correct, but worth knowing.
+
+**Chat → story: SKIPPED by user decision (2026-08-22), and the reason matters.** That direction
+splits in two, and only one half was ever missing:
+- **awareness — already works.** `skipDirectChatEntries` (`short-term-assembler.ts:973`) is only
+  true when `appId === "chat"`, so in STORY mode direct chat entries are injected as
+  `<recent_chat>`. The character already reads your chat when writing the next beat.
+- **trigger — not built, and deliberately not.** Chat does not cause a story turn to generate.
+
+The user's reasoning: the trigger is unnecessary because they drive it themselves — chat, then
+open story, and `<recent_chat>` carries it. Worth keeping the hazard on record in case it is
+ever revisited: now that story can send chat, wiring chat to trigger story closes a LOOP
+(story sends → chat triggers → story sends), two LLM calls ping-ponging with a notification each
+round. Any future attempt needs the brake designed first — e.g. only a USER message may trigger,
+never one the character just sent.
 
 ## Still open / not yet done
 - **Custom app imports** — 5 of 9 translated (see the CUSTOM APP IMPORTS section above). Left: `chew-tracker`, `focus.flow`, `friends.map`, and `pulse.social` (minified, may not be translatable). Zips live outside the repo under `App\`.
 - **`memory.add` provenance** — a custom app can write a long-term memory for any character, laundered as `sourceApp: "chat"`, and shared memory will lend it on. Stamp `metadata.viaCustomApp` and decide whether such entries are borrowable. User has been told; awaiting a decision.
 - **Couple Space mini-games, "Route A"** — ⚠️ **this name is referenced three times in this file and never DEFINED.** No scope, no design, no integration point was ever written down; the only surviving description is "a custom app via existing directives", from a session transcript rather than from here. Do not start it as if it were a specified task — it needs a design decision from the user first. Recorded 2026-08-18.
 - **Track 2 game imports** — the 3 remaining of 6 user-contributed games (imports 1-3 landed as `81eb207`, `d66b1dc`, `cff6995`): pocket-fishing (156 CJK / 590 lines), cute-pet (155 / 1497), executive-diary (577 / 1929, and it holds 6 of the 8 "write in Chinese" orders plus a gender-inference guard that needs adapting to English convention). Source files are untracked in `pending-game-imports/`; the 3 already-imported ones are tracked, which is how to tell them apart.
-- `notifyMascotPageContext` in `components/chat/phone-chat-app.tsx` — **DONE (2026-08-19)**, both call sites plus the file's last two comments; it is now 0 CJK. Verified display-only first: the label is only interpolated into `` `Current page: ${context.label} (${context.mode})` `` at `mascot-engine.ts:601,678` and is never parsed back, exactly as the standing rule says.
-- **`[系统指令]` / `[事件 …]` short-term timeline labels — DONE**, in `995e606`. All three files (`short-term-assembler.ts`, `chat-storage.ts`, `chat-offline-storage.ts`) are at 0 CJK; the queue entry describing them as pending was stale.
 - `app/api/**/route.ts` — **35 files** still contain Chinese (was ~43; the two new `app/api/mixology/*` routes were translated as part of that port because they were new files). Scope not yet decided (see "Scope note" above) — ask the user before starting.
 - The handful of out-of-scope `.ts` files under `components/world-builder/` and `components/debug-prompt-registry.ts` noted above — never explicitly in scope (rule 1 says `.tsx` only), no decision needed unless the user wants to expand scope.
 - Newly-discovered AI-prompt files added to the protected list this session (ask before touching): `lib/rich-message-parser.ts`, `lib/group-admin.ts`, `lib/memory-types.ts`. Full protected list is in the "AI PROMPT/PROTOCOL TEXT" section above.
