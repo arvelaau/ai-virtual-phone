@@ -150,6 +150,67 @@ const eq = (name, got, want) => ok(name, Object.is(got, want), `got ${JSON.strin
         new Date(capped[0].createdAt) >= new Date(capped[capped.length - 1].createdAt));
 }
 
+// ── S. short-term borrowing as summarization INPUT, and the echo break ────────
+//
+// A character with no history of its own can now build a long-term memory out of what world
+// mates wrote about them -- effectively a name search across their short-term timelines. The
+// output is flagged so it is never lent on, which is what stops the two characters echoing a
+// single event back and forth forever.
+{
+    const { selectBorrowableMemories, isSecondhandDerived, SECONDHAND_DERIVED_FLAG } = SH;
+    const ON = { sharedMemoryEnabled: true };
+    const BO = { id: "c_bo", name: "Bo", worldId: "w1" };
+    const row = (id, content, meta) => ({
+        id, characterId: "c_alice", sourceApp: "chat", type: "long_term", content,
+        importance: 0.8, createdAt: "2026-08-01T10:00:00Z", updatedAt: "2026-08-01T10:00:00Z",
+        metadata: meta ?? {},
+    });
+
+    eq("S1 the flag name is stable", SECONDHAND_DERIVED_FLAG, "fromSecondhand");
+    ok("S2 a flagged entry is recognised", isSecondhandDerived(row("x", "y", { fromSecondhand: true })));
+    ok("S3 an ordinary entry is not", !isSecondhandDerived(row("x", "y")));
+    ok("S4 a metadata-less entry is safe", !isSecondhandDerived({ id: "x", content: "y" }));
+
+    // the echo break: a secondhand-derived memory naming Bo must NOT come back to Bo
+    const owner = {
+        ownerId: "c_alice", ownerName: "Alice", worldId: "w1",
+        entries: [
+            row("firsthand", "Bo turned up at the harbour."),
+            row("derived", "Bo was mentioned again.", { fromSecondhand: true }),
+        ],
+    };
+    const got = selectBorrowableMemories(ON, BO, [owner]);
+    eq("S5 only the first-hand memory is lent", got.length, 1);
+    eq("S6 and it is the right one", got[0].id, "firsthand");
+    ok("S7 the derived memory is never lent on", !got.some((e) => e.id === "derived"));
+
+    // wiring, scoped per function body -- both sides are storage-backed and return [] in Node
+    const shr = fs2.readFileSync(path.join(root, "lib/memory-sharing.ts"), "utf8");
+    const sum = fs2.readFileSync(path.join(root, "lib/memory-summarizer.ts"), "utf8");
+    const bodyOf = (src, name) => {
+        const start = src.indexOf(name);
+        if (start < 0) return "";
+        const end = src.indexOf("\n}", start);
+        return end < 0 ? "" : src.slice(start, end);
+    };
+    const gather = bodyOf(shr, "export function gatherBorrowedShortTermEvents");
+    ok("S8 the gatherer was located", gather.length > 200, `${gather.length}`);
+    ok("S9 it reads world mates' timelines", gather.includes("loadNativeTimeline(ownerId)"));
+    ok("S10 it filters by the viewer's name", gather.includes("mentionsName(event.content, viewerName)"));
+    ok("S11 it never lends to itself", gather.includes("ownerId === viewerId) continue"));
+    ok("S12 each event says whose account it is", gather.includes("(from ${ownerName}'s account)"));
+    ok("S13 borrowed short-term is capped", gather.includes("MAX_BORROWED_SHORT_TERM"));
+
+    const pipeline = bodyOf(sum, "export async function runSummarizationPipeline");
+    ok("S14 the pipeline was located", pipeline.length > 400, `${pipeline.length}`);
+    ok("S15 the summarizer pulls borrowed events", pipeline.includes("gatherBorrowedShortTermEvents(characterId, config)"));
+    ok("S16 borrowed events count toward the 4-event threshold",
+        pipeline.includes("allEntries.length < 4") && pipeline.includes("...ownEntries, ...borrowedEvents"));
+    ok("S17 the saved entry is flagged when borrowed events contributed",
+        sum.includes("[SECONDHAND_DERIVED_FLAG]: true"));
+    ok("S18 and NOT flagged otherwise", sum.includes("borrowedEvents.length") && sum.includes(": {}"));
+}
+
 // ── P. the summarization prompt, and its superseded-default upgrade ───────────
 //
 // Shared memory can only surface what the summarizer wrote down. v1 framed every scene as
@@ -420,7 +481,7 @@ const eq = (name, got, want) => ok(name, Object.is(got, want), `got ${JSON.strin
 // Guard against the whole file silently skipping a group: the count is pinned, so a group
 // that stops running fails loudly instead of shrinking the suite.
 // Counted before this guard itself runs, so the total printed below is EXPECTED + 1.
-const EXPECTED = 113;
+const EXPECTED = 131;
 ok(`Z1 ${EXPECTED} assertions ran before this guard`, pass + fail === EXPECTED, `ran ${pass + fail}`);
 
 console.log(`\n${pass}/${pass + fail} passed`);

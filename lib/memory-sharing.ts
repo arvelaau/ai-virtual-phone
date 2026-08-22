@@ -16,6 +16,7 @@ import type { MemoryConfig, MemoryEntry } from "./memory-types";
 import { loadMemoryEntriesByType } from "./memory-storage";
 import { loadCharacters } from "./character-storage";
 import { loadCharacterWorldGroups } from "./character-world-storage";
+import { loadNativeTimeline, type NativeTimelineEntry } from "./short-term-assembler";
 import { loadStoryProjectionEntries } from "./story-storage";
 import { loadVnProjectionEntries } from "./vn-storage";
 import { loadChatOfflineProjectionEntries } from "./chat-offline-storage";
@@ -81,6 +82,27 @@ export function borrowedFromName(entry: MemoryEntry): string | null {
     return typeof name === "string" && name.trim() ? name : null;
 }
 
+/**
+ * Cap on borrowed SHORT-TERM events fed into a summarization run. Short-term entries are raw
+ * events rather than settled summaries, so there can be a great many of them; this keeps a
+ * summarization prompt from being dominated by somebody else's transcript.
+ */
+const MAX_BORROWED_SHORT_TERM = 60;
+
+/**
+ * Marks a long-term memory that was itself built from borrowed material. Such an entry is
+ * NEVER lent on -- see selectBorrowableMemories.
+ *
+ * Without this the feature echoes: Y summarizes X's mentions of Y into Y's own memory, that
+ * entry names X, X borrows it back, X's next summary absorbs it, and the two characters
+ * amplify a single event indefinitely. Sharing is deliberately one hop.
+ */
+export const SECONDHAND_DERIVED_FLAG = "fromSecondhand";
+
+export function isSecondhandDerived(entry: MemoryEntry): boolean {
+    return entry.metadata?.[SECONDHAND_DERIVED_FLAG] === true;
+}
+
 /** The character doing the borrowing */
 export type MemoryViewer = {
     id: string;
@@ -142,6 +164,9 @@ export function selectBorrowableMemories(
         if (!ownerName) continue;
 
         for (const entry of owner.entries ?? []) {
+            // One hop only: a memory that was itself built from borrowed material is never
+            // lent on, or the two characters echo a single event back and forth forever.
+            if (isSecondhandDerived(entry)) continue;
             if (!mentionsName(entry.content, name)) continue;
             borrowed.push({
                 ...entry,
@@ -156,6 +181,62 @@ export function selectBorrowableMemories(
 
     borrowed.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return borrowed.slice(0, MAX_BORROWED_ENTRIES);
+}
+
+/**
+ * Short-term events from the viewer's world mates that mention the viewer by name, for use as
+ * INPUT TO SUMMARIZATION.
+ *
+ * This is the answer to "character Y has no history of its own, but X has been talking about
+ * Y" -- effectively a name search across the other characters' short-term timelines. Y can now
+ * build a long-term memory out of what was said about them.
+ *
+ * Distinct from gatherBorrowedMemories, which lends settled summaries at PROMPT time. These
+ * are raw events and are never injected into a prompt directly; they only ever reach the
+ * summarizer, whose output is then marked SECONDHAND_DERIVED_FLAG so it is not lent on.
+ *
+ * Each entry's content is prefixed with whose account it came from, because the summarizer
+ * otherwise has no way to tell it is reading somebody else's experience.
+ */
+export function gatherBorrowedShortTermEvents(
+    viewerId: string,
+    config: Pick<MemoryConfig, "sharedMemoryEnabled">,
+): NativeTimelineEntry[] {
+    if (!config?.sharedMemoryEnabled || !viewerId) return [];
+
+    const characters = loadCharacters();
+    const viewer = characters.find((item) => item.id === viewerId);
+    const viewerName = viewer?.name?.trim();
+    if (!viewerName || viewerName.length < MIN_NAME_LENGTH) return [];
+
+    const groups = loadCharacterWorldGroups();
+    const viewerGroup = groups.find((group) => group.memberIds.includes(viewerId));
+    if (!viewerGroup) return [];
+
+    const nameById = new Map(characters.map((item) => [item.id, item.name]));
+    const collected: NativeTimelineEntry[] = [];
+
+    for (const ownerId of viewerGroup.memberIds) {
+        if (ownerId === viewerId) continue;
+        const ownerName = nameById.get(ownerId)?.trim();
+        if (!ownerName) continue;
+
+        let timeline: NativeTimelineEntry[] = [];
+        try {
+            timeline = loadNativeTimeline(ownerId) ?? [];
+        } catch {
+            continue;
+        }
+        for (const event of timeline) {
+            if (!event?.content?.trim()) continue;
+            if (!mentionsName(event.content, viewerName)) continue;
+            collected.push({ ...event, content: `(from ${ownerName}'s account) ${event.content}` });
+        }
+    }
+
+    collected.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    // Keep the most recent, then restore chronological order for the summarizer
+    return collected.slice(-MAX_BORROWED_SHORT_TERM);
 }
 
 /**

@@ -17,6 +17,7 @@ import {
 } from "./memory-storage";
 import { resolveAuxiliaryApiConfig } from "./settings-storage";
 import { loadNativeTimeline, formatTimelineForSummarization } from "./short-term-assembler";
+import { gatherBorrowedShortTermEvents, SECONDHAND_DERIVED_FLAG } from "./memory-sharing";
 import { generateEmbedding, resolveEmbeddingModel } from "./memory-embedding";
 import { simpleLLMCall } from "./api-helpers";
 import { maybeRunCoreMemoryPipeline } from "./core-memory-builder";
@@ -75,12 +76,25 @@ export async function runSummarizationPipeline(
     const afterTimestamp = options?.force
         ? undefined
         : options?.sinceTimestamp ?? (getLastSummarizedTimestamp(characterId) ?? undefined);
-    const allEntries = loadNativeTimeline(characterId, afterTimestamp ? { afterTimestamp } : undefined);
+    const ownEntries = loadNativeTimeline(characterId, afterTimestamp ? { afterTimestamp } : undefined);
+
+    // With shared memory on, also summarize what the character's WORLD MATES said about them.
+    // That is the whole point for a character with no history of its own: X has been talking
+    // about Y, so Y should be able to build a memory out of it. Each borrowed event carries
+    // whose account it came from, and the resulting entry is flagged so it is never lent on.
+    const borrowedEvents = gatherBorrowedShortTermEvents(characterId, config);
+    const allEntries = borrowedEvents.length
+        ? [...ownEntries, ...borrowedEvents].sort(
+            (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+        : ownEntries;
 
     if (allEntries.length < 4) {
         if (!options?.force) resetEventCounter(characterId);
+        const hint = config.sharedMemoryEnabled
+            ? " Shared memory is on, but no other character in this world has written anything naming them either."
+            : " Turning on Shared Memory would also summarize what other characters in this world said about them.";
         return { success: false, error: allEntries.length === 0
-                ? "This character has no events of its own to summarize yet. Long-term memory is built from what THIS character took part in; what other characters wrote about them is read at prompt time instead, and appears under \"Heard secondhand\"."
+                ? `This character has no events of its own to summarize yet.${hint}`
                 : "Fewer than 4 events to summarize." };
     }
 
@@ -157,6 +171,11 @@ export async function runSummarizationPipeline(
             summarizedEvents: allEntries.length,
             timeSpan: `${earliest} ~ ${latest}`,
             sourceSessionIds,
+            // Built partly from other characters' events, so it must never be lent on --
+            // otherwise the two characters echo one event back and forth forever.
+            ...(borrowedEvents.length
+                ? { [SECONDHAND_DERIVED_FLAG]: true, borrowedEventCount: borrowedEvents.length }
+                : {}),
         },
     };
     await saveMemoryEntry(longTermEntry);

@@ -1447,7 +1447,7 @@ export function formatTimelineForSummarization(
     const timeAware = resolvePromptTimeAware(options?.timeAware);
     const eventsText = entries
         .map(e => `- ${timeAware ? e.content : formatStoredPromptEventContent(e.content, {
-            label: "事件",
+            label: "Event",
             timestamp: e.timestamp,
             timeAware,
         })}`)
