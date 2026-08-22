@@ -2159,7 +2159,115 @@ plus a speaker field away from multi-character, and **group chat is the wrong mo
 it makes ONE call voicing every character, which makes knowledge isolation structurally
 impossible there.
 
+
+## CUSTOM APP IMPORTS (started 2026-08-22) — 5 of 9 translated
+Source packages live OUTSIDE the repo at `D:\Documents\Claude\ai-virtual-phone-main\App\` (9
+zips). Translated output goes to `App\translated\*-EN.zip`. **Nothing about this track is in
+the repo**: custom apps are installed at RUNTIME through the App Market (`installCustomApp`
+parses an uploaded zip into KV/IndexedDB), so the deliverable is a zip the user installs, not a
+code change. There is no in-repo bundle path — `public/game-builtins` is games, not apps.
+
+### The memory blast radius — audited before touching anything
+Custom apps have real memory access via `lib/custom-app-host-api.ts`, all behind manifest
+permissions: `memory.add`, `memory.timeline`, `memory.addTimeline`, `memory.deleteTimeline`,
+`memory.removeTimeline`, `memory.suggest`, `memory.readCore`, `memory.readLongTerm`.
+
+| app | memory reach |
+|---|---|
+| qbox, giftshop, melon.fiction, pocket.approval, waimai | **none** |
+| pulse.social, focus.flow | `memory.add`, `memory.addTimeline` |
+| chew-tracker | + `memory.deleteTimeline` |
+| **friends.map** | + `readCore`, `readLongTerm` — 18 permissions, the widest of the nine |
+
+**Three boundaries turned out to be sound**, and are worth knowing rather than re-deriving:
+- `deleteCustomAppTimelineEntries(appId, …)` (`custom-app-storage.ts:957`) is scoped to the
+  calling app's own id. An app cannot delete another app's entries, let alone real chat history.
+- Custom-app timeline events project as `sourceApp: "custom_app"`, which
+  `isBorrowableTimelineEntry` does **not** accept — so no custom app can reach shared memory
+  through the short-term path. Fixture `_fx-memory-sharing.mjs` S0h already pins this.
+- Everything is gated on declared permissions.
+
+### 🚨 OPEN GAP in my own design: custom-app long-term memories are indistinguishable
+`addCustomAppMemory` (`custom-app-host-api.ts:2098`) writes a `MemoryEntry` for an **arbitrary
+characterId**, with `type` chosen by the app (`long_term` or `core`) and **`sourceApp` hardcoded
+to `"chat"`**.
+
+I gated the SHORT-TERM borrowing path by source but never the LONG-TERM one. So a long-term
+entry written by a custom app that names another character **will** be borrowed by shared
+memory — and because `sourceApp` is laundered to `"chat"`, it cannot even be filtered out.
+
+Fix is small and not done: stamp `metadata.viaCustomApp = app.id` at the write, then decide
+whether such an entry may be lent on. Flagged to the user, awaiting a decision.
+
+### Rules for translating a custom app
+**Never translate** — `manifest.id`; every `.id` / `.handler` / `.entry`; `parameterSchema`
+property keys; `tags` / `primaryTags` / `appTags` (matched); preset `id`s.
+**Translate, but check first** — `extensions.chat.tools[].name` is the name the AI *calls*, so
+grep the package for it before moving it (in giftshop it appeared only in the manifest, 0 hits
+in `index.html`, so it was safe).
+**Translate freely** — `manifest.name`/`description`, `plusActions[].label`, all UI, and the
+preset prompt bodies.
+
+### Done, with what survives on purpose
+| app | CJK left | why |
+|---|---|---|
+| `io.xiaoq.giftshop.v2` | 0 | — |
+| `7Ou-qbox.app` | 0 | — |
+| `melon.fiction` | 12 | **bilingual parser aliases** |
+| `waimai.demo` | 4 | **bilingual status guard** |
+| `pocket.approval.app` | 12 | **deliberate Japanese example lines** |
+
+Each verified: manifest + presets `JSON.parse`, `<div>` balanced, zero control characters, zero
+smart quotes, identifiers untouched.
+
+### 🚨 "No memory access" does NOT mean "simple" — melon.fiction had its own protocol
+Its `index.html` parses a line format that its own `presets.json` teaches: `@标题`,
+`@楼 层= 谁= 赞= 引用=`, `谁=楼主`, `@备注`, `@右`/`@左`/`@时间`, `@撤回 左|右`, plus a
+`撤回了一条消息` fallback for when the model writes the wording as bubble text instead of using
+the tag. Same producer/consumer shape as the app-wide chat protocol, just self-contained.
+
+Handled in the project's established order — **parser bilingual first, teaching flipped second**.
+Covered by a 33/33 fixture that pulls `parseForum`/`parseChat` **straight out of the shipped
+HTML** with a brace-walker and drives them: both languages per tag, mixed aliases, the retract
+fallback in both languages, prose that merely mentions unsending NOT treated as a retract, and
+prose/empty negative controls. Then the lockstep proof — the taught example is **lifted out of
+the new preset text and run through the real parser** (forum: title + 2 posts, correct
+who/quote; chat: name + 5 messages, kinds R,L,t,wR,wL).
+
+One bracket detail worth keeping: the legacy tags use full-width `【】` in places, and the
+English teaching uses ASCII. Both are accepted on both sides, so a half-migrated model still
+parses.
+
+### 🚨 CJK HAS NO WORD BOUNDARIES — this bit three times
+A short key like `故事` or `购物车` matches **inside** any longer sentence containing it, leaving
+a half-English string (`捡起第一个Stories：选几位角色当Leads`, `好Right, the courier/…`,
+`“thisxxWhat is it?`). Two rules, both learned the hard way:
+1. **Every key must be a COMPLETE string as it appears in the file** — a whole attribute value,
+   a whole argument, a whole line. Never a fragment.
+2. **Sort longest-first automatically**, in the apply function. Relying on hand-ordering fails
+   the moment the list grows.
+
+For template-literal-heavy files (`waimai`, `pocket.approval`), extracting maximal **CJK runs**
+rather than whole strings is the right unit — replacing a 20-line template block by hand means
+rewriting its `${…}` interpolations, which is where mistakes come from. `scratchpad/runs.mjs`
+does the extraction; expect 2-3 passes, re-extracting between them.
+
+### The forced-Chinese-translation trap, now in third-party apps
+`pocket.approval`'s two presets both ordered the character to append a parenthesised Chinese
+gloss after any non-Chinese line — the same trap as `vn-engine` / `interview-magazine` /
+`calendar` / `map-rpg` / `worldbook`, and precisely what `BILINGUAL_INJECTION_ENABLED = false`
+switched off app-wide. Kept the "write in your own language" half, removed the forced gloss.
+**Assume every imported app's presets carry one until grepped.**
+
+### Remaining: 4 apps
+- `chew-tracker` (129 CJK lines) and `focus.flow` (213) — touch memory, but small
+- `friends.map` (800) — the widest permission set of all nine
+- **`pulse.social` — MINIFIED**, 9 lines averaging ~10,300 characters. Safe translation is not
+  practical in that form; it needs the original source, or it gets skipped.
+
 ## Still open / not yet done
+- **Custom app imports** — 5 of 9 translated (see the CUSTOM APP IMPORTS section above). Left: `chew-tracker`, `focus.flow`, `friends.map`, and `pulse.social` (minified, may not be translatable). Zips live outside the repo under `App\`.
+- **`memory.add` provenance** — a custom app can write a long-term memory for any character, laundered as `sourceApp: "chat"`, and shared memory will lend it on. Stamp `metadata.viaCustomApp` and decide whether such entries are borrowable. User has been told; awaiting a decision.
 - **Couple Space mini-games, "Route A"** — ⚠️ **this name is referenced three times in this file and never DEFINED.** No scope, no design, no integration point was ever written down; the only surviving description is "a custom app via existing directives", from a session transcript rather than from here. Do not start it as if it were a specified task — it needs a design decision from the user first. Recorded 2026-08-18.
 - **Track 2 game imports** — the 3 remaining of 6 user-contributed games (imports 1-3 landed as `81eb207`, `d66b1dc`, `cff6995`): pocket-fishing (156 CJK / 590 lines), cute-pet (155 / 1497), executive-diary (577 / 1929, and it holds 6 of the 8 "write in Chinese" orders plus a gender-inference guard that needs adapting to English convention). Source files are untracked in `pending-game-imports/`; the 3 already-imported ones are tracked, which is how to tell them apart.
 - `notifyMascotPageContext` in `components/chat/phone-chat-app.tsx` — **DONE (2026-08-19)**, both call sites plus the file's last two comments; it is now 0 CJK. Verified display-only first: the label is only interpolated into `` `Current page: ${context.label} (${context.mode})` `` at `mascot-engine.ts:601,678` and is never parsed back, exactly as the standing rule says.
