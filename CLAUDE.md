@@ -2265,6 +2265,60 @@ switched off app-wide. Kept the "write in your own language" half, removed the f
 - **`pulse.social` — MINIFIED**, 9 lines averaging ~10,300 characters. Safe translation is not
   practical in that form; it needs the original source, or it gets skipped.
 
+
+## Story mode can send a real chat message — **DONE** (`fc7b95f`), 55/55, `_fx-story-message.mjs` kept
+A story beat where the character picks up their phone and messages {{user}} now actually
+delivers, into the chat app, notification and all.
+
+**Almost all of it already existed.** `[Message]` is a registered action in `action-parser.ts`,
+and `dispatchChatMessage` (`:443`) runs the content through **`parseAndSaveResponse`** — the full
+chat pipeline: bubble splitting, stickers, status panels, image generation, banner and system
+notification. `moments-engine` has dispatched actions cross-app for a long time. Story was
+simply never wired in — zero references to `parseActionTags` / `dispatchActions` on its path.
+
+Three connections, in the usual order — **parser first, teaching second**:
+- `generateStoryCompletion` parses actions off the **raw** output (before the user's regexes run
+  in `parseStoryResponse`) and feeds the **cleaned** text onward. Miss that second half and the
+  tag renders as visible story prose.
+- `"story"` added to `ActionContext.sourceEngine`.
+- `story_output_format` teaches it, with an explicit carve-out from its own forbidden-directives
+  rule so the spec cannot be read two ways. `BUILTIN_PRESET_VERSION` → **280**.
+
+**Scope is `[Message]` only, by user decision.** The other five actions are still stripped from
+the story text but not acted on, so a story beat cannot silently post to Moments.
+
+### 🚨 Story is STRICTER than chat about unclosed tags — measured, not assumed
+`parseActionTags` has a documented fallback for a missing closing tag: take the content to the
+end of the text (`action-parser.ts:194`). Correct for chat — the text was going to be a message
+anyway. **Dangerous in story**, and a probe proved it: an unclosed `[Message]` at the top of a
+turn yields content equal to the WHOLE story prose, which with notifications on fires a banner
+carrying the entire scene.
+
+`isCompleteStoryMessage` therefore requires a properly closed block: `rawText` must END with a
+closer AND `content` must not still contain one. That second condition also rejects a mismatched
+pair like `[Message]…[/消息]`, which pairs through the same fallback and leaves the stray closer
+inside the body.
+
+**Two of my own assertions were wrong before the controls ran.** B5 and C4 encoded what I
+expected `parseActionTags` to do rather than what it does — and both "failures" were that
+fallback working as designed, which is exactly what surfaced the hazard. *When a fixture fails
+against long-standing code, check whether the code is right before changing it.*
+
+Controls: rawOutput to the story parser → 54/55 (E5); remove the completeness guard → 54/55
+(E3b); dispatch every action → 54/55 (E3); delete the teaching → 48/55 (P1-P6, P8); skip the
+version bump → 54/55 (P11).
+
+**E3b was added after control 2 passed 54/54** — group G drives `isCompleteStoryMessage`
+directly, so deleting the call from the engine's filter went unnoticed. Same shape as the
+shared-memory vacuous controls: testing a function is not testing its wiring.
+
+**Not verified here**: the dispatcher writes to chat storage and cannot be driven under Node, so
+whether the message really lands in chat needs a human.
+
+**Known and accepted**: the sent message enters the character's short-term timeline, which story
+reads next turn — so the story sees what it sent. Correct, but worth knowing. Chat → story is
+NOT wired; that is a separate design.
+
 ## Still open / not yet done
 - **Custom app imports** — 5 of 9 translated (see the CUSTOM APP IMPORTS section above). Left: `chew-tracker`, `focus.flow`, `friends.map`, and `pulse.social` (minified, may not be translatable). Zips live outside the repo under `App\`.
 - **`memory.add` provenance** — a custom app can write a long-term memory for any character, laundered as `sourceApp: "chat"`, and shared memory will lend it on. Stamp `metadata.viaCustomApp` and decide whether such entries are borrowable. User has been told; awaiting a decision.
