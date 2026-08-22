@@ -65,7 +65,7 @@ export const BUILTIN_PRESET_ID = "builtin_default_v1";
 //                   TRIMs the entry away entirely for characters with no Couple Space.
 //                   The block is built by the caller and passed in like currentSchedule,
 //                   so the assembler gains no import of the Couple Space store.
-export const BUILTIN_PRESET_VERSION = 279;
+export const BUILTIN_PRESET_VERSION = 280;
 
 export function createBuiltinPreset(): PresetConfig {
     const now = Date.now();
@@ -430,6 +430,17 @@ export function createBuiltinPreset(): PresetConfig {
                     "<summary>",
                     "the story summary goes here",
                     "</summary>",
+                    "",
+                    "【Messaging {{user}} for real】",
+                    "- Only when the scene genuinely has you pick up your phone and message {{user}}, you may send that message for real. It arrives in their chat app, as an ordinary message from you.",
+                    "- Put the block AFTER </summary>, never inside <content> or <summary>:",
+                    "  [Message]",
+                    "  what actually arrives on their phone",
+                    "  [/Message]",
+                    "- <content> narrates the act -- taking the phone out, hesitating, typing. The [Message] block holds ONLY the words that arrive. Do not write the message text out again inside <content>.",
+                    "- Several messages in a row: put them on separate lines inside the one block.",
+                    "- This is the ONLY chat directive story mode may use, and it is the exception to the rule above. Everything else in that list stays forbidden.",
+                    "- Leave it out entirely on any turn where you are not actually sending a message. It is not a channel for asides or commentary.",
                     "</story_output_format>",
                 ].join("\n"),
                 injection_position: 0,

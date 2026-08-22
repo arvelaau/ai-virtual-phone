@@ -19,6 +19,8 @@ import { buildCalendarScheduleMarker, getCurrentCalendarScheduleForPrompt } from
 import { buildCoupleSpacePromptBlock } from "./couple-space-prompt";
 import { getWeekStartIso } from "./calendar-utils";
 import { parseStoryResponse } from "./story-parser";
+import { parseActionTags, dispatchActions } from "./action-parser";
+
 import { STORY_PARSER_VERSION } from "./story-parser";
 import { loadStoryMessages, replaceStoryMessages, type StoryMessage } from "./story-storage";
 import type { ChatMessage } from "./chat-storage";
@@ -26,6 +28,40 @@ import { MacroEngine } from "./macro-engine";
 
 const DEFAULT_STORY_FOLD_TAGS = "think,thinking,summary";
 const DEFAULT_STORY_CONTEXT_EXCLUDED_TAGS = "think,thinking";
+
+/**
+ * The one action a story turn may actually fire: the character taking out their phone and
+ * messaging the user for real. `ActionTag.type` is the CANONICAL Chinese name regardless of
+ * which alias the model wrote (see action-parser's parseActionHeader), so this compares
+ * against that rather than against "Message".
+ */
+const STORY_DISPATCHABLE_ACTION = "消息";
+
+/** A closing tag in either language, at the very end of the matched block. */
+const STORY_ACTION_CLOSER = /\[\/\s*(?:Message|消息)\s*\]\s*$/i;
+/** Any closing tag, anywhere -- used to reject a block whose open/close aliases disagree. */
+const STORY_ACTION_CLOSER_ANYWHERE = /\[\/\s*(?:Message|消息)\s*\]/i;
+
+/**
+ * Story only fires a message from a PROPERLY CLOSED block. Deliberately stricter than chat.
+ *
+ * parseActionTags has a documented fallback for a missing closing tag: take the content to the
+ * end of the text. In chat that is the right call -- the text was going to be a message
+ * anyway, so a truncated one beats a lost one. In story it is dangerous: the prose is long,
+ * the block belongs after </summary> by convention, and a stray unclosed [Message] near the
+ * top turns the ENTIRE story into a chat message, notification and all. Verified: an unclosed
+ * opener at the start yields content equal to the whole prose.
+ *
+ * Two conditions, which between them also reject a mismatched pair like [Message]…[/消息]
+ * (that one "pairs" through the same fallback and leaves the stray closer inside the body):
+ *   - the matched block must END with a closing tag, and
+ *   - the content must not still contain one.
+ */
+export function isCompleteStoryMessage(action: { content: string; rawText?: string }): boolean {
+    if (!action.rawText || !STORY_ACTION_CLOSER.test(action.rawText)) return false;
+    if (STORY_ACTION_CLOSER_ANYWHERE.test(action.content)) return false;
+    return Boolean(action.content.trim());
+}
 
 export type StoryGenerationResult = {
   rawText: string;
@@ -156,7 +192,26 @@ export async function generateStoryCompletion(
     characterName: character.name,
   }, { skipOutputRegex: true, includeReasoning: true, appId: "story", appTags: ["story"], signal: options?.signal });
 
-  const parsed = parseStoryResponse(rawOutput, regexes, {
+  // Action tags are parsed from the RAW output, before the user's regexes run over it in
+  // parseStoryResponse -- a regex that rewrites the reply could otherwise mangle a tag before
+  // it is ever recognised. Same order chat uses.
+  //
+  // Scope is deliberately [Message] only for now. parseActionTags also recognises Moments,
+  // GroupMessage, DirectMessage, Comment and Reply; dispatching those from story too would
+  // widen the blast radius a long way (a story beat could silently post to Moments), so
+  // anything else is stripped from the display text but NOT acted on.
+  const { cleanText, actions } = parseActionTags(rawOutput);
+  const chatMessages = actions.filter(
+    action => action.type === STORY_DISPATCHABLE_ACTION && isCompleteStoryMessage(action));
+  if (chatMessages.length) {
+    // Fire and forget, exactly as chat and moments do: a failed side-effect must never take
+    // the story turn down with it. parseAndSaveResponse inside the dispatcher runs the full
+    // chat pipeline, notification banner included.
+    dispatchActions(chatMessages, { characterId, sourceEngine: "story", signal: options?.signal })
+      .catch(err => console.warn("[StoryEngine] chat message dispatch failed:", err));
+  }
+
+  const parsed = parseStoryResponse(cleanText, regexes, {
     summaryTag,
     foldTags: effectiveFoldTags,
     macroEngine,
