@@ -39,7 +39,13 @@ export type MemoryConfig = {
      * so it fails closed.
      */
     sharedMemoryEnabled: boolean;
-    /** Separate budget, so borrowed memories can never crowd out the character's own */
+    /**
+     * Separate budget, so borrowed memories can never crowd out the character's own.
+     *
+     * Deliberately small. This is "what you have heard about yourself lately", not a second
+     * memory bank -- and in story mode the <summary> is generated last, so it is the first
+     * thing to degrade when the prompt is bloated.
+     */
     sharedMemoryTokenBudget: number;
 };
 
@@ -157,5 +163,5 @@ export const DEFAULT_MEMORY_CONFIG: MemoryConfig = {
     coreMemoryPrompt: DEFAULT_CORE_MEMORY_PROMPT,
     vnSummaryPrompt: "",
     sharedMemoryEnabled: false,
-    sharedMemoryTokenBudget: 20000,
+    sharedMemoryTokenBudget: 4000,
 };

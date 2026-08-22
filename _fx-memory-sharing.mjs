@@ -133,6 +133,21 @@ const eq = (name, got, want) => ok(name, Object.is(got, want), `got ${JSON.strin
     // a viewer nobody has ever mentioned gets nothing -- the name filter IS the sharing circle
     eq("C21 an unmentioned character borrows nothing",
         selectBorrowableMemories(ON, { id: "c_zed", name: "Zed", worldId: "w1" }, owners).length, 0);
+
+    // Count cap. The token budget alone is not a bound: a long story history can produce
+    // hundreds of matching summaries, and secondhand knowledge that dominates the prompt
+    // pushes out what the character actually needs -- in story mode the trailing <summary>
+    // is the first casualty.
+    const many = {
+        ownerId: "c_many", ownerName: "Mira", worldId: "w1",
+        entries: Array.from({ length: 200 }, (_, i) =>
+            entry(`big${i}`, `Bo was there, beat ${i}.`, `2026-01-${String((i % 28) + 1).padStart(2, "0")}T10:00:00Z`)),
+    };
+    const capped = selectBorrowableMemories(ON, BO, [many]);
+    ok("C22 borrowed rows are capped well below the match count",
+        capped.length > 0 && capped.length <= 32, `got ${capped.length} from 200 matches`);
+    ok("C23 the cap keeps the NEWEST, not the first found",
+        new Date(capped[0].createdAt) >= new Date(capped[capped.length - 1].createdAt));
 }
 
 // ── P. the summarization prompt, and its superseded-default upgrade ───────────
@@ -348,7 +363,13 @@ const eq = (name, got, want) => ok(name, Object.is(got, want), `got ${JSON.strin
     ok("D7 borrowed line is attributed", mixed.includes("- (Alice) I took her to the pier."));
     ok("D8 heading appears once borrowed", mixed.includes("secondhand"));
     // The whole point: the model must be told whose "I" it is reading
-    ok("D9 heading explains the first person", /"I"/.test(mixed) && /never to you/i.test(mixed));
+    // The heading must say it is somebody else's experience and that the bracket names the
+    // source. Deliberately ONE short line: it lives inside a data marker, and a long
+    // instruction there competes with the output contract.
+    ok("D9 heading marks it as not the reader's own experience", /not your own experience/i.test(mixed));
+    ok("D9b heading explains the bracket", /brackets/i.test(mixed));
+    const headingLine = mixed.split("\n").find((l) => /secondhand/i.test(l)) ?? "";
+    ok("D9c heading stays short", headingLine.length < 130, `${headingLine.length} chars`);
     ok("D10 borrowed section comes after own", mixed.indexOf("- I made coffee.") < mixed.indexOf("- (Alice)"));
 
     const onlyBorrowed = formatLongTermMemories([borrowed("I waited an hour.", "Bo")]);
@@ -378,7 +399,18 @@ const eq = (name, got, want) => ok(name, Object.is(got, want), `got ${JSON.strin
     const shr = fs.readFileSync(path.join(root, "lib/memory-sharing.ts"), "utf8");
     ok("E6 only long_term is borrowed, never core",
         /loadMemoryEntriesByType\(ownerId, "long_term"\)/.test(shr) && !/"core"/.test(shr));
-    ok("E7 a character never borrows from itself", /ownerId === viewerId\) continue/.test(shr));
+    ok("E7 a character never borrows from itself", shr.includes("owner.ownerId === viewer.id) continue"));
+
+    // The wrapper enumerates WORLD MATES, not "everyone who has a memory row".
+    // getAllCharacterIdsWithMemories() only sees the memory store, so a character with story
+    // or VN history but no summarized long-term entry was invisible -- and long-term entries
+    // only appear after 80 events, so early on that is everybody. The feature produced nothing.
+    ok("E12 candidates come from the world group",
+        shr.includes("viewerGroup.memberIds.filter((id) => id !== viewerId)"));
+    ok("E13 the memory-store enumerator is no longer used as the candidate source",
+        !/await getAllCharacterIdsWithMemories\(\)/.test(shr));
+    ok("E14 borrowed rows are capped by count, not only by tokens",
+        shr.includes("MAX_BORROWED_ENTRIES") && /slice\(0, MAX_BORROWED_ENTRIES\)/.test(shr));
     ok("E8 stored entries are copied, never mutated", /\.\.\.entry,/.test(shr) && !/entry\.metadata\s*=/.test(shr));
     ok("E9 no CJK literals left in the script-range regex", !/[぀-鿿]/.test(shr));
     ok("E10 no control characters",
@@ -388,7 +420,7 @@ const eq = (name, got, want) => ok(name, Object.is(got, want), `got ${JSON.strin
 // Guard against the whole file silently skipping a group: the count is pinned, so a group
 // that stops running fails loudly instead of shrinking the suite.
 // Counted before this guard itself runs, so the total printed below is EXPECTED + 1.
-const EXPECTED = 106;
+const EXPECTED = 113;
 ok(`Z1 ${EXPECTED} assertions ran before this guard`, pass + fail === EXPECTED, `ran ${pass + fail}`);
 
 console.log(`\n${pass}/${pass + fail} passed`);

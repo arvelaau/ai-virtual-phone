@@ -34,13 +34,11 @@ export function formatLongTermMemories(memories: MemoryEntry[]): string {
 
     if (borrowed.length === 0) return own.join("\n");
 
+    // Kept to one short line. This sits inside a DATA marker, and a long instruction here
+    // competes with the output contract -- which in story mode costs the trailing summary.
     const sections: string[] = [];
     if (own.length) sections.push(own.join("\n"));
-    sections.push(
-        "Things you know secondhand, from other people's accounts of events involving you. "
-        + "These are THEIR memories, not yours: the speaker is named in brackets, and any "
-        + "\"I\" inside them refers to that person, never to you.",
-    );
+    sections.push("Heard secondhand (whose account it is, in brackets — not your own experience):");
     sections.push(borrowed.join("\n"));
     return sections.join("\n\n");
 }

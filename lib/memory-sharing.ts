@@ -13,7 +13,7 @@
 // is the only thing bounding this leak, so every early return errs towards sharing nothing.
 
 import type { MemoryConfig, MemoryEntry } from "./memory-types";
-import { getAllCharacterIdsWithMemories, loadMemoryEntriesByType } from "./memory-storage";
+import { loadMemoryEntriesByType } from "./memory-storage";
 import { loadCharacters } from "./character-storage";
 import { loadCharacterWorldGroups } from "./character-world-storage";
 import { loadStoryProjectionEntries } from "./story-storage";
@@ -22,6 +22,17 @@ import { loadChatOfflineProjectionEntries } from "./chat-offline-storage";
 
 /** Minimum name length to match on. A one-character name would hit almost every sentence. */
 const MIN_NAME_LENGTH = 2;
+
+/**
+ * Hard cap on borrowed rows, applied after sorting newest-first and before the token budget.
+ *
+ * The budget alone is not enough of a bound. A character with a long story history can produce
+ * hundreds of narrative summaries, and secondhand knowledge that dominates the prompt pushes
+ * out the things the character actually needs -- in story mode the <summary> is generated last
+ * and is the first casualty when the prompt is bloated. This is "what you have heard about
+ * yourself lately", not a second memory bank.
+ */
+const MAX_BORROWED_ENTRIES = 24;
 
 /** CJK (and kana) -- scripts written without spaces, so word boundaries do not apply */
 const NO_WORD_BOUNDARY_SCRIPT = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/;
@@ -144,7 +155,7 @@ export function selectBorrowableMemories(
     }
 
     borrowed.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    return borrowed;
+    return borrowed.slice(0, MAX_BORROWED_ENTRIES);
 }
 
 /**
@@ -229,25 +240,25 @@ export async function gatherBorrowedMemories(
     // declared in character-types.ts but never written or read by anything, so filtering on it
     // would silently match nothing. loadCharacterWorldGroups() normalises every character into
     // exactly one group, defaulting to world_default, so this is always resolvable.
-    const worldById = new Map<string, string>();
-    for (const group of loadCharacterWorldGroups()) {
-        for (const memberId of group.memberIds) worldById.set(memberId, group.id);
-    }
-    const viewerWorldId = worldById.get(viewerId);
-    if (!viewerWorldId) return [];
+    const groups = loadCharacterWorldGroups();
+    const viewerGroup = groups.find((group) => group.memberIds.includes(viewerId));
+    if (!viewerGroup) return [];
+    const viewerWorldId = viewerGroup.id;
 
     const nameById = new Map(characters.map((item) => [item.id, item.name]));
-    const ownerIds = await getAllCharacterIdsWithMemories();
+
+    // Candidates are the viewer's WORLD MATES, not "everyone who has a memory row".
+    // getAllCharacterIdsWithMemories() enumerates the memory store alone, so a character with
+    // story or VN history but no summarized long-term entry yet was invisible -- and long-term
+    // entries only appear after summarizationEventInterval (80) events, so early on that is
+    // everybody. That made the whole feature silently produce nothing.
+    const ownerIds = viewerGroup.memberIds.filter((id) => id !== viewerId);
 
     const owners: MemoryOwnerBundle[] = [];
     for (const ownerId of ownerIds) {
-        if (ownerId === viewerId) continue;
         const ownerName = nameById.get(ownerId)?.trim();
         if (!ownerName) continue;
-        // Skip the storage read entirely for other worlds -- the selector would drop them
-        // anyway, and long-term memory sets are the expensive part of this call.
-        const ownerWorldId = worldById.get(ownerId);
-        if (!ownerWorldId || ownerWorldId !== viewerWorldId) continue;
+        const ownerWorldId = viewerWorldId;
         owners.push({
             ownerId,
             ownerName,
