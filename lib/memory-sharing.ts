@@ -184,6 +184,30 @@ export function selectBorrowableMemories(
 }
 
 /**
+ * Which short-term entries may be borrowed at all.
+ *
+ * ONLY the modes that produce a summary of their own: story, VN, and offline chat. Those
+ * entries are already a summary the model wrote, which is the same rule the read-time
+ * narrative sources follow.
+ *
+ * Ordinary chat is deliberately EXCLUDED. A 1:1 or group conversation is private between that
+ * character and the user, and feeding it to another character's summarizer would launder it
+ * into a memory that then reaches prompts. `sourceApp: "chat"` covers both -- only the
+ * `chat_offline` detail is a summary; `direct`, `group` and `system` are raw messages.
+ *
+ * Fails closed: an unrecognised source is never borrowable, so a new sourceApp added later
+ * cannot start leaking by default.
+ */
+export function isBorrowableTimelineEntry(
+    entry: Pick<NativeTimelineEntry, "sourceApp" | "sourceDetail">,
+): boolean {
+    if (!entry) return false;
+    if (entry.sourceApp === "story" || entry.sourceApp === "vn") return true;
+    if (entry.sourceApp === "chat") return entry.sourceDetail === "chat_offline";
+    return false;
+}
+
+/**
  * Short-term events from the viewer's world mates that mention the viewer by name, for use as
  * INPUT TO SUMMARIZATION.
  *
@@ -229,6 +253,8 @@ export function gatherBorrowedShortTermEvents(
         }
         for (const event of timeline) {
             if (!event?.content?.trim()) continue;
+            // Source gate FIRST: private chat must never even be name-matched.
+            if (!isBorrowableTimelineEntry(event)) continue;
             if (!mentionsName(event.content, viewerName)) continue;
             collected.push({ ...event, content: `(from ${ownerName}'s account) ${event.content}` });
         }

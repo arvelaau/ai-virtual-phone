@@ -166,6 +166,26 @@ const eq = (name, got, want) => ok(name, Object.is(got, want), `got ${JSON.strin
         metadata: meta ?? {},
     });
 
+    // ── the privacy gate: ONLY modes that summarize themselves may be borrowed ──
+    // A 1:1 or group conversation belongs to that character and the user. Feeding it to
+    // another character's summarizer would launder it into a memory that then reaches
+    // prompts, so it must never even be name-matched.
+    const { isBorrowableTimelineEntry } = SH;
+    ok("S0a story is borrowable", isBorrowableTimelineEntry({ sourceApp: "story", sourceDetail: "story" }));
+    ok("S0b vn is borrowable", isBorrowableTimelineEntry({ sourceApp: "vn" }));
+    ok("S0c offline chat is borrowable", isBorrowableTimelineEntry({ sourceApp: "chat", sourceDetail: "chat_offline" }));
+    ok("S0d PRIVATE 1:1 chat is NOT", !isBorrowableTimelineEntry({ sourceApp: "chat", sourceDetail: "direct" }));
+    ok("S0e PRIVATE group chat is NOT", !isBorrowableTimelineEntry({ sourceApp: "chat", sourceDetail: "group" }));
+    ok("S0f chat system notes are NOT", !isBorrowableTimelineEntry({ sourceApp: "chat", sourceDetail: "system" }));
+    ok("S0g chat with no detail is NOT", !isBorrowableTimelineEntry({ sourceApp: "chat" }));
+    for (const app of ["moments", "map", "game", "diary", "xiaohongshu", "interview_magazine",
+                       "cocreate", "checkphone", "custom_app", "couple_space"]) {
+        ok(`S0h.${app} is NOT borrowable`, !isBorrowableTimelineEntry({ sourceApp: app }));
+    }
+    // fails closed, so a sourceApp added later cannot start leaking by default
+    ok("S0i an unknown source is NOT borrowable", !isBorrowableTimelineEntry({ sourceApp: "something_new" }));
+    ok("S0j a null entry is safe", !isBorrowableTimelineEntry(null));
+
     eq("S1 the flag name is stable", SECONDHAND_DERIVED_FLAG, "fromSecondhand");
     ok("S2 a flagged entry is recognised", isSecondhandDerived(row("x", "y", { fromSecondhand: true })));
     ok("S3 an ordinary entry is not", !isSecondhandDerived(row("x", "y")));
@@ -197,6 +217,13 @@ const eq = (name, got, want) => ok(name, Object.is(got, want), `got ${JSON.strin
     ok("S8 the gatherer was located", gather.length > 200, `${gather.length}`);
     ok("S9 it reads world mates' timelines", gather.includes("loadNativeTimeline(ownerId)"));
     ok("S10 it filters by the viewer's name", gather.includes("mentionsName(event.content, viewerName)"));
+    ok("S10a the source gate is applied", gather.includes("isBorrowableTimelineEntry(event)"));
+    // Order matters: private chat must be dropped BEFORE the name match, not after
+    // Both indexes must be REAL: a missing gate gives -1, which would satisfy a bare "<".
+    const gateAt = gather.indexOf("isBorrowableTimelineEntry(event)");
+    const nameAt = gather.indexOf("mentionsName(event.content");
+    ok("S10b the source gate runs before the name match",
+        gateAt >= 0 && nameAt >= 0 && gateAt < nameAt, `gate ${gateAt}, name ${nameAt}`);
     ok("S11 it never lends to itself", gather.includes("ownerId === viewerId) continue"));
     ok("S12 each event says whose account it is", gather.includes("(from ${ownerName}'s account)"));
     ok("S13 borrowed short-term is capped", gather.includes("MAX_BORROWED_SHORT_TERM"));
@@ -481,7 +508,7 @@ const eq = (name, got, want) => ok(name, Object.is(got, want), `got ${JSON.strin
 // Guard against the whole file silently skipping a group: the count is pinned, so a group
 // that stops running fails loudly instead of shrinking the suite.
 // Counted before this guard itself runs, so the total printed below is EXPECTED + 1.
-const EXPECTED = 131;
+const EXPECTED = 152;
 ok(`Z1 ${EXPECTED} assertions ran before this guard`, pass + fail === EXPECTED, `ran ${pass + fail}`);
 
 console.log(`\n${pass}/${pass + fail} passed`);
