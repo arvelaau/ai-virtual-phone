@@ -212,6 +212,52 @@ She typed "hey" and hit send, then stared at the ceiling.
     // (the unclosed-tag case lives in group G, where the guard that handles it is tested)
 }
 
+// ── Q. the author's punctuation must survive a [Message] turn ────────────────
+//
+// User-reported: the narration was present in the editor but rendered blank in the display,
+// and only on turns that sent a message. parseActionTags normalises smart/curly/corner quotes
+// to ASCII so a tag written 「Message」 still matches -- but it then returned that REWRITTEN
+// copy as cleanText. Feeding it to the story parser rewrote 「dialogue」 to "dialogue" across
+// the whole scene, so the user's own output regex stopped matching and styled nothing.
+// The ranges are cut from the original text now; the mapping is 1 char to 1 char, so the
+// offsets are the same either way.
+{
+    const CORNER_OPEN = String.fromCharCode(0x300c);
+    const CORNER_CLOSE = String.fromCharCode(0x300d);
+    const CURLY_OPEN = String.fromCharCode(0x201c);
+    const CURLY_CLOSE = String.fromCharCode(0x201d);
+
+    const dialogue =
+        CORNER_OPEN + "Are you still awake?" + CORNER_CLOSE + " he murmured, and she answered " +
+        CURLY_OPEN + "Always." + CURLY_CLOSE;
+
+    const scene = `<content>
+He pulled out his phone.
+${dialogue}
+</content>`;
+
+    const withMsg = parseActionTags(scene + "\n\n[Message]\nhey\n[/Message]");
+    eq("Q1 the message still parses", withMsg.actions.length, 1);
+    ok("Q2 corner quotes survive a [Message] turn",
+        withMsg.cleanText.includes(CORNER_OPEN + "Are you still awake?" + CORNER_CLOSE),
+        withMsg.cleanText.split("\n").find((l) => l.includes("awake")));
+    ok("Q3 curly quotes survive a [Message] turn",
+        withMsg.cleanText.includes(CURLY_OPEN + "Always." + CURLY_CLOSE),
+        withMsg.cleanText.split("\n").find((l) => l.includes("Always")));
+
+    // the same must hold on the fallback path (unclosed tag), which cuts ranges separately
+    const unclosed = parseActionTags(scene + "\n\n[Message]\nhey");
+    ok("Q4 they survive the unclosed-tag fallback too",
+        unclosed.cleanText.includes(CORNER_OPEN) && unclosed.cleanText.includes(CURLY_OPEN),
+        unclosed.cleanText);
+
+    // ...but normalisation must still happen for MATCHING, or a tag the model wrote with
+    // smart quotes inside it would stop being recognised
+    const smart = parseActionTags(`[Message]\n${CURLY_OPEN}hey${CURLY_CLOSE}\n[/Message]`);
+    eq("Q5 a tag containing smart quotes still matches", smart.actions.length, 1);
+    eq("Q6 and its payload is still normalised", smart.actions[0].content, '"hey"');
+}
+
 // ── D. scope: story dispatches Message ONLY ──────────────────────────────────
 //
 // parseActionTags recognises five other actions. They are stripped from the story text but
@@ -292,7 +338,7 @@ She typed "hey" and hit send, then stared at the ceiling.
     ok("P11 the version was bumped past 279", v && Number(v[1]) >= 280, v && v[1]);
 }
 
-const EXPECTED = 78;
+const EXPECTED = 84;
 ok(`Z1 ${EXPECTED} assertions ran before this guard`, pass + fail === EXPECTED, `ran ${pass + fail}`);
 console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail ? 1 : 0);

@@ -183,19 +183,27 @@ export function parseActionTags(text: string): {
 } {
     let cleanText = text;
 
-    // Normalize smart/curly quotes to ASCII quotes for reliable matching.
+    // Normalize smart/curly quotes to ASCII quotes for reliable MATCHING.
+    //
+    // The ranges are cut from the ORIGINAL text, not from the normalized copy. The mapping is
+    // one character to one character, so the offsets are identical either way -- but returning
+    // the normalized copy silently rewrote the author's punctuation across the whole reply,
+    // 「」 corner quotes included. In story mode that broke rendering outright: a turn carrying
+    // a [Message] had every 「line of dialogue」 turned into "line of dialogue", so the user's
+    // own output regex stopped matching and the narration vanished from the display while the
+    // raw text still looked right in the editor.
     const normalized = normalizeActionQuotes(text);
     let { actions, ranges } = collectActionBlocks(normalized, true);
 
     if (actions.length > 0) {
-        cleanText = removeActionRanges(normalized, ranges).trim();
+        cleanText = removeActionRanges(text, ranges).trim();
     }
 
     // Fallback: open tag without closing tag (AI omitted [/TAG]) — take content to end of text
     if (actions.length === 0) {
         ({ actions, ranges } = collectActionBlocks(normalized, false));
         if (actions.length > 0) {
-            cleanText = removeActionRanges(normalized, ranges).trim();
+            cleanText = removeActionRanges(text, ranges).trim();
         }
     }
 
