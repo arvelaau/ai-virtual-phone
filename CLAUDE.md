@@ -2259,12 +2259,92 @@ gloss after any non-Chinese line — the same trap as `vn-engine` / `interview-m
 switched off app-wide. Kept the "write in your own language" half, removed the forced gloss.
 **Assume every imported app's presets carry one until grepped.**
 
-### Remaining: 4 apps
-- `chew-tracker` (129 CJK lines) and `focus.flow` (213) — touch memory, but small
-- `friends.map` (800) — the widest permission set of all nine
-- **`pulse.social` — MINIFIED**, 9 lines averaging ~10,300 characters. Safe translation is not
-  practical in that form; it needs the original source, or it gets skipped.
+### ✅ ALL 9 CUSTOM APPS TRANSLATED (2026-08-23)
+The last four landed in one pass: `chew-tracker`, `focus.flow`, `friends.map`, `pulse.social`.
+Every zip round-trips clean through `verify-app.mjs`; `focus.flow` reports the **same 3 problems
+as its untouched original** (two `playSpeech` template placeholders the verifier reads as real
+handlers), so it is at baseline, not regressed.
 
+**⚠️ `pulse.social` was NOT untranslatable.** The earlier note said minification might rule it
+out. Wrong: only whitespace is minified, every string literal is intact and readable
+(`{home:'主页',search:'搜索'}`). 5,525 CJK characters, translated like any other file. *Check
+before writing off a minified file.*
+
+#### The four parsers that would have failed silently on English
+Each was found by the corrected detector, and each is now bilingual — legacy Chinese kept,
+English added.
+
+| app | what | why it mattered |
+|---|---|---|
+| `chew-tracker` | `foodDB` name regexes + spelled-out portion words | matched against what the USER types, so an English UI needs English keys |
+| `focus.flow` | `' 分钟'` chip labels vs `innerText.includes(mins+' 分钟')` | producer and consumer in one file; had to move together |
+| `pulse.social` | `cap()` split at **28 characters** | tuned for Chinese; 28 chars is ~5 English words, so every DM reply would have been shredded into 3 fragments |
+| `pulse.social` | harassment guard `/骚扰\|裸体\|.../` | picks a guarded canned reply from what the user typed; English words added, in **both** copies of the regex |
+
+**`chew-tracker`'s `/g|克/` was a live trap, not just a translation.** It tested for the letter
+`g` anywhere in the portion field — harmless in Chinese, but "2 large" contains a `g`, so it
+divided by 100 and produced 0.02 of a portion. Now the number must be *followed* by a gram unit.
+
+**English food names collide as substrings, and CJK boundaries do not save you here.** `chocolate`
+contains `cola`; `eggplant` contains `egg`; `pearl milk tea` contains `pear`; `goat` contains
+`oat`; `milk tea` contains `milk`. All six were real misses, all fixed with `\b` anchors or a
+negative lookahead, and all pinned by `probe-chew.mjs` (37/37).
+
+#### 🚨 I broke two regex character classes with my own dictionary
+Twice a bare punctuation or word run in the dictionary turned out to be **inside a live regex**:
+- `，。！？、；：` → stripped the Chinese half of `postTopic`'s `.split(/[，。！？、；：,.!?]/)`
+- `。！？` and `分段` → would have hit `splitNatural`'s class and the `[分段]` split marker
+
+Caught by re-listing every `.split(/.../)` after each chunk, and restored. **Rule: never put a
+bare punctuation run, or any word short enough to sit inside a character class or alternation, in
+a replacement dictionary.** Re-list the file's regexes after every bulk pass — a broken character
+class still parses, so no syntax check will catch it.
+
+#### `bisect.mjs` — new, and worth keeping
+Applies dictionary keys one at a time, re-parsing every `<script>` block after each, and reports
+exactly which key breaks it instead of leaving a 100k-char minified file to eyeball. It refuses to
+write when anything breaks. It caught six apostrophe breaks (`character's`, `today's`, `week's`)
+landing inside single-quoted JS strings — the same defect class that made `waimai` and
+`pocket.approval` unclickable earlier.
+
+**Its one gap, hit once:** it *silently skips* a key that is not present, so a no-op looks like
+success. If a replacement did not take effect, check the key actually matched before assuming the
+edit landed.
+
+**In a minified file, avoid apostrophes in translations entirely.** Quoting is single-quote heavy
+and there is no formatting to make the breakage visible.
+
+#### `pulse.social`'s trend categories are identifiers, not labels
+Eight unquoted object keys (`国际:`, `地区:` …) in `trendPools`, indexed by the same strings in
+`must`/`extra`, and also rendered. Both sides move together in one replace, but each value **must
+stay a single valid identifier** — `Film & TV` and `Film and TV` both broke the parse. Now
+`World / Local / Life / Idols / Tech / Sport / Screen / Games`, asserted against
+`/^[A-Za-z_$][A-Za-z0-9_$]*$/` before applying.
+
+#### Two findings for the still-open `memory.add` provenance decision
+- **`pulse.social` writes `type:'long_term'` memories** (`api.memory.add`, DM summariser). Since
+  `addCustomAppMemory` stamps `metadata.origin === "custom_app"` but launders `sourceApp` to
+  `"chat"`, shared memory **will** lend these on. This is the concrete case the pending decision
+  covers.
+- **`friends.map` declares `memory.readCore` + `memory.readLongTerm` and never calls either.** Its
+  only memory use is one `memory.addTimeline`. The widest permission set of the nine is mostly
+  unused — worth knowing before treating the manifest as a risk indicator.
+
+#### The forced-Chinese-translation trap, third and fourth instances in imported apps
+`focus.flow`'s five presets each ordered a parenthesised **Chinese** gloss after any non-English
+line. Unlike `pocket.approval`, here the gloss is a **real feature**: `sanitizeForTTS` strips the
+parenthetical so TTS speaks only the original language. So the feature was kept and the gloss
+language flipped to English — safe because that stripper already accepted both `（）` and `()`.
+Pinned by `probe-ff.mjs` (5/5), including the legacy full-width form.
+
+`chew-tracker` had none; `friends.map` had none (its one `中文` hit is `选中`+`文字`, "select
+text" — a false positive worth remembering).
+
+#### Deliberate CJK left in the shipped zips
+`chew-tracker` 27 lines (foodDB + portion aliases), `focus.flow` 4 (one Japanese example line in
+the language rule), `friends.map` **0**, `pulse.social` 27 (the four bilingual regexes, the
+harassment guard's legacy half, the `无` sentinel alias, and Japanese/Korean sample handles
+さくら / たなか / きき / ゆき / 민수, which are deliberate).
 
 ## Story mode can send a real chat message — **DONE** (`fc7b95f`, then `3cea87f` / `a2ed450` / `f4b1cbf`), 85/85, `_fx-story-message.mjs` kept
 A story beat where the character picks up their phone and messages {{user}} now actually
@@ -2410,7 +2490,7 @@ behaviour fails exactly Q2/Q3/Q4 while Q1/Q5/Q6 still pass, so it distinguishes 
 from "tags still match".
 
 ## Still open / not yet done
-- **Custom app imports** — 5 of 9 translated (see the CUSTOM APP IMPORTS section above). Left: `chew-tracker`, `focus.flow`, `friends.map`, and `pulse.social` (minified, may not be translatable). Zips live outside the repo under `App\`.
+- ~~**Custom app imports**~~ — **DONE (2026-08-23), all 9 translated.** Zips in `App\translated\*-EN.zip`; see the CUSTOM APP IMPORTS section. Not installed — the user installs them through the App Market.
 - **`memory.add` provenance** — a custom app can write a long-term memory for any character and shared memory will lend it on. ⚠️ **Correction to how this was first recorded**: nothing needs stamping. `addCustomAppMemory` already writes `id: custom_app_${app.id}_…` **and** `metadata: { origin: "custom_app", appId, appName, reason }`; only `sourceApp` is hardcoded to `"chat"`. The open question is narrower than it looked — should `selectBorrowableMemories` skip entries whose `metadata.origin === "custom_app"`? Awaiting a decision; the marker to filter on already exists.
 - **Couple Space mini-games, "Route A"** — ⚠️ **this name is referenced three times in this file and never DEFINED.** No scope, no design, no integration point was ever written down; the only surviving description is "a custom app via existing directives", from a session transcript rather than from here. Do not start it as if it were a specified task — it needs a design decision from the user first. Recorded 2026-08-18.
 - **Track 2 game imports** — the 3 remaining of 6 user-contributed games (imports 1-3 landed as `81eb207`, `d66b1dc`, `cff6995`): pocket-fishing (156 CJK / 590 lines), cute-pet (155 / 1497), executive-diary (577 / 1929, and it holds 6 of the 8 "write in Chinese" orders plus a gender-inference guard that needs adapting to English convention). Source files are untracked in `pending-game-imports/`; the 3 already-imported ones are tracked, which is how to tell them apart.
