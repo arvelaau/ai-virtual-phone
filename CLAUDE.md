@@ -2266,7 +2266,7 @@ switched off app-wide. Kept the "write in your own language" half, removed the f
   practical in that form; it needs the original source, or it gets skipped.
 
 
-## Story mode can send a real chat message — **DONE** (`fc7b95f`), 55/55, `_fx-story-message.mjs` kept
+## Story mode can send a real chat message — **DONE** (`fc7b95f`, then `3cea87f` / `a2ed450` / `f4b1cbf`), 85/85, `_fx-story-message.mjs` kept
 A story beat where the character picks up their phone and messages {{user}} now actually
 delivers, into the chat app, notification and all.
 
@@ -2332,9 +2332,86 @@ ever revisited: now that story can send chat, wiring chat to trigger story close
 round. Any future attempt needs the brake designed first — e.g. only a USER message may trigger,
 never one the character just sent.
 
+### Three follow-up fixes after the first smoke test (2026-08-22/23)
+All three came from the user actually using it, and all three are worth knowing before touching
+this path again. Fixture went 55 -> 71 -> 79 -> **85**.
+
+#### 1. The whole turn ended up in chat (`3cea87f`, group W)
+Reported straight after the first smoke test: the message sent, and so did the entire narration.
+Two shapes do it, and **both are properly closed**, so the completeness guard above passes them:
+- **E** — the model wraps the turn: `[Message]<content>…</content><summary>…</summary>[/Message]`
+- **F** — it opens at the top and closes at the very end, prose inside
+
+Both leave the story itself empty, which is the tell and the second guard. Two deliberately
+independent checks:
+- `isCompleteStoryMessage` refuses a block whose content carries the story's own
+  `<content>` / `<summary>` fields — that is the model repeating part of the turn inside the message.
+- the engine refuses to dispatch **at all** when stripping the actions leaves no story behind.
+  A story turn with no story in it is definitionally wrong: what the model produced was a scene.
+
+They overlap on shape E but not in general — a model that writes a real story *and* repeats a
+chunk inside the block is caught only by the first. **W0a exists because of that**: the first
+control run passed 69/69 since either guard alone covered shape E, so an isolating case had to be
+constructed before either could be said to be tested.
+
+#### 2. Reasoning is not a story, but a fold tag is (`a2ed450`)
+The user asked whether the swallowed-turn guard accounted for `<think>` and for the `<forum>` tag
+they had added themselves. It did not, and **the two need opposite treatment.**
+
+`storyTextSurvives` stripped only `<content>` / `<summary>`, so any *other* block counted as the
+story surviving — meaning `<think>…</think>` plus a `[Message]` holding the whole prose sailed
+through, which is exactly the shape guard 1 was written to stop.
+
+The distinction was already in the file:
+
+| | default | meaning |
+|---|---|---|
+| `foldTags` | `think,thinking,summary` | collapsed in the UI, still read |
+| `contextExcludedTags` | `think,thinking` | stripped before the model sees it |
+
+Context-excluded blocks are reasoning, so they no longer count as story. **Fold tags deliberately
+still do** — a fold tag is content the reader sees, merely collapsed, and a user who adds
+`<forum>` is writing forum posts: a turn made entirely of them is a real turn and must still be
+able to send its message. The guard reads the **session's** `contextExcludedTags`, not a
+hardcoded list, so it follows whatever that session configured.
+
+**Known edge case, flagged not fixed**: `stripContextExcludedTags` matches closed pairs only, so
+an unclosed `<think>` still counts as story. `stripReasoningTags` (`lib/block-tags.ts`) handles
+danglers, but the story path does not use it.
+
+#### 3. 🚨 The narration rendered BLANK — and it was quote normalisation (`f4b1cbf`)
+Reported as: the text is there when you open the editor, but the display shows nothing, and only
+on turns that sent a message.
+
+`parseActionTags` normalises smart, curly **and corner** quotes to ASCII so a tag written
+`[GroupMessage “name”]` still matches:
+```ts
+text.replace(/[“”‘’「」]/g, "\"")   // the last pair is U+300C/U+300D, corner brackets
+```
+It then returned that **rewritten copy** as `cleanText`. Harmless while only chat used it. Once
+story routed its prose through the same function, a turn carrying a `[Message]` had every
+`「line of dialogue」` rewritten to `"line of dialogue"` across the whole scene — so the user's own
+output regex stopped matching and styled nothing, while the raw text still looked correct.
+
+Fixed by cutting the ranges from the **original** text. The mapping is one character to one
+character, so the offsets line up against either string; matching still runs on the normalized
+copy, so nothing about tag recognition changed. Verified all three quote styles still resolve a
+quoted group-message header (`target` still comes back normalised), and that **no downstream
+parser matches a literal double quote** — `normalizeActionQuotes` is the only quote normaliser in
+`lib/`.
+
+**This is a shared path** — ten call sites across chat, group chat, moments and story. Chat replies
+now keep their original punctuation too, which is the more correct behaviour and was verified
+against all 22 repo fixtures.
+
+**The fixture passed 79/79 with the bug present**, which is the real lesson here: it asserted what
+was *stripped* and never what *survived*. Group Q closes that. Non-vacuous — restoring the old
+behaviour fails exactly Q2/Q3/Q4 while Q1/Q5/Q6 still pass, so it distinguishes "quotes preserved"
+from "tags still match".
+
 ## Still open / not yet done
 - **Custom app imports** — 5 of 9 translated (see the CUSTOM APP IMPORTS section above). Left: `chew-tracker`, `focus.flow`, `friends.map`, and `pulse.social` (minified, may not be translatable). Zips live outside the repo under `App\`.
-- **`memory.add` provenance** — a custom app can write a long-term memory for any character, laundered as `sourceApp: "chat"`, and shared memory will lend it on. Stamp `metadata.viaCustomApp` and decide whether such entries are borrowable. User has been told; awaiting a decision.
+- **`memory.add` provenance** — a custom app can write a long-term memory for any character and shared memory will lend it on. ⚠️ **Correction to how this was first recorded**: nothing needs stamping. `addCustomAppMemory` already writes `id: custom_app_${app.id}_…` **and** `metadata: { origin: "custom_app", appId, appName, reason }`; only `sourceApp` is hardcoded to `"chat"`. The open question is narrower than it looked — should `selectBorrowableMemories` skip entries whose `metadata.origin === "custom_app"`? Awaiting a decision; the marker to filter on already exists.
 - **Couple Space mini-games, "Route A"** — ⚠️ **this name is referenced three times in this file and never DEFINED.** No scope, no design, no integration point was ever written down; the only surviving description is "a custom app via existing directives", from a session transcript rather than from here. Do not start it as if it were a specified task — it needs a design decision from the user first. Recorded 2026-08-18.
 - **Track 2 game imports** — the 3 remaining of 6 user-contributed games (imports 1-3 landed as `81eb207`, `d66b1dc`, `cff6995`): pocket-fishing (156 CJK / 590 lines), cute-pet (155 / 1497), executive-diary (577 / 1929, and it holds 6 of the 8 "write in Chinese" orders plus a gender-inference guard that needs adapting to English convention). Source files are untracked in `pending-game-imports/`; the 3 already-imported ones are tracked, which is how to tell them apart.
 - `app/api/**/route.ts` — **35 files** still contain Chinese (was ~43; the two new `app/api/mixology/*` routes were translated as part of that port because they were new files). Scope not yet decided (see "Scope note" above) — ask the user before starting.
