@@ -1969,7 +1969,8 @@ The three files in `pending-game-imports/` are untracked ON PURPOSE — per the 
 **Use `git add <paths>` in this repo, not `-A`**, or check `--stat` before the commit lands.
 
 
-## SHARED MEMORY, layer 1 — **DONE** (`b3ec89e`), 65/65, `_fx-memory-sharing.mjs` kept
+## SHARED MEMORY — **DONE**, `_fx-memory-sharing.mjs` kept (**153/153** across the whole chapter)
+### Layer 1 (`b3ec89e`), 65/65 at the time
 A character can pick up another character's long-term memories, but only the ones that mention
 it **by name**. Off by default (`MemoryConfig.sharedMemoryEnabled`), toggle in the Memory Bank
 page next to Vector Recall.
@@ -2149,6 +2150,123 @@ Two fixes generalise:
 passing vacuously. Rewritten as plain `.includes()`, since none needed a regex. Same family as
 the `new RegExp(\`…\`)` bug already recorded above. **Do not build regexes through a generator
 script; write them with the Edit tool or use string matching.**
+
+### The SUMMARIZE side — five commits, 2026-08-22, none of them previously recorded here
+Everything above is the **read-time** half: what a character borrows when a prompt is built. This
+is the **summarize-time** half, and it came entirely from the user testing it. `_fx-memory-sharing.mjs`
+went 107 → 114 → 132 → 153, and is green at **153/153**.
+
+| commit | what |
+|---|---|
+| `c49ea82` | no secondhand block ever appeared; and it bloated the prompt when it did |
+| `285d87f` | borrowed memories were invisible in the Memory Bank |
+| `788aa1f` | summarizing Y now draws on what world mates wrote **about** Y |
+| `8ce718f` | 🚨 private chat was being fed to another character's summarizer |
+| `de658ba` | a duplicated pre-check made all of the above unreachable |
+
+#### 1. The candidate set was the wrong set (`c49ea82`)
+`gatherBorrowedMemories` enumerated with `getAllCharacterIdsWithMemories()`, which reads the
+**memory store alone**. A character with story or VN history but no summarized long-term entry
+was invisible — and long-term entries only appear after `summarizationEventInterval` (80) events,
+so early on that is *every* character. The feature produced nothing, silently.
+
+Candidates now come from the viewer's **world group membership**, which is already loaded for the
+world scope and is the correct set anyway: only world mates are borrowable.
+`getAllCharacterIdsWithMemories` is no longer used on this path.
+
+**Same commit, second symptom: the story `<summary>` broke easily with sharing on.** Both causes
+were prompt *weight*, not content — `compactProjectionText` already strips tags and flattens
+whitespace:
+- `sharedMemoryTokenBudget` defaulted to **20000**, roughly 160 borrowed rows at the 500-char cap.
+  Now **4000**, plus a hard `MAX_BORROWED_ENTRIES = 24` applied after the newest-first sort. *A
+  token budget alone was never a real bound.*
+- the section heading was two sentences of **instruction sitting inside a DATA marker**, competing
+  with the output contract. Cut to one line.
+
+Those two are hypotheses about a generation-time symptom — a fixture can prove what is injected
+and how much, never how the model behaves. They need a re-test.
+
+#### 2. "A character with no history cannot summarize" — by design, but the UI caused it (`285d87f`)
+`runSummarizationPipeline` reads `loadNativeTimeline(characterId)` — the character's **own**
+events. Someone who has never taken part has nothing to summarize, and building a summary out of
+what *other* characters wrote would be write-time sharing: duplicated, stale when the source is
+edited, surviving the toggle being turned off, and worst of all **echoing**.
+
+The confusion was ours, though: borrowed memories were **invisible**. The Memory Bank listed only
+stored entries, so a character who knows things purely through other people looked empty — which
+is exactly what makes someone press Summarize. The Long-Term tab now shows a read-only **"Heard
+secondhand"** section, each row badged with whose account it is, stating that these are not stored
+here and follow the original if it is edited or deleted.
+
+**The existing "Shared" tab was deliberately NOT reused** — it means shared *events* (Moments,
+group chats), a different concept with a confusingly similar name.
+
+#### 3. I had misread the request (`788aa1f`)
+The ask was never about long-term memory. It was that generating **Y's** summary should draw on
+**X's short-term entries that name Y** — a name search across other characters' timelines. Y has
+no history of its own, so it just said "Fewer than 4 events".
+
+`gatherBorrowedShortTermEvents()` collects, from world mates, every short-term event naming the
+viewer, and `runSummarizationPipeline` merges them with the character's own events **before** the
+4-event threshold. Distinct from `gatherBorrowedMemories`: these are raw events, never injected
+into a prompt directly, and only ever reach the summarizer. Each carries `(from <Name>'s account)`
+and the set is capped at **60**.
+
+**The echo break is the load-bearing part.** Without it: Y summarizes X's mentions of Y → that
+entry names X → X borrows it back at prompt time → X's next summary absorbs it → the two
+characters amplify one event indefinitely. The produced entry is flagged `SECONDHAND_DERIVED_FLAG`
+and `selectBorrowableMemories` refuses to lend a flagged entry on. **Sharing is one hop, on purpose.**
+
+#### 4. 🚨 The privacy leak I built and the user caught (`8ce718f`)
+`gatherBorrowedShortTermEvents` called `loadNativeTimeline(ownerId)` with **no source filter**, so
+every entry naming the viewer was collected — **including 1:1 and group chat between that character
+and the user**. Condensing a private conversation into a summary does not make it less of a leak,
+because the summarizer's output is itself injected.
+
+Worse: I had argued against exactly this two messages earlier — *"borrowing raw events would mean
+one character reading another's actual conversations"* — and then built it anyway, on the
+reasoning that these events "only reach the summarizer". That reasoning was wrong.
+
+`isBorrowableTimelineEntry()` now restricts borrowing to modes that produce **a summary of their
+own** — story, VN, and offline chat — the same rule the read-time narrative sources follow.
+`sourceApp: "chat"` covers both private and offline, so only `sourceDetail === "chat_offline"`
+passes; direct, group and system do not. **It fails closed**, so a `sourceApp` added later cannot
+start leaking by default, and **the gate runs before the name match** so private content is
+dropped rather than searched.
+
+#### 5. A duplicated pre-check made all of it unreachable (`de658ba`)
+Summarizing Y *still* said "Fewer than 4 events" with story mentions present.
+`handleManualSummarize` counted `loadNativeTimeline(selectedCharId)` **itself** and returned early
+below 4 — so `runSummarizationPipeline`, the only place that also counts borrowed events, was
+never reached. Everything in `788aa1f` and `8ce718f` was correct but dead through that button.
+
+The pre-check was **removed, not taught about borrowing**: the pipeline already applies the same
+threshold over the full set and returns a specific error the handler already surfaces. Duplicating
+a rule in the caller is what let the two drift apart — the same defect class as the duplicated call
+regexes that `lib/call-tag-patterns.ts` was created to end.
+
+#### Two fixture lessons from this run
+- **`S10b` was hardened after its control run**: it compared `indexOf` results, and a missing gate
+  yields `-1`, which satisfied a bare `<`. It now requires both positions to be real.
+- The privacy cases are asserted **individually per source, not in a loop**, so a failure names the
+  leak instead of reporting "one of six".
+
+All controls discriminate: remove the echo break → 130/132 (S5,S7); stop pulling borrowed events →
+131/132 (S15); drop attribution → 131/132 (S12); stop flagging output → 131/132 (S17); remove the
+privacy gate → 151/153 (S10a,S10b); allow all chat rather than only offline → 149/153 (S0d–S0g);
+enumerate from the memory store again → 112/114 (E12,E13); remove the count cap → 112/114
+(C22,E14); restore a long heading → 113/114 (D9c).
+
+#### Two translation misses found on this path
+Both were in files that had never been on any translation list: the six user-facing errors in
+`memory-summarizer.ts`, and `formatTimelineForSummarization`'s label `"事件"`, which reached
+**every** summarization prompt. CLAUDE.md recorded that label family as finished in `995e606`; this
+site was missed.
+
+#### Still not verified by me
+Whether the model actually handles the secondhand framing well, and whether the two prompt-weight
+fixes in `c49ea82` really settle the story `<summary>`. Both are generation-time behaviour. Turn
+the toggle on and read the borrowed block in the Prompt Viewer.
 
 ### Multi-character Story — planned, NOT built
 `STORY-MULTI-CHARACTER-PLAN.md` at the repo root. Superseded in practice by the above (the user
