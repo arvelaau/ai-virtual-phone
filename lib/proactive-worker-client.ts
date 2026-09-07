@@ -86,18 +86,27 @@ export async function deployProactiveWorker(
     return { accountId, databaseId, workerUrl, accessToken };
 }
 
-// ---------- Talking to the deployed Worker directly (not through the relay — CORS is fine here, it's our own Worker) ----------
-
+// ---------- Talking to the deployed Worker ----------
+// Routed through our own app/api/proactive-relay/route.ts rather than
+// fetch()'d directly from the browser to *.workers.dev — see that route's
+// header comment for why (a direct browser-to-Worker call reliably failed
+// on at least one real device even with correct CORS and a non-Authorization
+// auth header; routing through our own first-party origin sidesteps the
+// whole class of failure). init's method/body are unwrapped here rather than
+// spread as a raw RequestInit since the relay's contract is a plain JSON
+// envelope, not a fetch() passthrough — every call site already passes body
+// as an already-JSON.stringify()'d string, so it goes through unchanged.
 async function callWorker<T>(workerUrl: string, accessToken: string, path: string, init?: RequestInit): Promise<T> {
-    // A custom header rather than "Authorization: Bearer <token>" — see the
-    // matching comment on isAuthorized() in cloudflare/proactive-worker/src/worker.js
-    // for why (WebKit/Safari CORS quirks around the Authorization header).
-    const res = await fetch(`${workerUrl}${path}`, {
-        ...init,
-        headers: {
-            "X-Client-Token": accessToken,
-            ...(init?.headers || {}),
-        },
+    const res = await fetch("/api/proactive-relay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            workerUrl,
+            accessToken,
+            path,
+            method: init?.method === "POST" ? "POST" : "GET",
+            body: typeof init?.body === "string" ? init.body : undefined,
+        }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `Worker request to ${path} failed (${res.status})`);
