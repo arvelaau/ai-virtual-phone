@@ -174,8 +174,25 @@ function isAuthorized(request, env) {
     return Boolean(env.ACCESS_TOKEN) && token === env.ACCESS_TOKEN;
 }
 
+// The app's own settings page calls this Worker directly from the browser
+// (cross-origin: the app is on vercel.app, the Worker on workers.dev), so
+// every response needs CORS headers or the browser silently blocks it
+// before the app's code ever sees a status code (shows up as a generic
+// "Load failed"/"Failed to fetch", not a 401/500 — hard to diagnose without
+// knowing to look for this). Access-Control-Allow-Origin: * is fine here
+// because the actual security boundary is the ACCESS_TOKEN bearer check,
+// not CORS — CORS only controls which origins' JS can read the response.
+const CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type",
+};
+
 function json(data, status = 200) {
-    return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify(data), {
+        status,
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+    });
 }
 
 async function handleSubscribe(request, env) {
@@ -537,6 +554,14 @@ async function handleRunNow(env) {
 export default {
     async fetch(request, env) {
         const url = new URL(request.url);
+
+        // Browsers send a CORS preflight OPTIONS request before the actual
+        // POST/GET when the request carries an Authorization header — this
+        // must succeed (with the same CORS headers) before the browser will
+        // even attempt the real request.
+        if (request.method === "OPTIONS") {
+            return new Response(null, { status: 204, headers: CORS_HEADERS });
+        }
 
         if (url.pathname === "/subscribe" && request.method === "POST") {
             if (!isAuthorized(request, env)) return json({ error: "unauthorized" }, 401);

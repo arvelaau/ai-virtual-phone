@@ -74,6 +74,7 @@ export function ProactivePushSettings() {
     const [banner, setBanner] = useState<Banner | null>(null);
 
     const [showManualDeploy, setShowManualDeploy] = useState(false);
+    const [showRedeployForm, setShowRedeployForm] = useState(false);
     const [cfToken, setCfToken] = useState("");
     const [cfAccounts, setCfAccounts] = useState<CloudflareAccount[] | null>(null);
     const [cfAccountId, setCfAccountId] = useState("");
@@ -267,6 +268,7 @@ export function ProactivePushSettings() {
             });
             setConfig(loadPushNotificationConfig());
             setCfToken("");
+            setShowRedeployForm(false);
             setBanner({ variant: "success", message: `Deployed: ${result.workerUrl}` });
         } catch (err) {
             setBanner({ variant: "danger", message: err instanceof Error ? err.message : "Deployment failed" });
@@ -495,7 +497,7 @@ export function ProactivePushSettings() {
                     <span className="menu-label font-semibold">Proactive Message 2.0 — Cloud Deploy</span>
                 </div>
 
-                {config.worker ? (
+                {config.worker && !showRedeployForm ? (
                     <>
                         <span className="menu-desc break-all">Deployed: {config.worker.workerUrl}</span>
                         <div className="flex flex-wrap gap-2">
@@ -534,15 +536,34 @@ export function ProactivePushSettings() {
                                 {workerStatus.lastCronError && <> Last cron error: {workerStatus.lastCronError}</>}
                             </span>
                         )}
+                        <button
+                            type="button"
+                            className="ui-btn ui-btn-ghost self-start"
+                            onClick={() => setShowRedeployForm(true)}
+                        >
+                            <RefreshCw size={16} /> Redeploy (update Worker code)
+                        </button>
                     </>
                 ) : (
                     <>
                         <span className="menu-desc">
-                            Deploys a Worker to your own Cloudflare account: creates the D1 database,
-                            uploads the Worker, sets secrets, and schedules the Cron Trigger. Needs a
-                            Cloudflare API Token scoped to Workers Scripts:Edit, D1:Edit, Account
-                            Settings:Read. The token is relayed through this app&apos;s own server for
-                            each step and is not stored anywhere.
+                            {config.worker ? (
+                                <>
+                                    Re-uploads the Worker&apos;s code to your existing Cloudflare deployment
+                                    (same D1 database, same script — nothing is duplicated). Use this after
+                                    the app itself has been updated with a Worker fix, since editing the
+                                    app&apos;s code does not automatically update a Worker you already
+                                    deployed.
+                                </>
+                            ) : (
+                                <>
+                                    Deploys a Worker to your own Cloudflare account: creates the D1 database,
+                                    uploads the Worker, sets secrets, and schedules the Cron Trigger. Needs a
+                                    Cloudflare API Token scoped to Workers Scripts:Edit, D1:Edit, Account
+                                    Settings:Read. The token is relayed through this app&apos;s own server for
+                                    each step and is not stored anywhere.
+                                </>
+                            )}
                         </span>
                         <input
                             type="password"
@@ -560,14 +581,30 @@ export function ProactivePushSettings() {
                                 ))}
                             </Select>
                         )}
-                        <button
-                            className="ui-btn ui-btn-primary rounded-[20px] self-start"
-                            disabled={deploying || !config.vapidKeys || (cfAccounts !== null && cfAccounts.length > 1 && !cfAccountId)}
-                            onClick={handleStartDeploy}
-                        >
-                            {deploying && <Loader2 size={16} className="animate-spin" />}
-                            Start deployment
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                className="ui-btn ui-btn-primary rounded-[20px] self-start"
+                                disabled={deploying || !config.vapidKeys || (cfAccounts !== null && cfAccounts.length > 1 && !cfAccountId)}
+                                onClick={handleStartDeploy}
+                            >
+                                {deploying && <Loader2 size={16} className="animate-spin" />}
+                                {config.worker ? "Redeploy" : "Start deployment"}
+                            </button>
+                            {config.worker && (
+                                <button
+                                    type="button"
+                                    className="ui-btn self-start"
+                                    disabled={deploying}
+                                    onClick={() => {
+                                        setShowRedeployForm(false);
+                                        setCfToken("");
+                                        setDeploySteps({});
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                            )}
+                        </div>
                         {Object.keys(deploySteps).length > 0 && (
                             <ul className="menu-desc flex flex-col gap-1">
                                 {(Object.keys(DEPLOY_STEP_LABELS) as DeployProgressStep[])
