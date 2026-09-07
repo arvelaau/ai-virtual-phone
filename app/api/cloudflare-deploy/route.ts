@@ -47,11 +47,33 @@ async function cf<T>(token: string, path: string, init?: RequestInit): Promise<T
     return data.result;
 }
 
-function splitSchemaStatements(sql: string): string[] {
-    return sql
-        .split(/;\s*\n/)
+// Exported so a fixture can drive this directly against the real
+// schema.sql content, rather than only through the whole deploy flow.
+//
+// The previous version split on ";\s*\n" and then filtered out any segment
+// that, after trim(), started with "--". That silently dropped every
+// CREATE TABLE preceded by its own comment block, because there is no
+// semicolon between a comment and the statement it describes — the two end
+// up as ONE split segment, and the segment as a whole starts with "--". In
+// the real schema.sql this ate 3 of 5 tables (subscriptions,
+// character_snapshots, worker_meta all have a leading comment;
+// proactive_state and pending_messages don't, which is the only reason
+// they were ever created). Fixed by stripping comments first (from "--" to
+// end of line, which also correctly handles a trailing inline comment like
+// "character_id TEXT, -- NULL in Stage 2 ..."), then splitting the
+// comment-free text on plain ";".
+export function splitSchemaStatements(sql: string): string[] {
+    const withoutComments = sql
+        .split("\n")
+        .map((line) => {
+            const commentIndex = line.indexOf("--");
+            return commentIndex === -1 ? line : line.slice(0, commentIndex);
+        })
+        .join("\n");
+    return withoutComments
+        .split(";")
         .map((s) => s.trim())
-        .filter((s) => s.length > 0 && !s.startsWith("--"));
+        .filter((s) => s.length > 0);
 }
 
 async function listAccounts(token: string) {
