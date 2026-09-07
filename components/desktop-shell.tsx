@@ -5,6 +5,7 @@ import { Component, memo, useCallback, useEffect, useInsertionEffect, useLayoutE
 import { updateStatusBarTone } from "@/lib/bg-tone";
 import { startDiaryEntryTimerService, stopDiaryEntryTimerService } from "@/lib/diary-entry-timer-service";
 import { startFollowUpService, stopFollowUpService } from "@/lib/follow-up-service";
+import { pullAndMergeProactiveMessages } from "@/lib/proactive-reverse-sync";
 import { startMomentsService, stopMomentsService } from "@/lib/moments-engine";
 import { bgTimerCleanup } from "@/lib/bg-timer";
 import { PhoneThemeApp } from "@/components/phone-theme-app";
@@ -1572,6 +1573,14 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       const stopWeixinCloudRealtimeSync = startWeixinCloudRealtimeSync();
       servicesStarted = true;
       cleanupWeixinCloudRealtimeSync = stopWeixinCloudRealtimeSync;
+
+      // Proactive Message 2.0 (Stage 5): pull whatever the deployed Worker
+      // generated while this device was closed, and merge it into local
+      // chat history. No-op if no Worker is deployed. Errors are swallowed
+      // here on purpose — a failed pull just means it retries next time the
+      // app opens or the tab regains focus (see the visibilitychange
+      // listener below), not something worth surfacing as a UI error.
+      void pullAndMergeProactiveMessages().catch(() => {});
     })();
 
     return () => {
@@ -1584,6 +1593,19 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       }
       bgTimerCleanup();
     };
+  }, []);
+
+  // Also catch up on reopening the tab/app after it was backgrounded — the
+  // whole point of Proactive Message 2.0 is to fire while the app is closed,
+  // so "the user just came back" is the moment this matters most.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void pullAndMergeProactiveMessages().catch(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
   }, []);
 
   // WeChat iLink Bot bridge (polls messages for all enabled bots)

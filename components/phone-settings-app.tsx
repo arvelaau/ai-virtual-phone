@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, createContext, type CSSProperties, type ReactNode } from "react";
-import { Check, ChevronRight, Clock, Database, FileText, Fingerprint, Globe, HardDrive, Image, Info, KeyRound, Layers, Link2, Loader2, LogOut, MessageSquare, Mic, SlidersHorizontal, UserCircle, Wrench, X } from "lucide-react";
+import { Bell, Check, ChevronRight, Clock, Database, FileText, Fingerprint, Globe, HardDrive, Image, Info, KeyRound, Layers, Link2, Loader2, LogOut, MessageSquare, Mic, SlidersHorizontal, UserCircle, Wrench, X } from "lucide-react";
 import { ConfirmDialog } from "./ui/modal";
 import { useAccount } from "@/lib/account-context";
 import { changeAccountPassword } from "@/lib/account-client";
@@ -16,6 +16,7 @@ import { UserIdentitySettings } from "./settings/user-identity";
 import { AboutDeclaration } from "./settings/about-declaration";
 import { BindingManager } from "./settings/binding-manager";
 import { WeixinSettings } from "./settings/weixin-settings";
+import { ProactivePushSettings } from "./settings/proactive-push-settings";
 import { ToolboxSettings } from "./settings/toolbox-settings";
 import { ModerationCenter } from "./settings/moderation-center";
 import { fetchIsAdmin } from "@/lib/moderation-client";
@@ -50,6 +51,7 @@ type SubPage =
     | "identity"
     | "weixin"
     | "toolbox"
+    | "proactivePush"
     | "moderation"
     | "about";
 
@@ -64,6 +66,7 @@ const SETTINGS_MENU = [
     { id: "binding", icon: Link2, label: "Config Bindings", desc: "Manage config binding relationships across global defaults, characters, and apps", iconColor: BINDING_ACCENTS.identity },
     { id: "weixin", icon: MessageSquare, label: "WeChat Integration", desc: "iLink Bot", iconColor: CONTENT_APP_ACCENTS.chat },
     { id: "toolbox", icon: Wrench, label: "Chat Toolbox", desc: "External tool calls", iconColor: BINDING_ACCENTS.voice },
+    { id: "proactivePush", icon: Bell, label: "Proactive Push", desc: "Notifications that arrive even when the app is closed", iconColor: CONTENT_APP_ACCENTS.calendar },
     { id: "identity", icon: UserCircle, label: "User Identity", desc: "Personal info", iconColor: BINDING_ACCENTS.identity },
     { id: "about", icon: Info, label: "About & Disclaimer", desc: "Version & terms", iconColor: BINDING_ACCENTS.memory },
 ] as const;
@@ -261,6 +264,8 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                 return <WeixinSettings />;
             case "toolbox":
                 return <ToolboxSettings />;
+            case "proactivePush":
+                return <ProactivePushSettings />;
             case "moderation":
                 return <ModerationCenter onNotice={onNotice} />;
             case "identity":
@@ -354,7 +359,7 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                         <CardGrid
                             label="Connections"
                             labelClassName="settings-menu-section-title"
-                            items={SETTINGS_MENU.filter(item => ["weixin", "toolbox"].includes(item.id)).map(makeCardItem)}
+                            items={SETTINGS_MENU.filter(item => ["weixin", "toolbox", "proactivePush"].includes(item.id)).map(makeCardItem)}
                         />
                         <div className="settings-realtime-section">
                             <h3 className="settings-menu-section-title">Realtime</h3>

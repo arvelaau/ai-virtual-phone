@@ -36,7 +36,12 @@ import { clearChatOfflineTurns } from "@/lib/chat-offline-storage";
 import { triggerDeleteFriendReaction } from "@/lib/friend-request-engine";
 import { loadCharacters } from "@/lib/character-storage";
 import { resolveUserIdentity } from "@/lib/settings-storage";
-import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, MessageSquare, Search, AlertCircle, Code, Trash2, Smile, Sparkles, type LucideIcon } from "lucide-react";
+import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, MessageSquare, Search, AlertCircle, Code, Trash2, Smile, Sparkles, Cloud, Loader2, type LucideIcon } from "lucide-react";
+import {
+    isProactiveCloudSyncEnabled,
+    setProactiveCloudSyncEnabled,
+} from "@/lib/proactive-cloud-storage";
+import { removeProactiveCharacterFromCloud, syncProactiveCharacterToCloud } from "@/lib/proactive-cloud-sync";
 import { BINDING_ACCENTS, CONTENT_APP_ACCENTS } from "@/lib/ui-accent-colors";
 import CSSSchemeBar from "@/components/ui/css-scheme-picker";
 import { ConfirmDialog } from "@/components/ui/modal";
@@ -171,6 +176,8 @@ export function ChatSettingsPanel({
     const [bilingualTranslationEnabled, setBilingualTranslationEnabled] = useState(session.bilingualTranslationEnabled !== false);
     const [collapseBilingualTranslation, setCollapseBilingualTranslation] = useState(session.collapseBilingualTranslation !== false);
     const [discardInvalidStickers, setDiscardInvalidStickers] = useState(session.discardInvalidStickers === true);
+    const [proactiveCloudSync, setProactiveCloudSync] = useState(() => !session.isGroup && isProactiveCloudSyncEnabled(session.contactId));
+    const [proactiveCloudSyncBusy, setProactiveCloudSyncBusy] = useState(false);
     const defaultBilingualPrompt = session.isGroup ? DEFAULT_GROUP_CHAT_BILINGUAL_PROMPT : DEFAULT_CHAT_BILINGUAL_PROMPT;
     const defaultOfflineBilingualPrompt = session.isGroup ? DEFAULT_GROUP_OFFLINE_CHAT_BILINGUAL_PROMPT : DEFAULT_OFFLINE_CHAT_BILINGUAL_PROMPT;
     const [bilingualTranslationPrompt, setBilingualTranslationPrompt] = useState(session.bilingualTranslationPrompt || defaultBilingualPrompt);
@@ -793,6 +800,48 @@ export function ChatSettingsPanel({
                                 />
                             </div>
                         </div>
+                        {!session.isGroup && (
+                            <div className="menu-item">
+                                <ChatInfoIcon icon={Cloud} color={CONTENT_APP_ACCENTS.calendar} />
+                                <div className="menu-label-group">
+                                    <span className="menu-label">Proactive Push (Cloud Sync)</span>
+                                    <span className="menu-desc">
+                                        Lets {characterName} message you even after this app is closed, via a
+                                        Worker on your own Cloudflare account. Uploads their persona, memory
+                                        and recent chat there — off by default. Set up the Worker first in
+                                        Settings &gt; Proactive Push.
+                                    </span>
+                                </div>
+                                <div className="menu-right">
+                                    {proactiveCloudSyncBusy && <Loader2 size={16} className="animate-spin mr-2" />}
+                                    <Toggle
+                                        checked={proactiveCloudSync}
+                                        disabled={proactiveCloudSyncBusy}
+                                        onChange={async (c) => {
+                                            setProactiveCloudSync(c);
+                                            setProactiveCloudSyncEnabled(session.contactId, c);
+                                            setProactiveCloudSyncBusy(true);
+                                            try {
+                                                if (c) {
+                                                    await syncProactiveCharacterToCloud(session.contactId);
+                                                } else {
+                                                    await removeProactiveCharacterFromCloud(session.contactId);
+                                                }
+                                            } catch (error) {
+                                                console.error("Proactive cloud sync failed", error);
+                                                alert(
+                                                    c
+                                                        ? `Turned on, but the first sync failed: ${error instanceof Error ? error.message : String(error)}. You can retry from Settings > Proactive Push.`
+                                                        : `Turned off locally, but removing it from the Worker failed: ${error instanceof Error ? error.message : String(error)}.`,
+                                                );
+                                            } finally {
+                                                setProactiveCloudSyncBusy(false);
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        )}
                         <button className="menu-item" onClick={() => setShowScreenEffects(true)}>
                             <ChatInfoIcon icon={Sparkles} color={BINDING_ACCENTS.preset} />
                             <div className="menu-label-group">

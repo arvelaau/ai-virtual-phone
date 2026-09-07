@@ -245,7 +245,7 @@ export type ChatMessage = {
     nativeToolReasoning?: string; // provider reasoning content required by some tool APIs
     nativeToolOpenRouterReasoningDetails?: unknown[]; // OpenRouter provider-private reasoning state for tool replay
     cloudSync?: {
-        source: "weixin-cloud";
+        source: "weixin-cloud" | "proactive-cloud";
         botId?: string;
         externalId?: string;
         direction?: "inbound" | "outbound" | "local";

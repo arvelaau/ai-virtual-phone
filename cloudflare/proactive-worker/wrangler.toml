@@ -1,0 +1,19 @@
+name = "ai-phone-proactive-worker"
+main = "src/worker.js"
+compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ai-phone-proactive"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+# Set these with:
+#   wrangler secret put ACCESS_TOKEN
+#   wrangler secret put VAPID_PRIVATE_KEY
+# and these as plain vars (not secret, they're safe to read back):
+[vars]
+VAPID_PUBLIC_KEY = "REPLACE_WITH_YOUR_VAPID_PUBLIC_KEY"
+VAPID_SUBJECT = "mailto:you@example.com"
