@@ -14,7 +14,10 @@
 // Bindings expected (set by the deploy flow, or by wrangler.toml for a
 // manual deploy):
 //   DB               - D1 database binding (see ../schema.sql)
-//   ACCESS_TOKEN     - secret; bearer token the app must send to call /subscribe, /test-push, /status
+//   ACCESS_TOKEN     - secret; value the app must send in the X-Client-Token
+//                      header to call /subscribe, /test-push, /status, etc.
+//                      (a custom header, not Authorization — see the note by
+//                      isAuthorized() below for why)
 //   VAPID_PUBLIC_KEY - plain text; base64url, uncompressed P-256 point (65 bytes)
 //   VAPID_PRIVATE_KEY- secret; base64url, raw P-256 scalar (32 bytes)
 //   VAPID_SUBJECT    - plain text; a mailto: or https: contact URL for the VAPID JWT "sub" claim
@@ -168,9 +171,17 @@ async function sendWebPush(subscription, payloadObject, vapidConfig) {
 
 // ---------- HTTP routes ----------
 
+// A custom header rather than "Authorization: Bearer <token>" — deliberately
+// matching the reference proactive-push Worker this feature was modeled on
+// (SullyOS, github.com/qegj567-cloud/SullyOS, worker/proactive-push/src/index.ts).
+// "Authorization" is one of the handful of header names the Fetch/CORS spec
+// singles out for special preflight/credentials handling, and WebKit (Safari,
+// and Chrome-on-iOS since it's WebKit under the hood too) has a history of
+// quirks specifically around cross-origin requests that carry it — this app
+// is used almost exclusively from iOS home-screen PWAs. A plain custom header
+// has no such special-cased behavior in the spec.
 function isAuthorized(request, env) {
-    const header = request.headers.get("Authorization") || "";
-    const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+    const token = request.headers.get("X-Client-Token") || "";
     return Boolean(env.ACCESS_TOKEN) && token === env.ACCESS_TOKEN;
 }
 
@@ -180,12 +191,13 @@ function isAuthorized(request, env) {
 // before the app's code ever sees a status code (shows up as a generic
 // "Load failed"/"Failed to fetch", not a 401/500 — hard to diagnose without
 // knowing to look for this). Access-Control-Allow-Origin: * is fine here
-// because the actual security boundary is the ACCESS_TOKEN bearer check,
-// not CORS — CORS only controls which origins' JS can read the response.
+// because the actual security boundary is the ACCESS_TOKEN check, not CORS —
+// CORS only controls which origins' JS can read the response.
 const CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Authorization, Content-Type",
+    "Access-Control-Allow-Headers": "X-Client-Token, Content-Type",
+    "Access-Control-Max-Age": "86400",
 };
 
 function json(data, status = 200) {
@@ -556,11 +568,20 @@ export default {
         const url = new URL(request.url);
 
         // Browsers send a CORS preflight OPTIONS request before the actual
-        // POST/GET when the request carries an Authorization header — this
-        // must succeed (with the same CORS headers) before the browser will
-        // even attempt the real request.
+        // POST/GET whenever the request carries a custom header (X-Client-Token
+        // here) — this must succeed (with the same CORS headers) before the
+        // browser will even attempt the real request.
         if (request.method === "OPTIONS") {
             return new Response(null, { status: 204, headers: CORS_HEADERS });
+        }
+
+        // Unauthenticated liveness check — lets the app (or a person, by just
+        // opening this URL) confirm the Worker itself is reachable and
+        // responding, with zero token/CORS complexity in the way. Useful when
+        // a token-guarded call is failing and it's unclear whether that's a
+        // network problem or an auth/CORS problem.
+        if (url.pathname === "/health" && request.method === "GET") {
+            return json({ ok: true });
         }
 
         if (url.pathname === "/subscribe" && request.method === "POST") {

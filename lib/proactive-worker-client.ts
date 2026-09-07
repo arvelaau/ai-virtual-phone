@@ -89,10 +89,13 @@ export async function deployProactiveWorker(
 // ---------- Talking to the deployed Worker directly (not through the relay — CORS is fine here, it's our own Worker) ----------
 
 async function callWorker<T>(workerUrl: string, accessToken: string, path: string, init?: RequestInit): Promise<T> {
+    // A custom header rather than "Authorization: Bearer <token>" — see the
+    // matching comment on isAuthorized() in cloudflare/proactive-worker/src/worker.js
+    // for why (WebKit/Safari CORS quirks around the Authorization header).
     const res = await fetch(`${workerUrl}${path}`, {
         ...init,
         headers: {
-            Authorization: `Bearer ${accessToken}`,
+            "X-Client-Token": accessToken,
             ...(init?.headers || {}),
         },
     });
