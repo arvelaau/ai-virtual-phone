@@ -565,58 +565,70 @@ async function handleRunNow(env) {
 
 export default {
     async fetch(request, env) {
-        const url = new URL(request.url);
+        // Every route handler below can throw (a D1 query against a table
+        // that somehow doesn't exist, a malformed stored snapshot, etc.) and
+        // none of them are individually wrapped. Without this, an uncaught
+        // exception here becomes Cloudflare's own generic error response —
+        // no CORS headers, not JSON, and (via app/api/proactive-relay's
+        // res.json().catch(() => ({}))) arrives at the client as a bare
+        // "failed (500)" with the actual reason thrown away. Catching here
+        // turns that into a readable error message instead of a guess.
+        try {
+            const url = new URL(request.url);
 
-        // Browsers send a CORS preflight OPTIONS request before the actual
-        // POST/GET whenever the request carries a custom header (X-Client-Token
-        // here) — this must succeed (with the same CORS headers) before the
-        // browser will even attempt the real request.
-        if (request.method === "OPTIONS") {
-            return new Response(null, { status: 204, headers: CORS_HEADERS });
-        }
+            // Browsers send a CORS preflight OPTIONS request before the actual
+            // POST/GET whenever the request carries a custom header (X-Client-Token
+            // here) — this must succeed (with the same CORS headers) before the
+            // browser will even attempt the real request.
+            if (request.method === "OPTIONS") {
+                return new Response(null, { status: 204, headers: CORS_HEADERS });
+            }
 
-        // Unauthenticated liveness check — lets the app (or a person, by just
-        // opening this URL) confirm the Worker itself is reachable and
-        // responding, with zero token/CORS complexity in the way. Useful when
-        // a token-guarded call is failing and it's unclear whether that's a
-        // network problem or an auth/CORS problem.
-        if (url.pathname === "/health" && request.method === "GET") {
-            return json({ ok: true });
-        }
+            // Unauthenticated liveness check — lets the app (or a person, by just
+            // opening this URL) confirm the Worker itself is reachable and
+            // responding, with zero token/CORS complexity in the way. Useful when
+            // a token-guarded call is failing and it's unclear whether that's a
+            // network problem or an auth/CORS problem.
+            if (url.pathname === "/health" && request.method === "GET") {
+                return json({ ok: true });
+            }
 
-        if (url.pathname === "/subscribe" && request.method === "POST") {
-            if (!isAuthorized(request, env)) return json({ error: "unauthorized" }, 401);
-            return handleSubscribe(request, env);
+            if (url.pathname === "/subscribe" && request.method === "POST") {
+                if (!isAuthorized(request, env)) return json({ error: "unauthorized" }, 401);
+                return await handleSubscribe(request, env);
+            }
+            if (url.pathname === "/snapshot" && request.method === "POST") {
+                if (!isAuthorized(request, env)) return json({ error: "unauthorized" }, 401);
+                return await handleSnapshot(request, env);
+            }
+            if (url.pathname === "/snapshot/delete" && request.method === "POST") {
+                if (!isAuthorized(request, env)) return json({ error: "unauthorized" }, 401);
+                return await handleDeleteSnapshot(request, env);
+            }
+            if (url.pathname === "/pending-messages" && request.method === "GET") {
+                if (!isAuthorized(request, env)) return json({ error: "unauthorized" }, 401);
+                return await handlePendingMessages(env);
+            }
+            if (url.pathname === "/pending-messages/ack" && request.method === "POST") {
+                if (!isAuthorized(request, env)) return json({ error: "unauthorized" }, 401);
+                return await handleAckPendingMessages(request, env);
+            }
+            if (url.pathname === "/test-push" && request.method === "POST") {
+                if (!isAuthorized(request, env)) return json({ error: "unauthorized" }, 401);
+                return await handleTestPush(env);
+            }
+            if (url.pathname === "/status" && request.method === "GET") {
+                if (!isAuthorized(request, env)) return json({ error: "unauthorized" }, 401);
+                return await handleStatus(env);
+            }
+            if (url.pathname === "/run-now" && request.method === "POST") {
+                if (!isAuthorized(request, env)) return json({ error: "unauthorized" }, 401);
+                return await handleRunNow(env);
+            }
+            return json({ error: "not_found" }, 404);
+        } catch (err) {
+            return json({ error: err instanceof Error ? `${err.name}: ${err.message}` : String(err) }, 500);
         }
-        if (url.pathname === "/snapshot" && request.method === "POST") {
-            if (!isAuthorized(request, env)) return json({ error: "unauthorized" }, 401);
-            return handleSnapshot(request, env);
-        }
-        if (url.pathname === "/snapshot/delete" && request.method === "POST") {
-            if (!isAuthorized(request, env)) return json({ error: "unauthorized" }, 401);
-            return handleDeleteSnapshot(request, env);
-        }
-        if (url.pathname === "/pending-messages" && request.method === "GET") {
-            if (!isAuthorized(request, env)) return json({ error: "unauthorized" }, 401);
-            return handlePendingMessages(env);
-        }
-        if (url.pathname === "/pending-messages/ack" && request.method === "POST") {
-            if (!isAuthorized(request, env)) return json({ error: "unauthorized" }, 401);
-            return handleAckPendingMessages(request, env);
-        }
-        if (url.pathname === "/test-push" && request.method === "POST") {
-            if (!isAuthorized(request, env)) return json({ error: "unauthorized" }, 401);
-            return handleTestPush(env);
-        }
-        if (url.pathname === "/status" && request.method === "GET") {
-            if (!isAuthorized(request, env)) return json({ error: "unauthorized" }, 401);
-            return handleStatus(env);
-        }
-        if (url.pathname === "/run-now" && request.method === "POST") {
-            if (!isAuthorized(request, env)) return json({ error: "unauthorized" }, 401);
-            return handleRunNow(env);
-        }
-        return json({ error: "not_found" }, 404);
     },
 
     async scheduled(_event, env, ctx) {
