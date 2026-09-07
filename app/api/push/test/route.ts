@@ -64,12 +64,25 @@ export async function POST(request: Request) {
         const statusCode = err && typeof err === "object" && "statusCode" in err
             ? Number((err as { statusCode?: unknown }).statusCode)
             : undefined;
+        // web-push's own error message for anything it doesn't specifically
+        // recognize is the unhelpfully generic "Received unexpected response
+        // code" — the actually useful part (the push service's real HTTP
+        // status, and its response body when present) was being thrown away
+        // here. Both are on the WebPushError instance; surface them.
+        const body = err && typeof err === "object" && "body" in err
+            ? String((err as { body?: unknown }).body || "").slice(0, 300)
+            : "";
+        const baseMessage = err instanceof Error ? err.message : "push_send_failed";
+        const detail = [
+            statusCode !== undefined && Number.isFinite(statusCode) ? `status ${statusCode}` : null,
+            body || null,
+        ].filter(Boolean).join(", ");
         // A 404/410 from the push service means the subscription is gone
         // (expired, or the user removed the PWA) — the caller should clear
         // its stored subscription and ask the user to re-enable push.
         return NextResponse.json(
             {
-                error: err instanceof Error ? err.message : "push_send_failed",
+                error: detail ? `${baseMessage} (${detail})` : baseMessage,
                 expired: statusCode === 404 || statusCode === 410,
             },
             { status: 502 },
