@@ -13,11 +13,13 @@ export type CalendarColorKey =
 export type CalendarScheduleItem = {
   id: string;
   date: string;       // YYYY-MM-DD
-  weekday: string;    // 周一 ~ 周日
+  weekday: string;    // Monday ~ Sunday
   startTime: string;  // HH:MM
   endTime: string;    // HH:MM
   location: string;
   title: string;
+  /** Optional single-emoji icon for the event. */
+  emoji?: string;
   colorKey: CalendarColorKey;
   /** "offline_session" -- a factual record of an offline-mode session that happened, written by
    *  chat-room.tsx when the user exits offline mode with a character. Treated like "manual" by

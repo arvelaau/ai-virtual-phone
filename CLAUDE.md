@@ -3390,16 +3390,138 @@ correctly swaps between the two existing enter/exit affordances, and the Calenda
 renders its weekly schedule correctly with the widened `source` union. **The end-to-end
 summary/reaction/calendar-entry loop needs a real smoke test once an API is bound.**
 
+## Calendar UI redesign — port from xiaolongbao's rewrite: DONE (2026-09-08)
+Full three-way merge and translated port of upstream's calendar redesign: full-page month view
+(±12 months infinite scroll) + a two-day (configurable 1/2/3/5/7-day) detail timeline page +
+a real event-edit modal (emoji + color pickers, multi-day support) + a zero-data-table lunar
+calendar overlay. Not deferred after all — picked back up the same session per "Lanjut ke bikin
+desain calendar UI-nya".
+
+**Three-way merge, not a drop-in port.** `calendar-types.ts`/`calendar-utils.ts`/
+`calendar-storage.ts`/`calendar-engine.ts` each had to reconcile upstream's new fields against
+two things upstream never had: our own prior English-translation work (the bilingual `"none"`/
+`"无"` location sentinel in `calendar-engine.ts`) and our own brand-new offline-session feature
+(the `source: "offline_session"` schedule-item tag and its `isRegenerationClearable()` guard in
+**both** `clearGeneratedWeekItems()` and `cloneWeekPlanWithManualEdits()` — a lesson already
+learned once earlier in this same session, now preserved through the merge rather than
+re-losing it).
+
+**What changed, mechanically:**
+- `CALENDAR_HOUR_START`/`END` went from a hard `8`/`23` validation window (silently dropping
+  any schedule item outside it on read) to `0`/`24` — display-default only now. Simplified our
+  own `deriveOfflineSessionScheduleWindow()` in the same pass: no more hour-window clamping, just
+  the midnight-crossing clamp (to 23:59) and the 15-minute minimum-block pad.
+- New `emoji?: string` field on `CalendarScheduleItem`, extracted via `sanitizeScheduleEmoji()`
+  using an `\p{Extended_Pictographic}` regex — **written as escape-sequence text
+  (`\uFE0F`/`\u200D`), not literal Unicode bytes**, so the source stays reviewable. (First draft
+  had literal bytes; fixed via a standalone script, functionally identical either way but bad
+  practice.)
+- New `CalendarColorKey` validation (`isCalendarColorKey`, 8 keys: blue/green/amber/rose/violet/
+  teal/slate/lilac) — every event now carries a real color, not just a time-derived one.
+- New `daysPerPage` config (1/2/3/5/7) on `CalendarConfig`, persisted, driving the detail page's
+  column count.
+- Entirely new 6-theme system — `light/dark/cream/mint/mist/sakura`, replacing the old
+  `ocean/orange/honey/mint/mist/melon` — with a `LEGACY_THEME_MAP` so an existing user's theme
+  choice migrates instead of silently resetting (`ocean`→`light`, `orange`/`honey`→`cream`,
+  `melon`→`mint`).
+- New 7-field AI schedule-generation line format: `YYYY-MM-DD|weekday|start|end|location|emoji|
+  activity`, with backward-compatible 6-field legacy parsing (`parseScheduleLines` only reads the
+  6th field as an emoji when it's short and actually emoji-shaped, otherwise falls back to the
+  old reading) — so a schedule generated before this port still parses correctly.
+
+**`lib/lunar.ts`** (new) — lunar dates via `Intl.DateTimeFormat("zh-CN-u-ca-chinese")`, zero data
+tables, returns `null` silently when unsupported. **Localization judgment call**: lunar day/month
+labels render as English ordinals ("1st", "15th", "Leap 4th Month") rather than literally
+translating traditional Chinese lunar terms (初一/正月/腊月 etc.) — those carry cultural meaning a
+literal translation would misrepresent, matching how real bilingual lunar-calendar apps render
+this. Verified against real dates (2024-02-10 = Chinese New Year → `1st Month, 1st, isFirstDay:
+true`).
+
+**Three new component files** (`components/calendar/{month-page,detail-page,event-edit-modal}
+.tsx`) plus a full rewrite of `components/calendar-app.tsx` (~924 lines, from monolithic to a
+container composing the three) — full translation of all UI text, owner selector, multi-day
+event save (max 31 days, cross-week move handling), the FAB menu (New Event / AI Generate This
+Week / Weekly Auto-Generate — the AI options only show for a character owner, verified in
+browser), theme picker, days-per-page picker, and the full menstrual/period-cycle settings
+modal.
+
+**`SessionCustomCSS` (new shared component) + `extractCssImports` (new, `lib/css-scoper.ts`)** —
+ported alongside because `calendar-app.tsx` needed it: an iOS WebKit bug where `@import` inside
+a `<style>` tag can suspend the whole stylesheet while it loads/retries, flickering the page
+between styled and unstyled on a flaky connection. Fix hoists any `@import` (usually Google
+Fonts) out into its own `<link rel="stylesheet" precedence="default">`, letting React 19 hoist
+and dedupe it independently of the scoped custom-CSS `<style>` block.
+
+**`styles/tokens.css`** — replaced the entire base `:root` calendar token block and all 6
+`[data-calendar-theme="X"]` blocks with the new naming scheme (`--c-calendar-bg/surface/surface-2
+/sheet/ink/sub/faint/today/sel-bg/sel-fg/scrim/hair/glass{,-edge,-hi}` plus 8 `--c-calendar-ev-
+{color}-{bg,fg}` pairs). Hit the project's recurring mixed-CRLF/LF trap here — the replacement
+script (plain-`\n` template literal into a CRLF file) left 81 stray bare-LF lines among 1120 CRLF
+ones; fixed via full-file line-ending normalization, verified byte-level clean (`{crlf: 1201,
+lf: 0}`) afterward.
+
+**`styles/calendar.css`** — full 1536-line translated rewrite (all Chinese section-header/inline
+comments → English, every CSS rule preserved byte-for-byte since properties/values were already
+ASCII). Written LF (matching the file's own pre-existing convention, confirmed via `git show
+HEAD:styles/calendar.css` before writing — the repo has no single global EOL convention, e.g.
+`chat.css` is CRLF and `story.css` is LF, so "match this file's own history" is the right rule,
+not "force CRLF everywhere").
+
+**`lib/css-examples.ts`'s `CALENDAR_CSS_EXAMPLE`** — was entirely stale, referencing class names
+from an even-older pre-Ocean-theme iteration (`.calendar-header`, `.calendar-grid-shell`, etc.)
+that don't exist in the new markup at all. Replaced with upstream's own updated "Caramel Milk
+Tea" theme example (which already targets the exact new class/variable names), translated to
+English. Browser-verified end to end: clicking "Example" in the in-app CSS editor loads this
+exact translated text, and clicking "Apply" correctly re-themes the live calendar — proving the
+whole `--c-calendar-*` rename cascade (tokens.css base → calendar.css consumers → the example
+shown to users) is consistent.
+
+**Wired the missing `calendar-updated` event dispatch** into our own offline-session calendar
+write (`chat-room.tsx`'s `finalizeOfflineSessionSummary`), matching the existing dispatch site in
+`lib/tool-executor.ts:1929`, so a live-open Calendar app refreshes immediately when an offline
+session ends and writes its entry — this dispatch didn't exist before this pass.
+**Self-caught bug while adding it**: the enclosing function already had a local `const window =
+deriveOfflineSessionScheduleWindow(...)` a few lines up, which shadows the browser global —
+`window.dispatchEvent(...)` would have thrown (silently swallowed by the surrounding try/catch,
+so the event would just never fire, no error surfaced). Fixed by renaming the local to
+`scheduleWindow` rather than working around the shadow.
+
+**`_fx-offline-session.mjs`'s F-group** (testing `deriveOfflineSessionScheduleWindow`) needed 3
+assertions rewritten for the new unrestricted-hours behavior: an early-morning session no longer
+clamps to 08:00 (now passes through unclamped), a late-evening session no longer returns `null`
+for "no room" (there's no more hour ceiling to run out of room against), and a midnight-crossing
+session now clamps to 23:59 instead of the old 23:00. 55→56 checks (F3 split into F3/F3b).
+
+**Verification**: `npx tsc --noEmit` clean, `npm run build` clean (3.9min, wiped `.next` first
+per this file's own operational rule since the build was run right after another build), all 22
+repo fixtures green, control-character sweep clean across all 15 touched/created files. Browser
+smoke test (after wiping `.next` again and starting a single dev server): month view with correct
+lunar labels and the 1st-of-lunar-month underline styling; today correctly highlighted; tapped
+into the day-detail two-day timeline (cycle check-in row, hour grid); created a real event via
+the New Event modal (date/time/activity/location/emoji/color) and confirmed it rendered in the
+correct timeline slot with the right color; reopened it via click, confirmed the edit modal
+pre-filled every field correctly, deleted it cleanly; switched days-per-page 2→3→2, confirmed the
+column count changed live; opened the theme picker, switched to Dark (applied correctly, verified
+via `data-calendar-theme` attribute after a tick), loaded and applied the translated Example CSS
+(Caramel Milk Tea — cream background, orange accent, all correctly re-themed), cleared it and
+reset to Light; switched owner to a character and confirmed the FAB menu shows "AI Generate This
+Week"/"Weekly Auto-Generate" (correctly hidden for the user-self owner, since AI generation only
+makes sense for a character's schedule) — did **not** actually trigger a live generation call,
+since that would be a real paid external LLM request; opened Cycle Settings and confirmed the
+full menstrual-tracking modal renders correctly. Zero new console errors — the two error classes
+present (`NotFoundError` IndexedDB object-store noise, `ERR_CONNECTION_RESET`) are both the same
+pre-existing, previously-investigated, unrelated issues already documented in the Phase D
+writeup above (leftover IndexedDB churn / this dev environment's lack of outbound network
+access), not new.
+
+**Not verified by me**: an actual live AI-generated weekly schedule round-trip through the new
+7-field emoji format (needs a bound API config and a real paid call) — the parser/format side is
+fixture-verified, but the true text a model would write for the emoji field specifically hasn't
+been observed. The drag-free multi-day event save path (create an event spanning several days,
+confirm one schedule item per day, confirm a cross-week move works) was reviewed in source but
+not exercised in the browser.
+
 ## Still open / not yet done
-- **Calendar UI redesign toward xiaolongbao's rewrite** (deferred by user choice, 2026-09-08) —
-  month view + day-detail view + a proper event-edit modal + lunar calendar overlay, split across
-  `components/calendar/{month-page,detail-page,event-edit-modal}.tsx` + `lib/lunar.ts` upstream
-  (~1800 lines of new/restructured TSX + 1535 lines of CSS, all Chinese, needing translation on
-  the way in like every other ported feature). Confirmed **zero data-model dependency** on the
-  offline-session feature above — this is a pure visual/UX port, safe to pick up independently
-  whenever there's appetite for it. Our `calendar-app.tsx` has diverged substantially from
-  upstream already (translation + our own prior edits), so this is a real port/adapt job, not a
-  drop-in copy — budget accordingly.
 - ~~**Custom app imports**~~ — **DONE (2026-08-23), all 9 translated.** Zips in `App\translated\*-EN.zip`; see the CUSTOM APP IMPORTS section. Not installed — the user installs them through the App Market.
 - **`memory.add` provenance** — a custom app can write a long-term memory for any character and shared memory will lend it on. ⚠️ **Correction to how this was first recorded**: nothing needs stamping. `addCustomAppMemory` already writes `id: custom_app_${app.id}_…` **and** `metadata: { origin: "custom_app", appId, appName, reason }`; only `sourceApp` is hardcoded to `"chat"`. The open question is narrower than it looked — should `selectBorrowableMemories` skip entries whose `metadata.origin === "custom_app"`? Awaiting a decision; the marker to filter on already exists.
 - **Couple Space mini-games, "Route A"** — ⚠️ **this name is referenced three times in this file and never DEFINED.** No scope, no design, no integration point was ever written down; the only surviving description is "a custom app via existing directives", from a session transcript rather than from here. Do not start it as if it were a specified task — it needs a design decision from the user first. Recorded 2026-08-18.

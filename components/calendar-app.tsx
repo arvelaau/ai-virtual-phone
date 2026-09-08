@@ -1,15 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock3, Droplets, MapPin, Plus, Wand2, Trash2, Bot, Check, Palette, X, HeartPulse, MoreHorizontal } from "lucide-react";
-import { Avatar, EmptyState, GlassCard } from "./ui/primitives";
-import { scopeSessionCSS } from "@/lib/css-scoper";
-import { Input, Select } from "./ui/form";
+import { Bot, Check, ChevronLeft, HeartPulse, Plus, Trash2, Wand2, X } from "lucide-react";
+import { Avatar } from "./ui/primitives";
+import { SessionCustomCSS } from "@/components/ui/session-custom-css";
+import CSSSchemeBar from "@/components/ui/css-scheme-picker";
+import { CALENDAR_CSS_EXAMPLE } from "@/lib/css-examples";
+import { kvGet, kvSet, kvRemove } from "@/lib/kv-db";
+import { Input } from "./ui/form";
 import type { CalendarOwnerType, CalendarScheduleItem, CalendarWeekPlan } from "@/lib/calendar-types";
 import {
+  CALENDAR_DAYS_PER_PAGE_OPTIONS,
+  CALENDAR_THEME_IDS,
   deleteCalendarScheduleItem,
   loadCalendarConfig,
-  loadCalendarWeekPlan,
   loadOwnerCalendarPlans,
   saveCalendarConfig,
   upsertCalendarScheduleItem,
@@ -20,20 +24,11 @@ import { loadCharacters } from "@/lib/character-storage";
 import { loadChatSessions } from "@/lib/chat-storage";
 import { resolveUserIdentity } from "@/lib/settings-storage";
 import {
-  CALENDAR_HOUR_END,
-  CALENDAR_HOUR_START,
   formatIsoDate,
-  formatMonthDay,
-  formatWeekRangeLabel,
-  getMonthMatrix,
-  getWeekDates,
   getWeekStartIso,
-  getWeekdayLabel,
-  isDateInWeek,
-  isSameMonth,
   parseIsoDate,
   pickScheduleColorKey,
-  timeToMinutes,
+  sanitizeScheduleEmoji,
 } from "@/lib/calendar-utils";
 import {
   buildMenstrualDayMap,
@@ -49,6 +44,9 @@ import {
   validateMenstrualSettings,
   type MenstrualRecord,
 } from "@/lib/menstrual-storage";
+import { CalendarMonthPage } from "./calendar/month-page";
+import { CalendarDetailPage } from "./calendar/detail-page";
+import { CalendarEventEditModal, type CalendarEventDraft } from "./calendar/event-edit-modal";
 
 type OwnerOption = {
   key: string;
@@ -58,13 +56,14 @@ type OwnerOption = {
   avatar?: string | null;
 };
 
-type PeriodCareCharacterOption = {
-  characterId: string;
-  name: string;
-  avatar?: string | null;
-};
-
-const TOTAL_MINUTES = (CALENDAR_HOUR_END - CALENDAR_HOUR_START) * 60;
+const CALENDAR_THEMES: Array<{ id: (typeof CALENDAR_THEME_IDS)[number]; name: string }> = [
+  { id: "light", name: "Light" },
+  { id: "dark", name: "Dark" },
+  { id: "cream", name: "Cream" },
+  { id: "mint", name: "Mint" },
+  { id: "mist", name: "Mist" },
+  { id: "sakura", name: "Sakura" },
+];
 
 function buildOwnerOptions(): OwnerOption[] {
   const options: OwnerOption[] = [];
@@ -87,6 +86,12 @@ function buildOwnerOptions(): OwnerOption[] {
   }
   return options;
 }
+
+type PeriodCareCharacterOption = {
+  characterId: string;
+  name: string;
+  avatar?: string | null;
+};
 
 function buildPeriodCareCharacterOptions(): PeriodCareCharacterOption[] {
   const characters = loadCharacters();
@@ -113,23 +118,13 @@ function buildPeriodCareCharacterOptions(): PeriodCareCharacterOption[] {
     });
 }
 
-function CalendarGeneratingLabel({ loading, idle }: { loading: boolean; idle: string }) {
-  if (!loading) return <>{idle}</>;
-  return (
-    <span className="calendar-generating-label">
-      Generating
-      <span className="calendar-generating-dots" aria-hidden="true">
-        <i />
-        <i />
-        <i />
-      </span>
-    </span>
-  );
-}
+const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-import { CALENDAR_CSS_EXAMPLE } from "@/lib/css-examples";
-import CSSSchemeBar from "@/components/ui/css-scheme-picker";
-import { kvGet, kvSet, kvRemove } from "@/lib/kv-db";
+function formatSimpleDate(dateText: string | null): string {
+  if (!dateText) return "Not recorded yet";
+  const date = parseIsoDate(dateText);
+  return `${MONTH_ABBR[date.getMonth()]} ${date.getDate()}`;
+}
 
 export function PhoneCalendarApp({
   onClose,
@@ -138,19 +133,27 @@ export function PhoneCalendarApp({
   onClose: () => void;
   onNotice?: (text: string) => void;
 }) {
+  const todayIso = formatIsoDate(new Date());
   const [owners, setOwners] = useState<OwnerOption[]>(() => buildOwnerOptions());
-  const [selectedKey, setSelectedKey] = useState<string>(() => buildOwnerOptions()[0]?.key ?? "user:me");
-  const [weekStart, setWeekStart] = useState<string>(() => getWeekStartIso(new Date()));
-  const [selectedDate, setSelectedDate] = useState<string>(() => formatIsoDate(new Date()));
-  const [monthExpanded, setMonthExpanded] = useState(false);
-  const [plan, setPlan] = useState<CalendarWeekPlan | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string>(() => owners[0]?.key ?? "user:me");
+  const [view, setView] = useState<"month" | "detail">("month");
+  const [selectedDate, setSelectedDate] = useState<string>(todayIso);
+  const [detailKey, setDetailKey] = useState(0);
   const [ownerPlans, setOwnerPlans] = useState<CalendarWeekPlan[]>([]);
   const [config, setConfig] = useState(() => loadCalendarConfig());
   const [menstrualConfig, setMenstrualConfig] = useState(() => loadMenstrualConfig());
   const [menstrualRecords, setMenstrualRecords] = useState<MenstrualRecord[]>(() => loadMenstrualRecords());
-  const autoGenerateEnabled = config.autoGenerateEnabled;
   const [showThemePanel, setShowThemePanel] = useState(false);
+  const [showDaysPanel, setShowDaysPanel] = useState(false);
   const [showMenstrualSettings, setShowMenstrualSettings] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [showGenerateConfirm, setShowGenerateConfirm] = useState(false);
+  const [showAutoConfirm, setShowAutoConfirm] = useState(false);
+  const [fabMenuOpen, setFabMenuOpen] = useState(false);
+  const autoAttemptedRef = useRef<Set<string>>(new Set());
+  const [editingItem, setEditingItem] = useState<(CalendarEventDraft & { originalDate?: string }) | null>(null);
+  const autoGenerateEnabled = config.autoGenerateEnabled;
+
   const [menstrualDraft, setMenstrualDraft] = useState<{
     cycleLength: string;
     periodLength: string;
@@ -167,6 +170,7 @@ export function PhoneCalendarApp({
       periodCareLeadDays: String(initial.periodCareLeadDays) as "1" | "2" | "3",
     };
   });
+
   const [calendarCustomCss, setCalendarCustomCss] = useState(() =>
     typeof window !== "undefined" ? kvGet("calendar-custom-css") || "" : ""
   );
@@ -180,7 +184,7 @@ export function PhoneCalendarApp({
     setAppliedCalendarCss(trimmed);
     window.dispatchEvent(new CustomEvent("calendar-css-updated", { detail: trimmed }));
   };
-  // Listen for live CSS updates from Scroll
+  // Live-update the calendar's custom CSS from external sources (e.g. the mascot).
   useEffect(() => {
     const onCSSUpdate = (e: Event) => {
       const css = (e as CustomEvent).detail || "";
@@ -190,59 +194,43 @@ export function PhoneCalendarApp({
     window.addEventListener("calendar-css-updated", onCSSUpdate);
     return () => window.removeEventListener("calendar-css-updated", onCSSUpdate);
   }, []);
-  const [expandedDate, setExpandedDate] = useState<string | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [showGenerateConfirm, setShowGenerateConfirm] = useState(false);
-  const [showAutoConfirm, setShowAutoConfirm] = useState(false);
-  const autoAttemptedRef = useRef<Set<string>>(new Set());
-  const [editingItem, setEditingItem] = useState<{
-    id?: string;
-    date: string;
-    startTime: string;
-    endTime: string;
-    location: string;
-    title: string;
-  } | null>(null);
 
   const selectedOwner = useMemo(
     () => owners.find(owner => owner.key === selectedKey) ?? owners[0] ?? null,
     [owners, selectedKey],
   );
-  const weekEventCount = plan?.items.length ?? 0;
+  const weekStart = useMemo(() => getWeekStartIso(parseIsoDate(selectedDate)), [selectedDate]);
 
-  const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
-  const monthMatrix = useMemo(() => getMonthMatrix(weekStart), [weekStart]);
-  const monthDates = useMemo(() => monthMatrix.flat(), [monthMatrix]);
   const itemsByDate = useMemo(() => {
     const map = new Map<string, CalendarScheduleItem[]>();
-    for (const item of plan?.items ?? []) {
-      const list = map.get(item.date) || [];
-      list.push(item);
-      list.sort((a, b) => a.startTime.localeCompare(b.startTime));
-      map.set(item.date, list);
-    }
-    return map;
-  }, [plan]);
-  const countsByDate = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const ownerPlan of ownerPlans) {
-      for (const item of ownerPlan.items) {
-        map.set(item.date, (map.get(item.date) || 0) + 1);
+    for (const plan of ownerPlans) {
+      for (const item of plan.items) {
+        const list = map.get(item.date) || [];
+        list.push(item);
+        map.set(item.date, list);
       }
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => a.startTime.localeCompare(b.startTime));
     }
     return map;
   }, [ownerPlans]);
-  const menstrualDayMap = useMemo(() => {
-    if (selectedOwner?.ownerType !== "user" || monthDates.length === 0) return new Map();
-    return buildMenstrualDayMap(monthDates[0], monthDates[monthDates.length - 1], menstrualRecords, menstrualConfig);
-  }, [selectedOwner, monthDates, menstrualRecords, menstrualConfig]);
-  const weekMenstrualMap = useMemo(() => {
-    if (selectedOwner?.ownerType !== "user" || weekDates.length === 0) return new Map();
-    return buildMenstrualDayMap(weekDates[0], weekDates[weekDates.length - 1], menstrualRecords, menstrualConfig);
-  }, [selectedOwner, weekDates, menstrualRecords, menstrualConfig]);
-  const menstrualSummary = useMemo(() => getMenstrualSummary(menstrualRecords, menstrualConfig, selectedDate), [menstrualRecords, menstrualConfig, selectedDate]);
+
+  // Cycle markers: covers the month page's +/-1 year range.
+  const cycleMap = useMemo(() => {
+    if (selectedOwner?.ownerType !== "user") return null;
+    const today = parseIsoDate(todayIso);
+    const start = formatIsoDate(new Date(today.getFullYear() - 1, today.getMonth(), 1));
+    const end = formatIsoDate(new Date(today.getFullYear() + 1, today.getMonth() + 1, 0));
+    return buildMenstrualDayMap(start, end, menstrualRecords, menstrualConfig);
+  }, [selectedOwner, todayIso, menstrualRecords, menstrualConfig]);
+
+  const menstrualSummary = useMemo(
+    () => getMenstrualSummary(menstrualRecords, menstrualConfig, selectedDate),
+    [menstrualRecords, menstrualConfig, selectedDate],
+  );
   const periodCareCharacterOptions = useMemo(
-    () => showMenstrualSettings ? buildPeriodCareCharacterOptions() : [],
+    () => (showMenstrualSettings ? buildPeriodCareCharacterOptions() : []),
     [showMenstrualSettings],
   );
 
@@ -250,134 +238,33 @@ export function PhoneCalendarApp({
     setOwners(buildOwnerOptions());
   }, []);
 
-  const ownerStripRef = useRef<HTMLElement>(null);
-  const isDragging = useRef(false);
-  const isClicking = useRef(false);
-  const startX = useRef(0);
-  const scrollLeft = useRef(0);
-  const scrollTimeout = useRef<NodeJS.Timeout | undefined>(undefined);
+  const refreshPlans = () => {
+    if (!selectedOwner) return;
+    setOwnerPlans(loadOwnerCalendarPlans(selectedOwner.ownerType, selectedOwner.ownerId));
+  };
 
   useEffect(() => {
     if (!selectedOwner) return;
-    setPlan(loadCalendarWeekPlan(selectedOwner.ownerType, selectedOwner.ownerId, weekStart));
     setOwnerPlans(loadOwnerCalendarPlans(selectedOwner.ownerType, selectedOwner.ownerId));
+  }, [selectedOwner]);
 
-    // Smooth scroll the selected avatar into view if clicked
-    if (isClicking.current) {
-      setTimeout(() => {
-        if (ownerStripRef.current) {
-          const activeEl = ownerStripRef.current.querySelector('[data-active="true"]') as HTMLElement;
-          if (activeEl) {
-            const container = ownerStripRef.current;
-            const targetScroll = activeEl.offsetLeft - container.clientWidth / 2 + activeEl.clientWidth / 2;
-            container.scrollTo({ left: targetScroll, behavior: 'smooth' });
-          }
-        }
-        setTimeout(() => { isClicking.current = false; }, 300);
-      }, 50);
-    }
-  }, [selectedOwner, weekStart]);
-
-  // Listen for cross-app calendar updates (e.g. action-parser dispatches from chat)
+  // Refresh after chat/tool calls change the schedule.
   useEffect(() => {
     const handler = () => {
       if (!selectedOwner) return;
-      setPlan(loadCalendarWeekPlan(selectedOwner.ownerType, selectedOwner.ownerId, weekStart));
       setOwnerPlans(loadOwnerCalendarPlans(selectedOwner.ownerType, selectedOwner.ownerId));
     };
     window.addEventListener("calendar-updated", handler);
     return () => window.removeEventListener("calendar-updated", handler);
-  }, [selectedOwner, weekStart]);
+  }, [selectedOwner]);
 
-  const handleScroll = () => {
-    if (!ownerStripRef.current || isDragging.current || isClicking.current) return;
-    clearTimeout(scrollTimeout.current);
-    scrollTimeout.current = setTimeout(() => {
-      const container = ownerStripRef.current;
-      if (!container) return;
-      const center = container.scrollLeft + container.clientWidth / 2;
-      let minDistance = Infinity;
-      let closestKey: string | null = null;
-      
-      Array.from(container.children).forEach((child: any) => {
-        // Calculate child's absolute center relative to scroll container
-        const childCenter = child.offsetLeft + child.clientWidth / 2 - container.offsetLeft;
-        const dist = Math.abs(childCenter - center);
-        if (dist < minDistance) {
-          minDistance = dist;
-          closestKey = child.getAttribute('data-key');
-        }
-      });
-      
-      if (closestKey && closestKey !== selectedKey) {
-        setSelectedKey(closestKey);
-        setWeekStart(getWeekStartIso(new Date()));
-      }
-    }, 150); // wait for scroll to snap
-  };
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!ownerStripRef.current) return;
-    isDragging.current = true;
-    startX.current = e.pageX - ownerStripRef.current.offsetLeft;
-    scrollLeft.current = ownerStripRef.current.scrollLeft;
-  };
-
-  const snapToClosest = () => {
-    if (!ownerStripRef.current) return;
-    const container = ownerStripRef.current;
-    const center = container.scrollLeft + container.clientWidth / 2;
-    let minDistance = Infinity;
-    let closestKey: string | null = null;
-    let closestChild: HTMLElement | null = null;
-
-    Array.from(container.children).forEach((child: any) => {
-      const childCenter = child.offsetLeft + child.clientWidth / 2 - container.offsetLeft;
-      const dist = Math.abs(childCenter - center);
-      if (dist < minDistance) {
-        minDistance = dist;
-        closestKey = child.getAttribute('data-key');
-        closestChild = child;
-      }
-    });
-
-    if (closestChild) {
-      const targetScroll = (closestChild as HTMLElement).offsetLeft - container.clientWidth / 2 + (closestChild as HTMLElement).clientWidth / 2;
-      container.scrollTo({ left: targetScroll, behavior: 'smooth' });
-    }
-    if (closestKey && closestKey !== selectedKey) {
-      setSelectedKey(closestKey);
-      setWeekStart(getWeekStartIso(new Date()));
-    }
-  };
-
-  const handleMouseLeave = () => {
-    if (isDragging.current) {
-      isDragging.current = false;
-      snapToClosest();
-    }
-  };
-
-  const handleMouseUp = () => {
-    if (isDragging.current) {
-      isDragging.current = false;
-      snapToClosest();
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging.current || !ownerStripRef.current) return;
-    e.preventDefault();
-    const x = e.pageX - ownerStripRef.current.offsetLeft;
-    const walk = (x - startX.current) * 1.5; 
-    ownerStripRef.current.scrollLeft = scrollLeft.current - walk;
-  };
-
+  // Weekly auto-generate (characters only).
   useEffect(() => {
     if (!selectedOwner || !autoGenerateEnabled || selectedOwner.ownerType !== "character" || isGenerating) return;
     const autoKey = `${selectedOwner.ownerType}:${selectedOwner.ownerId}:${weekStart}`;
     if (autoAttemptedRef.current.has(autoKey)) return;
-    const existing = loadCalendarWeekPlan(selectedOwner.ownerType, selectedOwner.ownerId, weekStart);
+    const existing = loadOwnerCalendarPlans(selectedOwner.ownerType, selectedOwner.ownerId)
+      .find(plan => plan.weekStart === weekStart);
     if (existing && existing.items.length > 0) return;
     void (async () => {
       autoAttemptedRef.current.add(autoKey);
@@ -389,23 +276,94 @@ export function PhoneCalendarApp({
         return;
       }
       refreshPlans();
-      onNotice?.("This week's schedule was auto-generated");
+      onNotice?.("This week's schedule was generated automatically");
     })();
-  }, [autoGenerateEnabled, isGenerating, onNotice, selectedOwner, weekStart]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoGenerateEnabled, isGenerating, selectedOwner, weekStart]);
 
-  const refreshPlans = () => {
-    if (!selectedOwner) return;
-    setPlan(loadCalendarWeekPlan(selectedOwner.ownerType, selectedOwner.ownerId, weekStart));
-    setOwnerPlans(loadOwnerCalendarPlans(selectedOwner.ownerType, selectedOwner.ownerId));
+  // ── Event editing ──
+  const openNewDraft = (date: string) => {
+    const base = createDefaultScheduleDraft(date);
+    setEditingItem({
+      date: base.date,
+      startTime: base.startTime,
+      endTime: base.endTime,
+      location: base.location,
+      title: base.title,
+      emoji: base.emoji,
+    });
   };
 
-  const moveWeek = (delta: number) => {
-    const next = parseIsoDate(weekStart);
-    next.setDate(next.getDate() + delta * 7);
-    setWeekStart(getWeekStartIso(next));
-    const nextSelected = parseIsoDate(selectedDate);
-    nextSelected.setDate(nextSelected.getDate() + delta * 7);
-    setSelectedDate(formatIsoDate(nextSelected));
+  const openEditItem = (item: CalendarScheduleItem) => {
+    setEditingItem({
+      id: item.id,
+      date: item.date,
+      endDate: item.date,
+      originalDate: item.date,
+      startTime: item.startTime,
+      endTime: item.endTime,
+      location: item.location,
+      title: item.title,
+      emoji: item.emoji || "",
+      colorKey: item.colorKey,
+    });
+  };
+
+  const handleSaveDraft = () => {
+    if (!selectedOwner || !editingItem) return;
+    const error = validateScheduleDraft(editingItem);
+    if (error) {
+      onNotice?.(error);
+      return;
+    }
+    const startDate = editingItem.date;
+    const endDate = editingItem.endDate || editingItem.date;
+    if (endDate < startDate) {
+      onNotice?.("End date cannot be before the start date");
+      return;
+    }
+    const dayCount = Math.round((parseIsoDate(endDate).getTime() - parseIsoDate(startDate).getTime()) / 86400000) + 1;
+    if (dayCount > 31) {
+      onNotice?.("You can create at most 31 days of schedule at once");
+      return;
+    }
+    const firstWeekStart = getWeekStartIso(parseIsoDate(startDate));
+    // Moved to a different week: remove from the original week first.
+    if (editingItem.id && editingItem.originalDate) {
+      const originalWeekStart = getWeekStartIso(parseIsoDate(editingItem.originalDate));
+      if (originalWeekStart !== firstWeekStart) {
+        deleteCalendarScheduleItem(selectedOwner.ownerType, selectedOwner.ownerId, originalWeekStart, editingItem.id);
+      }
+    }
+    // Multi-day: the first day keeps the original id (edit case), each further day gets its own new item.
+    for (let offset = 0; offset < dayCount; offset++) {
+      const day = parseIsoDate(startDate);
+      day.setDate(day.getDate() + offset);
+      const dayIso = formatIsoDate(day);
+      upsertCalendarScheduleItem(selectedOwner.ownerType, selectedOwner.ownerId, getWeekStartIso(parseIsoDate(dayIso)), {
+        id: offset === 0 ? editingItem.id : undefined,
+        date: dayIso,
+        startTime: editingItem.startTime,
+        endTime: editingItem.endTime,
+        location: editingItem.location,
+        title: editingItem.title,
+        emoji: sanitizeScheduleEmoji(editingItem.emoji),
+        source: "manual",
+        colorKey: editingItem.colorKey ?? pickScheduleColorKey(editingItem.startTime),
+      });
+    }
+    setEditingItem(null);
+    refreshPlans();
+    onNotice?.(dayCount > 1 ? `Created ${dayCount} days of schedule` : "Event saved");
+  };
+
+  const handleDeleteItem = () => {
+    if (!selectedOwner || !editingItem?.id) return;
+    const targetWeekStart = getWeekStartIso(parseIsoDate(editingItem.originalDate || editingItem.date));
+    deleteCalendarScheduleItem(selectedOwner.ownerType, selectedOwner.ownerId, targetWeekStart, editingItem.id);
+    setEditingItem(null);
+    refreshPlans();
+    onNotice?.("Event deleted");
   };
 
   const handleGenerate = async () => {
@@ -422,36 +380,7 @@ export function PhoneCalendarApp({
     onNotice?.("This week's schedule has been generated");
   };
 
-  const handleSaveDraft = () => {
-    if (!selectedOwner || !editingItem) return;
-    const error = validateScheduleDraft(editingItem);
-    if (error) {
-      onNotice?.(error);
-      return;
-    }
-    upsertCalendarScheduleItem(selectedOwner.ownerType, selectedOwner.ownerId, weekStart, {
-      id: editingItem.id,
-      date: editingItem.date,
-      startTime: editingItem.startTime,
-      endTime: editingItem.endTime,
-      location: editingItem.location,
-      title: editingItem.title,
-      source: "manual",
-      colorKey: pickScheduleColorKey(editingItem.startTime),
-    });
-    setEditingItem(null);
-    refreshPlans();
-    onNotice?.("Event saved");
-  };
-
-  const handleDeleteItem = () => {
-    if (!selectedOwner || !editingItem?.id) return;
-    deleteCalendarScheduleItem(selectedOwner.ownerType, selectedOwner.ownerId, weekStart, editingItem.id);
-    setEditingItem(null);
-    refreshPlans();
-    onNotice?.("Event deleted");
-  };
-
+  // ── Menstrual cycle ──
   const refreshMenstrual = () => {
     setMenstrualConfig(loadMenstrualConfig());
     setMenstrualRecords(loadMenstrualRecords());
@@ -488,7 +417,7 @@ export function PhoneCalendarApp({
     const availableCharacterIds = new Set(periodCareCharacterOptions.map(option => option.characterId));
     const periodCareCharacterIds = menstrualDraft.periodCareCharacterIds.filter(id => availableCharacterIds.has(id));
     if (menstrualDraft.periodCareEnabled && periodCareCharacterIds.length === 0) {
-      onNotice?.("Please select at least one character you've chatted with");
+      onNotice?.("Please select at least one character you already have a chat with");
       return;
     }
     const savedConfig = saveMenstrualConfig({
@@ -505,577 +434,302 @@ export function PhoneCalendarApp({
     onNotice?.("Cycle settings saved");
   };
 
-  const handleDeleteMenstrual = (recordId: string) => {
-    setMenstrualRecords(deleteMenstrualRecord(recordId));
-    refreshMenstrual();
-    onNotice?.("Period record deleted");
-  };
-
-  const handleStartMenstrual = () => {
-    setMenstrualConfig(startCurrentPeriod(selectedDate));
-    setMenstrualRecords(loadMenstrualRecords());
-    onNotice?.("Period start recorded");
-  };
-
-  const handleCancelMenstrualStart = () => {
-    setMenstrualConfig(cancelCurrentPeriodStart(selectedDate));
-    setMenstrualRecords(loadMenstrualRecords());
-    onNotice?.("Period start for this day has been undone");
-  };
-
-  const handleFinishMenstrual = () => {
-    const result = finishCurrentPeriod(selectedDate);
-    if (!result.saved) {
-      onNotice?.("Please record the period start first");
-      return;
-    }
-    setMenstrualConfig(result.config);
-    setMenstrualRecords(result.records);
-    onNotice?.("Period end recorded");
-  };
-
-  const handleCancelMenstrualFinish = () => {
-    const result = cancelFinishCurrentPeriod(selectedDate);
-    if (!result.restored) {
-      onNotice?.("Period end for this day hasn't been recorded yet");
-      return;
-    }
-    setMenstrualConfig(result.config);
-    setMenstrualRecords(result.records);
-    onNotice?.("Period end for this day has been undone");
-  };
-
-  const formatSimpleDate = (dateText: string | null) => {
-    if (!dateText) return "Not recorded";
-    const date = parseIsoDate(dateText);
-    return `${date.getMonth() + 1}/${date.getDate()}`;
-  };
-
-  const todayIso = formatIsoDate(new Date());
   const canCancelSelectedStart = menstrualSummary.currentPeriodStartDate === selectedDate && !menstrualSummary.todayFinished;
   const canStartSelected = !menstrualSummary.todayStarted && !menstrualSummary.isPeriodActive;
   const canCancelSelectedFinish = menstrualSummary.todayFinished;
-  const canFinishSelected = menstrualSummary.isPeriodActive && !!menstrualSummary.currentPeriodStartDate && selectedDate >= menstrualSummary.currentPeriodStartDate && !menstrualSummary.todayFinished;
+  const canFinishSelected =
+    menstrualSummary.isPeriodActive &&
+    !!menstrualSummary.currentPeriodStartDate &&
+    selectedDate >= menstrualSummary.currentPeriodStartDate &&
+    !menstrualSummary.todayFinished;
+
+  const cycleStateForSelected = cycleMap?.get(selectedDate) ?? null;
+  const cycleSummaryLine = cycleStateForSelected
+    ? `Cycle · ${cycleStateForSelected.label || cycleStateForSelected.shortLabel}`
+    : menstrualSummary.isPeriodActive && menstrualSummary.currentPeriodStartDate
+      ? `This period started ${formatSimpleDate(menstrualSummary.currentPeriodStartDate)}`
+      : menstrualSummary.latest
+        ? null
+        : "Tap “Period started” to begin tracking and predicting";
+
+  // Detail page's cycle check-in row (user view only).
+  const cyclePanel = selectedOwner?.ownerType === "user" ? (
+    <div className="calendar-cycle-line">
+      <i className="calendar-cycle-dot" data-type={cycleStateForSelected?.type ?? "period"} aria-hidden="true" />
+      <span className="calendar-cycle-line-text">{cycleSummaryLine ?? "Cycle record"}</span>
+      {canCancelSelectedStart ? (
+        <button type="button" className="calendar-mini-btn" data-variant="primary" onClick={() => {
+          setMenstrualConfig(cancelCurrentPeriodStart(selectedDate));
+          setMenstrualRecords(loadMenstrualRecords());
+          onNotice?.("Undid “period started” for this day");
+        }}>Undo start</button>
+      ) : (
+        <button type="button" className="calendar-mini-btn" data-variant="primary" disabled={!canStartSelected} onClick={() => {
+          setMenstrualConfig(startCurrentPeriod(selectedDate));
+          setMenstrualRecords(loadMenstrualRecords());
+          onNotice?.("Recorded “period started”");
+        }}>Period started</button>
+      )}
+      {canCancelSelectedFinish ? (
+        <button type="button" className="calendar-mini-btn" data-variant="primary" onClick={() => {
+          const result = cancelFinishCurrentPeriod(selectedDate);
+          if (!result.restored) {
+            onNotice?.("No “period ended” record for this day yet");
+            return;
+          }
+          setMenstrualConfig(result.config);
+          setMenstrualRecords(result.records);
+          onNotice?.("Undid “period ended” for this day");
+        }}>Undo end</button>
+      ) : (
+        <button type="button" className="calendar-mini-btn" data-variant="ghost" disabled={!canFinishSelected} onClick={() => {
+          const result = finishCurrentPeriod(selectedDate);
+          if (!result.saved) {
+            onNotice?.("Please record “period started” first");
+            return;
+          }
+          setMenstrualConfig(result.config);
+          setMenstrualRecords(result.records);
+          onNotice?.("Recorded “period ended”");
+        }}>Period ended</button>
+      )}
+    </div>
+  ) : null;
+
+  const ownerStrip = (
+    <section className="calendar-owner-strip hide-scrollbar">
+      {owners.map(owner => (
+        <button
+          key={owner.key}
+          type="button"
+          className="calendar-owner-chip"
+          data-active={owner.key === selectedKey ? "true" : undefined}
+          onClick={() => {
+            setFabMenuOpen(false);
+            setSelectedKey(owner.key);
+            setSelectedDate(todayIso);
+          }}
+        >
+          <Avatar src={owner.avatar || undefined} name={owner.name} size="md" />
+          <span>{owner.name}</span>
+        </button>
+      ))}
+    </section>
+  );
+
+  const openDetail = (date: string) => {
+    setSelectedDate(date);
+    setDetailKey(k => k + 1);
+    setView("detail");
+  };
 
   return (
     <div className="calendar-app-shell" data-calendar-theme={config.theme}>
-      {appliedCalendarCss && <style dangerouslySetInnerHTML={{ __html: scopeSessionCSS(appliedCalendarCss, ".calendar-app-shell") }} />}
+      {appliedCalendarCss && <SessionCustomCSS css={appliedCalendarCss} scope=".calendar-app-shell" />}
       <div className="calendar-app">
-        <header className="calendar-header">
-          <div className="calendar-header-left">
-            <button type="button" className="calendar-header-action" onClick={onClose} aria-label="Back">
-              <ChevronLeft size={20} />
-            </button>
-          </div>
-          <div className="calendar-header-center">
-            <span className="calendar-header-eyebrow">Weekly Planner</span>
-          </div>
-          <div className="calendar-header-right">
-            <button type="button" className="calendar-header-action" onClick={() => setShowThemePanel(true)} aria-label="Theme color">
-              <Palette size={18} />
-            </button>
-          </div>
-        </header>
+        {view === "month" ? (
+          <CalendarMonthPage
+            todayIso={todayIso}
+            itemsByDate={itemsByDate}
+            cycleMap={cycleMap}
+            ownerStrip={ownerStrip}
+            onPickDay={openDetail}
+            onClose={onClose}
+            onOpenTheme={() => setShowThemePanel(true)}
+          />
+        ) : (
+          <CalendarDetailPage
+            key={detailKey}
+            initialDate={selectedDate}
+            todayIso={todayIso}
+            itemsByDate={itemsByDate}
+            cycleMap={cycleMap}
+            cyclePanel={cyclePanel}
+            daysPerPage={config.daysPerPage}
+            onOpenDaysPicker={() => setShowDaysPanel(true)}
+            onOpenCycleSettings={selectedOwner?.ownerType === "user" ? openMenstrualSettings : null}
+            onBack={() => setView("month")}
+            onSelectedChange={setSelectedDate}
+            onEditItem={openEditItem}
+          />
+        )}
 
-        <div className="calendar-scroll hide-scrollbar">
-          <section
-            ref={ownerStripRef}
-            className="calendar-owner-strip hide-scrollbar"
-            onScroll={handleScroll}
-            onMouseDown={handleMouseDown}
-            onMouseLeave={handleMouseLeave}
-            onMouseUp={handleMouseUp}
-            onMouseMove={handleMouseMove}
-          >
-            {owners.map(owner => (
+        {fabMenuOpen ? <div className="calendar-fab-backdrop" onClick={() => setFabMenuOpen(false)} /> : null}
+        <div className="calendar-fab-stack">
+          {fabMenuOpen && selectedOwner?.ownerType === "character" ? (
+            <div className="calendar-fab-menu" role="menu">
               <button
-                key={owner.key}
                 type="button"
-                className="calendar-owner-chip"
-                data-key={owner.key}
-                data-active={owner.key === selectedKey ? "true" : undefined}
-                onClick={(e) => {
-                  if (Math.abs(ownerStripRef.current!.scrollLeft - scrollLeft.current) > 5) {
-                    e.preventDefault();
-                    return;
-                  }
-                  isClicking.current = true;
-                  setSelectedKey(owner.key);
-                  setWeekStart(getWeekStartIso(new Date()));
-                  setSelectedDate(formatIsoDate(new Date()));
+                className="calendar-fab-menu-item"
+                onClick={() => {
+                  setFabMenuOpen(false);
+                  openNewDraft(view === "detail" ? selectedDate : todayIso);
                 }}
               >
-                <Avatar src={owner.avatar || undefined} name={owner.name} size="lg" />
-                <span>{owner.name}</span>
+                <Plus size={15} />
+                New Event
               </button>
-            ))}
-          </section>
-
-          <div className="calendar-week-card">
-            <div className="calendar-hero">
-              <div className="calendar-hero-copy">
-                <span className="calendar-hero-kicker">
-                  {selectedOwner?.ownerType === "user" ? "Manual" : "Character Schedule"}
-                </span>
-                <div className="calendar-week-title">
-                  <strong>{selectedOwner?.name || "Schedule"}</strong>
-                  <span className="calendar-week-owner">{formatWeekRangeLabel(weekStart)}</span>
-                </div>
-              </div>
-              <div className="calendar-hero-stat">
-                <span>This week's events</span>
-                <strong>{weekEventCount}</strong>
-              </div>
-            </div>
-
-            <div className="calendar-unified-grid">
-              <div className="calendar-unified-weekdays">
-                {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map(label => (
-                  <span key={label}>{label}</span>
-                ))}
-              </div>
-              <div className="calendar-unified-body">
-                {monthMatrix.map((week, weekIdx) => {
-                  const isCurrentWeek = week.some(d => isDateInWeek(d, weekStart));
-                  if (!monthExpanded && !isCurrentWeek) return null;
-                  return (
-                    <div
-                      key={weekIdx}
-                      className="calendar-unified-row"
-                      data-current={isCurrentWeek ? "true" : undefined}
-                    >
-                      {week.map(date => {
-                        const hasItems = countsByDate.has(date);
-                        const isOutside = !isSameMonth(date, weekStart);
-                        const isInWeek = isDateInWeek(date, weekStart);
-                        const menstrualState = selectedOwner?.ownerType === "user" ? weekMenstrualMap.get(date) || menstrualDayMap.get(date) : null;
-                        return (
-                          <button
-                            key={date}
-                            type="button"
-                            className="calendar-unified-cell"
-                            data-outside={isOutside ? "true" : undefined}
-                            data-in-week={isInWeek ? "true" : undefined}
-                            data-has-items={hasItems ? "true" : undefined}
-                            data-selected={date === selectedDate ? "true" : undefined}
-                            data-today={date === todayIso ? "true" : undefined}
-                            data-cycle={menstrualState?.type}
-                            onClick={() => {
-                              setWeekStart(getWeekStartIso(parseIsoDate(date)));
-                              setSelectedDate(date);
-                            }}
-                          >
-                            <span className="calendar-unified-date">{parseIsoDate(date).getDate()}</span>
-                            <span className="calendar-unified-indicators">
-                              {menstrualState ? <i className="calendar-unified-cycle-dot" data-type={menstrualState.type} /> : null}
-                              {hasItems ? <i className="calendar-unified-dot" /> : null}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="calendar-week-header">
-              <button type="button" className="calendar-month-toggle" onClick={() => setMonthExpanded(prev => !prev)} aria-label={monthExpanded ? "Collapse month view" : "Expand month view"}>
-                <ChevronDown size={16} style={{ transform: monthExpanded ? "rotate(180deg)" : undefined, transition: "transform 0.3s" }} />
+              <button
+                type="button"
+                className="calendar-fab-menu-item"
+                disabled={isGenerating}
+                onClick={() => {
+                  setFabMenuOpen(false);
+                  setShowGenerateConfirm(true);
+                }}
+              >
+                <Wand2 size={15} />
+                {isGenerating ? "Generating…" : "AI Generate This Week"}
               </button>
-            </div>
-          </div>
-
-          {selectedOwner?.ownerType === "user" ? (
-            <div className="calendar-menstrual-card">
-              <div className="calendar-menstrual-head">
-                <div className="calendar-menstrual-copy">
-                  <span className="calendar-menstrual-kicker">Cycle Tracker</span>
-                  <div className="calendar-menstrual-title-row">
-                    <strong>Period Log</strong>
-                    {menstrualSummary.todayState ? (
-                      <span className="calendar-menstrual-title-tag" data-type={menstrualSummary.todayState.type}>
-                        {menstrualSummary.todayState.shortLabel}
-                      </span>
-                    ) : null}
-                  </div>
-                  <span>
-                    {menstrualSummary.isPeriodActive
-                      ? `This period started on ${formatSimpleDate(menstrualSummary.currentPeriodStartDate)}`
-                      : menstrualSummary.latest
-                        ? "Predicted period and ovulation days are marked on the calendar based on your latest record"
-                        : "Tap \"Period Started\" to begin predicting your period and ovulation days"}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className="calendar-menstrual-settings-trigger"
-                  onClick={openMenstrualSettings}
-                  aria-label="Cycle settings"
-                  title="Cycle settings"
-                >
-                  <MoreHorizontal size={17} />
-                </button>
-              </div>
-
-              <div className="calendar-menstrual-action-row">
-                <button
-                  type="button"
-                  className="calendar-menstrual-pill"
-                  data-active={menstrualSummary.todayStarted ? "true" : undefined}
-                  onClick={canCancelSelectedStart ? handleCancelMenstrualStart : handleStartMenstrual}
-                  disabled={!canCancelSelectedStart && !canStartSelected}
-                >
-                  <span className="calendar-menstrual-pill-label">
-                    <Droplets size={12} />
-                    Period Started
-                  </span>
-                  <span className="calendar-menstrual-pill-switch" aria-hidden="true">
-                    <span className="calendar-menstrual-pill-switch-thumb" />
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="calendar-menstrual-pill"
-                  data-active={menstrualSummary.todayFinished ? "true" : undefined}
-                  onClick={canCancelSelectedFinish ? handleCancelMenstrualFinish : handleFinishMenstrual}
-                  disabled={!canCancelSelectedFinish && !canFinishSelected}
-                >
-                  <span className="calendar-menstrual-pill-label">
-                    <Droplets size={12} />
-                    Period Ended
-                  </span>
-                  <span className="calendar-menstrual-pill-switch" aria-hidden="true">
-                    <span className="calendar-menstrual-pill-switch-thumb" />
-                  </span>
-                </button>
-              </div>
-
-              <div className="calendar-menstrual-stats">
-                <div className="calendar-menstrual-stat-row">
-                  <div className="calendar-menstrual-stat">
-                    <span>Last period</span>
-                    <strong>
-                      {menstrualSummary.latest
-                        ? `${formatSimpleDate(menstrualSummary.latest.startDate)} - ${formatSimpleDate(menstrualSummary.latest.endDate)}`
-                        : "No record yet"}
-                    </strong>
-                  </div>
-                  <div className="calendar-menstrual-stat calendar-menstrual-stat-column-only">
-                    <span>Cycle / Period</span>
-                    <strong>{menstrualConfig.cycleLength}d / {menstrualConfig.periodLength}d</strong>
-                  </div>
-                </div>
-              </div>
-
-              <div className="calendar-menstrual-legend">
-                <span data-type="period">Period</span>
-                <span data-type="predicted_period">Predicted</span>
-                <span data-type="fertile">Fertile</span>
-                <span data-type="ovulation">Ovulation</span>
-              </div>
+              <button
+                type="button"
+                className="calendar-fab-menu-item"
+                data-on={autoGenerateEnabled ? "true" : undefined}
+                onClick={() => {
+                  setFabMenuOpen(false);
+                  setShowAutoConfirm(true);
+                }}
+              >
+                <Bot size={15} />
+                Weekly Auto-Generate
+                <i className="calendar-fab-menu-state">{autoGenerateEnabled ? "On" : "Off"}</i>
+              </button>
             </div>
           ) : null}
-
-          <div className="calendar-grid-card">
-            <div className="calendar-grid-header" onClick={() => setExpandedDate(null)} style={{ cursor: "pointer" }}>
-              <div className="calendar-grid-heading">
-                <strong>This Week's Schedule</strong>
-                <span>{selectedOwner?.ownerType === "user" ? "Manually keep track of your schedule" : "View the character's time blocks like a timetable"}</span>
-              </div>
-              <span className="calendar-grid-counter">{weekEventCount} events</span>
-            </div>
-
-            {!plan || plan.items.length === 0 ? (
-              <EmptyState
-                icon={CalendarDays}
-                message={selectedOwner?.ownerType === "user" ? "Nothing scheduled this week" : "This character has nothing scheduled this week"}
-                action={selectedOwner?.ownerType === "character" ? (
-                  <button
-                    type="button"
-                    className="ui-btn calendar-generate-button mt-3"
-                    data-loading={isGenerating ? "true" : undefined}
-                    onClick={() => setShowGenerateConfirm(true)}
-                    disabled={isGenerating}
-                    aria-busy={isGenerating}
-                  >
-                    <Wand2 size={16} className="calendar-generate-button-icon" />
-                    <CalendarGeneratingLabel loading={isGenerating} idle="Generate Schedule" />
-                  </button>
-                ) : undefined}
-              />
-            ) : (
-              <div className="calendar-grid-shell">
-                <div className="calendar-grid-days-head">
-                  <span />
-                  <div className="calendar-grid-day-heads" style={expandedDate ? { gridTemplateColumns: weekDates.map(d => d === expandedDate ? "3fr" : "1fr").join(" ") } : undefined}>
-                    {weekDates.map(date => (
-                      <div
-                        key={date}
-                        className="calendar-grid-day-head"
-                        data-selected={date === expandedDate ? "true" : undefined}
-                        onClick={() => setExpandedDate(prev => prev === date ? null : date)}
-                        style={{ cursor: "pointer" }}
-                      >
-                        <strong>{getWeekdayLabel(date)}</strong>
-                        <span>{formatMonthDay(date)}</span>
-                        {selectedOwner?.ownerType === "user" && weekMenstrualMap.get(date) ? (
-                          <i className="calendar-grid-day-phase-dot" data-type={weekMenstrualMap.get(date)?.type} />
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="calendar-grid-layout">
-                  <div className="calendar-time-column">
-                    {Array.from({ length: CALENDAR_HOUR_END - CALENDAR_HOUR_START }, (_, idx) => CALENDAR_HOUR_START + idx).map(hour => (
-                      <span key={hour}>{String(hour).padStart(2, "0")}:00</span>
-                    ))}
-                  </div>
-                  <div className="calendar-day-columns" style={expandedDate ? { gridTemplateColumns: weekDates.map(d => d === expandedDate ? "3fr" : "1fr").join(" ") } : undefined}>
-                    {weekDates.map(date => (
-                      <div key={date} className="calendar-day-column">
-                        {Array.from({ length: CALENDAR_HOUR_END - CALENDAR_HOUR_START }, (_, idx) => (
-                          <div key={idx} className="calendar-hour-cell" />
-                        ))}
-                        {(itemsByDate.get(date) || []).map(item => {
-                          const start = timeToMinutes(item.startTime);
-                          const end = timeToMinutes(item.endTime);
-                          const top = ((start - CALENDAR_HOUR_START * 60) / TOTAL_MINUTES) * 100;
-                          const height = Math.max(((end - start) / TOTAL_MINUTES) * 100, 5.5);
-                          return (
-                            <button
-                              key={item.id}
-                              type="button"
-                              className="calendar-event-block"
-                              data-color={item.colorKey}
-                              style={{ top: `${top}%`, height: `${height}%` }}
-                              onClick={() =>
-                                setEditingItem({
-                                  id: item.id,
-                                  date: item.date,
-                                  startTime: item.startTime,
-                                  endTime: item.endTime,
-                                  location: item.location,
-                                  title: item.title,
-                                })
-                              }
-                            >
-                              <strong>{item.title}</strong>
-                              <span><Clock3 size={12} />{item.startTime}-{item.endTime}</span>
-                              <span><MapPin size={12} />{item.location || "TBD"}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
+          <button
+            type="button"
+            className="calendar-fab calendar-fab-primary"
+            data-loading={isGenerating ? "true" : undefined}
+            onClick={() => {
+              if (selectedOwner?.ownerType === "character") {
+                setFabMenuOpen(prev => !prev);
+              } else {
+                openNewDraft(view === "detail" ? selectedDate : todayIso);
+              }
+            }}
+            aria-label={selectedOwner?.ownerType === "character" ? "Schedule actions menu" : "New event"}
+            aria-expanded={selectedOwner?.ownerType === "character" ? fabMenuOpen : undefined}
+          >
+            <Plus size={20} style={{ transform: fabMenuOpen ? "rotate(45deg)" : undefined, transition: "transform 0.2s" }} />
+          </button>
         </div>
-
-          <div className="calendar-fab-stack">
-            {selectedOwner?.ownerType === "character" ? (
-              <>
-                <button
-                  type="button"
-                  className={`calendar-fab ${autoGenerateEnabled ? 'calendar-fab-primary' : 'calendar-fab-secondary'}`}
-                  onClick={() => setShowAutoConfirm(true)}
-                  aria-label="Toggle auto-generation"
-                >
-                  <Bot size={18} />
-                </button>
-                <button
-                  type="button"
-                  className="calendar-fab calendar-fab-secondary"
-                  onClick={() => setShowGenerateConfirm(true)}
-                  disabled={isGenerating}
-                  data-loading={isGenerating ? "true" : undefined}
-                  aria-label="AI generate and overwrite this week's schedule"
-                >
-                  <Wand2 size={18} />
-                </button>
-              </>
-            ) : null}
-            <button
-              type="button"
-              className="calendar-fab calendar-fab-primary"
-              onClick={() => setEditingItem(createDefaultScheduleDraft(weekDates[0]))}
-              aria-label="Add event"
-            >
-              <Plus size={18} />
-            </button>
-          </div>
       </div>
 
       {showThemePanel && (
         <div className="modal-overlay calendar-edit-modal-overlay" onClick={() => setShowThemePanel(false)}>
-          <div className="calendar-edit-modal" style={{ padding: 24 }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="ts-14 font-semibold text-[var(--c-calendar-text)]">Theme Color</div>
-              <button type="button" onClick={() => setShowThemePanel(false)} className="p-1 rounded-full" style={{ color: "var(--c-calendar-sub)" }}>
-                <X size={18} />
+          <div className="calendar-edit-modal calendar-theme-modal" onClick={e => e.stopPropagation()}>
+            <div className="calendar-theme-modal-head">
+              <strong>Theme</strong>
+              <button type="button" onClick={() => setShowThemePanel(false)} className="calendar-icon-btn" aria-label="Close">
+                <X size={16} />
               </button>
             </div>
-            <div className="flex flex-wrap gap-3 justify-start">
-              {[
-                { id: "ocean", color: "#7BC6EC", name: "Ocean" },
-                { id: "orange", color: "#FF7E5F", name: "Citrus" },
-                { id: "honey", color: "#D4A373", name: "Honey" },
-                { id: "mint", color: "#80CBC4", name: "Mint" },
-                { id: "mist", color: "#B399D4", name: "Mist" },
-                { id: "melon", color: "#D1E5D0", name: "Melon" }
-              ].map(t => (
+            <div className="calendar-theme-grid">
+              {CALENDAR_THEMES.map(theme => (
                 <button
-                  key={t.id}
+                  key={theme.id}
+                  type="button"
+                  className="calendar-theme-option"
+                  data-active={config.theme === theme.id ? "true" : undefined}
                   onClick={() => {
-                    const nextConfig = { ...config, theme: t.id };
+                    const nextConfig = { ...config, theme: theme.id };
                     setConfig(nextConfig);
                     saveCalendarConfig(nextConfig);
                   }}
-                  className="flex flex-col items-center gap-1"
                 >
-                  <div
-                    style={{
-                      width: 32, height: 32, borderRadius: "50%",
-                      background: t.color,
-                      border: config.theme === t.id ? "2px solid var(--c-calendar-text)" : "2px solid transparent",
-                      boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                      transition: "all 0.2s"
-                    }}
-                  />
-                  <span className="ts-11 text-[var(--c-calendar-sub)]">{t.name}</span>
+                  <span className="calendar-theme-swatch" data-theme-id={theme.id} aria-hidden="true" />
+                  <span>{theme.name}</span>
                 </button>
               ))}
             </div>
 
-            <div className="ts-14 font-semibold text-[var(--c-calendar-text)] mt-5 mb-2">Custom CSS</div>
+            <div className="calendar-theme-css-label">Custom CSS</div>
             <textarea
-              className="w-full ts-12 px-3 py-2 rounded-lg"
-              style={{
-                background: "var(--c-calendar-glass-5)",
-                border: "1px solid var(--c-calendar-glass-4)",
-                color: "var(--c-calendar-text)",
-                height: 280, resize: "none",
-                fontFamily: "'SF Mono', 'Menlo', 'Monaco', monospace",
-                lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-all",
-              }}
+              className="calendar-css-textarea"
               value={calendarCustomCss}
               onChange={e => setCalendarCustomCss(e.target.value)}
-              placeholder="/* Enter CSS to override calendar styles... */"
+              placeholder="/* Enter CSS to override the calendar's styling... */"
               spellCheck={false}
               autoCapitalize="off"
               autoCorrect="off"
             />
-            <div className="flex gap-1 mt-2 items-center">
-              <CSSSchemeBar target="calendar" currentCSS={calendarCustomCss} onLoad={setCalendarCustomCss} btnStyle={{
-                width: 30, height: 30,
-                border: "1px solid var(--c-calendar-border, rgba(167,139,250,0.2))",
-                background: "var(--c-calendar-glass-5, rgba(255,255,255,0.1))",
-                color: "var(--c-calendar-text, #4A6B7C)",
-              }} modalVars={{
-                panel: "var(--c-calendar-bg-top, #E8F4F8)",
-                border: "var(--c-calendar-border, rgba(167,139,250,0.2))",
-                text: "var(--c-calendar-text, #4A6B7C)",
-                textDim: "var(--c-calendar-sub, #8AA8B8)",
-                input: "var(--c-calendar-glass-5, rgba(255,255,255,0.1))",
-                inputBorder: "var(--c-calendar-border, rgba(167,139,250,0.2))",
-                accent: "var(--c-calendar-action, #5B8FB9)",
-              }} />
-              <button type="button" className="ui-btn ui-btn-outline flex-1" style={{ borderColor: "var(--c-calendar-action)", color: "var(--c-calendar-action)", fontSize: "calc(11px*var(--app-text-scale,1))", padding: "6px 0", minWidth: 0 }} onClick={() => setCalendarCustomCss(CALENDAR_CSS_EXAMPLE)}>Example</button>
-              <button type="button" className="ui-btn ui-btn-outline flex-1" style={{ borderColor: "var(--c-calendar-action)", color: "var(--c-calendar-action)", fontSize: "calc(11px*var(--app-text-scale,1))", padding: "6px 0", minWidth: 0 }} onClick={() => setCalendarCustomCss("")}>Clear</button>
-              <button type="button" className="ui-btn ui-btn-primary flex-1" style={{ background: "var(--c-calendar-action)", fontSize: "calc(11px*var(--app-text-scale,1))", padding: "6px 0", minWidth: 0 }} onClick={handleApplyCalendarCss}>Apply</button>
+            <div className="calendar-theme-css-actions">
+              <CSSSchemeBar
+                target="calendar"
+                currentCSS={calendarCustomCss}
+                onLoad={setCalendarCustomCss}
+                btnStyle={{
+                  width: 30,
+                  height: 30,
+                  border: "none",
+                  background: "var(--c-calendar-surface)",
+                  color: "var(--c-calendar-ink)",
+                }}
+                modalVars={{
+                  panel: "var(--c-calendar-bg)",
+                  border: "var(--c-calendar-surface-2)",
+                  text: "var(--c-calendar-ink)",
+                  textDim: "var(--c-calendar-sub)",
+                  input: "var(--c-calendar-surface)",
+                  inputBorder: "var(--c-calendar-surface-2)",
+                  accent: "var(--c-calendar-today)",
+                }}
+              />
+              <button type="button" className="calendar-block-btn" data-variant="ghost" onClick={() => setCalendarCustomCss(CALENDAR_CSS_EXAMPLE)}>Example</button>
+              <button type="button" className="calendar-block-btn" data-variant="ghost" onClick={() => setCalendarCustomCss("")}>Clear</button>
+              <button type="button" className="calendar-block-btn" data-variant="primary" onClick={handleApplyCalendarCss}>Apply</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDaysPanel && (
+        <div className="modal-overlay calendar-edit-modal-overlay" onClick={() => setShowDaysPanel(false)}>
+          <div className="calendar-edit-modal calendar-days-modal" onClick={e => e.stopPropagation()}>
+            <div className="calendar-theme-modal-head">
+              <strong>Days Per Page</strong>
+              <button type="button" onClick={() => setShowDaysPanel(false)} className="calendar-icon-btn" aria-label="Close">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="calendar-days-options">
+              {CALENDAR_DAYS_PER_PAGE_OPTIONS.map(n => (
+                <button
+                  key={n}
+                  type="button"
+                  className="calendar-days-option"
+                  data-active={config.daysPerPage === n ? "true" : undefined}
+                  onClick={() => {
+                    const nextConfig = { ...config, daysPerPage: n };
+                    setConfig(nextConfig);
+                    saveCalendarConfig(nextConfig);
+                    setShowDaysPanel(false);
+                  }}
+                >
+                  <b>{n}</b>
+                  <span>{n === 1 ? "1 day" : `${n} days`}</span>
+                </button>
+              ))}
             </div>
           </div>
         </div>
       )}
 
       {editingItem && (
-        <div className="modal-overlay calendar-edit-modal-overlay" onClick={() => setEditingItem(null)}>
-          <div className="calendar-edit-modal" data-ui="calendar-edit-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header" data-ui="modal-header">
-              <button onClick={() => setEditingItem(null)} className="modal-header-btn modal-header-btn-muted">
-                <ChevronLeft size={18} />
-              </button>
-              <span className="modal-header-title">{editingItem.id ? "Edit Event" : "New Event"}</span>
-              <button onClick={handleSaveDraft} className="modal-header-btn modal-header-btn-action" aria-label="Save">
-                <Check size={18} />
-              </button>
-            </div>
-
-            <div className="modal-body hide-scrollbar flex flex-col gap-3 pb-10" data-ui="modal-body">
-              <div className="flex flex-col gap-3">
-                {/* Row 1: Date */}
-                <div className="flex flex-col gap-1">
-                  <label className="menu-desc ml-1">Date</label>
-                  <Select
-                    value={editingItem.date}
-                    onChange={e => setEditingItem(prev => prev ? { ...prev, date: e.target.value } : prev)}
-                  >
-                    {weekDates.map(date => (
-                      <option key={date} value={date}>{date} {getWeekdayLabel(date)}</option>
-                    ))}
-                  </Select>
-                </div>
-
-                {/* Row 2: Start Time and End Time */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label className="menu-desc ml-1">Start Time</label>
-                    <Input
-                      type="time"
-                      value={editingItem.startTime}
-                      onChange={e => setEditingItem(prev => prev ? { ...prev, startTime: e.target.value } : prev)}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="menu-desc ml-1">End Time</label>
-                    <Input
-                      type="time"
-                      value={editingItem.endTime}
-                      onChange={e => setEditingItem(prev => prev ? { ...prev, endTime: e.target.value } : prev)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="menu-desc ml-1">Location</label>
-                <Input
-                  value={editingItem.location}
-                  onChange={e => setEditingItem(prev => prev ? { ...prev, location: e.target.value } : prev)}
-                  placeholder="e.g. Office / Home / Mall"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="menu-desc ml-1">Event</label>
-                <Input
-                  value={editingItem.title}
-                  onChange={e => setEditingItem(prev => prev ? { ...prev, title: e.target.value } : prev)}
-                  placeholder="e.g. Department weekly meeting"
-                />
-              </div>
-
-              {editingItem.id ? (
-                <button type="button" className="ui-btn ui-btn-outline" onClick={handleDeleteItem} style={{ color: "var(--c-danger)" }}>
-                  <Trash2 size={16} />
-                  Delete This Event
-                </button>
-              ) : null}
-            </div>
-          </div>
-        </div>
+        <CalendarEventEditModal
+          draft={editingItem}
+          onChange={next => setEditingItem(prev => (prev ? { ...prev, ...next } : next))}
+          onSave={handleSaveDraft}
+          onDelete={handleDeleteItem}
+          onClose={() => setEditingItem(null)}
+        />
       )}
 
       {showMenstrualSettings && (
         <div className="modal-overlay calendar-edit-modal-overlay" onClick={() => setShowMenstrualSettings(false)}>
           <div className="calendar-edit-modal calendar-menstrual-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header" data-ui="modal-header">
-              <button onClick={() => setShowMenstrualSettings(false)} className="modal-header-btn modal-header-btn-muted">
+              <button onClick={() => setShowMenstrualSettings(false)} className="modal-header-btn modal-header-btn-muted" aria-label="Back">
                 <ChevronLeft size={18} />
               </button>
               <span className="modal-header-title">Cycle Settings</span>
@@ -1119,8 +773,8 @@ export function PhoneCalendarApp({
                     <HeartPulse size={16} />
                   </span>
                   <span className="calendar-menstrual-care-toggle-copy">
-                    <strong>Let them check in on my period</strong>
-                    <span>Only shows characters with existing chat sessions</span>
+                    <strong>Let them look out for my period</strong>
+                    <span>Only shows characters you already have a chat with</span>
                   </span>
                   <span className="calendar-menstrual-pill-switch" aria-hidden="true">
                     <span className="calendar-menstrual-pill-switch-thumb" />
@@ -1130,7 +784,7 @@ export function PhoneCalendarApp({
                 {menstrualDraft.periodCareEnabled ? (
                   <div className="calendar-menstrual-care-body">
                     <div className="calendar-menstrual-care-section">
-                      <label className="menu-desc ml-1">How far ahead to check in</label>
+                      <label className="menu-desc ml-1">How Far Ahead to Check In</label>
                       <div className="calendar-period-care-lead-row">
                         {(["1", "2", "3"] as const).map(value => (
                           <button
@@ -1147,7 +801,7 @@ export function PhoneCalendarApp({
                     </div>
 
                     <div className="calendar-menstrual-care-section">
-                      <label className="menu-desc ml-1">Select Character</label>
+                      <label className="menu-desc ml-1">Choose Characters</label>
                       {periodCareCharacterOptions.length > 0 ? (
                         <div className="calendar-period-care-avatars">
                           {periodCareCharacterOptions.map(option => {
@@ -1167,7 +821,7 @@ export function PhoneCalendarApp({
                           })}
                         </div>
                       ) : (
-                        <div className="calendar-menstrual-empty">Characters with existing chat sessions will show up here.</div>
+                        <div className="calendar-menstrual-empty">Characters you already have a chat with will show up here.</div>
                       )}
                     </div>
                   </div>
@@ -1187,7 +841,11 @@ export function PhoneCalendarApp({
                         <button
                           type="button"
                           className="calendar-menstrual-modal-delete"
-                          onClick={() => handleDeleteMenstrual(record.id)}
+                          onClick={() => {
+                            setMenstrualRecords(deleteMenstrualRecord(record.id));
+                            refreshMenstrual();
+                            onNotice?.("Period record deleted");
+                          }}
                           aria-label="Delete record"
                         >
                           <Trash2 size={14} />
@@ -1197,7 +855,7 @@ export function PhoneCalendarApp({
                   </div>
                 </div>
               ) : (
-                <div className="calendar-menstrual-empty">No completed period records yet. Tap "Period Started" on the main page, then "Period Ended" when it's over.</div>
+                <div className="calendar-menstrual-empty">No completed periods recorded yet. Tap "Period started" on the schedule page, then "Period ended" when it's over.</div>
               )}
             </div>
           </div>
@@ -1207,23 +865,23 @@ export function PhoneCalendarApp({
       {showGenerateConfirm && selectedOwner && (
         <div className="modal-overlay calendar-edit-modal-overlay" onClick={() => setShowGenerateConfirm(false)}>
           <div className="calendar-edit-modal calendar-confirm-dialog" onClick={e => e.stopPropagation()}>
-            <Wand2 size={28} className="calendar-confirm-icon" />
-            <div className="calendar-confirm-title">
-              Generate schedule?
-            </div>
+            <Wand2 size={26} className="calendar-confirm-icon" />
+            <div className="calendar-confirm-title">Generate this week's schedule?</div>
             <div className="calendar-confirm-desc">
-              This will generate a week's schedule for <strong>{selectedOwner.name}</strong> and overwrite the current one
+              This will generate a week of schedule for <strong>{selectedOwner.name}</strong> and overwrite the current AI-generated plan (manually added events are kept)
             </div>
             <div className="calendar-confirm-footer">
-              <button className="ui-btn ui-btn-outline" style={{ borderColor: "var(--c-calendar-action)", color: "var(--c-calendar-action)" }} onClick={() => setShowGenerateConfirm(false)}>Cancel</button>
+              <button type="button" className="calendar-block-btn" data-variant="ghost" onClick={() => setShowGenerateConfirm(false)}>Cancel</button>
               <button
-                className="ui-btn calendar-generate-button calendar-confirm-generate-button"
+                type="button"
+                className="calendar-block-btn"
+                data-variant="primary"
                 data-loading={isGenerating ? "true" : undefined}
                 onClick={handleGenerate}
                 disabled={isGenerating}
                 aria-busy={isGenerating}
               >
-                <CalendarGeneratingLabel loading={isGenerating} idle="Confirm" />
+                {isGenerating ? "Generating…" : "Confirm"}
               </button>
             </div>
           </div>
@@ -1233,25 +891,30 @@ export function PhoneCalendarApp({
       {showAutoConfirm && selectedOwner && (
         <div className="modal-overlay calendar-edit-modal-overlay" onClick={() => setShowAutoConfirm(false)}>
           <div className="calendar-edit-modal calendar-confirm-dialog" onClick={e => e.stopPropagation()}>
-            <Bot size={28} className="calendar-confirm-icon" />
+            <Bot size={26} className="calendar-confirm-icon" />
             <div className="calendar-confirm-title">
-              {autoGenerateEnabled ? "Turn off auto-generation?" : "Turn on auto-generation?"}
+              {autoGenerateEnabled ? "Turn off auto-generate?" : "Turn on auto-generate?"}
             </div>
             <div className="calendar-confirm-desc">
               {autoGenerateEnabled
-                ? "Weekly schedules will no longer be generated automatically for this character"
-                : <>A schedule will be generated automatically for <strong>{selectedOwner.name}</strong> every week</>}
+                ? "Once off, a weekly schedule will no longer be generated for this character automatically"
+                : <>A weekly schedule will be generated automatically for <strong>{selectedOwner.name}</strong></>}
             </div>
             <div className="calendar-confirm-footer">
-              <button className="ui-btn ui-btn-outline" style={{ borderColor: "var(--c-calendar-action)", color: "var(--c-calendar-action)" }} onClick={() => setShowAutoConfirm(false)}>Cancel</button>
-              <button className="ui-btn ui-btn-primary" style={{ background: "var(--c-calendar-action)" }} onClick={() => {
-                const next = !autoGenerateEnabled;
-                const nextConfig = { ...config, autoGenerateEnabled: next };
-                setConfig(nextConfig);
-                saveCalendarConfig(nextConfig);
-                setShowAutoConfirm(false);
-                onNotice?.(next ? "Weekly auto-generation turned on" : "Weekly auto-generation turned off");
-              }}>
+              <button type="button" className="calendar-block-btn" data-variant="ghost" onClick={() => setShowAutoConfirm(false)}>Cancel</button>
+              <button
+                type="button"
+                className="calendar-block-btn"
+                data-variant="primary"
+                onClick={() => {
+                  const next = !autoGenerateEnabled;
+                  const nextConfig = { ...config, autoGenerateEnabled: next };
+                  setConfig(nextConfig);
+                  saveCalendarConfig(nextConfig);
+                  setShowAutoConfirm(false);
+                  onNotice?.(next ? "Weekly auto-generate turned on" : "Weekly auto-generate turned off");
+                }}
+              >
                 Confirm
               </button>
             </div>

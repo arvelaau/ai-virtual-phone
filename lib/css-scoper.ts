@@ -1,4 +1,29 @@
 /**
+ * Pulls `@import` rules out of a CSS string and returns them separately.
+ *
+ * `@import` cannot stay inside a session's inline `<style>`: while an `@import` is still
+ * loading/retrying, iOS WebKit suspends every rule in the whole stylesheet. Users often
+ * `@import` Google Fonts, and on a flaky connection that request retries and fails repeatedly,
+ * flipping the entire custom CSS between "applied" and "not applied" -- visible as the page
+ * flickering between styled and unstyled at the top/bottom of a scrollable story view. Splitting
+ * it into a separate `<link rel="stylesheet">` means a failed font load only costs the font;
+ * every other rule keeps working.
+ */
+export function extractCssImports(raw: string): { imports: string[]; css: string } {
+  const imports: string[] = [];
+  if (!raw || !raw.includes("@import")) return { imports, css: raw };
+  const css = raw.replace(
+    /@import\s+(?:url\(\s*(['"]?)([^'")]+)\1\s*\)|(['"])([^'"]+)\3)[^;]*;/gi,
+    (_match, _q1, urlInParens: string | undefined, _q2, bareUrl: string | undefined) => {
+      const url = (urlInParens || bareUrl || "").trim();
+      if (url) imports.push(url);
+      return "";
+    }
+  );
+  return { imports, css };
+}
+
+/**
  * Scope raw CSS so every rule selector is prefixed with a scope selector.
  * - `body` / `html` / `:root` selectors are replaced with the scope selector.
  * - `@keyframes` / `@font-face` blocks are passed through unchanged.

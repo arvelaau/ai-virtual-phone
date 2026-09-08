@@ -1802,186 +1802,103 @@ export const VN_CSS_EXAMPLE = `/* ═══ Visual novel styling example ══�
 `;
 
 export const CALENDAR_CSS_EXAMPLE = `/* ══════════════════════════════════════════
-   Calendar page custom styling — Night Sky theme
-   Changes take effect as soon as you hit Save
-   Clear everything and save to go back to the default
+   Calendar page custom styling — Caramel Milk Tea theme
+   Changes take effect as soon as you hit Apply
+   Clear everything and Apply to go back to the default
    ══════════════════════════════════════════ */
 
 /* ━━ All colour variables ━━ */
 .calendar-app-shell {
-  /* the three background gradient stops */
-  --c-calendar-bg-top: #0f0e1a;
-  --c-calendar-bg-mid: #151228;
-  --c-calendar-bg-bottom: #1a1530;
-  /* decorative glow orbs */
-  --c-calendar-orb-1: rgba(100, 60, 220, 0.5);
-  --c-calendar-orb-2: rgba(220, 80, 160, 0.4);
-  /* text */
-  --c-calendar-text: #f0ecfa;
-  --c-calendar-sub: #bdb2da;
-  /* accent */
-  --c-calendar-accent: #a78bfa;
-  --c-calendar-accent-dim: rgba(167, 139, 250, 0.2);
-  /* weekend colour */
-  --c-calendar-weekend: #f472b6;
-  /* buttons and actions */
-  --c-calendar-action: #818cf8;
-  /* dialog background gradient */
-  --c-calendar-modal-pink: rgba(80, 50, 140, 0.4);
-  --c-calendar-modal-blue: rgba(40, 30, 100, 0.4);
-  /* panel background and border */
-  /* glass layers (opacity steps) */
-  --c-calendar-glass-1: rgba(255, 255, 255, 0.04);
-  --c-calendar-glass-3: rgba(255, 255, 255, 0.06);
-  --c-calendar-glass-4: rgba(255, 255, 255, 0.08);
-  --c-calendar-glass-5: rgba(255, 255, 255, 0.1);
-  --c-calendar-glass-55: rgba(255, 255, 255, 0.12);
-  --c-calendar-glass-6: rgba(255, 255, 255, 0.14);
-  --c-calendar-glass-7: rgba(255, 255, 255, 0.18);
-  --c-calendar-glass-8: rgba(255, 255, 255, 0.22);
-  --c-calendar-glass-85: rgba(255, 255, 255, 0.85);
-  --c-calendar-glass-9: rgba(255, 255, 255, 0.9);
-  --c-calendar-glass-full: #fff;
-  /* shadows */
-  --c-calendar-shadow-2: rgba(0, 0, 0, 0.08);
-  --c-calendar-shadow-3: rgba(0, 0, 0, 0.12);
-  --c-calendar-shadow-4: rgba(0, 0, 0, 0.15);
-  --c-calendar-shadow-6: rgba(0, 0, 0, 0.2);
-  --c-calendar-shadow-10: rgba(0, 0, 0, 0.3);
-  --c-calendar-shadow-15: rgba(0, 0, 0, 0.4);
-  /* overlay */
-  /* schedule event palette */
-  --c-calendar-event-blue: #818cf8;
-  --c-calendar-event-green: #34d399;
-  --c-calendar-event-amber: #fbbf24;
-  --c-calendar-event-rose: #fb7185;
-  --c-calendar-event-violet: #a78bfa;
-  --c-calendar-event-teal: #2dd4bf;
-  --c-calendar-event-slate: #94a3b8;
-  --c-calendar-event-purple: #c084fc;
+  /* page background / grey surfaces / sheet background */
+  --c-calendar-bg: #F7F0E6;
+  --c-calendar-surface: #EDE2D2;
+  --c-calendar-surface-2: #E2D4BF;
+  --c-calendar-sheet: #FFFBF4;
+  /* three text tiers */
+  --c-calendar-ink: #453425;
+  --c-calendar-sub: #94816C;
+  --c-calendar-faint: #C8B8A2;
+  /* "today" accent colour */
+  --c-calendar-today: #C96F2E;
+  /* selected-state colour block */
+  --c-calendar-sel-bg: #453425;
+  --c-calendar-sel-fg: #FFF9F0;
+  /* dialog scrim */
+  --c-calendar-scrim: rgba(69, 52, 37, 0.35);
+
+  /* event colour palette (one pair per colour: light bg + dark fg) */
+  --c-calendar-ev-blue-bg: #D8E6EE;   --c-calendar-ev-blue-fg: #35617C;
+  --c-calendar-ev-green-bg: #DEEBD2;  --c-calendar-ev-green-fg: #4C6B35;
+  --c-calendar-ev-amber-bg: #F6E3C5;  --c-calendar-ev-amber-fg: #96601C;
+  --c-calendar-ev-rose-bg: #F4DCDC;   --c-calendar-ev-rose-fg: #A04A4E;
+  --c-calendar-ev-violet-bg: #E5DEEC; --c-calendar-ev-violet-fg: #6A5390;
+  --c-calendar-ev-teal-bg: #D6EAE4;   --c-calendar-ev-teal-fg: #2F6E5F;
+  --c-calendar-ev-slate-bg: #E5E1DA;  --c-calendar-ev-slate-fg: #5C574E;
+  --c-calendar-ev-lilac-bg: #EEDFEC;  --c-calendar-ev-lilac-fg: #8A4E80;
 }
 
-/* ━━ The page overall ━━ */
-.calendar-app {
-  /* swap the whole background here */
-  /* background: linear-gradient(180deg, #0f0e1a, #1a1530); */
-}
-
-/* ━━ Top navigation bar ━━ */
-.calendar-header {
-  /* backdrop-filter: blur(20px); */
-}
-.calendar-header-eyebrow {
-  /* letter-spacing: 2px; */
-}
-.calendar-header-action {
-  /* opacity: 0.8; */
-}
-
-/* ━━ Character / user switcher ━━ */
-.calendar-owner-strip {
-  /* gap: 8px; */
-}
-.calendar-owner-chip {
-  border-radius: 20px;
-  /* box-shadow: 0 2px 12px rgba(167, 139, 250, 0.2); */
-}
-
-/* ━━ Weekday header row ━━ */
-.calendar-week-header {
-  /* padding: 12px 16px; */
-}
-.calendar-week-title {
-  /* font-size: calc(15px*var(--app-text-scale,1)); */
-}
-
-/* ━━ Month grid ━━ */
-.calendar-grid-shell {
-  border-radius: 18px;
-  /* box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3); */
-}
-.calendar-grid-card {
-  border-radius: 10px;
-}
-.calendar-grid-counter {
-  /* font-size: calc(10px*var(--app-text-scale,1)); */
-}
-
-/* ━━ Schedule timeline ━━ */
-.calendar-day-columns {
-  /* gap: 2px; */
-}
-.calendar-day-column {
-  /* min-width: 0; */
-}
-.calendar-event-block {
-  border-radius: 8px;
-  /* box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); */
-}
-
-/* ━━ Combined view ━━ */
-.calendar-unified-grid {
-  /* border-radius: 16px; */
-}
-.calendar-unified-row {
-  /* padding: 8px 12px; */
-}
-.calendar-unified-cell {
-  border-radius: 8px;
-}
-
-/* ━━ Hero card ━━ */
-.calendar-hero {
-  border-radius: 20px;
-  /* box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); */
-}
-.calendar-hero-kicker {
-  /* font-size: calc(11px*var(--app-text-scale,1)); */
-}
-.calendar-hero-stat {
-  color: #fff;
-}
-.calendar-hero-stat strong {
-  background: linear-gradient(135deg, #c4b5fd, #f9a8d4);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-/* ━━ Settings card ━━ */
-.calendar-setting-card {
-  border-radius: 16px;
-}
-.calendar-setting-row {
-  /* padding: 12px 16px; */
-}
-
-/* ━━ Floating button ━━ */
-.calendar-fab {
-  /* box-shadow: 0 4px 16px rgba(167, 139, 250, 0.3); */
+/* ━━ Top bar / floating buttons ━━ */
+.calendar-pill-btn,
+.calendar-icon-btn {
+  /* border-radius: 12px; */
 }
 .calendar-fab-primary {
-  /* background: var(--c-calendar-action); */
-}
-.calendar-fab-secondary {
-  /* opacity: 0.9; */
+  /* background: var(--c-calendar-today); */
 }
 
-/* ━━ Edit dialog ━━ */
+/* ━━ Owner switcher strip ━━ */
+.calendar-owner-chip {
+  /* border-radius: 12px; */
+}
+
+/* ━━ Full-page month view ━━ */
+.calendar-month-title strong {
+  /* font-family: Georgia, "Songti SC", serif; */
+}
+.calendar-month-num {
+  /* font-weight: 700; */
+}
+.calendar-month-lunar {
+  /* display: none; */  /* hide the small lunar-date text */
+}
+.calendar-month-week {
+  /* border-top: none; */  /* remove the week divider line */
+}
+
+/* ━━ Detail page week strip ━━ */
+.calendar-strip-bubble {
+  /* border-radius: 14px; */  /* squared-off selection bubble */
+}
+.calendar-strip-range {
+  /* background: var(--c-calendar-ev-blue-bg); */
+}
+
+/* ━━ Two-day timeline ━━ */
+.calendar-tl-event {
+  /* border-radius: 10px; */
+  /* border-left-width: 5px; */
+}
+.calendar-tl-event span {
+  /* display: none; */  /* show only the title line */
+}
+.calendar-tl-headrow {
+  /* background: var(--c-calendar-surface); */  /* column-head row background */
+}
+.calendar-tl-day-head b {
+  /* color: var(--c-calendar-sub); */  /* column-head date text */
+}
+
+/* ━━ Cycle check-in row ━━ */
+.calendar-cycle-line {
+  /* border-bottom: none; */
+}
+.calendar-mini-btn[data-variant="primary"] {
+  /* background: var(--c-calendar-ev-violet-bg); color: var(--c-calendar-ev-violet-fg); */
+}
+
+/* ━━ Modals ━━ */
 .calendar-edit-modal {
-  border-radius: 24px;
-  /* backdrop-filter: blur(5px) saturate(140%); */
-}
-
-/* ━━ Confirm dialog ━━ */
-.calendar-confirm-dialog {
-  /* max-width: 280px; */
-}
-.calendar-confirm-icon {
-  /* opacity: 0.9; */
-}
-.calendar-confirm-title {
-  /* font-size: calc(15px*var(--app-text-scale,1)); */
+  /* border-radius: 24px; */
 }`;
 
 export const MUSIC_CSS_EXAMPLE = `/* ══════════════════════════════════════════

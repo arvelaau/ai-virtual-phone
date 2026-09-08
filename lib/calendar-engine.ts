@@ -22,14 +22,12 @@ import { getCustomStickerExample, getCustomStickerNames } from "./custom-sticker
 import { previewMessagesForApi, sendLLMRequest, type ChatEngineError } from "./chat-engine";
 import { buildCalendarScheduleMarker, clearGeneratedWeekItems, cloneWeekPlanWithManualEdits, normalizeGeneratedScheduleItems, restoreCalendarWeekItems } from "./calendar-storage";
 import {
-  CALENDAR_HOUR_END,
-  CALENDAR_HOUR_START,
-  formatIsoDate,
   getWeekDates,
   getWeekStartIso,
   getWeekdayLabel,
   isCalendarTimeRangeAllowed,
   normalizeTime,
+  sanitizeScheduleEmoji,
 } from "./calendar-utils";
 
 type CalendarAssemblerResolved = {
@@ -70,6 +68,15 @@ function stripCodeFences(text: string): string {
     .trim();
 }
 
+function buildCalendarTriggerInstruction(ownerName: string, weekDates: string[]): string {
+  return [
+    `Generate the schedule for ${ownerName} for the week of ${weekDates[0]} to ${weekDates[6]}.`,
+    "Take the existing schedule into account and produce a complete plan for this week.",
+    "One line per item, format: YYYY-MM-DD|weekday|start time|end time|location|emoji|activity. Put a single emoji that best fits the activity in the emoji field.",
+    "Activities can happen at any hour (early mornings, night runs, all-nighters are all fine), but at most 5 items per day -- fewer, better items beat a crowded schedule.",
+  ].join("\n");
+}
+
 function parseScheduleLines(rawText: string, weekStart: string): CalendarScheduleItem[] {
   const weekDates = new Set(getWeekDates(weekStart));
   const lines = stripCodeFences(rawText)
@@ -83,6 +90,7 @@ function parseScheduleLines(rawText: string, weekStart: string): CalendarSchedul
     endTime: string;
     location: string;
     title: string;
+    emoji?: string;
   }> = [];
 
   for (const rawLine of lines) {
@@ -101,13 +109,30 @@ function parseScheduleLines(rawText: string, weekStart: string): CalendarSchedul
     if (!startTime || !endTime || !isCalendarTimeRangeAllowed(startTime, endTime)) continue;
 
     // "No location" sentinel. The prompt (lib/builtin-preset.ts, calendar block)
-    // now teaches "none", but the legacy Chinese "无" must keep working for any
-    // model still following an older/custom preset. Accept both, plus a bare dash.
+    // teaches "none", but the legacy Chinese "无" must keep working for any model still
+    // following an older/custom preset. Accept both, plus a bare dash.
     const locationRaw = parts[4];
     const isNoLocation = locationRaw === "无"
         || /^(none|n\/a|-|—)$/i.test(locationRaw.trim());
     const location = isNoLocation ? "" : locationRaw;
-    const title = parts.slice(5).join("|");
+
+    // The new format's 6th field is emoji (YYYY-MM-DD|weekday|start|end|location|emoji|activity);
+    // the legacy format has the activity directly in that position instead. Only treat it as the
+    // new format when that field actually IS a short emoji -- otherwise fall back to the legacy
+    // 6-field reading, so a model or a stored preset still following the old shape keeps parsing.
+    let emoji: string | undefined;
+    let title: string;
+    if (parts.length >= 7) {
+      const candidate = sanitizeScheduleEmoji(parts[5]);
+      if (candidate && Array.from(parts[5]).length <= 3) {
+        emoji = candidate;
+        title = parts.slice(6).join("|");
+      } else {
+        title = parts.slice(5).join("|");
+      }
+    } else {
+      title = parts[5];
+    }
     if (!title.trim()) continue;
 
     parsed.push({
@@ -116,6 +141,7 @@ function parseScheduleLines(rawText: string, weekStart: string): CalendarSchedul
       endTime,
       location,
       title,
+      emoji,
     });
   }
 
@@ -228,11 +254,7 @@ export async function generateWeeklyCalendarSchedule(
   try {
     const resolved = await resolveCalendarAssemblerInput(ownerType, ownerId, weekStart);
     const weekDates = getWeekDates(weekStart);
-    const triggerInstruction = [
-      `Generate the schedule for ${resolved.ownerName} for the week of ${weekDates[0]} to ${weekDates[6]}.`,
-      "Take the existing schedule into account and produce a complete plan for this week.",
-      `Only schedule activities between ${String(CALENDAR_HOUR_START).padStart(2, "0")}:00 and ${String(CALENDAR_HOUR_END).padStart(2, "0")}:00.`,
-    ].join("\n");
+    const triggerInstruction = buildCalendarTriggerInstruction(resolved.ownerName, weekDates);
 
     const messages: LLMMessage[] = [
       ...resolved.llmMessages,
@@ -277,11 +299,7 @@ export async function previewCalendarPromptPayload(
   }
   const resolved = await resolveCalendarAssemblerInput(ownerType, ownerId, weekStart);
   const weekDates = getWeekDates(weekStart);
-  const triggerInstruction = [
-    `Generate the schedule for ${resolved.ownerName} for the week of ${weekDates[0]} to ${weekDates[6]}.`,
-    "Take the existing schedule into account and produce a complete plan for this week.",
-    `Only schedule activities between ${String(CALENDAR_HOUR_START).padStart(2, "0")}:00 and ${String(CALENDAR_HOUR_END).padStart(2, "0")}:00.`,
-  ].join("\n");
+  const triggerInstruction = buildCalendarTriggerInstruction(resolved.ownerName, weekDates);
 
   const messages: LLMMessage[] = [
     ...resolved.llmMessages,
@@ -309,6 +327,7 @@ export function createDefaultScheduleDraft(date: string) {
     endTime: "10:00",
     location: "",
     title: "",
+    emoji: "",
     source: "manual" as const,
   };
 }

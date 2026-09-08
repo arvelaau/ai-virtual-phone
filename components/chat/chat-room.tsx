@@ -3991,16 +3991,19 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 });
             }
             if (!endedSession.endedAt) return;
-            const window = deriveOfflineSessionScheduleWindow(endedSession.startedAt, endedSession.endedAt);
-            if (!window) return;
-            upsertCalendarScheduleItem("character", session.contactId, getWeekStartIso(new Date(window.date)), {
-                date: window.date,
-                startTime: window.startTime,
-                endTime: window.endTime,
+            const scheduleWindow = deriveOfflineSessionScheduleWindow(endedSession.startedAt, endedSession.endedAt);
+            if (!scheduleWindow) return;
+            upsertCalendarScheduleItem("character", session.contactId, getWeekStartIso(new Date(scheduleWindow.date)), {
+                date: scheduleWindow.date,
+                startTime: scheduleWindow.startTime,
+                endTime: scheduleWindow.endTime,
                 location: "",
                 title: title || "Offline together",
                 source: "offline_session",
             });
+            if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("calendar-updated"));
+            }
         } catch (err) {
             console.warn("[ChatRoom] Offline session summary/schedule failed:", err);
         }

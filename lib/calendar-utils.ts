@@ -2,10 +2,41 @@ import type { CalendarColorKey, CalendarScheduleItem } from "./calendar-types";
 
 const WEEKDAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
 
-export const CALENDAR_HOUR_START = 8;
-export const CALENDAR_HOUR_END = 23;
-const CALENDAR_MINUTE_START = CALENDAR_HOUR_START * 60;
-const CALENDAR_MINUTE_END = CALENDAR_HOUR_END * 60;
+/** Default display range for the day-timeline view only -- data itself is no longer restricted
+ *  to these hours (see isCalendarTimeRangeAllowed()'s own note below). A past version of this
+ *  app capped schedules to 08:00-23:00 and silently dropped anything outside that window on
+ *  read; that cap is gone, so an early-morning or overnight item is now a normal, visible entry. */
+export const CALENDAR_HOUR_START = 0;
+export const CALENDAR_HOUR_END = 24;
+
+export const CALENDAR_COLOR_KEYS: CalendarColorKey[] = [
+  "blue",
+  "green",
+  "amber",
+  "rose",
+  "violet",
+  "teal",
+  "slate",
+  "lilac",
+];
+
+export function isCalendarColorKey(value: unknown): value is CalendarColorKey {
+  return typeof value === "string" && (CALENDAR_COLOR_KEYS as string[]).includes(value);
+}
+
+const EMOJI_SEQUENCE_RE = /\p{Extended_Pictographic}\uFE0F?(?:\u200D\p{Extended_Pictographic}\uFE0F?)*/u;
+
+/** Extracts the first emoji sequence from an event's emoji field; returns "" when there isn't
+ *  one. The "无" ("none") check is a defensive legacy-Chinese fallback -- our own English
+ *  teaching never asks the model to type that word, but it costs nothing to keep recognizing it
+ *  the way every other sentinel in this app does. */
+export function sanitizeScheduleEmoji(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "无") return "";
+  const match = trimmed.match(EMOJI_SEQUENCE_RE);
+  return match ? match[0] : "";
+}
 
 export function formatIsoDate(date: Date): string {
   const year = date.getFullYear();
@@ -89,11 +120,16 @@ export function normalizeTime(value: string): string | null {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
+/**
+ * Whether a time range is valid. A past version of this app also required 08:00-23:00 and
+ * silently dropped anything outside that window on read; that restriction is gone now --
+ * schedules can span any hour, including overnight -- so this only checks that both times parse
+ * and the start comes before the end.
+ */
 export function isCalendarTimeRangeAllowed(startTime: string, endTime: string): boolean {
   const start = timeToMinutes(startTime);
   const end = timeToMinutes(endTime);
-  if (Number.isNaN(start) || Number.isNaN(end) || start >= end) return false;
-  return start >= CALENDAR_MINUTE_START && end <= CALENDAR_MINUTE_END;
+  return !Number.isNaN(start) && !Number.isNaN(end) && start < end;
 }
 
 function minutesToHHMM(minutes: number): string {
@@ -105,14 +141,16 @@ function minutesToHHMM(minutes: number): string {
  *  real elapsed time was shorter than this (a 30-second exchange still deserves a visible entry,
  *  not a silently-dropped zero-length one). */
 const OFFLINE_SESSION_MIN_BLOCK_MINUTES = 15;
+const END_OF_DAY_MINUTES = 23 * 60 + 59;
 
 /**
- * Turns an offline-mode session's real start/end timestamps into a date + time range that fits
- * the calendar's allowed window (isCalendarTimeRangeAllowed()) -- clamped to CALENDAR_HOUR_START/
- * CALENDAR_HOUR_END, clamped to the session's own start date if it crossed midnight (never
- * splits across two days), and padded up to OFFLINE_SESSION_MIN_BLOCK_MINUTES if the real
- * duration would otherwise round to nothing. Returns null only when even the padded block cannot
- * fit inside the allowed window at all (e.g. a session that started after CALENDAR_HOUR_END).
+ * Turns an offline-mode session's real start/end timestamps into a date + time range for a
+ * calendar entry -- clamped to the session's own start date if it crossed midnight (never splits
+ * across two calendar days; there is no per-hour restriction to clamp against any more, see
+ * isCalendarTimeRangeAllowed()'s own note), and padded up to OFFLINE_SESSION_MIN_BLOCK_MINUTES if
+ * the real duration would otherwise round to nothing. Returns null only for invalid input
+ * (unparseable timestamps) -- with no hour window left to run out of room in, there is no longer
+ * a "this session had nowhere to fit" case.
  */
 export function deriveOfflineSessionScheduleWindow(
   startedAt: string,
@@ -122,17 +160,16 @@ export function deriveOfflineSessionScheduleWindow(
   const end = new Date(endedAt);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
   const date = formatIsoDate(start);
-  const startMinutesRaw = start.getHours() * 60 + start.getMinutes();
-  // A session that crosses midnight is clamped to the end of the allowed window on its start
-  // date, rather than attempting to split it across two calendar days.
+  const startMinutes = start.getHours() * 60 + start.getMinutes();
+  // A session that crosses midnight is clamped to the end of its start date, rather than
+  // attempting to split it across two calendar days.
   const endMinutesRaw = formatIsoDate(end) === date
     ? end.getHours() * 60 + end.getMinutes()
-    : CALENDAR_MINUTE_END;
+    : END_OF_DAY_MINUTES;
 
-  const startMinutes = Math.max(CALENDAR_MINUTE_START, Math.min(CALENDAR_MINUTE_END, startMinutesRaw));
-  let endMinutes = Math.max(CALENDAR_MINUTE_START, Math.min(CALENDAR_MINUTE_END, endMinutesRaw));
+  let endMinutes = Math.min(END_OF_DAY_MINUTES, endMinutesRaw);
   if (endMinutes < startMinutes + OFFLINE_SESSION_MIN_BLOCK_MINUTES) {
-    endMinutes = Math.min(CALENDAR_MINUTE_END, startMinutes + OFFLINE_SESSION_MIN_BLOCK_MINUTES);
+    endMinutes = Math.min(END_OF_DAY_MINUTES, startMinutes + OFFLINE_SESSION_MIN_BLOCK_MINUTES);
   }
   if (endMinutes <= startMinutes) return null;
 
@@ -157,13 +194,6 @@ export function sortScheduleItems(items: CalendarScheduleItem[]): CalendarSchedu
     if (a.endTime !== b.endTime) return a.endTime.localeCompare(b.endTime);
     return a.title.localeCompare(b.title);
   });
-}
-
-export function formatWeekRangeLabel(weekStart: string): string {
-  const dates = getWeekDates(weekStart);
-  const start = parseIsoDate(dates[0]);
-  const end = parseIsoDate(dates[6]);
-  return `${start.getMonth() + 1}/${start.getDate()} - ${end.getMonth() + 1}/${end.getDate()}`;
 }
 
 export function getOwnerStorageKey(ownerType: string, ownerId: string): string {

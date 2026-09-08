@@ -198,24 +198,28 @@ seedSession(SESSION_ID, CHAR_ID, false);
     ok("F1 a normal daytime window returns a valid range", Boolean(normal), normal);
     ok("F1b start < end", normal && normal.startTime < normal.endTime, normal);
 
+    // The calendar redesign (2026-09) removed the old 08:00-23:00 hour-window restriction --
+    // CALENDAR_HOUR_START/END are now 0/24 (display-default only), so an early-morning session
+    // is no longer clamped into a fixed window; it just gets its own real start time.
     const beforeOpen = calUtils.deriveOfflineSessionScheduleWindow("2026-03-05T05:00:00", "2026-03-05T05:05:00");
-    ok("F2 a session before CALENDAR_HOUR_START is clamped into the window, not dropped", Boolean(beforeOpen), beforeOpen);
-    eq("F2b clamped start is 08:00", beforeOpen?.startTime, "08:00");
+    ok("F2 an early-morning session is not dropped", Boolean(beforeOpen), beforeOpen);
+    eq("F2b start time is unclamped (05:00)", beforeOpen?.startTime, "05:00");
 
+    // A session starting late in the evening no longer "has no room" -- there is no hour-window
+    // ceiling to run out of room against any more, only the end-of-day (23:59) clamp.
     const afterClose = calUtils.deriveOfflineSessionScheduleWindow("2026-03-05T23:30:00", "2026-03-05T23:45:00");
-    ok("F3 a session starting after CALENDAR_HOUR_END has no room and returns null", afterClose === null, afterClose);
+    ok("F3 a late-evening session still returns a real window", afterClose !== null, afterClose);
+    eq("F3b start/end pass through unclamped", afterClose && `${afterClose.startTime}-${afterClose.endTime}`, "23:30-23:45");
 
     const tooShort = calUtils.deriveOfflineSessionScheduleWindow("2026-03-05T14:00:00", "2026-03-05T14:00:05");
     ok("F4 a near-zero-length session is padded up to a minimum visible block", Boolean(tooShort), tooShort);
     ok("F4b padded block is at least 15 minutes", tooShort && (Number(tooShort.endTime.replace(":", "")) - Number(tooShort.startTime.replace(":", ""))) >= 15, tooShort);
 
-    // Starts at 22:00 (an hour of real room before the window closes at 23:00) and crosses into
-    // the next calendar day -- exercises the "different date -> clamp to CALENDAR_HOUR_END"
-    // branch while still leaving room to pad/return a real window (unlike starting AT 23:00
-    // itself, which is F3's "no room at all" case).
+    // Starts at 22:00 and crosses into the next calendar day -- exercises the "different date ->
+    // clamp to end-of-day (23:59)" branch while still leaving room to pad/return a real window.
     const crossesMidnight = calUtils.deriveOfflineSessionScheduleWindow("2026-03-05T22:00:00", "2026-03-06T01:00:00");
     ok("F5 a session crossing midnight is clamped to the start date, never split", Boolean(crossesMidnight) && crossesMidnight.date === "2026-03-05", crossesMidnight);
-    eq("F5b clamped end is CALENDAR_HOUR_END (23:00)", crossesMidnight?.endTime, "23:00");
+    eq("F5b clamped end is end-of-day (23:59)", crossesMidnight?.endTime, "23:59");
     eq("F5c clamped start is unchanged (22:00)", crossesMidnight?.startTime, "22:00");
 }
 
