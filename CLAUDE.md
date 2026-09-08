@@ -2607,6 +2607,490 @@ was *stripped* and never what *survived*. Group Q closes that. Non-vacuous — r
 behaviour fails exactly Q2/Q3/Q4 while Q1/Q5/Q6 still pass, so it distinguishes "quotes preserved"
 from "tags still match".
 
+## Rich HTML directive cards now reach story and offline mode, plus a "Studio" authoring app
+See `PROACTIVE-MESSAGE-2.0-PLAN.md`'s HTML-trigger-cards plan for the full design. Two pieces,
+both shipped:
+
+**Phase A — story/offline get the same directive-triggered card chat already had.** `StoryMessage`
+/ `ChatOfflineTurn` gained `appId`/`appName`/`appCardLayout`; `lib/rich-message-parser.ts` exports
+a new `extractCustomAppCard(text)` that reuses the existing `findCustomAppRichCandidate` /
+`buildCustomAppDirectivePart` matchers without the rest of chat's `parseAIResponse` pipeline;
+`lib/story-engine.ts` and the new leaf module `lib/offline-message-dispatch.ts` (a UI-layer-only
+import to avoid the `chat-engine` → `action-parser` → `follow-up-service` → `chat-engine` cycle)
+call it alongside their existing `[Message]` extraction. Rendering was extracted out of
+`message-bubble.tsx`'s `AppCardBubble` into a new shared `components/chat/app-card-view.tsx`
+(`AppCardView`) so chat/story/offline render one iframe+srcDoc implementation instead of three
+copies drifting apart — the `tool-executor`/`FETCH_RESULT_HEADER` defect class this file keeps
+warning about. Offline also got `[Message]` support at the same time (it was simply never done
+when story got it), sharing story's hard-won completeness/fold-tag/quote-normalization guards via
+a new `lib/narrative-message-guards.ts` rather than a second copy.
+
+**A real, easy-to-miss gap this caught**: `story-engine.ts` had the *parser* for a directive card
+but the model was never *taught* one exists — `buildStoryPromptMessages` builds its own prompt
+payload rather than going through chat's `buildChatPromptMessages`, so it needed its own explicit
+`customAppRichMediaDirectives: formatCustomAppChatDirectivesForPrompt()`. Without it the feature
+would have been silently unreachable in story mode no matter how correct the parsing side was.
+Offline needed no equivalent fix — confirmed `generateOfflineChatCompletion` calls the same shared
+`buildChatPromptMessages` chat itself uses, so it already taught directives for free.
+
+Also added: a manual reload button on the card itself (`RefreshCw`, remounts the iframe via a key
+bump — fixes a stuck/glitched render without touching the underlying HTML or calling the LLM
+again).
+
+Fixtures: `_fx-offline-message.mjs` (57/57, built from `_fx-story-message.mjs`'s template) and
+`_fx-narrative-app-card.mjs` (groups A-D, 30/30 at the time) cover the parser/wiring side.
+
+**Phase A.5 — Studio: one app to author a card that reaches chat, story AND offline at once.**
+The user pointed out there was no manual trigger (the AI decides autonomously from a directive's
+`description`, same as any custom-app directive) and no Mixology-style authoring UI for this
+specific feature, and — since chat/story/offline are effectively separate "apps" even though
+offline lives inside chat — asked for ONE place to author a card rather than three. Two decisions
+locked in up front: a **standalone new home-screen app**, and **clicking a Studio-authored card
+opens a brief detail/summary popup**, not a real app (there is nothing real to open).
+
+**Design: Studio cards are a separate data source, merged into the directive list at READ time —
+never written into the shared `ai_phone_custom_apps_v1` installed-apps store.** Verified first
+(both independently and via an Explore agent whose *other* findings corroborated it — see the
+worktree-staleness warning below) that at least 6 UI surfaces enumerate that store unfiltered
+with no way to hide a synthetic entry (App Market's Installed tab has Update/Uninstall buttons
+with zero filtering, plus desktop icons, the icon-skin picker, Binding Manager, Preset/Regex
+Manager, Toolbox Settings) — inserting a fake "Studio" app there would have corrupted all of them.
+
+New `lib/card-studio-storage.ts` (plain kv-db CRUD, same shape as every other `*-storage.ts`):
+`StudioCard { id, name, syntax, description, html, tone?, accentColor?, height? }`, exporting a
+fixed stub identity `STUDIO_APP_ID = "studio"`. `lib/custom-app-chat-directives.ts`'s
+`loadCustomAppChatDirectives()` merges `loadStudioCards()` in **after** real installed apps (so a
+real app always keeps first claim on a colliding syntax head — a Studio card can't accidentally
+shadow one), each converted through the SAME `normalizeDirective()` real apps use, passed a fixed
+`{id: STUDIO_APP_ID, name: "Studio"}` stub instead of a real `InstalledCustomApp` record —
+`normalizeDirective`'s first-parameter type was narrowed from the full `InstalledCustomApp` to
+`{id, name}` since that's all it ever read. **Zero new plumbing needed for chat/story/offline to
+pick these up**: `formatCustomAppChatDirectivesForPrompt()` is already the single call every mode
+uses, so one code path teaches Studio cards everywhere the moment they're saved. No new event
+either — nothing else reads Studio cards and every prompt build calls `loadCustomAppChatDirectives()`
+fresh, unlike the real installed-apps store (which needs `CUSTOM_APPS_UPDATED_EVENT` because other
+UI caches it).
+
+**Click handling — the STUDIO_APP_ID check lives inside `AppCardView` itself**, not duplicated
+across the three call sites. `AppCardView` gained an optional `appId` prop; when it equals
+`STUDIO_APP_ID`, `handleOpen()` shows an in-place `StudioCardDetailSheet` (the same
+`buildAppCardSrcDoc` iframe, just larger, with a plain-text fallback for non-HTML layouts) instead
+of calling the passed-in `onOpen` — so Studio never reaches `desktop-shell.tsx`'s real
+app-opening resolution at all, and there is nothing there that could break. Each of the three
+render sites (`message-bubble.tsx`'s `AppCardBubble`, `story-app-base.tsx`,
+`chat-room.tsx`'s offline turn renderer) just had to pass its own `appId` through — one line each.
+
+The Studio app (`components/studio/studio-app.tsx`) is a plain list + create/edit form
+(name / trigger tag / AI instruction / HTML / accent color / height) built from the same
+`PageShell, Button, Input, Textarea, EmptyState, GlassCard, Badge` primitives `couple-space-app.tsx`
+uses. **The live preview reuses `AppCardView` directly**, passing `appId={STUDIO_APP_ID}` — so
+clicking the in-editor preview exercises the exact same detail-popup code path a real trigger
+would, dogfooding the click behavior for free. Registered on the home screen the same 3-point way
+as Mixology/Couple Space: `lib/desktop-config.ts` (`IconId` union, `ICONS` entry, `PAGE_3_DEFAULT`),
+`components/icon-glyph.tsx` (`mdiCardsOutline` — checked it exists in `@mdi/js` before using it,
+since `mdiCards` does not), `components/desktop-shell.tsx` (`activeApp === "studio"` branch).
+
+**A real bug caught only by using the editor, not by the fixture**: the syntax field's placeholder
+hint (`draft.name.replace(/[^A-Za-z0-9]/g, "") || "Card"` → e.g. `[CafeMenu]`) did not match
+`saveStudioCard`'s actual fallback when the field was left blank (`` `[${name}]` ``, producing the
+literal `[Cafe Menu]` with a space) — a real trigger tag the placeholder never suggested you'd
+get. Both now go through one shared `defaultSyntaxFor(name)` in `card-studio-storage.ts`. Caught
+by browser-testing the create flow end-to-end and comparing the saved badge against the hint —
+the Node fixture only checked `saveStudioCard` in isolation and had no reason to compare it
+against the UI's own placeholder text.
+
+**⚠️ Worktree-agent staleness bit again, and was correctly dismissed this time.** An Explore
+agent launched with `isolation: "worktree"` (a known-unsafe setting in this repo, since a
+worktree is cut from `origin/main`, ~168+ commits behind `master`) reported "`formatCustomAppChatDirectivesForPrompt()`
+not found in `story-engine.ts`, no story component renders `appCardLayout`" — directly
+contradicting the Phase-A work completed earlier in the same session. Re-verified directly
+against `master` with plain `Grep` (not trusting the agent) before writing anything further, and
+confirmed both were intact. The rest of that same agent's report (about the App Market collision
+surfaces, `normalizeInstalledApp`'s validation, the click-resolution trace) was accurate, since it
+concerned older code unaffected by the branch gap — the lesson stands as "cross-verify anything
+a worktree-isolated agent claims is *missing*, especially anything added recently," not "distrust
+the whole report."
+
+Fixture: `_fx-narrative-app-card.mjs` group E (18 checks, 49/49 total in the file) — a real
+installed app's directive and a Studio card's directive both surface and are both taught; a
+Studio-triggered `[Menu]` in narrative text extracts with `appId === STUDIO_APP_ID`; a syntax-head
+collision is won by the real app, not the Studio card; `saveStudioCard`'s update path replaces in
+place rather than duplicating; deleting an unknown id is a no-op; and — per this file's standing
+rule for any new `clean*` helper — a multi-word HTML string survives `cleanHtml` unmangled.
+Non-vacuity confirmed by temporarily replacing the Studio-merge loop with an empty array: exactly
+the 6 merge-dependent assertions (E3-E8) failed, nothing else moved.
+
+**Two more control-character corruption hits in this pass**, same recurring trap as everywhere
+else in this file: `card-studio-storage.ts`'s two `\u0000` regex literals landed as raw NUL bytes
+on first write. First attempted fix via `node -e "..."` with escaped backslashes **also failed
+silently** (bash's own backslash-unescaping inside the `-e` string ate a level before Node ever
+saw it, and the "fixed" file still had raw NUL bytes afterward, confirmed by re-scanning rather
+than trusting the script's own "replaced 2" printout) — fixed for real only after writing the
+fix as a standalone `.mjs` script file, exactly as this file has warned to do and not through
+`node -e`.
+
+Manual smoke test (2026-09-08, this session): created a card in Studio with the field left blank
+for syntax → saved as `[CafeMenu]` (post-fix); clicked the live-preview card → detail popup opened
+with the enlarged iframe, and a listener confirmed `"open-app"` never fired; closed the popup;
+confirmed the card does **not** appear in App Market's Installed tab (`"No apps installed yet"`)
+even after being saved. `npx tsc --noEmit` clean across the whole project both before and after
+the placeholder-mismatch fix. All 22 repo fixtures re-run green (exit 0) after this change.
+
+**Not yet done from the plan**: the gift-provenance concept inside WithU, replacing built-in
+Couple Space with it, and "Pin to Moments" for chat/story/offline cards (including whether a
+Studio-authored card should be pinnable at all, since it has no real app behind it to render a
+gallery view) — see `PROACTIVE-MESSAGE-2.0-PLAN.md` Phases C-E.
+
+## Phase B — WithU ported and translated: **DONE** (2026-09-08)
+`App\WithU_v1_2.zip` (`index.html` 4621 lines/~5988 CJK chars, `manifest.json`, `presets.json`,
+9 preset entries) → `App\translated\WithU_v1_2-EN.zip`. Not installed anywhere yet — this is
+the translated package ready for Phase D's install step. Followed the same workflow as the
+9 prior custom-app imports (see "CUSTOM APP IMPORTS" below), but this app is a fresh port for
+the Couple-Space-replacement plan specifically, not part of that original batch.
+
+**Protocol audit done BEFORE any bulk translation** — this app has 10 self-contained bracket
+tags of its own, all local to `index.html`'s own `extractTag`/`extractDirectiveArg`/
+`extractJsonLoose`/`extractJsonArrayLoose` (a plain `new RegExp` interpolating a `tag` string
+parameter passed at each call site — 12 call sites total). **No pre-existing installed
+instances of this app exist anywhere**, so unlike the melon.fiction/chew-tracker-era imports
+there's no legacy-data reason for bilingual recognition — done anyway, to match this project's
+standing convention: all four extractor functions now accept `tag` as an alias array
+(`['English', '中文']`), teaching goes out in English, legacy Chinese stays recognized, no
+backreference pinning the opener's language to the closer's (same rationale as the
+`[InnerThoughts]…[/内心]` fix — a half-migrated response must still parse).
+
+| Chinese tag | English tag | shape |
+|---|---|---|
+| `纪念品` | `Relic` | `[Tag]{JSON}[/Tag]` |
+| `纪念品留言` | `RelicMessage` | `[Tag]text[/Tag]` |
+| `纪念日想法` | `AnniversaryThought` | `[Tag]text[/Tag]` |
+| `便利贴` | `Note` | `[Tag]text[/Tag]` |
+| `便利贴回复` | `NoteReply` | `[Tag]text[/Tag]` |
+| `心愿` | `Wish` | `[Tag]{JSON}[/Tag]` |
+| `打卡信` | `CheckinLetter` | `[Tag]text[/Tag]` |
+| `惊喜任务` | `SurpriseMission` | `[Tag]{JSON}[/Tag]` |
+| `陪伴` | `Companion` | `[Tag]text[/Tag]` |
+| `记忆摘要` | `MemorySummary` | `[Tag][JSON array][/Tag]` |
+| `留言板` | `NoteWall` | `[Tag:arg]` — the manifest's chat-directive `syntax`, a different shape (`extractDirectiveArg`, not `extractTag`) from the other nine |
+
+All ten flipped in lockstep across `presets.json`'s taught `content` strings, `manifest.json`'s
+directive `syntax`, and every `index.html` call site — the producer/consumer pairing this
+project has repeatedly gotten wrong when done in two separate passes.
+
+**A real, pre-existing bug found and fixed while touching the directive**: the manifest's card
+template was `"body": "{{内容}}"`, but the host's token-interpolation map
+(`lib/rich-message-parser.ts`'s `buildDirectiveCardTokenMap`) never registers a bare `内容` key
+— `syntaxArgLabels` specifically maps that literal placeholder word to `arg1` before it ever
+becomes a token name. So `{{内容}}` could never have resolved to anything; the note card would
+have silently rendered the literal text `{{内容}}` forever, in the original Chinese zip too.
+Fixed to `{{arg1}}`, which the token map does provide.
+
+**Verification**: `_verify.mjs` (47/47) pulled the real `extractTag`/`extractDirectiveArg`/
+`extractJsonLoose`/`extractJsonArrayLoose`/`tagAlternation` functions and the real `TAG_*`
+constants out of `index.html` via `vm.runInContext` — not copies — and drove them: English and
+legacy-Chinese round trips for all ten tags, mixed-alias open/close pairs, a negative control
+that `Relic`'s alias doesn't swallow `RelicMessage`'s longer tag as a prefix, the JSON payload
+tags parsed against the ACTUAL worked examples pulled out of `presets.json`, and that every
+preset teaches the English tag and none still teaches the legacy one. **First version of this
+fixture was vacuous and caught it before shipping**: it built its own hardcoded `{English:
+Chinese}` alias table instead of reading the real `TAG_*` constants, so deleting `TAG_NOTE`'s
+Chinese alias from source changed nothing about the test's outcome (37/37 stayed green). Fixed
+by extracting the actual constant declarations out of source via regex and driving the
+assertions from those — re-running the same break then failed exactly the 3 dependent checks
+(44/47), confirmed non-vacuous, then restored.
+
+**Bulk UI-text translation** (~530 CJK lines of the ~546 total, everything outside the protocol
+layer above) was dispatched to a background agent with the full glossary and this project's
+standing pitfall list (smart quotes, apostrophes breaking single-quoted strings, whitespace-
+collapsing cleaners, forced-Chinese-output orders). It came back clean on its own four checks
+(both `<script>` blocks parse, 0 smart quotes, 0 control chars, 42 CJK chars remaining — all
+inside the deliberately-bilingual `TAG_*` constants plus one comment quoting a legacy tag) and
+I re-ran all four independently rather than trusting the report, plus spot-read half a dozen
+sections across the file (splash screen, anniversaries, note wall, missions, memories) for
+translation quality. Two things I fixed myself afterward, both missed by the agent: `<html
+lang="zh-CN">` never flipped to `lang="en"` (same one-line fix as `custom-app-runner.tsx` got
+in the original 9-app batch), and one toast whose translation ("Filed away, you can find it in
+the storage box any time") was accurate but too long for a toast — trimmed to match the
+sibling toast's brevity.
+
+**One genuinely ambiguous source string**, flagged by the agent rather than guessed at blindly:
+`一手拿钱，可在收纳盒中查看` (a toast shown when archiving one note out of a multi-note thread,
+not the last one). Doesn't parse as coherent Chinese for this context — traced the sibling
+toast for the "last note in thread" case (`已收纳` = "Filed away") and concluded the string is
+either a typo or a stray idiom fragment (`一手交钱一手交货`, "cash on delivery") that doesn't
+fit here at all. Translated to convey the same meaning as its sibling: "Filed away — check the
+Storage box."
+
+**Author field**: `小玉` → `Xiaoyu` (pinyin transliteration), matching the established
+precedent from `io.xiaoq.giftshop.v2`'s `小方` → `Xiaofang` in the original 9-app batch —
+person names are transliterated, not translated.
+
+**Not done here, deliberately out of scope for a translation pass**: no `icon.png` exists in
+either the original or translated zip (matches the original exactly — the app's manifest
+declares one but never shipped it, so it already fell back to a generated glyph); not installed
+anywhere (that's Phase D).
+
+## Phase C — gift-provenance concept added to WithU: **DONE** (2026-09-08)
+`App\translated\WithU_v1_2-EN.zip` updated in place (same file, no manifest version/permission
+change). WithU can now track real gifts exchanged over chat — separate from its existing
+fictional Keepsakes collection — and resell one the character gave the user.
+
+**Verified the exact payload shape before writing anything.** `serializeBridgeChatMessage`
+(`components/app-market/custom-app-runner.tsx:639`) confirmed `chat.message.created`'s
+`payload.message` DOES carry `mediaType`/`mediaData` in full (not just `content`/`role`, which
+is all the creator guide's own example shows) — so the design the plan proposed (watch the
+existing event, check `mediaType==='gift'`, read the ten fields `sendShoppingGiftMessage`
+already writes) works exactly as assumed, no host changes needed. Also confirmed `isGroup` is
+a top-level `payload` field, and that `AiPhone.wallet.pay` is a **debit-only** API with no
+crediting counterpart exposed to custom apps at all — settling the plan's own hedge ("if not,
+resell can just remove/flag the item without crediting a balance") as a hard technical
+constraint, not a judgment call. No wallet permission was added to the manifest; there would be
+nothing for it to do.
+
+**Design, mirroring `lib/gift-provenance.ts`/`lib/gift-resell.ts` as WithU's own reimplementation**
+(a custom app can't import host `lib/` modules):
+- New `gifts` collection via `AI.db.*`, keyed like the host's index — `shoppingGiftId` when
+  present, `msg:<messageId>` otherwise (called `provenanceKey` here since `AI.db.create` auto-
+  assigns its own `id`).
+- Extended WithU's **single existing** `chat.message.created` listener (it already had one, for
+  the note-wall directive) rather than adding a second — the old listener's early
+  `role!=='assistant'` return had to move from the top of the handler into the note-wall
+  branch specifically, since a gift can arrive from either role. Group chats are skipped
+  entirely (`payload.isGroup`), matching the host's own `excludeGroup` scoping for couple-space
+  gift history — WithU is inherently a one-character space.
+- Event-driven, not scan-based like the host (there is no rescan-from-history step here), so a
+  dedup check against the existing `gifts` list guards against the same message being recorded
+  twice.
+- **New "Gift history" tab** added to the existing Keepsakes cabinet (`renderRelic`'s tab strip
+  went from 2 buttons to 3) rather than a new top-level tile — thematically adjacent (both are
+  "things kept from this relationship") and avoids the extra registration a whole new detail-page
+  section would need (home-screen tile, `FAB_KEYS` entry, `openDetail` branch). Both FABs
+  (add-manually / ask-them-to-find-one) are hidden on this tab — gifts only ever come from real
+  chat activity, there is nothing to author.
+- **Resell, scoped exactly like the host**: only `direction==='character_to_user'` gifts that
+  aren't already resold show a Resell button (mirrors `canResellGift`'s rule precisely). Marks
+  the record and shows the estimated secondhand value (same `GIFT_RESALE_RATE = 0.5`), and says
+  outright that nothing gets credited, rather than implying a payment happened.
+- **A real edge case caught and fixed before shipping, not by the fixture**: an AI-authored gift
+  (the built-in `[Gift:...]` chat tag, not a shopping order) gets a **placeholder** price label —
+  literally the text `"A Thoughtful Gift"` (`lib/rich-tag-builders.ts`'s
+  `DEFAULT_GIFT_PRICE_LABEL`), not a real price. First draft let this "resell" for `$0`, which is
+  silently wrong. Fixed to refuse outright when no price can be parsed — "No resale value could
+  be worked out for that gift" — matching `resellGift`'s own behavior (it also refuses rather
+  than recording a worthless resale) rather than reasoning about it fresh.
+- `buildDigestDataPackage()` (the "Memories" LLM feature's data source) now also includes
+  `gifts`, and the `[MemorySummary]` instruction's suggested category list gained "Gifts"
+  alongside the existing Keepsakes/Anniversary/Wishlist/Notes/Together/Streaks/Milestones —
+  small, low-risk extension since the function/instruction were already right there.
+
+**A fourth NUL-byte corruption hit in this same session** (after `card-studio-storage.ts` twice
+and this file's own manifest/presets pass) — `cleanGiftText`'s intended `\u0000` landed as a
+raw byte again. Caught immediately via the standard control-character sweep, fixed with the
+established standalone-script remedy (never `node -e` for this — a bash quoting layer already
+silently ate the fix once earlier this session).
+
+**Verification**: a new fixture drove the real `cleanGiftText`/`parseGiftPriceLabel`/
+`estimateGiftResaleValue`/`recordGiftFromMessage`/`safe` pulled out of `index.html` via
+`vm.runInContext` against a minimal in-memory `AI.db`/`AI.memory` mock (same approach as the
+host's own `_fx-dexie-stub.mjs`-backed fixtures) — 45/45, covering: resale math, the standing
+"multi-word English string survives `clean*`" rule, a full shopping-order gift round-trip
+(all optional fields present), a minimal AI-authored gift (no shopping fields, provenanceKey
+falls back to `msg:<id>`), the dedup guard (same message delivered twice → recorded once), a
+gift with no resolvable product name → not recorded, the listener's role/group/mediaType gating
+read from source (with brace-depth tracking, not a naive `indexOf('});')`, which the first draft
+of the fixture got wrong and had to fix), the Gifts-tab wiring, the digest package inclusion,
+and the no-price-refuses-resale guard. Non-vacuity confirmed on three separate assertions by
+breaking each in turn (dedup check, the FAB-hiding fix, the no-price refusal) and watching
+exactly the expected assertion fail each time, then restoring.
+
+**Not done here**: no live smoke test (needs the app actually installed and a real gift sent in
+chat — that's Phase D territory, once WithU replaces built-in Couple Space and there's somewhere
+to install it into).
+
+## Phase D — built-in Couple Space removed: **DONE** (2026-09-08)
+Clean cutover, no data migration, per the user's decision. WithU is NOT installed by this
+change — the user installs it themselves via the App Market's local-import flow using
+`App\translated\WithU_v1_2-EN.zip`. Nothing left to register it in code: custom apps get their
+own dynamic `CustomAppIconId`, they were never part of the static `IconId` union the built-in
+feature used, so there is no "slot" step for me to wire up.
+
+**Scope was bigger than the plan enumerated — re-audited from scratch rather than trusting it.**
+A fresh repo-wide grep for `couple-space|couplespace|CoupleSpace|COUPLE_SPACE|coupleSpace|
+couple_space` found **18 files**, not the plan's original ~10: `story-engine.ts`,
+`short-term-assembler.ts`, `chat-engine.ts` and `group-chat-engine.ts` were all missing from the
+plan's list, because Couple Space had grown a `coupleSpace` prompt field on **every** surface
+that reads the timeline, not only the ones the plan's author had specifically worked on. Would
+have left story mode and offline chat still computing and threading a value into a macro that no
+longer existed — dead code, not a crash, but exactly the kind of stale wiring this project's own
+history warns against leaving behind.
+
+**Removed, by category:**
+- **7 dedicated files**: `couple-space-{types,storage,memory,prompt}.ts`,
+  `gift-{provenance,resell}.ts`, `components/couple-space/couple-space-app.tsx` (and the now-empty
+  directory). Confirmed first that `gift-provenance.ts`/`gift-resell.ts` had **no consumers outside**
+  the Couple Space files — safe to delete alongside, not just "related to" the feature.
+- **Desktop registration**: `desktop-config.ts` (`IconId` union, `PAGE_2_DEFAULT`, `ICONS` entry),
+  `desktop-shell.tsx` (import + `activeApp==="couplespace"` branch), `icon-glyph.tsx` (the
+  `couplespace: mdiHeart` mapping only — `mdiHeart` itself stays imported, still used by the
+  custom-app fallback-glyph set).
+- **The macro**: `macro-engine.ts`'s `coupleSpace` field + its `\x00TRIM\x00`-sentinel resolver
+  branch.
+- **The wiring through the prompt assembler**: `llm-prompt-assembler.ts` lost 2 type-field
+  declarations and 4 `engine.coupleSpace = ...` assignments (1:1 ×2, group whole-engine, group
+  per-member); `chat-engine.ts`, `story-engine.ts` and `group-chat-engine.ts` each lost their own
+  `buildCoupleSpacePromptBlock` import + call + the field in the object passed to
+  `assemblePromptPayload`/`assembleGroupPromptPayload`.
+- **The preset entry**: `builtin-preset.ts`'s `couple_space_context` (both the `prompt_order`
+  toggle and the entry definition). `BUILTIN_PRESET_VERSION` → **283** — required, or the removal
+  is dead code and the old entry keeps shipping to every user's stored preset copy, per this
+  file's own standing rule.
+- **The timeline/projection layer** — the deepest removal, in `short-term-assembler.ts`: the
+  `loadCoupleSpaceProjectionEntries` import, `"couple_space"` dropped from **both**
+  `sourceApp`/`sourceDetail` union types, the projection-building block, `FEATURE_ORDER.couple_space`
+  / `FEATURE_TAG.couple_space`, and **two independent** `raw.push` sites (the 1:1 and group
+  `prepareShortTermContext` functions each collect separately — same two-site shape Stage 2c's
+  registration hit when *adding* a feature, now hit again removing one).
+- **The tools**: `internal-capability-storage.ts` lost the whole `COUPLE_SPACE_CAPABILITY_ID`
+  block (4 parameter schemas, the usage guide, the 4-entry subtools array, the capability config
+  entry, and its branch in all 3 lookup functions); `tool-executor.ts` lost its imports, the
+  router line, and the entire `isCoupleSpaceToolName`/`coupleSpaceFailure`/`executeCoupleSpaceTool`
+  block.
+- **4 obsolete fixtures deleted** (they tested code that no longer exists):
+  `_fx-couple-space{,-prompt,-timeline,-tools}.mjs`, `_fx-gift-{provenance,resell}.mjs`.
+
+**Kept, deliberately**: `sendShoppingGiftMessage` (`chat-room.tsx:3412`) — it produces gift
+messages, and stays as the host feature Phase C's WithU listener now consumes instead of the
+old `gift-provenance.ts`. `chat-room.tsx`/`message-bubble.tsx`/`rich-message-parser.ts`/
+`action-parser.ts`/`chat-offline-storage.ts`/`story-storage.ts`/`custom-app-chat-directives.ts`/
+`styles/chat.css` show as modified in this same working tree only because Phase A/A.5/C already
+touched them earlier this session — none of that is Couple Space cutover work, confirmed by
+grepping each for Couple Space references and finding none.
+
+**No stale-layout migration needed.** Checked `desktop-shell.tsx`'s icon-render loop before
+assuming this: `getDesktopIconMeta` does `iconId in ICONS ? {...} : null`, and the render loop
+does `if (!pos || !icon) return null` — a leftover `"couplespace"` in someone's saved desktop
+layout (from before this cutover) renders as nothing, gracefully, not a crash. No migration
+script needed for existing local dev state.
+
+**Verification**: `npx tsc --noEmit` — 0 errors across the whole project. `npm run build` — clean,
+0 errors. All 20 remaining repo fixtures — pass (`_fx-memory-sharing.mjs` still references the
+string `"couple_space"` in one test case, S0h, asserting such an entry — hypothetical now, since
+nothing produces it anymore — still correctly comes back "not borrowable"; left as-is, still
+meaningful as defense-in-depth, not broken).
+
+**Browser smoke test** (clean `.next` wipe + fresh dev server, since a prior `npm run build` in
+this same working tree would otherwise collide with the dev server per this file's own
+operational rule): desktop renders correctly on both affected pages, "Couple Space" is confirmed
+absent from the icon list (`Co-Create, Games, App Market, Xiaohongshu, Dwelling, Story, VN Mode,
+Adventure` — exactly `PAGE_2_DEFAULT` post-removal), 19 total icons instead of 20, no crash, Chat
+app opens and lists existing sessions normally. One transient `NotFoundError` ("object store not
+found") appeared in the console during the post-wipe Fast-Refresh churn — investigated rather
+than dismissed: `couple-space-storage.ts` used `kv-db.ts`'s single generic `entries` Dexie store
+(confirmed via `kv-db.ts:11`, `.stores({ entries: "key" })`) and never had a dedicated schema of
+its own to remove, `ChatDB`/`SettingsDB` both loaded real data successfully immediately before and
+after the error in the console log, and the app remained fully functional across two separate
+reloads. Concluded unrelated to this change — most likely local IndexedDB churn accumulated
+across this session's many earlier, unrelated feature tests — but not fully root-caused; flagging
+rather than asserting certainty.
+
+**Not done**: no live test of a real gift/chat exchange with WithU actually installed (needs the
+user to install the zip through the App Market first — that is the one remaining manual step, not
+a code task).
+
+## Phase E — "Pin to Moments": **DONE** (2026-09-08)
+A directive-triggered card in chat, story, or offline mode can now be pinned into a
+couple-space-capable app's own Moments gallery. `App\translated\WithU_v1_2-EN.zip` updated in
+place with the receiving side; not installed anywhere yet (same manual step as Phase D).
+
+**Design pivot from the plan's own proposal, found by reading the actual event-delivery code
+before implementing.** The plan suggested dispatching a new custom-app event
+(`moments.card.pinned`) through the same machinery `chat.message.created` uses. Traced that
+machinery first (`components/app-market/custom-app-runner.tsx` + a **parallel, separate**
+background-dispatch `useEffect` in `desktop-shell.tsx`, `~50` lines hardcoding
+`"chat.message.created"` by literal string at three call sites) and concluded it exists
+specifically to broadcast an event to every *subscribed, possibly-not-open* app the instant
+something happens elsewhere in the host — the right tool for "notify anyone listening," wrong
+tool for "the user just clicked one button, write one thing." Replicating that whole subsystem
+for a second event used by exactly one app so far would have been substantial, fragile
+surface area for no real gain.
+
+**What it uses instead**: the host already has `readCustomAppCollection`/
+`writeCustomAppCollection` (`lib/custom-app-storage.ts`) — plain, permission-free, host-side
+functions the SAME `db.create`/`db.list` bridge handlers already call when a running app writes
+its own data. A pin is a **direct host-side write** into the target app's own collection, using
+the exact row shape `db.create` would have produced. No event, no permission gate beyond the
+manifest opt-in, no background sandboxed runtime — the target app reads a pin back through its
+completely ordinary `AI.db.list(...)` call, unaware the row didn't come from its own code.
+
+**A capability flag was needed, and it exposed a real bug in the manifest normalizer.** The
+plan asked for "a manifest-declared capability flag" to identify a pin target without
+hardcoding WithU's app id (`lib/custom-app-types.ts`'s new `extensions.moments.acceptsPinnedCards`).
+Before wiring anything to read it, checked whether it would even *survive* installation —
+`custom-app-storage.ts`'s `normalizeCustomAppManifest` **rebuilds `extensions` from an
+enumerated list of known sub-blocks** (`chat`/`ui`/`prompt`/`tools`/`events`); an unrecognized
+`extensions.moments` would have been silently dropped on every install, exactly like `primaryTags`
+would have been the wrong field to repurpose (it's read for App-Market categorization, a
+different meaning). Fixed the normalizer to read and preserve the new block, mirroring the
+`uiBlock`-style pattern the other extension types already use.
+
+**Design choices, each made after checking the actual code rather than assuming:**
+- **Pinned layout is the NORMALIZED shape, not the raw `appCardLayout` prop.** `AppCardView`
+  already computes `layout` (via `normalizeAppCardLayout`) for its own rendering; pinning that
+  instead of the raw blob means WithU only ever has to handle one clean, validated shape,
+  regardless of which of chat/story/offline/Studio produced the card.
+- **Studio cards are pinnable too, deliberately not special-cased out.** A user-authored card
+  triggered during a real, meaningful moment is exactly the kind of thing worth pinning — the
+  card's *origin* doesn't change whether the *moment* it represents is worth remembering.
+- **"More than one target app" is a documented simplification, not a resolved design**: the
+  first installed app declaring the flag wins (`findMomentsPinTargetApp` vs. the plural
+  `findMomentsPinTargetApps`, which exists for anyone who later wants to build a picker).
+  Matches this project's repeated pattern of handling the common case well and documenting the
+  edge case rather than building UI for a scenario with no real precedent yet.
+- **The Moments gallery landing spot in WithU** — reused the existing `.tile-digest` CSS class
+  verbatim (a small fixed-height icon button already proven to fit inside `tile-col-a`'s flex
+  column, used today for the Memories shortcut) rather than restructuring WithU's precisely
+  designed 3×2 CSS grid to fit a 6th top-level tile, or merging Moments into the unrelated
+  Memories/Digest page (which has its own FAB/select-mode behavior a merge would have risked
+  disturbing). Zero new CSS risk, since I can't visually render WithU's own UI the way I can
+  browser-test the host app.
+
+**Verification**: two fixtures, both driving real code rather than copies.
+`_fx-moments-pin.mjs` (30/30, kept) exercises the host side via jiti — critically, **the
+normalizer round-trip itself** (not just the new helper functions assuming the field survived),
+`findMomentsPinTargetApp(s)`/`hasMomentsPinTarget` across zero/one/many qualifying apps, a full
+`pinAppCardToMoments` write verified by reading it back through the exact function `db.list`'s
+handler calls, a second pin proving the write reads-then-prepends rather than clobbering, three
+failure paths (no target / empty characterId / null layout) proving no garbage gets written, and
+the standing "does a multi-word English string survive `clean*`" rule. Non-vacuity confirmed by
+reverting the normalizer fix alone: **8 assertions failed and the run crashed downstream**,
+about as strong a signal as this project's fixtures have produced that a single fix is
+load-bearing for an entire feature. A WithU-side fixture (23/23, driven via the same
+`vm.runInContext` extraction technique used for the tag-migration and gift-provenance fixtures
+in Phases B/C) covered the sanitizer functions for real and source-checked the tile/routing/
+collection wiring; non-vacuity confirmed on the routing and the sanitizer-usage checks
+separately.
+
+`npx tsc --noEmit` and `npm run build` both clean after the host-side changes (which touch
+shared files: `custom-app-types.ts`, `custom-app-storage.ts`, `app-card-view.tsx`, and all three
+narrative-mode callers). All fixtures in the repo re-run green.
+
+**One more NUL-byte corruption** (the sixth this session) — `lib/custom-app-moments-pin.ts`'s
+`cleanText` helper, caught immediately by the standard sweep and fixed with the standard
+script-file remedy.
+
+**Not done**: no live browser test of the pin button itself. Checked first whether one would be
+meaningful right now: the button is gated on `findMomentsPinTargetApp()` finding a real
+installed app declaring the capability flag, and no such app is installed in this dev
+environment (WithU is not installed — same manual step every other phase has deferred to the
+user), so a live check would show nothing to click regardless of whether the feature works.
+The fixtures cover both the write path (host → target app's collection) and the read-back path
+(exactly how the target app would read it) directly against the real functions, which is the
+part that could not be observed visually anyway.
+
+**With Phase E done, the full plan (`PROACTIVE-MESSAGE-2.0-PLAN.md`) is complete on the code
+side.** The one remaining step anywhere in the plan is the user's own manual action: install
+`App\translated\WithU_v1_2-EN.zip` through the App Market.
+
 ## Still open / not yet done
 - ~~**Custom app imports**~~ — **DONE (2026-08-23), all 9 translated.** Zips in `App\translated\*-EN.zip`; see the CUSTOM APP IMPORTS section. Not installed — the user installs them through the App Market.
 - **`memory.add` provenance** — a custom app can write a long-term memory for any character and shared memory will lend it on. ⚠️ **Correction to how this was first recorded**: nothing needs stamping. `addCustomAppMemory` already writes `id: custom_app_${app.id}_…` **and** `metadata: { origin: "custom_app", appId, appName, reason }`; only `sourceApp` is hardcoded to `"chat"`. The open question is narrower than it looked — should `selectBorrowableMemories` skip entries whose `metadata.origin === "custom_app"`? Awaiting a decision; the marker to filter on already exists.

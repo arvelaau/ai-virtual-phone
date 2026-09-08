@@ -164,6 +164,17 @@ export type CustomAppUiExtensions = {
   searchProviders?: CustomAppExtensionEntry[];
 };
 
+/**
+ * Declares this app as a "Pin to Moments" target: chat/story/offline directive-triggered
+ * cards get a Pin action that writes into this app's own `moments` collection via
+ * lib/custom-app-moments-pin.ts, directly from host code -- no event/background-runtime
+ * plumbing needed, since the host can already read/write any installed app's data
+ * collections through readCustomAppCollection/writeCustomAppCollection.
+ */
+export type CustomAppMomentsExtensions = {
+  acceptsPinnedCards?: boolean;
+};
+
 export type CustomAppPromptHistoryMode = "default" | "none" | "current_session" | "recent";
 export type CustomAppPromptOutputMode = "chat" | "plain_text" | "json";
 
@@ -219,6 +230,7 @@ export type CustomAppExtensions = {
   };
   tools?: CustomAppToolDefinition[];
   events?: CustomAppEventSubscription[];
+  moments?: CustomAppMomentsExtensions;
 };
 
 export type CustomAppNetworkPolicy = {

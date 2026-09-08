@@ -66,7 +66,6 @@ import { loadAllTracks } from "./music-storage";
 import { getActiveAppTags } from "./content-tag-utils";
 import { isNeteaseConfigured, getUserPlaylists, getPlaylistTracks, checkLoginStatus, loadMusicApiConfig } from "./music-service";
 import { buildCalendarScheduleMarker, getCurrentCalendarScheduleForPrompt } from "./calendar-storage";
-import { buildCoupleSpacePromptBlock } from "./couple-space-prompt";
 import { getWeekStartIso } from "./calendar-utils";
 import { buildCharacterTimeContext } from "./character-time";
 import { getPromptTimestampOptionsForTimeContext } from "./prompt-time";
@@ -1854,7 +1853,6 @@ export async function buildChatPromptMessages(
     const coreMemories = coreResults ? formatCoreMemories(coreResults) : "";
     const scheduleSummary = buildCalendarScheduleMarker("character", character.id, getWeekStartIso(now));
     const currentSchedule = getCurrentCalendarScheduleForPrompt("character", character.id, now);
-    const coupleSpace = buildCoupleSpacePromptBlock({ characterId: character.id, characterName: character.name });
     const musicOnlineHint = isNeteaseConfigured() ? "- You may recommend any song; the system will search for it online and play it. You are not limited to the user's local library.\n" : "\n";
     const pluginPrompt = await runChatPluginTransform("prompt.system", {
         sessionId: session.id,
@@ -1893,7 +1891,6 @@ export async function buildChatPromptMessages(
         periodCareContext: options?.periodCareContext,
         scheduleSummary,
         currentSchedule,
-        coupleSpace,
         coreMemories,
         longTermMemories,
         worldBookActivationContext: options?.worldBookActivationContext || wbActivationContext,

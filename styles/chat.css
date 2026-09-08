@@ -1989,6 +1989,7 @@
 }
 
 .chat-app-custom-card {
+  position: relative;
   width: min(272px, calc(100vw - 96px));
   border-radius: 0;
   overflow: hidden;
@@ -2005,6 +2006,202 @@
   max-height: 520px;
   border: 0;
   background: transparent;
+}
+
+/* Manual reload for the sandboxed card -- there's no reliable way to detect a
+   rendering failure inside an arbitrary iframe, so this is always available
+   rather than conditional on a failure heuristic. Unobtrusive corner button,
+   never covers real card content. */
+.chat-app-custom-card-reload {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(0, 0, 0, 0.35);
+  color: #ffffff;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}
+
+.chat-app-custom-card-reload:hover {
+  opacity: 1;
+}
+
+/* "Pin to Moments" -- offered on both card shapes, so the base rule suits the structured
+   card's flex head (an inline icon button pushed to the far right) and is overridden below
+   for the HTML card, where it sits in a fixed corner like the reload button. */
+.chat-app-custom-card-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--chat-app-card-accent, #b8879a);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.chat-app-custom-card-pin:hover {
+  opacity: 1;
+}
+
+.chat-app-custom-card-pin[data-state="pinned"] {
+  color: #4caf7d;
+  opacity: 1;
+}
+
+.chat-app-custom-card-pin[data-state="error"] {
+  color: #d9534f;
+  opacity: 1;
+}
+
+.chat-app-custom-card .chat-app-custom-card-pin {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 1;
+  margin-left: 0;
+  width: 22px;
+  height: 22px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #ffffff;
+  opacity: 0.55;
+}
+
+.chat-app-custom-card .chat-app-custom-card-pin:hover {
+  opacity: 1;
+}
+
+.chat-app-custom-card .chat-app-custom-card-pin[data-state="pinned"] {
+  background: rgba(76, 175, 125, 0.85);
+  color: #ffffff;
+}
+
+.chat-app-custom-card .chat-app-custom-card-pin[data-state="error"] {
+  background: rgba(217, 83, 79, 0.85);
+  color: #ffffff;
+}
+
+/* Studio-authored cards have no real installed app to hand off to -- clicking one opens this
+   in-place detail popup instead of dispatching "open-app". */
+.chat-app-card-detail-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.chat-app-card-detail-sheet {
+  width: min(360px, 100%);
+  max-height: min(560px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+}
+
+.chat-app-card-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #333333;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.chat-app-card-detail-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  color: #555555;
+  cursor: pointer;
+}
+
+.chat-app-card-detail-frame {
+  display: block;
+  width: 100%;
+  height: min(60vh, 480px);
+  border: 0;
+  background: transparent;
+}
+
+.chat-app-card-detail-body {
+  padding: 14px;
+  overflow-y: auto;
+  font-size: 13px;
+  color: #333333;
+  line-height: 1.5;
+}
+
+.chat-app-card-detail-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 4px;
+}
+
+.chat-app-card-detail-subtitle {
+  font-size: 12px;
+  color: #777777;
+  margin-bottom: 8px;
+}
+
+.chat-app-card-detail-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.chat-app-card-detail-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555555;
+  margin-bottom: 4px;
+}
+
+.chat-app-card-detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 12.5px;
+}
+
+.chat-app-card-detail-row span {
+  color: #888888;
+}
+
+.chat-app-card-detail-row strong {
+  color: #1a1a1a;
+  font-weight: 600;
+  text-align: right;
 }
 
 .chat-plus-custom-app-icon {

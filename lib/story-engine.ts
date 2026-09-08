@@ -16,18 +16,27 @@ import { retrieveCoreMemoriesForPrompt, retrieveMemoriesForPrompt } from "./memo
 import { formatCoreMemories, formatLongTermMemories } from "./memory-injector";
 import { prepareShortTermContext } from "./short-term-assembler";
 import { buildCalendarScheduleMarker, getCurrentCalendarScheduleForPrompt } from "./calendar-storage";
-import { buildCoupleSpacePromptBlock } from "./couple-space-prompt";
 import { getWeekStartIso } from "./calendar-utils";
 import { parseStoryResponse } from "./story-parser";
 import { parseActionTags, dispatchActions } from "./action-parser";
+import { extractCustomAppCard } from "./rich-message-parser";
+import { formatCustomAppChatDirectivesForPrompt } from "./custom-app-chat-directives";
 
 import { STORY_PARSER_VERSION } from "./story-parser";
 import { loadStoryMessages, replaceStoryMessages, type StoryMessage } from "./story-storage";
 import type { ChatMessage } from "./chat-storage";
 import { MacroEngine } from "./macro-engine";
+import {
+    stripContextExcludedTags as sharedStripContextExcludedTags,
+    isCompleteDispatchableMessage,
+    narrativeTextSurvives,
+} from "./narrative-message-guards";
 
 const DEFAULT_STORY_FOLD_TAGS = "think,thinking,summary";
 const DEFAULT_STORY_CONTEXT_EXCLUDED_TAGS = "think,thinking";
+
+/** `<content>` / `<summary>` -- the story turn's own structure. */
+const STORY_STRUCTURAL_FIELDS = ["content", "summary"];
 
 /**
  * The one action a story turn may actually fire: the character taking out their phone and
@@ -37,64 +46,19 @@ const DEFAULT_STORY_CONTEXT_EXCLUDED_TAGS = "think,thinking";
  */
 const STORY_DISPATCHABLE_ACTION = "消息";
 
-/** A closing tag in either language, at the very end of the matched block. */
-const STORY_ACTION_CLOSER = /\[\/\s*(?:Message|消息)\s*\]\s*$/i;
-/** Any closing tag, anywhere -- used to reject a block whose open/close aliases disagree. */
-const STORY_ACTION_CLOSER_ANYWHERE = /\[\/\s*(?:Message|消息)\s*\]/i;
-
 /**
- * Story only fires a message from a PROPERLY CLOSED block. Deliberately stricter than chat.
- *
- * parseActionTags has a documented fallback for a missing closing tag: take the content to the
- * end of the text. In chat that is the right call -- the text was going to be a message
- * anyway, so a truncated one beats a lost one. In story it is dangerous: the prose is long,
- * the block belongs after </summary> by convention, and a stray unclosed [Message] near the
- * top turns the ENTIRE story into a chat message, notification and all. Verified: an unclosed
- * opener at the start yields content equal to the whole prose.
- *
- * Two conditions, which between them also reject a mismatched pair like [Message]…[/消息]
- * (that one "pairs" through the same fallback and leaves the stray closer inside the body):
- *   - the matched block must END with a closing tag, and
- *   - the content must not still contain one.
+ * Story only fires a message from a PROPERLY CLOSED block, and the turn must still have a
+ * story in it once one fires -- see lib/narrative-message-guards.ts for the full history of
+ * why (five separately user-reported bugs). Thin story-flavored wrappers so every existing
+ * caller/import of these two names keeps working unchanged; offline mode uses the same shared
+ * functions with its own structural field list instead of duplicating either check.
  */
 export function isCompleteStoryMessage(action: { content: string; rawText?: string }): boolean {
-    if (!action.rawText || !STORY_ACTION_CLOSER.test(action.rawText)) return false;
-    if (STORY_ACTION_CLOSER_ANYWHERE.test(action.content)) return false;
-    if (!action.content.trim()) return false;
-    // A message that contains the story's own XML fields is the model having wrapped the whole
-    // turn in [Message]…[/Message]. Properly closed, so the checks above pass it, but what
-    // arrives in chat is the entire scene. Reported by the user, reproduced as shape E.
-    if (STORY_XML_FIELD.test(action.content)) return false;
-    return true;
+    return isCompleteDispatchableMessage(action, STORY_STRUCTURAL_FIELDS);
 }
 
-/** `<content>` / `<summary>` and their closers -- the story turn's own structure. */
-const STORY_XML_FIELD = /<\/?\s*(?:content|summary)\s*>/i;
-
-/**
- * A story turn must still have a story in it.
- *
- * The other way the whole scene ends up in chat: the model opens [Message] at the very top and
- * closes it at the very end, so the prose sits inside the block. That block IS well formed, so
- * no amount of tag checking catches it -- but stripping it leaves nothing to render, and a
- * story turn with no story is definitionally wrong. Reproduced as shape F.
- *
- * Checked against the text AFTER the actions are stripped, so it can only be judged here
- * rather than inside isCompleteStoryMessage.
- *
- * `contextExcludedTags` is the SESSION's own setting (default `think,thinking`) -- the blocks
- * that are stripped before anything reaches the model, i.e. reasoning rather than story. Those
- * must not count as the story surviving, or `<think>…</think>` alongside a [Message] holding
- * the whole prose would pass the guard.
- *
- * FOLD tags are deliberately NOT stripped here. A fold tag is content the reader sees, merely
- * collapsed -- a user who adds `<forum>` to foldTags is writing forum posts, and a turn made
- * entirely of them is a real turn. Only the context-excluded set is discounted, so the rule
- * follows whatever that session configured rather than a hardcoded list.
- */
 export function storyTextSurvives(cleanText: string, contextExcludedTags?: string): boolean {
-    const withoutReasoning = stripContextExcludedTags(cleanText, contextExcludedTags);
-    return withoutReasoning.replace(/<\/?\s*(?:content|summary)\s*>/gi, "").trim().length > 0;
+    return narrativeTextSurvives(cleanText, contextExcludedTags, STORY_STRUCTURAL_FIELDS, DEFAULT_STORY_CONTEXT_EXCLUDED_TAGS);
 }
 
 export type StoryGenerationResult = {
@@ -106,6 +70,10 @@ export type StoryGenerationResult = {
   promptMessages: LLMMessage[];
   model: string;
   presetName: string;
+  /** A custom-app chat directive this turn triggered (a boarding-pass/menu-style card), if any. */
+  appId?: string;
+  appName?: string;
+  appCardLayout?: Record<string, unknown>;
 };
 
 export type StoryPreviewResult = {
@@ -115,17 +83,8 @@ export type StoryPreviewResult = {
   presetName: string;
 };
 
-function escapeTagName(tag: string): string {
-  return tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 function stripContextExcludedTags(text: string, excludedTags?: string): string {
-  const tags = Array.from(new Set((excludedTags ?? DEFAULT_STORY_CONTEXT_EXCLUDED_TAGS).split(",").map(t => t.trim()).filter(Boolean)));
-  if (tags.length === 0) return text;
-
-  const tagAlternation = tags.map(escapeTagName).join("|");
-  const rx = new RegExp(`<(${tagAlternation})>[\\s\\S]*?<\\/\\1>`, "gi");
-  return text.replace(rx, "").replace(/\n{3,}/g, "\n\n").trim();
+  return sharedStripContextExcludedTags(text, excludedTags, DEFAULT_STORY_CONTEXT_EXCLUDED_TAGS);
 }
 
 function toHistoryMessage(message: StoryMessage, contextExcludedTags?: string): ChatMessage {
@@ -251,7 +210,16 @@ export async function generateStoryCompletion(
       .catch(err => console.warn("[StoryEngine] chat message dispatch failed:", err));
   }
 
-  const parsed = parseStoryResponse(cleanText, regexes, {
+  // A custom-app directive (e.g. a boarding-pass/menu card) can appear alongside the story
+  // prose, the same way it already can in live chat. Scanned on the text AFTER [Message]
+  // extraction -- a directive's syntax head is validated at registration time to never shadow
+  // a built-in action tag name, so the two extractions cannot collide.
+  const appCard = extractCustomAppCard(cleanText);
+  const textForStoryParser = appCard
+    ? (cleanText.slice(0, appCard.matchIndex) + cleanText.slice(appCard.matchIndex + appCard.matchLength)).trim()
+    : cleanText;
+
+  const parsed = parseStoryResponse(textForStoryParser, regexes, {
     summaryTag,
     foldTags: effectiveFoldTags,
     macroEngine,
@@ -266,6 +234,9 @@ export async function generateStoryCompletion(
     promptMessages: llmMessages,
     model: apiConfig.defaultModel,
     presetName: preset?.name || "(default preset)",
+    appId: appCard?.appId,
+    appName: appCard?.appName,
+    appCardLayout: appCard?.appCardLayout,
   };
 }
 
@@ -307,12 +278,16 @@ async function buildStoryPromptMessages(
     appId: "story",
     scheduleSummary: buildCalendarScheduleMarker("character", characterId, getWeekStartIso(now)),
     currentSchedule: getCurrentCalendarScheduleForPrompt("character", characterId, now),
-    coupleSpace: buildCoupleSpacePromptBlock({ characterId, characterName: character?.name }),
     coreMemories: coreMemories ? formatCoreMemories(coreMemories) : "",
     longTermMemories: memories ? formatLongTermMemories(memories) : "",
     worldBookActivationContext: wbActivationContext,
     recentBlocks,
     unifiedRecentItems,
+    // Without this, the model has no idea an installed custom app's directive (e.g. a
+    // boarding-pass/menu card) exists at all in story mode -- chat and offline both get this
+    // automatically via buildChatPromptMessages in chat-engine.ts; story builds its own prompt
+    // payload here and was missing it entirely.
+    customAppRichMediaDirectives: formatCustomAppChatDirectivesForPrompt(),
   });
 }
 

@@ -28,6 +28,7 @@ import { parseAIResponse, type ParsedMessagePart } from "@/lib/rich-message-pars
 import { isKnownStickerLabel } from "@/lib/sticker-data";
 import { translateReasoningText } from "@/lib/reasoning-translate";
 import { MessageBubble, MediaDetailModal, prewarmStickerCache, BilingualTextBlock, isStandaloneHtmlPreviewContent, normalizeTextBubbleContent } from "./message-bubble";
+import { AppCardView } from "./app-card-view";
 import { PhotoInputModal, TextPhotoModal, VoiceRecordModal, RedPacketModal, LocationInputModal, SystemInstructionModal } from "./rich-input-modals";
 import { EmojiPanel, StickerPanel } from "./emoji-panel";
 import { StateValuesPanel } from "./state-values-panel";
@@ -59,6 +60,7 @@ import { deleteWeixinCloudMessagesFromCloud } from "@/lib/weixin-cloud-sync";
 import { loadBindingConfig, loadRegexes, resolveBinding, resolveUserIdentity } from "@/lib/settings-storage";
 import { generateGroupChatCompletion, generateGroupOfflineChatCompletion, parseGroupChatResponse, buildEditableGroupRoundText } from "@/lib/group-chat-engine";
 import { appendChatOfflineTurn, deleteChatOfflineTurn, deleteChatOfflineTurnsFrom, loadChatOfflineTurns, parseOfflineResponse, saveChatOfflineTurns, updateChatOfflineTurn, type ChatOfflineTurn } from "@/lib/chat-offline-storage";
+import { extractOfflineDispatchableMessages, dispatchOfflineMessages } from "@/lib/offline-message-dispatch";
 import { applyDisplayRegex, applyEditRegex } from "@/lib/llm-prompt-assembler";
 import { scheduleFollowUp, cancelFollowUp } from "@/lib/follow-up-service";
 import { PENDING_REPLY_PREFIX } from "@/lib/friend-request-engine";
@@ -4025,19 +4027,37 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     ? await generateGroupOfflineChatCompletion(session, history, { signal: offlineRun.controller.signal })
                     : await generateOfflineChatCompletion(session, history, { signal: offlineRun.controller.signal });
                 if (!isCurrentOfflineRun()) return;
-                const assistantContent = result.content.trim() || result.rawText.trim();
+                // 1:1 only, matching story mode's [Message] -- group action dispatch already
+                // has a known gap (see CLAUDE.md), no need to compound it here. Actions must
+                // come off the raw text BEFORE using its content/summary, or a [Message] block
+                // sitting inside <content> would leak into the displayed offline turn.
+                const offlineDispatch = !session.isGroup
+                    ? extractOfflineDispatchableMessages(result.rawText, result.summaryTag)
+                    : null;
+                const parsedContent = offlineDispatch?.parsed.content ?? result.content;
+                const parsedSummary = offlineDispatch?.parsed.summary ?? result.summary;
+                const assistantContent = parsedContent.trim() || result.rawText.trim();
                 if (!assistantContent) throw new Error("AI did not return offline content");
-                if (!result.summary.trim()) showChatToast(`Couldn't extract <${result.summaryTag}> summary`);
+                if (!parsedSummary.trim()) showChatToast(`Couldn't extract <${result.summaryTag}> summary`);
                 const saved = appendChatOfflineTurn({
                     sessionId: session.id,
                     userContent: currentText,
                     assistantContent,
-                    summary: result.summary.trim(),
+                    summary: parsedSummary.trim(),
                     summaryTag: result.summaryTag,
                     rawText: result.rawText,
                     reasoningText: result.reasoning,
+                    appId: offlineDispatch?.appCard?.appId,
+                    appName: offlineDispatch?.appCard?.appName,
+                    appCardLayout: offlineDispatch?.appCard?.appCardLayout,
                 });
                 setOfflineTurns(prev => [...prev, saved]);
+                if (offlineDispatch?.dispatchable.length) {
+                    dispatchOfflineMessages(offlineDispatch.dispatchable, {
+                        characterId: session.contactId,
+                        signal: offlineRun.controller.signal,
+                    });
+                }
             } catch (error: any) {
                 if (!isCurrentOfflineRun() || isAbortLikeError(error)) return;
                 offlineTextInputRef.current?.setText(currentText);
@@ -4140,19 +4160,33 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 ? await generateGroupOfflineChatCompletion(session, history, { signal: offlineRun.controller.signal })
                 : await generateOfflineChatCompletion(session, history, { signal: offlineRun.controller.signal });
             if (!isCurrentOfflineRun()) return;
-            const assistantContent = result.content.trim() || result.rawText.trim();
+            const offlineDispatch = !session.isGroup
+                ? extractOfflineDispatchableMessages(result.rawText, result.summaryTag)
+                : null;
+            const parsedContent = offlineDispatch?.parsed.content ?? result.content;
+            const parsedSummary = offlineDispatch?.parsed.summary ?? result.summary;
+            const assistantContent = parsedContent.trim() || result.rawText.trim();
             if (!assistantContent) throw new Error("AI did not return offline content");
-            if (!result.summary.trim()) showChatToast(`Couldn't extract <${result.summaryTag}> summary`);
+            if (!parsedSummary.trim()) showChatToast(`Couldn't extract <${result.summaryTag}> summary`);
             const saved = appendChatOfflineTurn({
                 sessionId: session.id,
                 userContent: retryInput,
                 assistantContent,
-                summary: result.summary.trim(),
+                summary: parsedSummary.trim(),
                 summaryTag: result.summaryTag,
                 rawText: result.rawText,
                 reasoningText: result.reasoning,
+                appId: offlineDispatch?.appCard?.appId,
+                appName: offlineDispatch?.appCard?.appName,
+                appCardLayout: offlineDispatch?.appCard?.appCardLayout,
             });
             setOfflineTurns([...baseTurns, saved]);
+            if (offlineDispatch?.dispatchable.length) {
+                dispatchOfflineMessages(offlineDispatch.dispatchable, {
+                    characterId: session.contactId,
+                    signal: offlineRun.controller.signal,
+                });
+            }
         } catch (error: any) {
             if (!isCurrentOfflineRun() || isAbortLikeError(error)) return;
             offlineTextInputRef.current?.setText(retryInput);
@@ -5372,6 +5406,41 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                             </div>
                                         </details>
                                     )}
+                                    {turn.appCardLayout ? (
+                                        <AppCardView
+                                            appCardLayout={turn.appCardLayout}
+                                            appName={turn.appName || "APP"}
+                                            appId={turn.appId}
+                                            onOpen={() => {
+                                                if (!turn.appId || typeof window === "undefined") return;
+                                                window.dispatchEvent(new CustomEvent("open-app", {
+                                                    detail: {
+                                                        appId: toCustomAppIconId(turn.appId),
+                                                        launchContext: {
+                                                            source: "offline_directive",
+                                                            messageId: turn.id,
+                                                            sessionId: turn.sessionId,
+                                                            characterId: session.contactId,
+                                                            characterName: character?.name,
+                                                            appId: turn.appId,
+                                                            appName: turn.appName,
+                                                            summary: turn.summary || offlineDisplay.assistantContent,
+                                                        },
+                                                    },
+                                                }));
+                                            }}
+                                            pinContext={session.contactId ? {
+                                                sourceMode: "offline",
+                                                characterId: session.contactId,
+                                                characterName: character?.name || "",
+                                                summary: turn.summary || offlineDisplay.assistantContent,
+                                                cardAppId: turn.appId,
+                                                cardAppName: turn.appName,
+                                                messageId: turn.id,
+                                                sessionId: turn.sessionId,
+                                            } : undefined}
+                                        />
+                                    ) : null}
                                 </div>
                             </div>
                             </Fragment>

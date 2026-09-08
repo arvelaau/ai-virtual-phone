@@ -37,6 +37,7 @@ import {
   mdiDatabase,
   mdiAccount,
   mdiHome,
+  mdiCardsOutline,
 } from "@mdi/js";
 
 type IconGlyphProps = {
@@ -47,7 +48,6 @@ type IconGlyphProps = {
 const MDI_PATHS: Record<IconId, string> = {
   settings: mdiCogOutline,
   chat: mdiMessageProcessing,
-  couplespace: mdiHeart,
   mixology: mdiGlassCocktail,
   diary: mdiBookOpenPageVariant,
   music: mdiMusic,
@@ -72,6 +72,7 @@ const MDI_PATHS: Record<IconId, string> = {
   resources: mdiDatabase,
   characters: mdiAccount,
   dwelling: mdiHome,
+  studio: mdiCardsOutline,
 };
 
 export function IconGlyph({ id, className }: IconGlyphProps) {

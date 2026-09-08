@@ -14,7 +14,6 @@ export type IconId =
   | "checkphone"
   | "shopping"
   | "calendar"
-  | "couplespace"
   | "interview_magazine"
   | "vnmode"
   | "mapmode"
@@ -27,7 +26,8 @@ export type IconId =
   | "resources"
   | "characters"
   | "worldbuilder"
-  | "mixology";
+  | "mixology"
+  | "studio";
 
 export type DesktopIconId = IconId | CustomAppIconId;
 
@@ -49,21 +49,20 @@ export const PAGE_2_DEFAULT: IconId[] = [
   "appmarket",
   "xiaohongshu",
   "dwelling",
-  "couplespace",
   "story",
   "vnmode",
   "mapmode"
 ];
 
 // Default icons for page three (centred; see createDefaultDesktopIconLayout for placement)
-export const PAGE_3_DEFAULT: IconId[] = ["worldbuilder", "mixology"];
+export const PAGE_3_DEFAULT: IconId[] = ["worldbuilder", "mixology", "studio"];
 
 export const DOCK_DEFAULT: IconId[] = ["settings", "theme", "resources", "characters"];
 
 export const ICONS: Record<IconId, IconMeta> = {
   chat: { id: "chat", label: "Chat", tone: "var(--c-icon-green)", placeholder: false },
   mixology: { id: "mixology", label: "House Special", tone: "var(--c-icon-violet)", placeholder: false },
-  couplespace: { id: "couplespace", label: "Couple Space", tone: "var(--c-icon-rose, #d98f9b)", placeholder: false },
+  studio: { id: "studio", label: "Studio", tone: "var(--c-icon-amber)", placeholder: false },
   diary: { id: "diary", label: "Notes", tone: "var(--c-icon-violet)", placeholder: false },
   music: { id: "music", label: "Music", tone: "var(--c-icon-coral)", placeholder: false },
   reading: { id: "reading", label: "Reading", tone: "var(--c-icon-amber)", placeholder: false },

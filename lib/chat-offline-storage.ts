@@ -15,6 +15,10 @@ export type ChatOfflineTurn = {
     rawText?: string;
     reasoningText?: string; // 模型思维链（reasoning/CoT）内容
     createdAt: string;
+    /** A custom-app chat directive triggered this turn (e.g. a boarding-pass/menu card) -- see extractCustomAppCard() in rich-message-parser.ts. Mirrors the subset of ChatMessage.mediaData that AppCardBubble actually reads. */
+    appId?: string;
+    appName?: string;
+    appCardLayout?: Record<string, unknown>;
 };
 
 export type ChatOfflineProjectionEntry = {
@@ -54,7 +58,11 @@ function normalizeTurn(value: unknown): ChatOfflineTurn | null {
         summary: typeof item.summary === "string" ? item.summary : "",
         summaryTag: typeof item.summaryTag === "string" && item.summaryTag.trim() ? item.summaryTag.trim() : "summary",
         rawText: typeof item.rawText === "string" ? item.rawText : undefined,
+        reasoningText: typeof item.reasoningText === "string" ? item.reasoningText : undefined,
         createdAt: item.createdAt,
+        appId: typeof item.appId === "string" ? item.appId : undefined,
+        appName: typeof item.appName === "string" ? item.appName : undefined,
+        appCardLayout: item.appCardLayout && typeof item.appCardLayout === "object" ? item.appCardLayout : undefined,
     };
 }
 
@@ -92,6 +100,9 @@ export function appendChatOfflineTurn(input: {
     summaryTag: string;
     rawText?: string;
     reasoningText?: string;
+    appId?: string;
+    appName?: string;
+    appCardLayout?: Record<string, unknown>;
 }): ChatOfflineTurn {
     const turn: ChatOfflineTurn = {
         id: createTurnId(),
@@ -102,6 +113,9 @@ export function appendChatOfflineTurn(input: {
         summaryTag: input.summaryTag.trim() || "summary",
         rawText: input.rawText,
         reasoningText: input.reasoningText,
+        appId: input.appId,
+        appName: input.appName,
+        appCardLayout: input.appCardLayout,
         createdAt: new Date().toISOString(),
     };
     saveChatOfflineTurns(input.sessionId, [...loadChatOfflineTurns(input.sessionId), turn]);

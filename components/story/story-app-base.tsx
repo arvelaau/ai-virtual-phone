@@ -6,6 +6,8 @@ import { ArrowLeft, Menu, ArrowUp, Square, UserRound, MessageSquareText, Clock3,
 import CSSSchemeBar from "@/components/ui/css-scheme-picker";
 import { Avatar } from "@/components/ui/primitives";
 import { StoryHtmlRenderer } from "@/components/ui/story-html-renderer";
+import { AppCardView } from "@/components/chat/app-card-view";
+import { toCustomAppIconId } from "@/lib/custom-app-types";
 import { loadCharacters } from "@/lib/character-storage";
 import { maybeRunSummarization } from "@/lib/memory-summarizer";
 import { incrementEventCounter } from "@/lib/memory-storage";
@@ -585,6 +587,9 @@ export function StoryApp({ onClose }: StoryAppProps) {
         storySummary: result.storySummary,
         regexSignature: result.regexSignature,
         parserVersion: result.parserVersion,
+        appId: result.appId,
+        appName: result.appName,
+        appCardLayout: result.appCardLayout,
       });
       if (activeSessionIdRef.current === sessionId) {
         setMessages((prev) => [...prev, assistantMessage]);
@@ -796,6 +801,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
         sessionId, role: "assistant",
         rawContent: result.rawText, renderedContent: result.renderedText,
         storySummary: result.storySummary, regexSignature: result.regexSignature, parserVersion: result.parserVersion,
+        appId: result.appId, appName: result.appName, appCardLayout: result.appCardLayout,
       });
       if (activeSessionIdRef.current === sessionId) setMessages(prev => [...prev, assistantMessage]);
       setStorageVersion(v => v + 1);
@@ -1168,6 +1174,41 @@ export function StoryApp({ onClose }: StoryAppProps) {
                           return shellInnerRef.current ? createPortal(menu, shellInnerRef.current) : menu;
                         })()}
                       </div>
+                      {message.role === "assistant" && message.appCardLayout ? (
+                        <AppCardView
+                          appCardLayout={message.appCardLayout}
+                          appName={message.appName || "APP"}
+                          appId={message.appId}
+                          onOpen={() => {
+                            if (!message.appId || typeof window === "undefined") return;
+                            window.dispatchEvent(new CustomEvent("open-app", {
+                              detail: {
+                                appId: toCustomAppIconId(message.appId),
+                                launchContext: {
+                                  source: "story_directive",
+                                  messageId: message.id,
+                                  sessionId: message.sessionId,
+                                  characterId: currentCharacter.id,
+                                  characterName: currentCharacter.name,
+                                  appId: message.appId,
+                                  appName: message.appName,
+                                  summary: message.storySummary || message.renderedContent || message.rawContent,
+                                },
+                              },
+                            }));
+                          }}
+                          pinContext={{
+                            sourceMode: "story",
+                            characterId: currentCharacter.id,
+                            characterName: currentCharacter.name,
+                            summary: message.storySummary || message.renderedContent || message.rawContent,
+                            cardAppId: message.appId,
+                            cardAppName: message.appName,
+                            messageId: message.id,
+                            sessionId: message.sessionId,
+                          }}
+                        />
+                      ) : null}
                     </article>
                   );
                 })}

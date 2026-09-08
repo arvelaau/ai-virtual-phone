@@ -18,8 +18,8 @@ import MusicPlayer from "@/components/music/music-player";
 import MusicFloat from "@/components/music/music-float";
 import MiniAppWindow from "@/components/music/mini-app-window";
 import { PhoneCalendarApp } from "@/components/calendar-app";
-import { CoupleSpaceApp } from "@/components/couple-space/couple-space-app";
 import { MixologyApp } from "@/components/mixology/mixology-app";
+import { StudioApp } from "@/components/studio/studio-app";
 import { DiaryApp } from "@/components/diary/diary-app";
 import { XiaohongshuApp } from "@/components/xiaohongshu/xiaohongshu-app";
 import { StoryApp } from "@/components/story/story-app";
@@ -3374,12 +3374,12 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
       return <PhoneCalendarApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
     }
 
-    if (activeApp === "couplespace") {
-      return <CoupleSpaceApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
-    }
-
     if (activeApp === "mixology") {
       return <MixologyApp onClose={() => setActiveApp(null)} />;
+    }
+
+    if (activeApp === "studio") {
+      return <StudioApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
     }
 
     if (activeApp === "diary") {

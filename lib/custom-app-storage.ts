@@ -12,6 +12,7 @@ import type {
   CustomAppExtensionEntry,
   CustomAppExtensions,
   CustomAppManifest,
+  CustomAppMomentsExtensions,
   CustomAppNetworkPolicy,
   CustomAppPermission,
   CustomAppPromptProfile,
@@ -532,6 +533,7 @@ export function normalizeCustomAppManifest(raw: unknown): CustomAppManifest {
   };
   const uiExtensions = asRecord(extensionsRecord.ui);
   const promptExtension = asRecord(extensionsRecord.prompt);
+  const momentsExtension = asRecord(extensionsRecord.moments);
   const rawChatDirectives = Array.isArray(canonicalChatExtensions.directives)
     ? canonicalChatExtensions.directives as unknown[]
     : [
@@ -632,13 +634,17 @@ export function normalizeCustomAppManifest(raw: unknown): CustomAppManifest {
       searchProviders: searchProviders.length > 0 ? searchProviders : undefined,
     }
     : undefined;
-  const extensions: CustomAppExtensions | undefined = chatBlock || uiBlock || promptProfiles.length > 0 || tools.length > 0 || events.length > 0
+  const momentsBlock: CustomAppMomentsExtensions | undefined = momentsExtension.acceptsPinnedCards === true
+    ? { acceptsPinnedCards: true }
+    : undefined;
+  const extensions: CustomAppExtensions | undefined = chatBlock || uiBlock || promptProfiles.length > 0 || tools.length > 0 || events.length > 0 || momentsBlock
     ? {
       chat: chatBlock,
       ui: uiBlock,
       prompt: promptProfiles.length > 0 ? { profiles: promptProfiles } : undefined,
       tools: tools.length > 0 ? tools : undefined,
       events: events.length > 0 ? events : undefined,
+      moments: momentsBlock,
     }
     : undefined;
   const resources = normalizeResources(record.resources);

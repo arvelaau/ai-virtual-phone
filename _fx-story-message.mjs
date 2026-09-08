@@ -290,9 +290,17 @@ ${dialogue}
     ok("E3b the filter actually applies the completeness guard",
         body.includes("isCompleteStoryMessage(action)"), body.slice(body.indexOf("chatMessages"), body.indexOf("chatMessages") + 200));
     ok("E4 the source engine is story", body.includes('sourceEngine: "story"'));
-    // the display text must be the CLEANED text, or the tag renders as visible story prose
-    ok("E5 parseStoryResponse is fed cleanText, not rawOutput",
-        body.includes("parseStoryResponse(cleanText,") && !body.includes("parseStoryResponse(rawOutput,"));
+    // the display text must be the CLEANED text, or the tag renders as visible story prose.
+    // parseStoryResponse's argument is textForStoryParser (cleanText further stripped of any
+    // custom-app card directive) rather than cleanText directly since the app-card extraction
+    // landed -- check the guarantee (never rawOutput, and derived from cleanText) rather than
+    // one specific variable name, so this survives that kind of refactor.
+    ok("E5 parseStoryResponse is not fed rawOutput directly", !body.includes("parseStoryResponse(rawOutput,"));
+    const storyParserArg = body.match(/parseStoryResponse\((\w+),/)?.[1];
+    ok("E5b parseStoryResponse's argument is derived from cleanText, not a fresh copy of rawOutput",
+        Boolean(storyParserArg) && storyParserArg !== "rawOutput"
+        && new RegExp(`(?:const|let)\\s+${storyParserArg}\\s*=[\\s\\S]{0,200}?cleanText`).test(body),
+        storyParserArg);
     // parse order: actions come off the raw output BEFORE the user's regexes run
     const atParse = body.indexOf("parseActionTags(rawOutput)");
     const atStory = body.indexOf("parseStoryResponse(");
@@ -321,7 +329,12 @@ ${dialogue}
     ok("P2 it says the message is real", /arrives in their chat app/i.test(entry));
     ok("P3 it places the block outside the XML fields", /AFTER <\/summary>/.test(entry));
     ok("P4 it forbids repeating the text in the prose", /Do not write the message text out again/i.test(entry));
-    ok("P5 it carves itself out of the forbidden list", /ONLY chat directive story mode may use/i.test(entry));
+    // Wording moved from "[Message] is the ONLY chat directive..." to an "Exceptions" section
+    // once custom-app directives became a second allowed exception (see
+    // _fx-narrative-app-card.mjs's C11, which asserts the OLD single-exception phrasing is
+    // gone) -- check the guarantee (an exceptions carve-out exists and names [Message]) rather
+    // than one exact sentence, so this survives that kind of wording change.
+    ok("P5 it carves itself out of the forbidden list", /ONLY chat directives? .* may use/i.test(entry) && entry.includes("[Message]"));
     ok("P6 it tells the model to omit it when not messaging", /Leave it out entirely/i.test(entry));
     ok("P7 the entry still targets the story surface", /tags: \["story"\]/.test(preset.slice(start, start + entry.length + 400)));
 
@@ -338,7 +351,7 @@ ${dialogue}
     ok("P11 the version was bumped past 279", v && Number(v[1]) >= 280, v && v[1]);
 }
 
-const EXPECTED = 84;
+const EXPECTED = 85;
 ok(`Z1 ${EXPECTED} assertions ran before this guard`, pass + fail === EXPECTED, `ran ${pass + fail}`);
 console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail ? 1 : 0);

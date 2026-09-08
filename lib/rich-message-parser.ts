@@ -664,6 +664,40 @@ function findCustomAppRichCandidate(segment: string): RichPatternCandidate | nul
     return null;
 }
 
+export type ExtractedCustomAppCard = {
+    appId: string;
+    appName: string;
+    appCardLayout: Record<string, unknown>;
+    matchIndex: number;
+    matchLength: number;
+};
+
+/**
+ * Finds and builds the first custom-app chat-directive card in `text`, without the rest of
+ * parseAIResponse's chat-specific machinery (reasoning-tag stripping, built-in rich-media
+ * patterns, double-newline segmentation) -- narrative modes (story, offline) just need "does
+ * this turn's raw output contain one directive-triggered card, and if so what's its span so it
+ * can be cut out of the narration". Returns null both when nothing matches and when a matching
+ * directive produced no renderable card layout (a directive with only structured
+ * title/body/actions fields and no card.html would still build a part, but narrative modes only
+ * care about the rich HTML-card case).
+ */
+export function extractCustomAppCard(text: string): ExtractedCustomAppCard | null {
+    const candidate = findCustomAppRichCandidate(text);
+    if (!candidate) return null;
+    const part = candidate.build();
+    const data = part.mediaData as Record<string, unknown> | undefined;
+    const appCardLayout = data?.appCardLayout;
+    if (!appCardLayout || typeof appCardLayout !== "object") return null;
+    return {
+        appId: String(data?.appId || ""),
+        appName: String(data?.appName || ""),
+        appCardLayout: appCardLayout as Record<string, unknown>,
+        matchIndex: candidate.index,
+        matchLength: candidate.matchText.length,
+    };
+}
+
 // ── Structured hidden block extraction ───────────────────
 
 function extractBracketBlock(text: string, tags: string | string[]): { cleaned: string; content: string } {

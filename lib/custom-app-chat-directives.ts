@@ -1,5 +1,6 @@
 import { loadInstalledCustomApps } from "./custom-app-storage";
 import type { CustomAppChatDirective, CustomAppChatPlusAction, InstalledCustomApp } from "./custom-app-types";
+import { loadStudioCards, STUDIO_APP_ID, STUDIO_APP_NAME, type StudioCard } from "./card-studio-storage";
 
 export type RegisteredCustomAppChatDirective = CustomAppChatDirective & {
   appId: string;
@@ -87,7 +88,10 @@ export function getCustomAppDirectiveSyntaxHead(syntax: string | undefined): str
   return cleanDirectiveLabel(body.split(/[：:]/)[0] || "");
 }
 
-function normalizeDirective(app: InstalledCustomApp, directive: CustomAppChatDirective): RegisteredCustomAppChatDirective | null {
+// Only `.id`/`.name` are read below, so a fixed stub object (Studio's cards) works exactly
+// like a real InstalledCustomApp here -- narrowed on purpose rather than requiring callers to
+// fabricate a full InstalledCustomApp record.
+function normalizeDirective(app: { id: string; name: string }, directive: CustomAppChatDirective): RegisteredCustomAppChatDirective | null {
   const label = cleanDirectiveLabel(directive.label);
   if (!label || BUILTIN_DIRECTIVE_LABELS.has(label)) return null;
   const syntax = formatSyntax(label, directive.syntax);
@@ -163,6 +167,23 @@ function normalizePlusAction(app: InstalledCustomApp, action: CustomAppChatPlusA
   };
 }
 
+function studioCardToDirective(card: StudioCard): CustomAppChatDirective {
+  return {
+    id: card.id,
+    label: card.name,
+    syntax: card.syntax,
+    description: card.description,
+    card: {
+      html: card.html,
+      tone: card.tone,
+      accentColor: card.accentColor,
+      height: card.height,
+    },
+    tone: card.tone,
+    accentColor: card.accentColor,
+  };
+}
+
 export function loadCustomAppChatDirectives(): RegisteredCustomAppChatDirective[] {
   const installed = loadInstalledCustomApps();
   const result: RegisteredCustomAppChatDirective[] = [];
@@ -182,6 +203,16 @@ export function loadCustomAppChatDirectives(): RegisteredCustomAppChatDirective[
       seen.add(key);
       result.push(normalized);
     }
+  }
+  // Studio cards are merged in last, so a real installed app's directive always keeps first
+  // claim on a colliding syntax head -- a Studio card can't accidentally shadow one.
+  for (const card of loadStudioCards()) {
+    const normalized = normalizeDirective({ id: STUDIO_APP_ID, name: STUDIO_APP_NAME }, studioCardToDirective(card));
+    if (!normalized) continue;
+    const key = getCustomAppDirectiveSyntaxHead(normalized.syntax);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(normalized);
   }
   return result;
 }

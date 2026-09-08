@@ -33,6 +33,10 @@ export type StoryMessage = {
   regexSignature?: string;
   parserVersion?: number;
   createdAt: string;
+  /** A custom-app chat directive triggered this turn (e.g. a boarding-pass/menu card) -- see extractCustomAppCard() in rich-message-parser.ts. Mirrors the subset of ChatMessage.mediaData that AppCardBubble actually reads. */
+  appId?: string;
+  appName?: string;
+  appCardLayout?: Record<string, unknown>;
 };
 
 export type StoryProjectionEntry = {

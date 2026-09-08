@@ -65,7 +65,12 @@ export const BUILTIN_PRESET_ID = "builtin_default_v1";
 //                   TRIMs the entry away entirely for characters with no Couple Space.
 //                   The block is built by the caller and passed in like currentSchedule,
 //                   so the assembler gains no import of the Couple Space store.
-export const BUILTIN_PRESET_VERSION = 280;
+// 283 (2026-09-08): Phase D cutover — built-in Couple Space removed entirely (replaced by
+//                   the WithU custom app). Removes the `couple_space_context` entry and its
+//                   prompt_order toggle added in 279. No stored-preset content survives a
+//                   bump anyway (factory content wins, preserveCustomAppPresetPrompts is the
+//                   only exception), so this is a clean removal, not a migration.
+export const BUILTIN_PRESET_VERSION = 283;
 
 export function createBuiltinPreset(): PresetConfig {
     const now = Date.now();
@@ -108,12 +113,6 @@ export function createBuiltinPreset(): PresetConfig {
             // First thing after the history block on purpose: it is the history's own
             // style that this rule has to override, so it must be read after it.
             { identifier: "persona_style_authority", enabled: true },
-
-            // Standing relationship facts (anniversaries / wishlist / gift tally). Sits
-            // below the history so an anniversary landing in three days is the freshest
-            // thing the model reads before replying. TRIMs away when the character has no
-            // Couple Space, so it costs nothing for everyone else.
-            { identifier: "couple_space_context", enabled: true },
 
             // ── Feature entries (after chatHistory) ──
             { identifier: "chat_tools", enabled: true },
@@ -235,25 +234,6 @@ export function createBuiltinPreset(): PresetConfig {
                     "A character profile can be edited at any time, so your earlier replies may have been written under an older version of it. Read them as a record of what was said, never as a style guide for how to say things now. Where your recent messages and the profile above disagree about your manner, follow the profile, and let your voice change starting with this message — without announcing the change, apologising for it, or explaining it in or out of character.",
                     "**This applies to voice only, never to substance.** Everything that has already happened remains true and must still be honoured in full: past events and plot, the current state of your relationship with the user and with other characters, promises made, running jokes, and every detail carried in the conversation history, short-term events, core memories and long-term memories. Keep recalling and using all of it exactly as before, with the same continuity you would show otherwise. What changes is only how you express it — not what you know, not what you feel about the user, and not what has happened between you.",
                 ].join("\n"),
-                injection_position: 0,
-                injection_depth: 0,
-                enabled: true,
-            },
-            // Couple Space standing state. Like output_language_rule and
-            // persona_style_authority this deliberately has NO `tags`, so the assembler's
-            // tag filter never drops it and one entry covers every surface.
-            // The body is a single macro on purpose: when the character has no Couple
-            // Space the macro resolves to the TRIM sentinel, the content becomes empty,
-            // and the assembler's `if (!content) continue` drops the entry outright --
-            // so no empty heading is ever emitted.
-            // The block itself is built by the CALLER (buildCoupleSpacePromptBlock) and
-            // passed in as `coupleSpace`, mirroring `currentSchedule`, so the assembler
-            // gains no import of the Couple Space store and no cycle is possible.
-            {
-                identifier: "couple_space_context",
-                name: "▸ Couple Space",
-                role: "system",
-                content: "{{coupleSpace}}",
                 injection_position: 0,
                 injection_depth: 0,
                 enabled: true,
@@ -439,8 +419,12 @@ export function createBuiltinPreset(): PresetConfig {
                     "  [/Message]",
                     "- <content> narrates the act -- taking the phone out, hesitating, typing. The [Message] block holds ONLY the words that arrive. Do not write the message text out again inside <content>.",
                     "- Several messages in a row: put them on separate lines inside the one block.",
-                    "- This is the ONLY chat directive story mode may use, and it is the exception to the rule above. Everything else in that list stays forbidden.",
                     "- Leave it out entirely on any turn where you are not actually sending a message. It is not a channel for asides or commentary.",
+                    "",
+                    "【Exceptions to the forbidden list above】",
+                    "- [Message] (just above) and any installed app directive listed below are the ONLY chat directives story mode may use. Everything else in the forbidden list stays forbidden.",
+                    "{{customAppRichMediaDirectives}}",
+                    "",
                     "</story_output_format>",
                 ].join("\n"),
                 injection_position: 0,
@@ -715,6 +699,17 @@ export function createBuiltinPreset(): PresetConfig {
                     "## Output example",
                     "<content>{{char}} lays the phone face down on the table and looks up at {{user}}. The rain outside makes the room feel very quiet; after a pause, {{char}} finally puts into words the thing left unsaid a moment ago.</content>",
                     "<{{offlineSummaryTag}}>{{char}} and {{user}} talked in person about the earlier silence, and the mood eased a little.</{{offlineSummaryTag}}>",
+                    "",
+                    "## Messaging {{user}} for real",
+                    "- Only when the in-person scene genuinely has you pick up your phone and message {{user}} (stepping out to text them, sending a photo you just took, etc.), you may send that message for real. It arrives in their chat app, as an ordinary message from you.",
+                    "- Put the block AFTER </{{offlineSummaryTag}}>, never inside <content> or <{{offlineSummaryTag}}>:",
+                    "  [Message]",
+                    "  what actually arrives on their phone",
+                    "  [/Message]",
+                    "- <content> narrates the act -- taking the phone out, typing. The [Message] block holds ONLY the words that arrive. Do not write the message text out again inside <content>.",
+                    "- Several messages in a row: put them on separate lines inside the one block.",
+                    "- This is the ONLY chat directive offline mode may use, and it is the exception to the rule above forbidding cross-scene action tags. Everything else on that list stays forbidden.",
+                    "- Leave it out entirely on any round where you are not actually sending a message. It is not a channel for asides or commentary.",
                     "</chat_offline_format>",
                 ].join("\n"),
                 injection_position: 0,

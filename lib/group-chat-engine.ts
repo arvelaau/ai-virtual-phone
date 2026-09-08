@@ -37,7 +37,6 @@ import {
 import type { CustomAppPromptProfile } from "./custom-app-types";
 import { isNeteaseConfigured } from "./music-service";
 import { buildCalendarScheduleMarker, getCurrentCalendarScheduleForPrompt } from "./calendar-storage";
-import { buildCoupleSpacePromptBlock } from "./couple-space-prompt";
 import { getWeekStartIso } from "./calendar-utils";
 import {
     resolveBinding,
@@ -344,7 +343,6 @@ async function buildGroupChatPromptMessages(
         memberTimeContexts[charId] = memberTimeContext;
         const scheduleSummary = buildCalendarScheduleMarker("character", charId, getWeekStartIso(now));
         const currentSchedule = getCurrentCalendarScheduleForPrompt("character", charId, now);
-        const coupleSpace = buildCoupleSpacePromptBlock({ characterId: charId, characterName: character.name });
         const charSlot = resolveBinding(bindings, charId, "group_chat");
         const worldBooks = promptProfile?.enableWorldBooks === false
             ? []
@@ -369,7 +367,6 @@ async function buildGroupChatPromptMessages(
             worldBooks,
             scheduleSummary,
             currentSchedule,
-            coupleSpace,
             coreMemories,
             longTermMemories,
             currentStateValues: getLatestCharacterStateValues(charId),

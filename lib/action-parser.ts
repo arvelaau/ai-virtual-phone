@@ -34,7 +34,7 @@ export type ActionTag = {
 export type ActionContext = {
     characterId: string;
     sessionId?: string;
-    sourceEngine: "chat" | "moments" | "group_chat" | "followup" | "story";
+    sourceEngine: "chat" | "moments" | "group_chat" | "followup" | "story" | "offline";
     signal?: AbortSignal;
 };
 
