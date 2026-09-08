@@ -48,7 +48,14 @@ export async function POST(request: Request) {
     if (!publicKey || !privateKey) {
         return NextResponse.json({ error: "missing_vapid_keys" }, { status: 400 });
     }
-    const subject = String(payload.vapidSubject || "").trim() || "mailto:proactive-push@ai-virtual-phone.local";
+    // Fallback only (the client always sends its own vapidKeys.subject) —
+    // a fake/non-resolvable domain here (".local", "localhost", etc.) is
+    // silently accepted by Chrome/Firefox's push services but rejected
+    // outright by Apple's with "BadJwtToken", so this must be a real,
+    // publicly resolvable https: URL. Deriving it from the incoming
+    // request's own origin means it's automatically correct for wherever
+    // this app is actually deployed, without hardcoding a domain.
+    const subject = String(payload.vapidSubject || "").trim() || new URL(request.url).origin;
 
     const notificationPayload = JSON.stringify({
         title: String(payload.title || "Test notification").slice(0, 200),

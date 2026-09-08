@@ -235,7 +235,14 @@ async function loadVapidConfig(env) {
     return {
         publicKey: env.VAPID_PUBLIC_KEY,
         privateKey,
-        subject: env.VAPID_SUBJECT || "mailto:proactive-push@ai-virtual-phone.local",
+        // Fallback only — the deploy flow always sets VAPID_SUBJECT from the
+        // app's own vapidKeys.subject, so this normally never triggers. A
+        // fake/non-resolvable domain here (".local", "localhost", etc.) is
+        // silently accepted by Chrome/Firefox's push services but rejected
+        // outright by Apple's with "BadJwtToken" — example.com is a real,
+        // always-resolvable domain reserved by IANA specifically for use in
+        // documentation and examples like this one.
+        subject: env.VAPID_SUBJECT || "mailto:push@example.com",
     };
 }
 

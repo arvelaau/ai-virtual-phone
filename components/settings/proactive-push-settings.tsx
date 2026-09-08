@@ -133,7 +133,17 @@ export function ProactivePushSettings() {
             saveVapidKeys({
                 publicKey: data.publicKey,
                 privateKey: data.privateKey,
-                subject: "mailto:proactive-push@ai-virtual-phone.local",
+                // The VAPID JWT's "sub" claim. A fake, non-resolvable domain
+                // here (".local", "localhost", etc.) is silently accepted by
+                // Chrome/Firefox's push services but is EXPLICITLY rejected
+                // by Apple's — every push attempt fails with "BadJwtToken",
+                // no matter how many times the keypair itself gets
+                // regenerated or the subscription re-created, since this
+                // string was never actually wrong because of the key.
+                // window.location.origin is a real, publicly resolvable
+                // https: URL — a valid "sub" value per the VAPID spec, and
+                // it automatically matches wherever this app is deployed.
+                subject: window.location.origin,
                 createdAt: new Date().toISOString(),
             });
             setConfig(loadPushNotificationConfig());
