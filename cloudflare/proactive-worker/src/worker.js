@@ -262,8 +262,19 @@ async function pushToAllSubscriptions(env, payloadObject) {
             );
             if (response.ok) {
                 sent += 1;
-            } else if (response.status === 404 || response.status === 410) {
-                // Subscription is gone (expired, or the PWA was removed) — prune it.
+            } else if (response.status === 404 || response.status === 410 || response.status === 400) {
+                // 404/410: the push service says the subscription is gone
+                // outright (expired, or the PWA was removed).
+                // 400: the push service rejected this SPECIFIC endpoint/key
+                // combination — seen in practice for subscriptions left over
+                // from an earlier VAPID keypair after a regenerate. Safe to
+                // treat the same as 404/410 specifically because it's scoped
+                // to one row: other rows in the same batch (the current,
+                // correctly-configured subscription) succeed alongside it,
+                // which is what tells them apart from a 403 — a 403 means
+                // the VAPID config itself is wrong for every subscription at
+                // once, which must NOT prune anything, or a real
+                // misconfiguration would silently wipe out every device.
                 await env.DB.prepare("DELETE FROM subscriptions WHERE id = ?1").bind(row.id).run();
                 errors.push(`expired:${row.id}`);
             } else {
