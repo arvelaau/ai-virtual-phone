@@ -17,7 +17,7 @@
 import { useMemo, useState } from "react";
 import { IdCard, Plus, Trash2, Pencil } from "lucide-react";
 
-import { PageShell, Button, Input, Textarea, EmptyState, GlassCard, Badge } from "@/components/ui";
+import { PageShell, Button, Input, Textarea, EmptyState, GlassCard, Badge, MenuToggleRow } from "@/components/ui";
 import { AppCardView } from "@/components/chat/app-card-view";
 import {
     loadStudioCards,
@@ -27,6 +27,14 @@ import {
     type StudioCard,
     type StudioCardInput,
 } from "@/lib/card-studio-storage";
+import type { CustomAppCardScopeMode } from "@/lib/custom-app-types";
+
+const ALL_SCOPE_MODES: CustomAppCardScopeMode[] = ["chat", "story", "offline"];
+const SCOPE_MODE_LABELS: Record<CustomAppCardScopeMode, { label: string; desc: string }> = {
+    chat: { label: "Chat", desc: "Trigger this card in live chat" },
+    story: { label: "Story", desc: "Trigger this card in Story mode" },
+    offline: { label: "Offline", desc: "Trigger this card in Offline mode" },
+};
 
 type Props = {
     onClose: () => void;
@@ -42,6 +50,7 @@ const EMPTY_DRAFT: StudioCardInput = {
     html: "",
     accentColor: "",
     height: 220,
+    scope: undefined,
 };
 
 function draftFromCard(card: StudioCard): StudioCardInput {
@@ -52,6 +61,7 @@ function draftFromCard(card: StudioCard): StudioCardInput {
         html: card.html,
         accentColor: card.accentColor ?? "",
         height: card.height ?? 220,
+        scope: card.scope,
     };
 }
 
@@ -92,6 +102,24 @@ export function StudioApp({ onClose, onNotice }: Props) {
         setScreen({ mode: "list" });
     };
 
+    // Which surfaces this card is allowed to trigger on -- undefined/empty scope means
+    // unrestricted (every mode checked), matching lib/custom-app-chat-directives.ts's own
+    // directiveMatchesScope() reading of it.
+    const effectiveScope = draft.scope && draft.scope.length > 0 ? draft.scope : ALL_SCOPE_MODES;
+    const toggleScope = (mode: CustomAppCardScopeMode) => {
+        setDraft(prev => {
+            const current = prev.scope && prev.scope.length > 0 ? prev.scope : ALL_SCOPE_MODES;
+            const isOn = current.includes(mode);
+            if (isOn) {
+                const next = current.filter(m => m !== mode);
+                if (next.length === 0) return prev; // never allow a card scoped to nowhere
+                return { ...prev, scope: next };
+            }
+            const next = [...current, mode];
+            return { ...prev, scope: next.length === ALL_SCOPE_MODES.length ? undefined : next };
+        });
+    };
+
     if (screen.mode === "list") {
         return (
             <PageShell
@@ -120,9 +148,12 @@ export function StudioApp({ onClose, onNotice }: Props) {
                                 {cards.map(card => (
                                     <li key={card.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                                         <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                                                 <span style={{ fontWeight: 500 }}>{card.name}</span>
                                                 <Badge>{card.syntax}</Badge>
+                                                {card.scope && card.scope.length > 0 ? (
+                                                    <Badge>{card.scope.map(mode => SCOPE_MODE_LABELS[mode].label).join(" + ")}</Badge>
+                                                ) : null}
                                             </div>
                                             {card.description ? (
                                                 <div style={{ opacity: 0.65, fontSize: 12.5, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -188,6 +219,25 @@ export function StudioApp({ onClose, onNotice }: Props) {
                                 onChange={event => setDraft(prev => ({ ...prev, description: event.target.value }))}
                             />
                         </label>
+                    </div>
+                </GlassCard>
+
+                <GlassCard>
+                    <h3 style={{ margin: "0 0 4px" }}>Scope</h3>
+                    <p style={{ fontSize: 12.5, opacity: 0.7, margin: "0 0 12px" }}>
+                        Where this specific card is allowed to trigger. Uncheck a mode to keep this
+                        design out of it -- a boarding pass might only make sense in Story, for example.
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {ALL_SCOPE_MODES.map(mode => (
+                            <MenuToggleRow
+                                key={mode}
+                                label={SCOPE_MODE_LABELS[mode].label}
+                                desc={SCOPE_MODE_LABELS[mode].desc}
+                                checked={effectiveScope.includes(mode)}
+                                onChange={() => toggleScope(mode)}
+                            />
+                        ))}
                     </div>
                 </GlassCard>
 

@@ -80,7 +80,7 @@ import {
     DEFAULT_OFFLINE_CHAT_BILINGUAL_PROMPT,
     resolveBilingualPrompt,
 } from "./bilingual-prompt-defaults";
-import { parseOfflineResponse, type ParsedOfflineResponse } from "./chat-offline-storage";
+import { parseOfflineResponse, parseOfflineSessionSummary, type ParsedOfflineResponse, type ParsedOfflineSessionSummary } from "./chat-offline-storage";
 import { throwIfAborted } from "./abort-utils";
 
 
@@ -1861,7 +1861,10 @@ export async function buildChatPromptMessages(
         hint: buildChatPluginPromptFragments(session.id),
     });
     const pluginPromptHint = pluginPrompt.hint?.trim() ? `\n\n### Plugins\n${pluginPrompt.hint.trim()}\n` : "";
-    const customAppRichMediaDirectives = formatCustomAppChatDirectivesForPrompt() + buildScreenEffectPromptHint() + pluginPromptHint;
+    // This builder is shared by live chat AND offline (generateOfflineChatCompletion passes
+    // appTags: ["chat", "offline"]) -- reuse the isOfflineMode flag already computed above so
+    // each directive's own per-card scope is checked against the right surface.
+    const customAppRichMediaDirectives = formatCustomAppChatDirectivesForPrompt(isOfflineMode ? "offline" : "chat") + buildScreenEffectPromptHint() + pluginPromptHint;
     const toolsPrompt = toolsEnabled && !usesNativeActions ? formatToolsForPrompt(enabledTools) : "";
     const chatBilingualInstruction = !session.isGroup
         ? buildChatBilingualInstruction(session.bilingualTranslationEnabled !== false, "single", session.bilingualTranslationPrompt)
@@ -2001,6 +2004,78 @@ export async function generateOfflineChatCompletion(
         model: config.defaultModel,
         presetName: preset?.name || "Default preset",
         reasoning: reasoning || undefined,
+    };
+}
+
+export type OfflineSessionSummaryResult = ParsedOfflineSessionSummary & {
+    model: string;
+    presetName: string;
+};
+
+/**
+ * One-off "wrap up this offline visit" call, made when the user exits offline mode (see
+ * chat-room.tsx's finalizeOfflineSessionSummary). Deliberately NOT a taught preset format --
+ * unlike a normal offline turn, this only fires once per visit, so it is cheaper and safer to
+ * inline the request as a single trigger message (the same pattern
+ * lib/calendar-engine.ts's generateWeeklyCalendarSchedule() uses for its own one-off ask) than to
+ * teach the model a rarely-relevant structured format it would otherwise have to remember never
+ * to use unprompted, and to avoid a BUILTIN_PRESET_VERSION bump for something this narrow.
+ *
+ * Reuses buildChatPromptMessages() for the SAME persona/worldbook/memory/output-rule context a
+ * normal offline reply gets (so the recap is told in the character's own established voice, and
+ * respects e.g. the output-language rule) -- only the trailing trigger and the response shape
+ * differ from generateOfflineChatCompletion() above.
+ */
+export async function generateOfflineSessionSummary(
+    session: ChatSession,
+    history: ChatMessage[],
+    options?: { signal?: AbortSignal; brief?: boolean },
+): Promise<OfflineSessionSummaryResult> {
+    const { llmMessages, character, config, preset, regexes, userIdentity } = await buildChatPromptMessages(
+        session,
+        history,
+        {
+            appTags: ["chat", "offline"],
+            excludeOfflineSessionId: session.id,
+        },
+    );
+    const triggerInstruction = [
+        "The user has just exited offline mode -- this visit is now over.",
+        "Write a short wrap-up: a natural, first-person recap of what happened during this stretch (1-3 sentences), plus a short label suitable for a calendar entry (3-6 words, no punctuation at the end).",
+        options?.brief
+            ? "This particular visit was very short -- it barely lasted any time at all. If it feels natural for your character, you may react to how quickly they left; if not, that's fine too."
+            : "",
+        "Respond in exactly this format, nothing else:",
+        "<title>short calendar label</title>",
+        "<summary>first-person recap</summary>",
+    ].filter(Boolean).join("\n");
+
+    const messages: LLMMessage[] = [
+        ...llmMessages,
+        {
+            role: "user",
+            content: triggerInstruction,
+            _debugMeta: { marker: "offline_session_summary_trigger" },
+        },
+    ];
+
+    const rawOutput = await sendLLMRequest(config, preset, messages, regexes, {
+        characterName: character.name,
+        userName: userIdentity?.name,
+    }, {
+        appTags: ["chat", "offline"],
+        debugSessionId: session.id,
+        signal: options?.signal,
+    });
+    // Defensive only: this trigger is never taught, so the model has no reason to emit an
+    // action/directive tag here -- but if it echoes one from the surrounding context anyway,
+    // strip it rather than let inert bracket syntax leak into a calendar title or summary.
+    const { cleanText } = parseActionTags(rawOutput);
+
+    return {
+        ...parseOfflineSessionSummary(cleanText),
+        model: config.defaultModel,
+        presetName: preset?.name || "Default preset",
     };
 }
 

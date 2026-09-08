@@ -1,11 +1,19 @@
 import { loadInstalledCustomApps } from "./custom-app-storage";
-import type { CustomAppChatDirective, CustomAppChatPlusAction, InstalledCustomApp } from "./custom-app-types";
+import type { CustomAppCardScopeMode, CustomAppChatDirective, CustomAppChatPlusAction, InstalledCustomApp } from "./custom-app-types";
 import { loadStudioCards, STUDIO_APP_ID, STUDIO_APP_NAME, type StudioCard } from "./card-studio-storage";
 
 export type RegisteredCustomAppChatDirective = CustomAppChatDirective & {
   appId: string;
   appName: string;
 };
+
+/** Whether a directive is allowed to teach/trigger on the given surface -- an omitted/empty
+ *  `scope` means unrestricted (every surface), matching every directive authored before this
+ *  field existed. Per-card, set by the card's own author (Studio's scope picker, or a
+ *  third-party app manifest that chooses to declare it) -- there is no global app-wide toggle. */
+export function directiveMatchesScope(directive: Pick<CustomAppChatDirective, "scope">, mode: CustomAppCardScopeMode): boolean {
+  return !directive.scope || directive.scope.length === 0 || directive.scope.includes(mode);
+}
 
 export type RegisteredCustomAppChatPlusAction = CustomAppChatPlusAction & {
   appId: string;
@@ -76,6 +84,24 @@ function plainRecord(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
+const VALID_SCOPE_MODES: readonly CustomAppCardScopeMode[] = ["chat", "story", "offline"];
+
+/** Same normalization as card-studio-storage.ts's own (kept local since this function also
+ *  handles arbitrary, untrusted third-party manifest JSON, not just already-clean Studio
+ *  cards) -- dedupe, drop unrecognized values, collapse "all three"/"none" to undefined
+ *  (unrestricted) since that is the canonical "no opinion" form every consumer checks for. */
+function normalizeScopeField(value: unknown): CustomAppCardScopeMode[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const seen = new Set<CustomAppCardScopeMode>();
+  for (const raw of value) {
+    if (typeof raw === "string" && (VALID_SCOPE_MODES as readonly string[]).includes(raw)) {
+      seen.add(raw as CustomAppCardScopeMode);
+    }
+  }
+  if (seen.size === 0 || seen.size === VALID_SCOPE_MODES.length) return undefined;
+  return VALID_SCOPE_MODES.filter(mode => seen.has(mode));
+}
+
 function formatSyntax(label: string, syntax?: string): string {
   const text = cleanText(syntax, 160);
   if (text.startsWith("[") && text.endsWith("]")) return text;
@@ -124,6 +150,7 @@ function normalizeDirective(app: { id: string; name: string }, directive: Custom
         style: cleanText(action.style, 30),
       })).filter(action => action.label).slice(0, 3)
       : undefined,
+    scope: normalizeScopeField(directive.scope),
     appId: app.id,
     appName: app.name,
   };
@@ -181,6 +208,7 @@ function studioCardToDirective(card: StudioCard): CustomAppChatDirective {
     },
     tone: card.tone,
     accentColor: card.accentColor,
+    scope: card.scope,
   };
 }
 
@@ -246,8 +274,12 @@ export function findCustomAppChatDirective(label: string): RegisteredCustomAppCh
   return loadCustomAppChatDirectives().find(item => getCustomAppDirectiveSyntaxHead(item.syntax) === normalized) ?? null;
 }
 
-export function formatCustomAppChatDirectivesForPrompt(options: { group?: boolean } = {}): string {
-  const directives = loadCustomAppChatDirectives();
+export function formatCustomAppChatDirectivesForPrompt(mode: CustomAppCardScopeMode, options: { group?: boolean } = {}): string {
+  // Scope is per-card (directiveMatchesScope, above) -- authored alongside the card itself in
+  // Studio, not a global app-wide setting. That is what makes this safe to call unconditionally
+  // from every surface: each directive opts itself in or out of `mode`, so there is nothing left
+  // for the caller to gate.
+  const directives = loadCustomAppChatDirectives().filter(d => directiveMatchesScope(d, mode));
   if (directives.length === 0) return "";
   const lines: string[] = [];
   for (const directive of directives) {

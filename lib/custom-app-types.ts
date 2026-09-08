@@ -74,6 +74,12 @@ export type CustomAppChatDirectiveAction = {
   style?: string;
 };
 
+/** Which surfaces a directive-triggered card is allowed to appear on. Per-card, authored
+ *  alongside the card itself (Studio's own scope picker) -- NOT a global app-wide setting. An
+ *  omitted/empty scope means unrestricted (all three), so every directive authored before this
+ *  field existed keeps behaving exactly as it did. */
+export type CustomAppCardScopeMode = "chat" | "story" | "offline";
+
 export type CustomAppChatDirective = {
   id: string;
   label: string;
@@ -90,6 +96,7 @@ export type CustomAppChatDirective = {
   sceneTag?: string;
   tags?: string[];
   actions?: CustomAppChatDirectiveAction[];
+  scope?: CustomAppCardScopeMode[];
 };
 
 export type CustomAppChatPlusAction = {

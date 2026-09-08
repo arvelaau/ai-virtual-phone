@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, createContext, type CSSProperties, type ReactNode } from "react";
-import { Bell, Check, ChevronRight, Clock, Database, FileText, Fingerprint, Globe, HardDrive, Image, Info, KeyRound, Layers, Link2, Loader2, LogOut, MessageSquare, Mic, SlidersHorizontal, UserCircle, Wrench, X } from "lucide-react";
+import { ArrowUpDown, Bell, Check, ChevronRight, Clock, Database, FileText, Fingerprint, Globe, HardDrive, Image, Info, KeyRound, Layers, Link2, Loader2, LogOut, MessageSquare, Mic, SlidersHorizontal, UserCircle, Wrench, X } from "lucide-react";
 import { ConfirmDialog } from "./ui/modal";
 import { useAccount } from "@/lib/account-context";
 import { changeAccountPassword } from "@/lib/account-client";
@@ -83,6 +83,10 @@ const quickActionIconStyle = {
     "--icon-color": BINDING_ACCENTS.worldBook,
 } as CSSProperties;
 
+const appCardPositionIconStyle = {
+    "--icon-color": BINDING_ACCENTS.identity,
+} as CSSProperties;
+
 const accountIconStyle = {
     "--icon-color": BINDING_ACCENTS.identity,
 } as CSSProperties;
@@ -103,6 +107,7 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
     const [timeAware, setTimeAware] = useState(true);
     const [promptViewerEnabled, setPromptViewerEnabled] = useState(false);
     const [quickActionEnabled, setQuickActionEnabled] = useState(false);
+    const [appCardPositionBeforeText, setAppCardPositionBeforeText] = useState(false);
     const pageBodyRef = useRef<HTMLDivElement | null>(null);
 
     // ── 账号：显示当前登录 / 修改密码 / 退出登录 ──
@@ -222,6 +227,15 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
         onNotice(next ? "Quick actions enabled" : "Quick actions disabled");
     }, [onNotice]);
 
+    // App cards: whether a triggered card renders before or after the turn's main text. Which
+    // surfaces a card can appear on ("scope") is authored per-card in the Studio app, not a
+    // global setting here -- see lib/app-card-settings.ts.
+    const handleAppCardPositionChange = useCallback((next: boolean) => {
+        setAppCardPositionBeforeText(next);
+        saveChatAppSettings({ ...loadChatAppSettings(), appCardPositionBeforeText: next });
+        onNotice(next ? "App cards now render before the main text" : "App cards now render after the main text");
+    }, [onNotice]);
+
     const imageGenerationItem = SETTINGS_MENU.find(i => i.id === "imageGeneration")!;
     const imageGenerationFeaturedItem: FeaturedCardItem = {
         id: imageGenerationItem.id,
@@ -297,6 +311,7 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
         setTimeAware(settings.timeAware !== false);
         setPromptViewerEnabled(settings.promptViewerEnabled === true);
         setQuickActionEnabled(settings.quickActionEnabled === true);
+        setAppCardPositionBeforeText(settings.appCardPositionBeforeText === true);
     }, []);
 
     // Listen for mascot navigation mode (e.g. jump to worldbook/regex tab)
@@ -414,6 +429,23 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                     </span>
                                     <span className="menu-right settings-tools-menu-toggle">
                                         <Toggle checked={quickActionEnabled} onChange={handleQuickActionChange} className="settings-toggle-control" />
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="settings-tools-section">
+                            <h3 className="settings-menu-section-title">App Cards</h3>
+                            <div className="menu-group settings-tools-menu">
+                                <div className="menu-item settings-tools-menu-item">
+                                    <span className="card-icon" style={appCardPositionIconStyle}>
+                                        <ArrowUpDown size={22} strokeWidth={1.75} />
+                                    </span>
+                                    <span className="settings-tools-menu-copy">
+                                        <span className="menu-label appearance-menu-item-label">Card Before Text</span>
+                                        <span className="menu-desc settings-tools-menu-desc">Story & Offline only — renders above the turn's text instead of below it</span>
+                                    </span>
+                                    <span className="menu-right settings-tools-menu-toggle">
+                                        <Toggle checked={appCardPositionBeforeText} onChange={handleAppCardPositionChange} className="settings-toggle-control" />
                                     </span>
                                 </div>
                             </div>

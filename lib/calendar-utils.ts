@@ -96,6 +96,49 @@ export function isCalendarTimeRangeAllowed(startTime: string, endTime: string): 
   return start >= CALENDAR_MINUTE_START && end <= CALENDAR_MINUTE_END;
 }
 
+function minutesToHHMM(minutes: number): string {
+  const clamped = Math.max(0, Math.min(23 * 60 + 59, Math.round(minutes)));
+  return `${String(Math.floor(clamped / 60)).padStart(2, "0")}:${String(clamped % 60).padStart(2, "0")}`;
+}
+
+/** Minimum block length an offline-session calendar entry is still worth writing, even when the
+ *  real elapsed time was shorter than this (a 30-second exchange still deserves a visible entry,
+ *  not a silently-dropped zero-length one). */
+const OFFLINE_SESSION_MIN_BLOCK_MINUTES = 15;
+
+/**
+ * Turns an offline-mode session's real start/end timestamps into a date + time range that fits
+ * the calendar's allowed window (isCalendarTimeRangeAllowed()) -- clamped to CALENDAR_HOUR_START/
+ * CALENDAR_HOUR_END, clamped to the session's own start date if it crossed midnight (never
+ * splits across two days), and padded up to OFFLINE_SESSION_MIN_BLOCK_MINUTES if the real
+ * duration would otherwise round to nothing. Returns null only when even the padded block cannot
+ * fit inside the allowed window at all (e.g. a session that started after CALENDAR_HOUR_END).
+ */
+export function deriveOfflineSessionScheduleWindow(
+  startedAt: string,
+  endedAt: string,
+): { date: string; startTime: string; endTime: string } | null {
+  const start = new Date(startedAt);
+  const end = new Date(endedAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  const date = formatIsoDate(start);
+  const startMinutesRaw = start.getHours() * 60 + start.getMinutes();
+  // A session that crosses midnight is clamped to the end of the allowed window on its start
+  // date, rather than attempting to split it across two calendar days.
+  const endMinutesRaw = formatIsoDate(end) === date
+    ? end.getHours() * 60 + end.getMinutes()
+    : CALENDAR_MINUTE_END;
+
+  const startMinutes = Math.max(CALENDAR_MINUTE_START, Math.min(CALENDAR_MINUTE_END, startMinutesRaw));
+  let endMinutes = Math.max(CALENDAR_MINUTE_START, Math.min(CALENDAR_MINUTE_END, endMinutesRaw));
+  if (endMinutes < startMinutes + OFFLINE_SESSION_MIN_BLOCK_MINUTES) {
+    endMinutes = Math.min(CALENDAR_MINUTE_END, startMinutes + OFFLINE_SESSION_MIN_BLOCK_MINUTES);
+  }
+  if (endMinutes <= startMinutes) return null;
+
+  return { date, startTime: minutesToHHMM(startMinutes), endTime: minutesToHHMM(endMinutes) };
+}
+
 export function pickScheduleColorKey(startTime: string): CalendarColorKey {
   const minutes = timeToMinutes(startTime);
   if (Number.isNaN(minutes)) return "slate";

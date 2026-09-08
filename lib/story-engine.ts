@@ -213,8 +213,10 @@ export async function generateStoryCompletion(
   // A custom-app directive (e.g. a boarding-pass/menu card) can appear alongside the story
   // prose, the same way it already can in live chat. Scanned on the text AFTER [Message]
   // extraction -- a directive's syntax head is validated at registration time to never shadow
-  // a built-in action tag name, so the two extractions cannot collide.
-  const appCard = extractCustomAppCard(cleanText);
+  // a built-in action tag name, so the two extractions cannot collide. Each directive/Studio
+  // card declares its own scope (chat/story/offline) when it's authored -- there is no global
+  // "story" toggle to check here, extractCustomAppCard() filters by mode itself.
+  const appCard = extractCustomAppCard(cleanText, "story");
   const textForStoryParser = appCard
     ? (cleanText.slice(0, appCard.matchIndex) + cleanText.slice(appCard.matchIndex + appCard.matchLength)).trim()
     : cleanText;
@@ -286,8 +288,9 @@ async function buildStoryPromptMessages(
     // Without this, the model has no idea an installed custom app's directive (e.g. a
     // boarding-pass/menu card) exists at all in story mode -- chat and offline both get this
     // automatically via buildChatPromptMessages in chat-engine.ts; story builds its own prompt
-    // payload here and was missing it entirely.
-    customAppRichMediaDirectives: formatCustomAppChatDirectivesForPrompt(),
+    // payload here and was missing it entirely. Only directives/Studio cards whose own scope
+    // includes "story" are taught -- see custom-app-chat-directives.ts's directiveMatchesScope().
+    customAppRichMediaDirectives: formatCustomAppChatDirectivesForPrompt("story"),
   });
 }
 

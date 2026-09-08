@@ -12,6 +12,9 @@
 // lib/custom-app-chat-directives.ts's loadCustomAppChatDirectives().
 
 import { kvGet, kvSet } from "./kv-db";
+import type { CustomAppCardScopeMode } from "./custom-app-types";
+
+const VALID_SCOPE_MODES: readonly CustomAppCardScopeMode[] = ["chat", "story", "offline"];
 
 const STORAGE_KEY = "ai_phone_card_studio_v1";
 
@@ -35,6 +38,9 @@ export type StudioCard = {
     accentColor?: string;
     /** Card iframe height in px. */
     height?: number;
+    /** Which surfaces this card is allowed to trigger on -- undefined/empty = all three
+     *  (unrestricted). Authored per-card here, not as a global app-wide setting. */
+    scope?: CustomAppCardScopeMode[];
     createdAt: string;
     updatedAt: string;
 };
@@ -47,7 +53,23 @@ export type StudioCardInput = {
     tone?: string;
     accentColor?: string;
     height?: number;
+    scope?: CustomAppCardScopeMode[];
 };
+
+/** Dedupes + drops unrecognized values. An empty/all-three result is stored as `undefined` --
+ *  "unrestricted" is the canonical form, so a card saved with every box checked reads identically
+ *  to one that never had a scope opinion at all. */
+function normalizeScope(value: unknown): CustomAppCardScopeMode[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    const seen = new Set<CustomAppCardScopeMode>();
+    for (const raw of value) {
+        if (typeof raw === "string" && (VALID_SCOPE_MODES as readonly string[]).includes(raw)) {
+            seen.add(raw as CustomAppCardScopeMode);
+        }
+    }
+    if (seen.size === 0 || seen.size === VALID_SCOPE_MODES.length) return undefined;
+    return VALID_SCOPE_MODES.filter(mode => seen.has(mode));
+}
 
 function cleanText(value: unknown, maxLength: number): string {
     return String(value ?? "").replace(/\u0000/g, "").replace(/\s+/g, " ").trim().slice(0, maxLength);
@@ -93,6 +115,7 @@ function normalizeCard(value: unknown): StudioCard | null {
         height: typeof entry.height === "number" && Number.isFinite(entry.height)
             ? Math.max(96, Math.min(520, Math.round(entry.height)))
             : undefined,
+        scope: normalizeScope(entry.scope),
         createdAt: String(entry.createdAt ?? nowIso()),
         updatedAt: String(entry.updatedAt ?? entry.createdAt ?? nowIso()),
     };
@@ -142,6 +165,7 @@ export function saveStudioCard(input: StudioCardInput, id?: string): StudioCard 
             height: typeof input.height === "number" && Number.isFinite(input.height)
                 ? Math.max(96, Math.min(520, Math.round(input.height)))
                 : existing.height,
+            scope: normalizeScope(input.scope),
             updatedAt: timestamp,
         };
         persist(cards.map(card => (card.id === id ? updated : card)));
@@ -158,6 +182,7 @@ export function saveStudioCard(input: StudioCardInput, id?: string): StudioCard 
         height: typeof input.height === "number" && Number.isFinite(input.height)
             ? Math.max(96, Math.min(520, Math.round(input.height)))
             : undefined,
+        scope: normalizeScope(input.scope),
         createdAt: timestamp,
         updatedAt: timestamp,
     };

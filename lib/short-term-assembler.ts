@@ -53,7 +53,7 @@ import { loadInterviewMagazineProjectionEntries } from "./interview-magazine-mem
 import { loadCoCreateProjectionEntries } from "./cocreate-memory";
 import { stripStateAndInnerForPrompt } from "./prompt-sanitizer";
 import { renderUserNameMacro } from "./user-macro";
-import { loadChatOfflineProjectionEntries } from "./chat-offline-storage";
+import { loadChatOfflineProjectionEntries, loadChatOfflineSessionProjectionEntries } from "./chat-offline-storage";
 import { loadCheckPhoneProjectionEntries } from "./checkphone-storage";
 import { formatShoppingPaymentRequestHistory } from "./shopping-payment-request";
 import { loadCustomAppTimelineEntries } from "./custom-app-storage";
@@ -78,7 +78,7 @@ function formatPhotoDirectiveForPrompt(msg: ChatMessage): string {
 export type NativeTimelineEntry = {
     id: string;
     sourceApp: "chat" | "moments" | "story" | "vn" | "map" | "game" | "diary" | "xiaohongshu" | "interview_magazine" | "cocreate" | "checkphone" | "custom_app";
-    sourceDetail?: "direct" | "group" | "system" | "story" | "chat_offline" | "game" | "diary_entry" | "notewall" | "xiaohongshu" | "black_market_theater" | "interview_issue" | "interview_shared_issue" | "cocreate_project" | "checkphone" | "custom_app_event"; // chat sub-type: 1:1 vs group chat vs system note
+    sourceDetail?: "direct" | "group" | "system" | "story" | "chat_offline" | "chat_offline_session" | "game" | "diary_entry" | "notewall" | "xiaohongshu" | "black_market_theater" | "interview_issue" | "interview_shared_issue" | "cocreate_project" | "checkphone" | "custom_app_event"; // chat sub-type: 1:1 vs group chat vs system note
     authorType?: "user" | "character" | "npc"; // who authored this entry
     postAuthorType?: "user" | "character"; // for moments: who owns the parent post
     sessionId?: string;
@@ -569,6 +569,28 @@ export function loadNativeTimeline(
         });
     }
 
+    // ── Offline session (enter/exit "visit") wrap-up projections -- 1:1 only, one entry per
+    // ended visit, alongside (not instead of) the per-turn entries above ──
+    const offlineSessionEntries = loadChatOfflineSessionProjectionEntries(characterId, {
+        afterTimestamp: options?.afterTimestamp,
+        excludeSessionId: options?.excludeOfflineSessionId,
+    });
+    for (const sessionEntry of offlineSessionEntries) {
+        entries.push({
+            id: sessionEntry.id,
+            sourceApp: "chat",
+            sourceDetail: "chat_offline_session",
+            sessionId: sessionEntry.sessionId,
+            timestamp: sessionEntry.timestamp,
+            content: formatStoredPromptEventContent(sessionEntry.content, {
+                label: "事件",
+                timestamp: sessionEntry.timestamp,
+                timeAware,
+                timestampOptions,
+            }),
+        });
+    }
+
     // ── Black market theater projections ──
     const theaterEntries = loadBlackMarketTheaterProjectionEntries(characterId, {
         afterTimestamp: options?.afterTimestamp,
@@ -828,7 +850,7 @@ function getFeatureTag(appId: string): string {
 }
 
 function isChatOfflineEntry(entry: NativeTimelineEntry): boolean {
-    return entry.sourceDetail === "chat_offline";
+    return entry.sourceDetail === "chat_offline" || entry.sourceDetail === "chat_offline_session";
 }
 
 function formatCoReadingTimestamp(isoStr: string, timeAware: boolean, timestampOptions?: PromptTimestampOptions): string {

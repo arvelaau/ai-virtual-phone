@@ -29,10 +29,11 @@ import { isKnownStickerLabel } from "@/lib/sticker-data";
 import { translateReasoningText } from "@/lib/reasoning-translate";
 import { MessageBubble, MediaDetailModal, prewarmStickerCache, BilingualTextBlock, isStandaloneHtmlPreviewContent, normalizeTextBubbleContent } from "./message-bubble";
 import { AppCardView } from "./app-card-view";
+import { appCardRendersBeforeText } from "@/lib/app-card-settings";
 import { PhotoInputModal, TextPhotoModal, VoiceRecordModal, RedPacketModal, LocationInputModal, SystemInstructionModal } from "./rich-input-modals";
 import { EmojiPanel, StickerPanel } from "./emoji-panel";
 import { StateValuesPanel } from "./state-values-panel";
-import { generateChatCompletion, generateOfflineChatCompletion, flattenCompletionResult, ChatEngineError } from "@/lib/chat-engine";
+import { generateChatCompletion, generateOfflineChatCompletion, generateOfflineSessionSummary, flattenCompletionResult, ChatEngineError } from "@/lib/chat-engine";
 import { sendBrowserNotification } from "@/lib/browser-notification";
 import { dispatchChatMessageNotice } from "@/lib/chat-notification-events";
 import { shouldSendChatInputOnEnter } from "@/lib/chat-input-keyboard";
@@ -59,7 +60,9 @@ import { ConfirmDialog } from "@/components/ui/modal";
 import { deleteWeixinCloudMessagesFromCloud } from "@/lib/weixin-cloud-sync";
 import { loadBindingConfig, loadRegexes, resolveBinding, resolveUserIdentity } from "@/lib/settings-storage";
 import { generateGroupChatCompletion, generateGroupOfflineChatCompletion, parseGroupChatResponse, buildEditableGroupRoundText } from "@/lib/group-chat-engine";
-import { appendChatOfflineTurn, deleteChatOfflineTurn, deleteChatOfflineTurnsFrom, loadChatOfflineTurns, parseOfflineResponse, saveChatOfflineTurns, updateChatOfflineTurn, type ChatOfflineTurn } from "@/lib/chat-offline-storage";
+import { appendChatOfflineTurn, deleteChatOfflineTurn, deleteChatOfflineTurnsFrom, loadChatOfflineTurns, parseOfflineResponse, saveChatOfflineTurns, updateChatOfflineTurn, type ChatOfflineTurn, startChatOfflineSession, getActiveChatOfflineSession, endChatOfflineSession, patchChatOfflineSession, getChatOfflineSessionTurns, type ChatOfflineSession } from "@/lib/chat-offline-storage";
+import { upsertCalendarScheduleItem } from "@/lib/calendar-storage";
+import { getWeekStartIso, deriveOfflineSessionScheduleWindow } from "@/lib/calendar-utils";
 import { extractOfflineDispatchableMessages, dispatchOfflineMessages } from "@/lib/offline-message-dispatch";
 import { applyDisplayRegex, applyEditRegex } from "@/lib/llm-prompt-assembler";
 import { scheduleFollowUp, cancelFollowUp } from "@/lib/follow-up-service";
@@ -1059,6 +1062,10 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     });
     const [isGenerating, setIsGenerating] = useState(false);
     const [offlineMode, setOfflineMode] = useState(false);
+    // The active offline "visit" (enter/exit session boundary), 1:1 only -- see
+    // lib/chat-offline-storage.ts's ChatOfflineSession doc comment for why group chat is
+    // excluded. null whenever offlineMode is false, or for a group session.
+    const [activeOfflineSessionId, setActiveOfflineSessionId] = useState<string | null>(null);
     const [theaterMode, setTheaterMode] = useState(() => kvGet(CHAT_THEATER_MODE_PREFIX + session.id) === "1");
     const [offlineTurns, setOfflineTurns] = useState<ChatOfflineTurn[]>([]);
     const [offlineVisibleCount, setOfflineVisibleCount] = useState(OFFLINE_INITIAL_LOAD);
@@ -1690,6 +1697,9 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         setUserIdentity(resolveUserIdentity(session.contactId, "chat"));
         setTransientMessages([]);
         setOfflineMode(kvGet(CHAT_OFFLINE_MODE_PREFIX + session.id) === "1");
+        // Reload whatever session was already active (e.g. after a page refresh mid-visit) --
+        // 1:1 only, matching every other part of this feature.
+        setActiveOfflineSessionId(!session.isGroup ? (getActiveChatOfflineSession(session.id)?.id ?? null) : null);
         setOfflineVisibleCount(OFFLINE_INITIAL_LOAD);
         offlineTextInputRef.current?.clear();
         setPendingOfflineUserText("");
@@ -3958,6 +3968,44 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         setEditingOfflineContent(role === "user" ? turn.userContent : formatOfflineTurnXml(turn));
     };
 
+    /**
+     * Generates the full-visit wrap-up and, best-effort, writes a matching calendar entry --
+     * both happen in the BACKGROUND, after the panel has already closed, exactly like every
+     * other "a failed side effect must never take the main flow down" spot in this codebase
+     * (dispatchActions, moments, memory summarization). endChatOfflineSession() already
+     * persisted endedAt/brief synchronously before this ever runs, so a slow or failed call here
+     * never leaves the session record itself in a bad state -- only fullSummary/calendarTitle
+     * and the calendar entry are at stake.
+     */
+    const finalizeOfflineSessionSummary = async (endedSession: ChatOfflineSession) => {
+        try {
+            const turns = getChatOfflineSessionTurns(session.id, endedSession.id);
+            const history = buildOfflinePromptHistory(turns, "");
+            const result = await generateOfflineSessionSummary(session, history, { brief: endedSession.brief });
+            const summary = result.summary.trim();
+            const title = result.title.trim();
+            if (summary) {
+                patchChatOfflineSession(session.id, endedSession.id, {
+                    fullSummary: summary,
+                    calendarTitle: title || undefined,
+                });
+            }
+            if (!endedSession.endedAt) return;
+            const window = deriveOfflineSessionScheduleWindow(endedSession.startedAt, endedSession.endedAt);
+            if (!window) return;
+            upsertCalendarScheduleItem("character", session.contactId, getWeekStartIso(new Date(window.date)), {
+                date: window.date,
+                startTime: window.startTime,
+                endTime: window.endTime,
+                location: "",
+                title: title || "Offline together",
+                source: "offline_session",
+            });
+        } catch (err) {
+            console.warn("[ChatRoom] Offline session summary/schedule failed:", err);
+        }
+    };
+
     const toggleOfflineMode = () => {
         if (!offlineMode && isGenerating) {
             showChatToast("Please wait for a reply first");
@@ -3976,11 +4024,23 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         setActiveOfflineTarget(null);
         setOfflineTurns(loadChatOfflineTurns(session.id));
         setOfflineVisibleCount(OFFLINE_INITIAL_LOAD);
-        setOfflineMode(prev => {
-            const next = !prev;
-            kvSet(CHAT_OFFLINE_MODE_PREFIX + session.id, next ? "1" : "0");
-            return next;
-        });
+        const next = !offlineMode;
+        kvSet(CHAT_OFFLINE_MODE_PREFIX + session.id, next ? "1" : "0");
+        setOfflineMode(next);
+
+        // Session-boundary tracking (enter/exit "visits") is 1:1 only -- group chat keeps the
+        // bare panel-visibility flip it always had.
+        if (session.isGroup) return;
+        if (next) {
+            setActiveOfflineSessionId(startChatOfflineSession(session.id).id);
+            return;
+        }
+        if (!activeOfflineSessionId) return;
+        const ended = endChatOfflineSession(session.id, activeOfflineSessionId);
+        setActiveOfflineSessionId(null);
+        if (ended && ended.turnCount > 0) {
+            void finalizeOfflineSessionSummary(ended.session);
+        }
     };
 
     const toggleTheaterMode = () => {
@@ -4050,6 +4110,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     appId: offlineDispatch?.appCard?.appId,
                     appName: offlineDispatch?.appCard?.appName,
                     appCardLayout: offlineDispatch?.appCard?.appCardLayout,
+                    offlineSessionId: activeOfflineSessionId ?? undefined,
                 });
                 setOfflineTurns(prev => [...prev, saved]);
                 if (offlineDispatch?.dispatchable.length) {
@@ -4179,6 +4240,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 appId: offlineDispatch?.appCard?.appId,
                 appName: offlineDispatch?.appCard?.appName,
                 appCardLayout: offlineDispatch?.appCard?.appCardLayout,
+                offlineSessionId: targetTurn.offlineSessionId ?? activeOfflineSessionId ?? undefined,
             });
             setOfflineTurns([...baseTurns, saved]);
             if (offlineDispatch?.dispatchable.length) {
@@ -5302,6 +5364,42 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                             const assistantHasHtmlPreview = hasOfflineHtmlPreview(offlineDisplay.assistantContent);
                             const prevTime = turnIdx > 0 ? visibleOfflineTurns[turnIdx - 1].createdAt : null;
                             const showTime = !prevTime || shouldShowTimestamp(turn.createdAt, prevTime);
+                            const offlineCardBeforeText = turn.appCardLayout ? appCardRendersBeforeText() : false;
+                            const offlineAppCardNode = turn.appCardLayout ? (
+                                <AppCardView
+                                    appCardLayout={turn.appCardLayout}
+                                    appName={turn.appName || "APP"}
+                                    appId={turn.appId}
+                                    onOpen={() => {
+                                        if (!turn.appId || typeof window === "undefined") return;
+                                        window.dispatchEvent(new CustomEvent("open-app", {
+                                            detail: {
+                                                appId: toCustomAppIconId(turn.appId),
+                                                launchContext: {
+                                                    source: "offline_directive",
+                                                    messageId: turn.id,
+                                                    sessionId: turn.sessionId,
+                                                    characterId: session.contactId,
+                                                    characterName: character?.name,
+                                                    appId: turn.appId,
+                                                    appName: turn.appName,
+                                                    summary: turn.summary || offlineDisplay.assistantContent,
+                                                },
+                                            },
+                                        }));
+                                    }}
+                                    pinContext={session.contactId ? {
+                                        sourceMode: "offline",
+                                        characterId: session.contactId,
+                                        characterName: character?.name || "",
+                                        summary: turn.summary || offlineDisplay.assistantContent,
+                                        cardAppId: turn.appId,
+                                        cardAppName: turn.appName,
+                                        messageId: turn.id,
+                                        sessionId: turn.sessionId,
+                                    } : undefined}
+                                />
+                            ) : null;
                             return (
                             <Fragment key={turn.id}>
                             {showTime && <div className="chat-offline-time">{formatChatUiTime(turn.createdAt)}</div>}
@@ -5372,6 +5470,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                             <ChevronRight size={14} strokeWidth={1.8} className="chat-reasoning-trigger-icon" />
                                         </button>
                                     )}
+                                    {offlineCardBeforeText ? offlineAppCardNode : null}
                                     <div
                                         className="chat-offline-text"
                                         onPointerDown={(e) => { e.stopPropagation(); handleOfflinePointerDown(e, { turnId: turn.id, role: "assistant" }); }}
@@ -5406,41 +5505,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                             </div>
                                         </details>
                                     )}
-                                    {turn.appCardLayout ? (
-                                        <AppCardView
-                                            appCardLayout={turn.appCardLayout}
-                                            appName={turn.appName || "APP"}
-                                            appId={turn.appId}
-                                            onOpen={() => {
-                                                if (!turn.appId || typeof window === "undefined") return;
-                                                window.dispatchEvent(new CustomEvent("open-app", {
-                                                    detail: {
-                                                        appId: toCustomAppIconId(turn.appId),
-                                                        launchContext: {
-                                                            source: "offline_directive",
-                                                            messageId: turn.id,
-                                                            sessionId: turn.sessionId,
-                                                            characterId: session.contactId,
-                                                            characterName: character?.name,
-                                                            appId: turn.appId,
-                                                            appName: turn.appName,
-                                                            summary: turn.summary || offlineDisplay.assistantContent,
-                                                        },
-                                                    },
-                                                }));
-                                            }}
-                                            pinContext={session.contactId ? {
-                                                sourceMode: "offline",
-                                                characterId: session.contactId,
-                                                characterName: character?.name || "",
-                                                summary: turn.summary || offlineDisplay.assistantContent,
-                                                cardAppId: turn.appId,
-                                                cardAppName: turn.appName,
-                                                messageId: turn.id,
-                                                sessionId: turn.sessionId,
-                                            } : undefined}
-                                        />
-                                    ) : null}
+                                    {offlineCardBeforeText ? null : offlineAppCardNode}
                                 </div>
                             </div>
                             </Fragment>

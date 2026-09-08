@@ -438,7 +438,12 @@ async function buildGroupChatPromptMessages(
         hint: buildChatPluginPromptFragments(session.id),
     });
     const pluginPromptHint = pluginPrompt.hint?.trim() ? `\n\n### Plugins\n${pluginPrompt.hint.trim()}\n` : "";
-    const customAppRichMediaDirectives = formatCustomAppChatDirectivesForPrompt({ group: true }) + buildScreenEffectPromptHint() + pluginPromptHint;
+    // Group offline shares this builder with live group chat (generateGroupOfflineChatCompletion
+    // passes appTags: ["group_chat", "offline"], mirroring the 1:1 pattern in chat-engine.ts) --
+    // reuse the isOfflineMode flag already computed above so each directive's own per-card scope
+    // is checked against the right surface. Group chat counts as "chat" scope -- a card's scope
+    // is chat/story/offline, not a fourth group-specific one.
+    const customAppRichMediaDirectives = formatCustomAppChatDirectivesForPrompt(isOfflineMode ? "offline" : "chat", { group: true }) + buildScreenEffectPromptHint() + pluginPromptHint;
     const toolsPrompt = usesNativeActions
         ? "Use the available action interface when an action is needed."
         : formatToolsForPrompt(enabledTools);

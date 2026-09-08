@@ -241,6 +241,13 @@ export function getCurrentCalendarScheduleForPrompt(
  * model copies it verbatim, so "regenerate" never changes anything. Returns the removed
  * entries so they can be restored if generation fails.
  */
+/** Items that a full-week AI regeneration must leave alone -- the user's own manual entries,
+ *  plus factual "this really happened" records (offline_session), as opposed to a purely
+ *  speculative "generated" guess. */
+function isRegenerationClearable(item: CalendarScheduleItem): boolean {
+  return item.source !== "manual" && item.source !== "offline_session";
+}
+
 export function clearGeneratedWeekItems(
   ownerType: CalendarOwnerType,
   ownerId: string,
@@ -248,9 +255,9 @@ export function clearGeneratedWeekItems(
 ): CalendarScheduleItem[] {
   const existing = loadCalendarWeekPlan(ownerType, ownerId, weekStart);
   const items = existing?.items ?? [];
-  const removed = items.filter(item => item.source !== "manual");
+  const removed = items.filter(isRegenerationClearable);
   if (removed.length === 0) return [];
-  replaceCalendarWeekItems(ownerType, ownerId, weekStart, items.filter(item => item.source === "manual"));
+  replaceCalendarWeekItems(ownerType, ownerId, weekStart, items.filter(item => !isRegenerationClearable(item)));
   return removed;
 }
 
@@ -318,7 +325,9 @@ export function cloneWeekPlanWithManualEdits(
   generatedItems: CalendarScheduleItem[],
 ): CalendarWeekPlan {
   const existing = loadCalendarWeekPlan(ownerType, ownerId, weekStart);
-  const manualItems = (existing?.items ?? []).filter(item => item.source === "manual");
+  // Same "clearable vs. kept" split as clearGeneratedWeekItems() -- manual edits AND
+  // offline_session records both need to survive being re-attached after a regeneration.
+  const manualItems = (existing?.items ?? []).filter(item => !isRegenerationClearable(item));
   const nextItems = [...generatedItems.filter(item => item.source !== "manual")];
   for (const item of manualItems) {
     const collides = nextItems.find(

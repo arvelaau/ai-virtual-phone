@@ -2,6 +2,7 @@ import { hydrateKvDb, kvGet, kvKeysWithPrefix, kvRemove, kvSet, kvSetAsync, regi
 import { deleteMediaRef } from "./media-cache-storage";
 import type {
   CustomAppAsset,
+  CustomAppCardScopeMode,
   CustomAppChatCardAction,
   CustomAppChatDirective,
   CustomAppChatInputTool,
@@ -104,6 +105,27 @@ function stringArray(value: unknown, maxLength = 160, limit = 50): string[] {
   if (Array.isArray(value)) return value.map(item => cleanText(item, maxLength)).filter(Boolean).slice(0, limit);
   const text = cleanText(value, maxLength);
   return text ? [text] : [];
+}
+
+const VALID_DIRECTIVE_SCOPE_MODES: readonly CustomAppCardScopeMode[] = ["chat", "story", "offline"];
+
+/** Which surfaces a directive is allowed to trigger on -- same normalization as
+ *  lib/custom-app-chat-directives.ts's directiveMatchesScope() consumer side and
+ *  lib/card-studio-storage.ts's own copy: dedupe, drop unrecognized values, collapse
+ *  "all three"/"none" to undefined (unrestricted, the canonical "no opinion" form). This is
+ *  the INSTALL-time normalizer -- lib/custom-app-chat-directives.ts's normalizeDirective() does
+ *  the same thing again at READ time, since manifest JSON is untrusted either way, but this one
+ *  runs first and is what determines whether `scope` survives into the stored manifest at all. */
+function normalizeDirectiveScope(value: unknown): CustomAppCardScopeMode[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const seen = new Set<CustomAppCardScopeMode>();
+  for (const raw of value) {
+    if (typeof raw === "string" && (VALID_DIRECTIVE_SCOPE_MODES as readonly string[]).includes(raw)) {
+      seen.add(raw as CustomAppCardScopeMode);
+    }
+  }
+  if (seen.size === 0 || seen.size === VALID_DIRECTIVE_SCOPE_MODES.length) return undefined;
+  return VALID_DIRECTIVE_SCOPE_MODES.filter(mode => seen.has(mode));
 }
 
 function addPrimaryTag(target: Set<string>, tags: unknown): void {
@@ -322,6 +344,7 @@ function normalizeChatDirective(value: unknown): CustomAppChatDirective | null {
     sceneTag: cleanText(record.sceneTag, 120) || undefined,
     tags: stringArray(record.tags ?? record.appTags, 120, 30),
     actions: actions && actions.length > 0 ? actions : undefined,
+    scope: normalizeDirectiveScope(record.scope),
   };
 }
 

@@ -63,7 +63,7 @@ export function extractOfflineDispatchableMessages(rawText: string, summaryTag: 
     let dispatchable = actions.filter(a => a.type === "消息" && isCompleteOfflineMessage(a, summaryTag));
     if (dispatchable.length && !offlineTextSurvives(afterActions, summaryTag)) dispatchable = [];
 
-    const appCard = extractCustomAppCard(afterActions);
+    const appCard = extractCustomAppCard(afterActions, "offline");
     const afterAppCard = appCard
         ? (afterActions.slice(0, appCard.matchIndex) + afterActions.slice(appCard.matchIndex + appCard.matchLength)).trim()
         : afterActions;

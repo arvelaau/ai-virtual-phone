@@ -263,6 +263,12 @@ export type ChatAppSettings = {
     quickActionEnabled?: boolean; // When true, show the floating quick action entry
     browserNotificationsEnabled?: boolean; // When true, send browser Notification API alerts when page is hidden
     enterToSendEnabled?: boolean; // When true, Enter sends chat input and Shift+Enter inserts a newline
+    // ── App card (directive-triggered HTML card) position -- see lib/app-card-settings.ts ──
+    // Which surfaces a card is allowed on ("scope") is per-card, not global -- see
+    // lib/custom-app-types.ts's CustomAppChatDirective.scope, authored in the Studio app.
+    /** When true, a directive card renders BEFORE the message's main text instead of after
+     *  (the long-standing default, unchanged unless this is explicitly turned on). */
+    appCardPositionBeforeText?: boolean;
 };
 
 export const CHAT_APP_SETTINGS_UPDATED_EVENT = "chat-app-settings-updated";
@@ -530,6 +536,7 @@ const DEFAULT_CHAT_APP_SETTINGS: ChatAppSettings = {
     promptViewerEnabled: false,
     quickActionEnabled: false,
     enterToSendEnabled: false,
+    appCardPositionBeforeText: false,
 };
 
 // ── In-Memory Caches (hydrated from IndexedDB on startup) ──────────

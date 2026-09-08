@@ -193,7 +193,8 @@ export function selectBorrowableMemories(
  * Ordinary chat is deliberately EXCLUDED. A 1:1 or group conversation is private between that
  * character and the user, and feeding it to another character's summarizer would launder it
  * into a memory that then reaches prompts. `sourceApp: "chat"` covers both -- only the
- * `chat_offline` detail is a summary; `direct`, `group` and `system` are raw messages.
+ * `chat_offline`/`chat_offline_session` details are summaries; `direct`, `group` and `system`
+ * are raw messages.
  *
  * Fails closed: an unrecognised source is never borrowable, so a new sourceApp added later
  * cannot start leaking by default.
@@ -203,7 +204,7 @@ export function isBorrowableTimelineEntry(
 ): boolean {
     if (!entry) return false;
     if (entry.sourceApp === "story" || entry.sourceApp === "vn") return true;
-    if (entry.sourceApp === "chat") return entry.sourceDetail === "chat_offline";
+    if (entry.sourceApp === "chat") return entry.sourceDetail === "chat_offline" || entry.sourceDetail === "chat_offline_session";
     return false;
 }
 

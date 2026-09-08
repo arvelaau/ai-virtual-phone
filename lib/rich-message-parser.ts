@@ -22,12 +22,14 @@ import {
     DEFAULT_TRANSFER_NOTE,
 } from "./rich-tag-builders";
 import {
+    directiveMatchesScope,
     formatCustomAppDirectiveSummary,
     getCustomAppDirectiveSyntaxHead,
     loadCustomAppChatDirectives,
     splitCustomAppDirectiveArgs,
     type RegisteredCustomAppChatDirective,
 } from "./custom-app-chat-directives";
+import type { CustomAppCardScopeMode } from "./custom-app-types";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -644,8 +646,8 @@ function findBuiltInRichCandidate(segment: string): RichPatternCandidate | null 
     };
 }
 
-function findCustomAppRichCandidate(segment: string): RichPatternCandidate | null {
-    const directives = loadCustomAppChatDirectives();
+function findCustomAppRichCandidate(segment: string, mode: CustomAppCardScopeMode): RichPatternCandidate | null {
+    const directives = loadCustomAppChatDirectives().filter(d => directiveMatchesScope(d, mode));
     if (directives.length === 0) return null;
     const bySyntaxHead = new Map(directives.map(item => [getCustomAppDirectiveSyntaxHead(item.syntax), item]));
     const bracketPattern = /\[([^\]\n：:]{1,24})([：:][^\]\n]*)?\]/g;
@@ -682,8 +684,8 @@ export type ExtractedCustomAppCard = {
  * title/body/actions fields and no card.html would still build a part, but narrative modes only
  * care about the rich HTML-card case).
  */
-export function extractCustomAppCard(text: string): ExtractedCustomAppCard | null {
-    const candidate = findCustomAppRichCandidate(text);
+export function extractCustomAppCard(text: string, mode: CustomAppCardScopeMode): ExtractedCustomAppCard | null {
+    const candidate = findCustomAppRichCandidate(text, mode);
     if (!candidate) return null;
     const part = candidate.build();
     const data = part.mediaData as Record<string, unknown> | undefined;
@@ -738,7 +740,9 @@ function parseSegment(segment: string, parts: ParsedMessagePart[]) {
     // (e.g. [...拍了拍...]), the earlier marker lands in the un-parsed `before`
     // chunk and leaks as literal text. Ties keep list order (priority).
     const builtIn = findBuiltInRichCandidate(segment);
-    const customApp = findCustomAppRichCandidate(segment);
+    // parseSegment (and everything above it -- parseAIResponse) is the CHAT pipeline only;
+    // story/offline go through the separate extractCustomAppCard() below with their own mode.
+    const customApp = findCustomAppRichCandidate(segment, "chat");
     const best = customApp && (!builtIn || customApp.index < builtIn.index) ? customApp : builtIn;
 
     if (best) {

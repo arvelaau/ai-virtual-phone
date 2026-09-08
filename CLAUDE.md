@@ -3091,7 +3091,315 @@ part that could not be observed visually anyway.
 side.** The one remaining step anywhere in the plan is the user's own manual action: install
 `App\translated\WithU_v1_2-EN.zip` through the App Market.
 
+## App card position + scope settings — DONE (2026-09-08)
+User asked three analysis questions about the story/offline app-card work (Phase A) before
+installing WithU: (1) does the card render before or after the main text, and is that
+configurable; (2) can offline mode get an explicit enter/exit boundary with a full-session
+summary on exit; (3) can the schedule system rewrite itself the way upstream's does when a
+character just finished an offline session. Point 3 was **answered, not implemented** — direct
+inspection of `upstream/main` found no such behavior there either (it was never a port
+candidate, just a new idea), and `lib/calendar-engine.ts`'s `generateWeeklyCalendarSchedule` is
+manual/whole-week regeneration with no per-event recurrence field in `calendar-types.ts` to hang
+an "offline just ended" marker on — a real feature, not started. Point 2 (offline enter/exit +
+character reacting to an early exit) is **also not started** — see "Still open" below.
+
+**Point 1 — done.** Position (before/after the turn's main text) and scope (chat/story/offline,
+independently toggleable, plus an "All" convenience) are now real settings, in
+`lib/app-card-settings.ts`, stored on the existing `ChatAppSettings` record
+(`lib/chat-storage.ts`) alongside `timeAware`/`promptViewerEnabled`/etc. Both default to their
+pre-existing behavior (scope on everywhere, card after text), so turning this feature on changed
+nothing until a user actually opens Settings → Tools → App Cards.
+
+**A self-caught import-cycle near-miss.** The first draft gated
+`formatCustomAppChatDirectivesForPrompt()` (`lib/custom-app-chat-directives.ts`) internally, by
+importing `app-card-settings.ts` (which pulls in `chat-storage.ts` for `loadChatAppSettings`)
+directly into that file. Tracing the import graph before running anything found a real 4-hop
+cycle: `rich-message-parser.ts` (value-imports `loadCustomAppChatDirectives` etc. from
+`custom-app-chat-directives.ts`) → `custom-app-chat-directives.ts` (the new import) →
+`app-card-settings.ts` → `chat-storage.ts` (value-imports `parseAIResponse` from
+`rich-message-parser.ts`) → closed. `custom-app-chat-directives.ts` was previously a pure leaf
+with no path back into that cycle; this would have been a new one, in the exact shape CLAUDE.md
+already warns about (`lib/block-tags.ts`'s extraction story, the `prompt-sanitizer` /
+`rich-message-parser` cycle). Reverted, and moved the scope check to the **callers** instead —
+the established "caller checks and skips" pattern used everywhere else in this migration:
+`chat-engine.ts`, `group-chat-engine.ts` and `story-engine.ts` each now compute
+`isAppCardSurfaceEnabled(...)` themselves and simply don't call
+`formatCustomAppChatDirectivesForPrompt()`/`extractCustomAppCard()` when a surface is scoped
+off, rather than the shared parser gating itself. None of those three files is reachable from
+`chat-storage.ts`, so they can safely import `app-card-settings.ts`.
+
+**Chat and group-chat share one builder for BOTH live and offline** (`buildChatPromptMessages`/
+`buildGroupChatPromptMessages`, since `generateOfflineChatCompletion`/
+`generateGroupOfflineChatCompletion` pass `appTags: ["chat","offline"]`/`["group_chat","offline"]`
+through the same function). Both builders already computed an `isOfflineMode` flag from
+`options.appTags` for unrelated reasons (tool-availability gating, session-exclusion) — reused it
+rather than adding a second, redundant flag, so `isAppCardSurfaceEnabled(isOfflineMode ?
+"offline" : "chat")` is the whole gate at each site. Group chat has no separate "group" scope —
+it counts as "chat", matching the user's 3-value ask (chat/story/offline only).
+
+**`lib/offline-message-dispatch.ts`'s own comment already explained why it's safe to import
+anything**: it's UI-layer-adjacent (imported only from `chat-room.tsx`, never from anything under
+`lib/`), so its `extractCustomAppCard(afterActions)` call is gated the same way story's is,
+directly, with no caller-side indirection needed.
+
+**Position.** `AppCardView`'s JSX was hoisted out of its former single inline spot in both
+`components/story/story-app-base.tsx` (the `.story-bubble-wrap` sibling, previously always
+*after*) and `components/chat/chat-room.tsx`'s offline turn renderer (previously always after
+the summary fold), into a `appCardNode`/`offlineAppCardNode` variable computed once per message,
+then rendered on either side of the main text block depending on
+`appCardRendersBeforeText()`. Chat itself needed no position work — a chat app card is its own
+separate `ChatMessage` with `mediaType: "app_card"` (`components/chat/message-bubble.tsx:97`,
+`AppCardBubble`), a distinct bubble in the timeline rather than a field alongside a text
+message, so "before/after the main text" doesn't apply there; the user's own question was
+scoped to story/offline specifically for this reason.
+
+**Extraction-level "defense in depth" gating was deliberately scoped down for chat.** Story and
+offline each have exactly one, simple extraction call site (`extractCustomAppCard`, called once
+per turn) that was cheap and safe to gate directly. Chat's equivalent is
+`findCustomAppRichCandidate`, buried inside `rich-message-parser.ts`'s recursive `parseSegment`
+— called from `parseAIResponse`, which is itself called from 5+ places across the codebase
+(`chat-room.tsx` at 7+ sites, `follow-up-service.ts`, `proactive-reverse-sync.ts`,
+`weixin-bridge.ts`, `weixin-cloud-sync.ts`). Threading a new parameter through that whole call
+graph — the only cycle-safe way to gate it without importing settings into
+`rich-message-parser.ts` itself — was judged disproportionate effort for what is a secondary
+safety net; the teaching-level gate (already done for chat) is the dominant, ~100%-effective
+control in practice, since a model essentially never emits an unusual bracket syntax it wasn't
+taught. Chat's "chat" scope toggle therefore only stops the AI being *taught* the directive
+exists; it does not (yet) stop a hallucinated directive-shaped bracket from still rendering as a
+card. Documented here rather than silently narrowed.
+
+**The vacuous-control trap, caught before shipping.** `isAppCardSurfaceEnabled(mode)` originally
+called `loadChatAppSettings()` directly. That function (and `saveChatAppSettings`) both
+early-return under `typeof window === "undefined"` — i.e. always, in a plain Node fixture
+script — meaning any fixture "testing" the scope-off behavior would have silently always seen the
+defaults and passed regardless of whether the logic was right. Split into a pure
+`isAppCardSurfaceEnabledFor(settings, mode)` (and `appCardPositionBeforeTextFor(settings)`) that
+takes a `ChatAppSettings` object directly, with the storage-backed `isAppCardSurfaceEnabled`/
+`appCardRendersBeforeText` as thin one-line wrappers — the same split already used for
+`selectBorrowableMemories`/`formatMascotUserIdentityRule` earlier in this file, for the identical
+reason.
+
+**Settings UI**: a new "App Cards" section in `components/phone-settings-app.tsx` (Settings →
+Tools → App Cards), 5 rows in the existing `menu-item`/`Toggle` row pattern — All Surfaces (a
+derived toggle: `checked = chat && story && offline`, and flipping it fans out to write all
+three stored fields in one `saveChatAppSettings` call), Chat, Story, Offline, Card Before Text.
+Live-verified in a browser: the section renders with the right icons/copy, all defaults are
+correct (3 scopes on, position off), toggling "Card Before Text" flips it and the value survives
+a full page reload (confirming the `saveChatAppSettings`/`loadChatAppSettings` round-trip), and
+no new console errors appeared (the pre-existing `NotFoundError`/`ERR_CONNECTION_RESET` noise is
+the same unrelated, already-investigated leftover-IndexedDB/no-network-access state documented
+in the Phase D writeup above).
+
+**Verification**: `npx tsc --noEmit` and `npm run build` both clean (one pre-existing, unrelated
+error in the untracked `app/api/cloudflare-deploy/route.ts` — confirmed via `git log` that it
+predates this work and isn't touched by it). `_fx-narrative-app-card.mjs` grew from 48 to 72
+assertions: 2 updated (C2/C9, whose old literal-substring checks broke on the new gated call
+shape — replaced with a regex tolerant of the ternary, plus new C2b/C9b asserting the gate
+itself is present) and a new section F (21 assertions) driving the pure decision functions
+directly (defaults, independent toggling, no cross-talk between surfaces, the "all off" case)
+plus source-level wiring checks for every call site touched. All 20 repo fixtures re-run green.
+Control-character swept clean on every touched/created file (no NUL/control-char corruption this
+round).
+
+### ⚠️ CORRECTION (2026-09-08, same day): scope is PER-CARD, not a global setting
+User: *"keknya km salah tangkep soal html itu bisa muncul di mode story/chat/offline deh,
+maksudku per desain. Jadi settingnya per desain (alias masuk ke aplikasi studio)."* — the global
+Chat/Story/Offline toggles above were a misread. Which surfaces a card can appear on is a
+property of the CARD, authored alongside its HTML and trigger tag, not an app-wide switch. A
+single global toggle can't express "this boarding pass is story-only but that café menu works
+everywhere" — which is exactly the scenario per-card scope exists for.
+
+**Reworked, not patched.** `formatCustomAppChatDirectivesForPrompt()` and `extractCustomAppCard()`
+now take a **required `mode: CustomAppCardScopeMode` argument** ("chat"/"story"/"offline") and
+filter directives by their own `scope` field via a new shared predicate,
+`directiveMatchesScope()` (`lib/custom-app-chat-directives.ts`) — `!directive.scope ||
+directive.scope.length === 0 || directive.scope.includes(mode)`, so an omitted/empty scope is
+unrestricted and every directive authored before this field existed keeps working exactly as
+before. `CustomAppChatDirective.scope?: CustomAppCardScopeMode[]` lives in
+`lib/custom-app-types.ts`, the single shared type both a Studio card and a third-party manifest
+directive draw from.
+
+**This *removed* the entire global-setting mechanism from the previous entry**, not just
+superseded it: `ChatAppSettings.appCardScopeChat/Story/Offline` deleted from `chat-storage.ts`;
+`isAppCardSurfaceEnabled`/`isAppCardSurfaceEnabledFor`/`AppCardSurfaceMode` deleted from
+`lib/app-card-settings.ts` (which now covers **only** card position — the one setting that
+really is global, since "before or after the text" isn't a per-design question the way
+"which modes" is); the `appCardsEnabled`/`isAppCardSurfaceEnabled(...)` gates removed from
+`chat-engine.ts`, `group-chat-engine.ts`, `offline-message-dispatch.ts`, `story-engine.ts` —
+each now just passes its mode straight through, since filtering happens inside the shared
+functions based on each directive's own data. The 4-toggle "App Cards" section in
+Settings → Tools shrank to the single "Card Before Text" row.
+
+**A real bug this surfaced, not just a rename.** The first scope-filtering pass only touched
+`lib/custom-app-chat-directives.ts`'s own `normalizeDirective()` (a READ-time normalizer run
+every time `loadCustomAppChatDirectives()` is called) — but `lib/custom-app-storage.ts` has a
+**second, separate** `normalizeChatDirective()` that runs at INSTALL time
+(`saveInstalledCustomApps()` → `normalizeInstalledApp()` → `normalizeCustomAppManifest()`), and
+it whitelists a fixed set of fields per directive with no `scope` in the list — so a scope set
+on install-time JSON was silently dropped before the read-time normalizer ever saw it. Every
+scope-filtering assertion passed anyway on a first run because Studio cards (added via
+`saveStudioCard()`, which never goes through this installer path) were the only thing tested at
+first; a real installed-app directive with a `scope` field would have silently ignored it. Fixed
+by adding the identical dedupe/validate/collapse-to-undefined normalization
+(`normalizeDirectiveScope()`) to `custom-app-storage.ts` too — the exact "two independent
+normalizers for the same shape must be kept in lockstep" defect class this file has hit
+repeatedly (`FETCH_RESULT_HEADER`, the `tool-executor`/`text-tool-protocol` regression, etc.).
+**Non-vacuity confirmed**: reverting just this one field addition made 6 assertions fail
+(`AS2/AS3/AS6/B9/D7/D8`, all "does NOT extract/teach in a mode the card wasn't scoped for"),
+confirmed by actually running the revert and restoring it afterward.
+
+**Studio's scope picker**: a "Scope" `GlassCard` in the card editor with 3 `MenuToggleRow`s
+(Chat/Story/Offline, all checked by default = unrestricted), guarded so unchecking the last box
+is a no-op — a card scoped to nothing would be silently untriggerable everywhere, with no error
+to explain why. Checking all three back on normalizes back to `undefined` (the canonical
+unrestricted form), matching what the storage layer does anyway. The card list shows a
+`"Chat + Offline"`-style badge next to the trigger-tag badge whenever a card is restricted, so a
+scoped-down card is visible at a glance rather than a silent trap.
+
+**Fixture**: `_fx-narrative-app-card.mjs` rewritten (72 → 91 assertions) — a new `A-scope`
+section drives `extractCustomAppCard()` across all 3 modes for an unscoped/story-only/two-mode
+card and asserts `directiveMatchesScope()` directly; `B9` adds the same check through
+`extractOfflineDispatchableMessages()`; `D6-D8`/`E18-E21` cover the teaching side and the Studio
+round-trip (including the "all three checked → undefined" normalization); section `F` was
+rewritten from testing the deleted global-setting functions to asserting they're **actually
+gone** (`!chatStorage.includes("appCardScopeChat")` etc., not just "unused") alongside the
+remaining position-only wiring and the new Studio/predicate wiring. `seedTestApp()` gained an
+optional `scope` parameter so every section can seed a scoped directive without duplicating the
+install-shaped fixture object. Verified with the standard `Object.is()`-on-arrays trap this
+project has hit before (`E18` initially compared two array *literals* with `eq()`, which is
+never true by reference — fixed to compare `JSON.stringify()` output instead).
+
+`npx tsc --noEmit`, `npm run build`, all 20 repo fixtures, and a control-character sweep all
+clean. Live-verified in a browser: Settings shows only the position toggle; Studio's scope
+picker renders, toggling "Story" off and saving updates the list badge to "Chat + Offline",
+re-checking all three removes the badge again (confirming the undefined-collapse round-trips
+through the real UI, not just the storage functions in isolation).
+
+## Offline mode enter/exit session boundary + schedule write-back — DONE (2026-09-08)
+User: *"jangan lupa kalo exit mode bisa overwrite schedule. dan kalo bisa, design schedule diubah
+jadi kek punya developer utama (xiaolongbao)"* — bundled into Point 2. **Scoped down after
+research, with the user's sign-off**: the xiaolongbao calendar UI redesign (month view/day
+view/event modal/lunar calendar, `components/calendar/*` + `lib/lunar.ts` upstream, ~1800 lines
++ 1535 lines of CSS) turned out to be **pure UI/UX** — upstream's `CalendarScheduleItem` gained
+only an `emoji?` field, no recurrence, no source-tracking beyond `manual`/`generated`. It would
+not have unlocked "exit overwrites the schedule" at all; that needed new work regardless of
+whether the UI got ported. Given the choice (asked via `AskUserQuestion`), the user picked
+**feature first, calendar UI redesign later as its own separate task** — so this entry covers
+only the feature; the calendar UI port is still fully open, tracked below.
+
+**Session boundary is 1:1 only**, matching this project's repeated "1:1 only, group has a known
+deferred gap" precedent (the same scoping `[Message]` dispatch and Couple Space used) — group
+offline mode keeps the exact bare boolean flip it always had.
+
+**`ChatOfflineSession`** (`lib/chat-offline-storage.ts`) is a new, separate record from
+`ChatOfflineTurn`: `{id, sessionId, startedAt, endedAt?, brief?, fullSummary?, calendarTitle?}`.
+`ChatOfflineTurn` gained an optional `offlineSessionId` so existing turns (predating this
+feature) simply have none and never group into anything — no migration needed. `endedAt` and
+`brief` are set **synchronously**, computed entirely from data already on disk (turn count +
+wall-clock duration via `isBriefOfflineSession()`, brief = `turnCount <= 1 OR duration < 3
+minutes`) — a session is never left "active" forever just because the follow-up LLM call is slow
+or fails. `fullSummary`/`calendarTitle` are patched in **asynchronously** afterward.
+
+**`chat-room.tsx`'s `toggleOfflineMode` now does real enter/exit, not just a panel-visibility
+flip** — for 1:1 sessions: entering calls `startChatOfflineSession()` (auto-closing any
+dangling active session first, defensively); exiting calls `endChatOfflineSession()`
+synchronously, then — if any turns happened — fires `finalizeOfflineSessionSummary()` in the
+**background** (fire-and-forget, wrapped in try/catch, matching this codebase's `dispatchActions`/
+moments/memory-summarization pattern: a failed side effect must never take the main flow down).
+**No new buttons were added** — the existing composer already had two logically distinct
+buttons for this (`ChatTextInputBar`'s "Offline mode" icon = enter, `OfflineTextInputBar`'s
+already-labeled "Return to online mode" icon = exit), just wired to a dumb boolean flip before;
+deepening what already happens on those two existing actions satisfied the ask without new UI
+surface. A zero-turn exit (opened and immediately closed the panel) is a pure no-op: no LLM
+call, no brief flag, no calendar entry — nothing to react to or record.
+
+**The wrap-up call is deliberately NOT a taught preset format.** Unlike a normal offline turn,
+it fires once per visit, so `generateOfflineSessionSummary()` (`lib/chat-engine.ts`) inlines a
+one-off trigger message on top of the SAME `buildChatPromptMessages()` context a real offline
+reply gets (persona/worldbook/memory/output-language-rule, all for free) — mirroring
+`lib/calendar-engine.ts`'s own `generateWeeklyCalendarSchedule()`, which uses the identical
+one-off-trigger-instead-of-taught-format trick for its own rare, single-shot ask. Avoids a
+`BUILTIN_PRESET_VERSION` bump and avoids teaching the model a format it would otherwise have to
+remember never to use unprompted. Response is a `<title>`/`<summary>` pair (this project's
+standing XML-tag convention), parsed by the new `parseOfflineSessionSummary()`, defensively run
+through `parseActionTags(...).cleanText` first in case a stray action-shaped tag leaks in from
+context (this call never dispatches actions, so a leaked tag would otherwise sit as inert text
+in a calendar title — cheap insurance, not expected to ever actually fire).
+
+**The "character can react to a fast exit" mechanism doesn't wait on the LLM call at all.**
+`loadChatOfflineSessionProjectionEntries()` (parallel to the existing per-turn
+`loadChatOfflineProjectionEntries()`, both read by the same shared `loadNativeTimeline()` in
+`short-term-assembler.ts`) projects one entry per **ended** session: `fullSummary` once it has
+landed, or — for a session flagged `brief` — a deterministic fallback note
+(`"(This offline visit ended almost as soon as it began...)"`) immediately, synchronously, no
+LLM required. That's what lets the character notice and react to a fast exit even if the user
+sends a live message before the background summary call finishes (a real race this project has
+hit before in spirit, if not literally — eventual-consistency is accepted throughout, matching
+memory summarization and proactive messages). A **non**-brief session with no summary yet is
+skipped entirely: its individual turns already project on their own, so there's nothing to add
+until the real recap lands. `sourceDetail: "chat_offline_session"` is a new value alongside the
+existing `"chat_offline"`; both route through the same `isChatOfflineEntry()` check (now
+widened) into the `recent_chat` prompt section, and both are borrowable under shared memory
+(`lib/memory-sharing.ts`'s `isBorrowableTimelineEntry()`, widened for the same reason its own doc
+comment already gives for `chat_offline`: it's a summary, not a raw private message).
+
+**Schedule write-back**: `finalizeOfflineSessionSummary()` best-effort calls
+`upsertCalendarScheduleItem("character", session.contactId, ...)` after the summary lands, tagged
+with a **new** `CalendarScheduleItem.source` value, `"offline_session"` — a factual record of
+something that really happened, deliberately distinct from `"generated"` (an AI's speculative
+guess) so it is **not** silently wiped by the next full-week AI regeneration the way a generated
+guess is. `clearGeneratedWeekItems()` and `cloneWeekPlanWithManualEdits()` both updated (via one
+shared `isRegenerationClearable()` predicate) to treat `"offline_session"` like `"manual"` for
+survival purposes — **both** needed the fix, not just the first one: `cloneWeekPlanWithManualEdits`
+re-attaches items after regeneration from a filter of its own, and would have silently dropped
+offline-session items even after `clearGeneratedWeekItems` stopped removing them. Caught by
+writing the fixture before trusting the first fix alone.
+
+**`deriveOfflineSessionScheduleWindow()`** (`lib/calendar-utils.ts`) turns a session's real
+start/end timestamps into a calendar-legal `{date, startTime, endTime}`: clamped to
+`CALENDAR_HOUR_START`/`CALENDAR_HOUR_END` (08:00-23:00), clamped to the session's own start date
+if it crossed midnight (never splits across two calendar days), and padded up to a 15-minute
+minimum block if the real duration would otherwise round to nothing (a 30-second exchange still
+deserves a visible entry, not a silently-dropped zero-length one). Returns `null` only when even
+the padded block has nowhere to fit (e.g. a session that started exactly at 23:00) — the write is
+skipped gracefully in that case, no error.
+
+**Verification**: `_fx-offline-session.mjs` (new, 55/55, kept — aliases `dexie` to the existing
+in-memory stub so `loadChatSessions()` is the real function) covers session CRUD (including the
+auto-close-dangling-session and idempotent-double-end guards), the brief heuristic, the
+projection fallback logic across all its branches (ended+summarized / ended+brief+unsummarized /
+ended+non-brief+unsummarized / still-active / group-excluded / `afterTimestamp`/
+`excludeSessionId` filtering), `parseOfflineSessionSummary`'s three shapes,
+`deriveOfflineSessionScheduleWindow`'s six cases (normal / clamped-early / no-room-late /
+padded-minimum / crosses-midnight / exactly-at-close), the calendar-preservation fix on both
+functions, and the `isBorrowableTimelineEntry` widening. Two of the fixture's own first-draft
+assertions were themselves wrong (an over-strict `undefined`-vs-`false` expectation on a 0-turn
+session's brief flag, and a "crosses midnight" test case that actually started exactly at the
+window's close, so it correctly returned `null` for an unrelated reason) — both caught by reading
+the failure output rather than assuming the code was wrong. Non-vacuity confirmed on the two most
+novel behaviors: reverting the calendar-preservation predicate fails exactly 3 assertions;
+reverting the brief-fallback-note logic fails exactly 2. `npx tsc --noEmit`, `npm run build`, all
+21 repo fixtures, and a control-character sweep all clean.
+
+**Not verified by me (no live API/network access in this environment)**: the actual LLM-driven
+`generateOfflineSessionSummary()` call — its prompt, its `<title>`/`<summary>` output shape in
+practice, and whether the character's in-voice recap and reaction to a brief exit read well.
+Browser-verified instead what's observable without a live model: entering and exiting offline
+mode (including a zero-turn exit) works with no crash and no new console errors, the composer
+correctly swaps between the two existing enter/exit affordances, and the Calendar app still
+renders its weekly schedule correctly with the widened `source` union. **The end-to-end
+summary/reaction/calendar-entry loop needs a real smoke test once an API is bound.**
+
 ## Still open / not yet done
+- **Calendar UI redesign toward xiaolongbao's rewrite** (deferred by user choice, 2026-09-08) —
+  month view + day-detail view + a proper event-edit modal + lunar calendar overlay, split across
+  `components/calendar/{month-page,detail-page,event-edit-modal}.tsx` + `lib/lunar.ts` upstream
+  (~1800 lines of new/restructured TSX + 1535 lines of CSS, all Chinese, needing translation on
+  the way in like every other ported feature). Confirmed **zero data-model dependency** on the
+  offline-session feature above — this is a pure visual/UX port, safe to pick up independently
+  whenever there's appetite for it. Our `calendar-app.tsx` has diverged substantially from
+  upstream already (translation + our own prior edits), so this is a real port/adapt job, not a
+  drop-in copy — budget accordingly.
 - ~~**Custom app imports**~~ — **DONE (2026-08-23), all 9 translated.** Zips in `App\translated\*-EN.zip`; see the CUSTOM APP IMPORTS section. Not installed — the user installs them through the App Market.
 - **`memory.add` provenance** — a custom app can write a long-term memory for any character and shared memory will lend it on. ⚠️ **Correction to how this was first recorded**: nothing needs stamping. `addCustomAppMemory` already writes `id: custom_app_${app.id}_…` **and** `metadata: { origin: "custom_app", appId, appName, reason }`; only `sourceApp` is hardcoded to `"chat"`. The open question is narrower than it looked — should `selectBorrowableMemories` skip entries whose `metadata.origin === "custom_app"`? Awaiting a decision; the marker to filter on already exists.
 - **Couple Space mini-games, "Route A"** — ⚠️ **this name is referenced three times in this file and never DEFINED.** No scope, no design, no integration point was ever written down; the only surviving description is "a custom app via existing directives", from a session transcript rather than from here. Do not start it as if it were a specified task — it needs a design decision from the user first. Recorded 2026-08-18.

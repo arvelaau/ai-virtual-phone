@@ -19,7 +19,12 @@ export type CalendarScheduleItem = {
   location: string;
   title: string;
   colorKey: CalendarColorKey;
-  source: "manual" | "generated";
+  /** "offline_session" -- a factual record of an offline-mode session that happened, written by
+   *  chat-room.tsx when the user exits offline mode with a character. Treated like "manual" by
+   *  clearGeneratedWeekItems()/cloneWeekPlanWithManualEdits() -- it survives a full-week AI
+   *  regeneration instead of being wiped like a "generated" guess, since it records something
+   *  that actually happened rather than a speculative AI-authored plan. */
+  source: "manual" | "generated" | "offline_session";
   createdAt: string;
   updatedAt: string;
 };

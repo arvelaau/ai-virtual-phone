@@ -7,6 +7,7 @@ import CSSSchemeBar from "@/components/ui/css-scheme-picker";
 import { Avatar } from "@/components/ui/primitives";
 import { StoryHtmlRenderer } from "@/components/ui/story-html-renderer";
 import { AppCardView } from "@/components/chat/app-card-view";
+import { appCardRendersBeforeText } from "@/lib/app-card-settings";
 import { toCustomAppIconId } from "@/lib/custom-app-types";
 import { loadCharacters } from "@/lib/character-storage";
 import { maybeRunSummarization } from "@/lib/memory-summarizer";
@@ -1087,6 +1088,43 @@ export function StoryApp({ onClose }: StoryAppProps) {
                     : message.role === "assistant"
                       ? (currentCharacter.avatar || undefined)
                       : undefined;
+                  const hasAppCard = message.role === "assistant" && Boolean(message.appCardLayout);
+                  const appCardBeforeText = hasAppCard && appCardRendersBeforeText();
+                  const appCardNode = hasAppCard ? (
+                    <AppCardView
+                      appCardLayout={message.appCardLayout}
+                      appName={message.appName || "APP"}
+                      appId={message.appId}
+                      onOpen={() => {
+                        if (!message.appId || typeof window === "undefined") return;
+                        window.dispatchEvent(new CustomEvent("open-app", {
+                          detail: {
+                            appId: toCustomAppIconId(message.appId),
+                            launchContext: {
+                              source: "story_directive",
+                              messageId: message.id,
+                              sessionId: message.sessionId,
+                              characterId: currentCharacter.id,
+                              characterName: currentCharacter.name,
+                              appId: message.appId,
+                              appName: message.appName,
+                              summary: message.storySummary || message.renderedContent || message.rawContent,
+                            },
+                          },
+                        }));
+                      }}
+                      pinContext={{
+                        sourceMode: "story",
+                        characterId: currentCharacter.id,
+                        characterName: currentCharacter.name,
+                        summary: message.storySummary || message.renderedContent || message.rawContent,
+                        cardAppId: message.appId,
+                        cardAppName: message.appName,
+                        messageId: message.id,
+                        sessionId: message.sessionId,
+                      }}
+                    />
+                  ) : null;
                   return (
                     <article
                       key={message.id}
@@ -1116,6 +1154,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
                           </div>
                         </div>
                       ) : null}
+                      {appCardBeforeText ? appCardNode : null}
                       <div className="story-bubble-wrap" style={{ position: "relative" }}>
                         <div className="story-bubble">
                           {editingMessageId === message.id ? (
@@ -1174,41 +1213,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
                           return shellInnerRef.current ? createPortal(menu, shellInnerRef.current) : menu;
                         })()}
                       </div>
-                      {message.role === "assistant" && message.appCardLayout ? (
-                        <AppCardView
-                          appCardLayout={message.appCardLayout}
-                          appName={message.appName || "APP"}
-                          appId={message.appId}
-                          onOpen={() => {
-                            if (!message.appId || typeof window === "undefined") return;
-                            window.dispatchEvent(new CustomEvent("open-app", {
-                              detail: {
-                                appId: toCustomAppIconId(message.appId),
-                                launchContext: {
-                                  source: "story_directive",
-                                  messageId: message.id,
-                                  sessionId: message.sessionId,
-                                  characterId: currentCharacter.id,
-                                  characterName: currentCharacter.name,
-                                  appId: message.appId,
-                                  appName: message.appName,
-                                  summary: message.storySummary || message.renderedContent || message.rawContent,
-                                },
-                              },
-                            }));
-                          }}
-                          pinContext={{
-                            sourceMode: "story",
-                            characterId: currentCharacter.id,
-                            characterName: currentCharacter.name,
-                            summary: message.storySummary || message.renderedContent || message.rawContent,
-                            cardAppId: message.appId,
-                            cardAppName: message.appName,
-                            messageId: message.id,
-                            sessionId: message.sessionId,
-                          }}
-                        />
-                      ) : null}
+                      {appCardBeforeText ? null : appCardNode}
                     </article>
                   );
                 })}
