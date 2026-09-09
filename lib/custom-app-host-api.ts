@@ -681,7 +681,7 @@ function requireHostActionPermission(app: InstalledCustomApp, actionType: string
 }
 
 function numberAmount(value: unknown): number {
-  const amount = typeof value === "number" ? value : Number(String(value ?? "").replace(/[¥￥元,\s]/g, ""));
+  const amount = typeof value === "number" ? value : Number(String(value ?? "").replace(/[¥￥元$,\s]/g, ""));
   return Number.isFinite(amount) ? Math.max(0, Math.round(amount * 100) / 100) : 0;
 }
 

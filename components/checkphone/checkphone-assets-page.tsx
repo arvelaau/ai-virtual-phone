@@ -66,7 +66,7 @@ function getCardDisplayNumber(masked: string): string {
 }
 
 function parseAssetAmount(amount: string): number {
-  const normalized = amount.replace(/[,\s¥￥]/g, "");
+  const normalized = amount.replace(/[,\s¥￥$]/g, "");
   if (!normalized) return 0;
   const sign = normalized.startsWith("-") ? -1 : 1;
   const numeric = Number.parseFloat(normalized.replace(/^[+-]/, ""));
@@ -76,19 +76,19 @@ function parseAssetAmount(amount: string): number {
 function formatAssetDelta(amount: number): string {
   const sign = amount < 0 ? "-" : "+";
   const absolute = Math.abs(amount);
-  const formatter = new Intl.NumberFormat("zh-CN", {
+  const formatter = new Intl.NumberFormat("en-US", {
     minimumFractionDigits: Number.isInteger(absolute) ? 0 : 2,
     maximumFractionDigits: 2,
   });
-  return `${sign} ¥${formatter.format(absolute)}`;
+  return `${sign} $${formatter.format(absolute)}`;
 }
 
 function formatAssetTotal(amount: number): string {
-  const formatter = new Intl.NumberFormat("zh-CN", {
+  const formatter = new Intl.NumberFormat("en-US", {
     minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
     maximumFractionDigits: 2,
   });
-  return `¥ ${formatter.format(amount)}`;
+  return `$ ${formatter.format(amount)}`;
 }
 
 function isSameLocalDay(date: Date, target: Date): boolean {

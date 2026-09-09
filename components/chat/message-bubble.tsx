@@ -667,7 +667,7 @@ function RedPacketBubble({ msg, charName, userName, groupSize, onShowDetail }: {
                         {d?.label || "Best wishes and good fortune"}
                     </div>
                     {userShare != null && (
-                        <div className="ts-20 font-bold mt-1 ui-text-white-85">¥{userShare.toFixed(2)}</div>
+                        <div className="ts-20 font-bold mt-1 ui-text-white-85">${userShare.toFixed(2)}</div>
                     )}
                     {isDeclined && <div className="ts-12 mt-1 ui-text-white-70">Returned</div>}
                 </div>
@@ -704,7 +704,7 @@ function TransferBubble({ msg, charName, userName, onShowDetail }: {
             <div className={`chat-transfer-body p-4 flex items-center gap-3 ${bgClass}`}>
                 <div className="ts-28 shrink-0">💰</div>
                 <div className="flex-1">
-                    <div className="text-white ts-24 font-bold">¥{d?.amount?.toFixed(2)}</div>
+                    <div className="text-white ts-24 font-bold">${d?.amount?.toFixed(2)}</div>
                     <div className="ts-13 mt-0.5 ui-text-white-85">{d?.label || "Transfer"}</div>
                 </div>
             </div>
@@ -751,7 +751,7 @@ function PaymentRequestBubble({ msg, charName, userName, onShowDetail }: {
                 </div>
                 <div className="flex-1 min-w-0">
                     <div className="text-white ts-12 ui-text-white-85">{requester} requested a payment</div>
-                    <div className="text-white ts-24 font-bold mt-1">¥{amount}</div>
+                    <div className="text-white ts-24 font-bold mt-1">${amount}</div>
                     <div className="ts-12 mt-1 ui-text-white-85 line-clamp-2">{itemsText || "Order"}</div>
                 </div>
             </div>
@@ -1514,7 +1514,7 @@ export function MediaDetailModal({ msg, userName, groupSize, onAccept, onClose }
     let statusText = "";
     if (isRedPacket) {
         if (isDeclined) statusText = "Returned";
-        else if (alreadyClaimed && userShare != null) statusText = `You claimed ¥${userShare.toFixed(2)}`;
+        else if (alreadyClaimed && userShare != null) statusText = `You claimed $${userShare.toFixed(2)}`;
         else if (allClaimed) statusText = "Red envelope fully claimed";
         else if (isFromUser) statusText = "Red envelope you sent";
     } else {
@@ -1543,7 +1543,7 @@ export function MediaDetailModal({ msg, userName, groupSize, onAccept, onClose }
                 {/* Header with gradient */}
                 <div className={`media-modal-header ${gradientClass}`}>
                     <div className="media-modal-emoji">{isRedPacket ? "🧧" : isTransfer ? "💰" : "🧾"}</div>
-                    <div className="media-modal-amount">¥{modalAmountText}</div>
+                    <div className="media-modal-amount">${modalAmountText}</div>
                     <div className="media-modal-label">
                         {isRedPacket ? (d?.label || "Best wishes and good fortune") : isTransfer ? (d?.label || "Transfer") : "Payment Request"}
                     </div>
@@ -1573,7 +1573,7 @@ export function MediaDetailModal({ msg, userName, groupSize, onAccept, onClose }
                             {claimedBy.map((name) => (
                                 <div key={name} className="media-modal-list-row">
                                     <span>{name}</span>
-                                    <span className="media-modal-list-amt">¥{(claimedAmounts[name] ?? 0).toFixed(2)}</span>
+                                    <span className="media-modal-list-amt">${(claimedAmounts[name] ?? 0).toFixed(2)}</span>
                                 </div>
                             ))}
                         </div>

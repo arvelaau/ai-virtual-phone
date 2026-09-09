@@ -74,7 +74,7 @@ function formatTakeoutTime(iso: string): string {
 }
 
 function formatAmount(amount: number): string {
-  return `¥ ${Number.isInteger(amount) ? amount : amount.toFixed(2).replace(/\.00$/, "")}`;
+  return `$ ${Number.isInteger(amount) ? amount : amount.toFixed(2).replace(/\.00$/, "")}`;
 }
 
 type RenderableTakeoutItem = CheckPhoneTakeoutOrder["items"][number] | string;
@@ -445,7 +445,7 @@ export function CheckPhoneTakeoutPage({ character, onBack }: CheckPhoneTakeoutPa
 
                 <div className="cp-takeout-detail-fee">
                   <span>Packaging fee</span>
-                  <span>¥1</span>
+                  <span>$1</span>
                 </div>
                 <div className="cp-takeout-detail-fee">
                   <span>Delivery fee</span>

@@ -118,7 +118,7 @@ export function buildShoppingPaymentRequestItems(items: PaymentRequestOrderItem[
   return items.map(item => ({
     title: cleanPaymentSegment(item.title) || "商品",
     detail: cleanPaymentSegment(item.detail || item.subtitle || item.title) || "商品详情",
-    priceLabel: cleanPaymentSegment(item.priceLabel) || "¥0",
+    priceLabel: cleanPaymentSegment(item.priceLabel) || "$0",
     quantityLabel: `x${parseShoppingQuantity(item.quantityLabel)}`,
   }));
 }
@@ -128,7 +128,7 @@ export function formatShoppingPaymentRequestItems(items: ShoppingPaymentRequestI
     .map(item => [
       cleanPaymentSegment(item.title) || "商品",
       cleanPaymentSegment(item.detail) || "商品详情",
-      cleanPaymentSegment(item.priceLabel) || "¥0",
+      cleanPaymentSegment(item.priceLabel) || "$0",
       cleanPaymentSegment(item.quantityLabel) || "x1",
     ].join("/"))
     .join("; ");

@@ -70,7 +70,7 @@ export const BUILTIN_PRESET_ID = "builtin_default_v1";
 //                   prompt_order toggle added in 279. No stored-preset content survives a
 //                   bump anyway (factory content wins, preserveCustomAppPresetPrompts is the
 //                   only exception), so this is a clean removal, not a migration.
-export const BUILTIN_PRESET_VERSION = 284;
+export const BUILTIN_PRESET_VERSION = 285;
 
 export function createBuiltinPreset(): PresetConfig {
     const now = Date.now();
@@ -2259,6 +2259,7 @@ export function createBuiltinPreset(): PresetConfig {
                     "- An order's [Note] is shown as Inner Thoughts on the order detail page, so write it the same way: what they actually thought after ordering — anticipation, regret, restraint, relief, or the practical situation around it.",
                     "- [Icon] and [ItemNIcon] must be a single emoji or one short icon character standing for the product category. Never a URL, an image link, a Markdown image, HTML or a file path.",
                     "- An order may hold 1 to 3 items; number the item fields consecutively as Item1Name, Item2Name and so on.",
+                    "- Write every price with the $ currency symbol, e.g. $24.99 or $1,280. This applies to [Price], [TotalPrice] and [ItemNPrice].",
                     "- Output the block format above and nothing else.",
                     "</checkphone_shopping_instruction>",
                 ].join("\n"),

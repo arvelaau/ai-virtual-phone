@@ -3687,6 +3687,193 @@ API as a second book-review source is a clean, additive fast-follow if genuine t
 reviews are ever wanted (would only need to flip a `Description`-labeled snippet back to
 `Review`-labeled, nothing structural).
 
+## Movie/Book Review app — UI redesign, exact match to reference screenshots: DONE (2026-09-09)
+User shared 7 reference screenshots of a dark, poster-forward "film archive/journal" aesthetic
+(serif italic typography, a stacked-poster hero card, "MY FILM ARCHIVE" home screen, a merged
+"New Film Journal" search+manual add flow, a full-bleed cover-image detail header) and asked for
+an **exact match** — not the plain light "glass card" chrome the app used everywhere else. This
+is a pure visual/flow reskin: zero changes to `lib/review-{types,storage,engine,memory,
+lookup-client}.ts` or the three `_fx-review-*.mjs` fixtures, so the whole data/engine layer built
+the day before stayed exactly as verified.
+
+**New `styles/review.css`** (self-contained, scoped to `.review-app-shell`, following the same
+per-app-stylesheet convention as `calendar.css`/`mixology.css`) — a dark palette
+(`--rv-bg/surface/surface-2/sheet/ink/sub/faint/accent/hair`), `Georgia, "Songti SC", "Noto Serif
+SC", serif` for display type (the same stack already proven for `dwelling`'s item-detail page and
+story mode's `serifIframeFallback`, reused rather than sourcing a new font), and the
+`--page-header-safe-top` convention every other custom-header app in this codebase uses for
+safe-area spacing. Registered via `@import "../styles/review.css";` in `app/globals.css`.
+
+**`components/review/review-app.tsx` rewritten**, not patched — every piece of state, every
+handler (journal CRUD, discuss send, ask-for-review, grounding confirm/edit/clear, delete) is
+untouched; only the JSX/markup layer and the screen structure changed:
+- **Home ("MY FILM ARCHIVE")**: an eyebrow + serif title, a 3-layer rotated "stacked keepsake"
+  hero card for the most-recently-updated title (pure CSS transforms on 3 overlapping `<img>`
+  layers, no extra state), an "All Displayed" section with a Recent/All tab toggle and a
+  horizontal poster rail, and a floating gold "+" action button.
+- **"New Film Journal" add flow** — **merged** `ReviewSearchScreen`'s separate search-vs-
+  "can't find it, add manually" link into one screen with a real SEARCH/MANUAL pill toggle
+  (matching the reference exactly), each mode showing/hiding its own block via a `mode` state.
+  The manual tab is now a real inline form (Title/Director/Year/Notes/Cover file-picker) that
+  builds and saves a `ReviewTitle` directly — no longer routed through `ReviewGroundingFlow`'s
+  manual branch, which was removed as dead code once the inline form replaced it (grounding-flow
+  is now search-results-only, matching what it's actually for: fetching TMDB/Open-Library detail
+  + the cached review/description snippet).
+- **Grounding confirm step**: reskinned into the same dark/poster/serif language (cover image,
+  overview text, the confirm/edit/clear snippet card), logic unchanged.
+- **Detail screen**: a fixed 300px full-bleed cover-image hero (back + delete icons overlaid,
+  title in italic serif at the bottom on a gradient) above a scrollable body — status chips,
+  interactive star rating, the grounding panel, and the Journal/Discuss/Reviews panels all
+  reskinned to the same dark-panel language, same underlying handlers.
+
+**One dead-code cleanup caught while rewriting**: the file had an accidental unused `Settings2`
+import + a pointless `export const ReviewSettingsIcon = Settings2;` line left over from an
+earlier draft — removed before it ever reached `tsc` (would have been harmless but was pure
+clutter with zero call sites).
+
+**Verification**: `npx tsc --noEmit` clean, `npm run build` clean (both new `/api/media-lookup/*`
+routes still register correctly, confirming the review UI rewrite didn't disturb the engine/API
+layer). Browser smoke test (fresh `.next` wipe + single dev server, per this file's own
+operational rule): opened the redesigned app from its home-screen icon, confirmed the empty
+state, walked through New Film Journal → Manual tab (all fields, the Choose-file picker) →
+"Confirm & Collect Film" → landed correctly on the detail screen with the entered
+title/director/year, confirmed the character-discussion selector auto-picked the one existing
+test character, scrolled through the full detail screen at a taller emulated viewport (300px
+hero + status chips + interactive 5-star rating + Journal/Discuss/Reviews panels all rendering
+correctly with zero console errors beyond this project's own already-documented, pre-existing,
+unrelated `NotFoundError`/`ERR_CONNECTION_RESET` noise), went back to Home and confirmed the
+stacked-hero card + "All Displayed" rail rendered the newly-added title correctly with the
+correct kind badge, then deleted the test title via the reskinned confirm dialog.
+
+**Not verified by me**: pixel-for-pixel fidelity against the reference screenshots was not
+machine-checked (no image-diffing tool available) — the match was built and self-reviewed against
+memory of the 7 reference images described earlier in this session (dark background, serif
+italic taglines, stacked poster hero, merged search/manual toggle, full-bleed detail hero); worth
+a final human eyeball pass against the originals.
+
+## Wallet / currency system — yuan (¥) to dollar ($): DONE (2026-09-09)
+Full-repo audit first (a dedicated research pass, since this project has repeatedly hit
+producer/consumer desyncs when a display string turned out to also be parsed elsewhere — see the
+many `tool-executor`/`FETCH_RESULT_HEADER`/`prompt-sanitizer` entries above). The audit sorted
+every `¥`/`￥` occurrence into three buckets: pure display (safe to swap alone), AI-taught
+protocol text (needs the teaching prompt changed too, or the AI keeps writing the old symbol
+regardless of any UI edit), and defensive parser regexes (need `$` added to their strip character
+class for round-trip safety, not required for correctness but cheap insurance).
+
+**Wallet core** (`lib/wallet-storage.ts`) — the one genuine shared choke point in this whole
+system: `formatWalletAmount()` now emits `$` (was `¥`) and formats with the `en-US` locale (was
+`zh-CN` — cosmetically identical for plain numbers, changed for correctness); `normalizeMoney`/
+`normalizeSignedMoney`'s strip regex gained `$` alongside the existing `¥￥元`. `~15` call sites
+across `wallet-panel.tsx`, `user-profile-panel.tsx`, `custom-app-host-api.ts`'s `wallet.get()` API
+and `shopping-app.tsx`'s payment-source picker all route through this one function, so none of
+them needed a direct edit.
+
+**Red packet / transfer / payment-request** — confirmed via the audit these are **purely
+renderer-added**: the AI is taught to write a bare `amount`/`total` placeholder
+(`lib/builtin-preset.ts:552,555,558`, `[RedPacket:amount:message]` etc.) with no currency symbol
+at all, and `lib/rich-message-parser.ts`'s amount-capture regex is strictly `(\d+(?:\.\d+)?)`
+with no symbol tolerance — so the `¥` shown in a red-packet/transfer/payment-request bubble was
+always a UI-side literal, never AI-generated text. Swapped the ~7 direct sites: 6 in
+`components/chat/message-bubble.tsx` (claim/transfer/payment-request bubble amounts, the media
+modal), 1 in `components/chat/rich-input-modals.tsx` (the amount-input `$` label), the inline SVG
+"Transfer" action icon glyph in `chat-room.tsx`, the canvas-drawn share-card/screenshot rendering
+in `lib/weixin-bridge.ts` (`moneyText`/`drawMoneyIcon`, used when exporting a chat screenshot),
+and two `"¥0"` fallback literals in `lib/shopping-payment-request.ts`.
+
+**Shopping (`checkphone_shopping` + the standalone Shopping app) needed a teaching-prompt change,
+not just a UI edit** — `priceLabel` is raw AI-generated text rendered **directly**, never passed
+through a formatter, so a UI-only swap would have done nothing: existing/regenerated content
+would keep showing whatever symbol the model defaults to. Two prompts updated in lockstep with
+their parsers:
+- `lib/builtin-preset.ts`'s `checkphone_shopping` entry gained an explicit rule (mirroring
+  `checkphone_assets`'s own existing pattern): *"Write every price with the $ currency symbol...
+  This applies to [Price], [TotalPrice] and [ItemNPrice]."* **`BUILTIN_PRESET_VERSION` bumped
+  284 → 285** — required, or the edit is dead code per this file's own standing trap.
+- `lib/shopping-engine.ts`'s **live** `DEFAULT_SHOPPING_REFRESH_PROMPT`/`DEFAULT_SHOPPING_SEARCH_
+  PROMPT` (not the frozen `SHOPPING_CN_DEFAULT_*` constants, which exist only for old-Chinese
+  byte-match upgrade detection and must never be edited) gained the same `$`-symbol rule. Because
+  these two prompts are **stored in KV** as part of a user's shopping settings
+  (`shopping-storage.ts` writes the default into state on first use), editing the live constant
+  alone would never reach an existing user — the exact versioned-defaults trap this file has
+  hit before (`loadInterviewHostPrompt`, the shopping refresh/search prompts' own CN→EN
+  migration). Handled the same way: captured the pre-edit English prompt text verbatim (via a
+  `jiti`-imported read of the real exported constant, not manual retyping — the same "verify the
+  exact byte content, don't transcribe by hand" discipline used throughout this project), froze
+  it as new `SHOPPING_PRE_USD_REFRESH_PROMPT`/`SHOPPING_PRE_USD_SEARCH_PROMPT` exports, and added
+  both to `shopping-storage.ts`'s existing `SUPERSEDED_REFRESH_PROMPTS`/`SUPERSEDED_SEARCH_
+  PROMPTS` recognition lists alongside the already-frozen Chinese originals — so a user who
+  already has the (English, pre-`$`-rule) prompt stored gets silently upgraded on next load,
+  exactly like the CN→EN migration did.
+- Both duplicated `formatShoppingAmount`/`parseShoppingAmount` pairs (`checkphone-shopping-
+  page.tsx` and the standalone `shopping-app.tsx` each carry their own copy) updated: formatter
+  now emits `$`, parser strips `$` alongside `¥￥元` for round-trip safety.
+
+**A real, pre-existing bug found and fixed in the same pass, not caused by this change**:
+`checkphone_assets`'s teaching prompt *already* told the AI to write `$`-formatted balances
+(`[Balance]$ 3,420`, `[Amount]- $32` — this was apparently fixed at some earlier point, unrelated
+to today's work) — but `checkphone-assets-page.tsx`'s `parseAssetAmount` only ever stripped
+`¥`/`￥`, never `$`, so `Number.parseFloat("$3420")` was `NaN` and the aggregated Assets-page
+totals (`formatAssetTotal`/`formatAssetDelta`, both still hardcoded to `¥`) silently rendered as
+`$0`/`¥0` for every real user regardless of their actual generated balances. Individual
+account/transaction rows were unaffected (they render the AI's raw string directly, un-parsed) —
+only the two headline aggregate figures were broken. Fixed: `$` added to the strip regex, both
+formatters switched from `¥`/`zh-CN` to `$`/`en-US`. **Verified as a real bug, not assumed**: a
+standalone script reimplementing the pre-fix regex (`[,\s¥￥]`, no `$`) against the exact string
+the AI is taught to write (`"$ 3,420"`) reproduced `0` — the actual silent failure — before
+confirming the fixed version returns `3420` correctly.
+
+**Takeout and Steam prices left the UI-only route** — checked their teaching prompts first
+(`lib/builtin-preset.ts`'s `checkphone_takeout`/`checkphone_steam` blocks) and confirmed both
+`[Amount]`/`[Price]` are taught as **bare numbers with no currency word or symbol at all**
+("`- [Amount] is a bare number... with no currency word or symbol`" / "`Price are bare numbers...
+with no words like "hours" or a currency name`") — so their `¥`-prefix was always 100% UI-side.
+Swapped `formatAmount` (`checkphone-takeout-page.tsx`) and `formatPrice`
+(`checkphone-steam-page.tsx`) directly, plus one hardcoded `¥1` packaging-fee display literal.
+
+**Defensive-only, not bug fixes**: added `$` to the strip-regex character class in
+`lib/custom-app-host-api.ts` (`AiPhone.wallet.pay` input normalizer) and
+`lib/checkphone-engine.ts` (the takeout-amount and Steam-numeric-field parsers) for round-trip
+safety, matching the pattern already applied to the wallet core — none of these had an active
+bug (their fields are taught as bare numbers), this is pure insurance in case a model ever writes
+a symbol anyway. `lib/custom-app-creator-guide.ts`'s two illustrative `¥38`/`¥12` example values
+(shown to the AI when it's building a custom app) swapped to `$38`/`$12` for consistency.
+
+**Deliberately left untouched, and why**: the `¥`/`￥`/`元` characters that remain in every strip
+regex's character class (`wallet-storage.ts`, `custom-app-host-api.ts`, `checkphone-engine.ts`,
+`checkphone-shopping-page.tsx`, `shopping-app.tsx`) are kept **on purpose** as accepted legacy
+input alongside the new `$` — a user or model that still writes a yuan-formatted amount should
+keep parsing correctly, exactly the "producer moves, parser still accepts both" discipline this
+whole file's Track-2 protocol migration was built on. Three narration strings that build Chinese
+sentences with a `元` unit suffix (`chat-room.tsx:2065`, `chat-room.tsx:2186`,
+`message-bubble.tsx:1444`, e.g. `` `，金额:${amt}元` ``) were confirmed by the audit to be pure
+saved-chat-history narration text with **zero downstream parsing** — left alone since translating
+a full Chinese sentence is a different, larger scope than a currency-symbol swap; flagged here in
+case a future full-sentence translation pass wants it. `lib/game-imported-html.ts`'s one `¥`
+occurrence lives inside a fully self-contained embedded "Star Ring Monopoly" game (fictional
+in-game currency, zero connection to the real wallet system) — out of scope, confirmed isolated.
+**Also not done, a scope call rather than an oversight**: illustrative example *magnitudes* in
+preset teaching text (e.g. Steam's sample `[Price]148`, tuned for a yuan-scale price) were left
+as-is — the ask was read as "change the currency symbol," not "recalibrate every illustrative
+price example to dollar-realistic magnitudes," which would be a larger, more subjective follow-up
+if wanted.
+
+**Verification**: `npx tsc --noEmit` clean, `npm run build` clean, all 25 repo fixtures green
+(unaffected — none assert on the exact byte content of the `checkphone_shopping` preset block or
+the shopping default prompts). Control-character sweep clean across all 19 touched files. Browser
+smoke test: the chat composer's Transfer action icon renders `$` (was `¥`), opening the Transfer
+modal shows a `$` amount-field label. The `checkphone_assets` bug fix could not be exercised
+live (needs a real LLM call to generate assets content, unavailable in this environment) — instead
+verified with a standalone script reimplementing both the pre-fix and post-fix `parseAssetAmount`
+against the AI's actual taught output shape, non-vacuously reproducing the original `$0` bug
+before confirming the fix.
+
+**Not verified by me**: the Wallet panel itself (`components/chat/wallet-panel.tsx`) was not
+visually opened in the browser (routing to it proved fiddly in this sandboxed session and was not
+worth the time given `formatWalletAmount` — the single function it and ~15 other call sites all
+route through — was already directly source-verified and confirmed working in the visually
+similar Transfer modal); a live checkphone-shopping generation showing real `$`-priced products
+end-to-end also needs a bound API this environment doesn't have.
+
 ## Still open / not yet done
 - ~~**Custom app imports**~~ — **DONE (2026-08-23), all 9 translated.** Zips in `App\translated\*-EN.zip`; see the CUSTOM APP IMPORTS section. Not installed — the user installs them through the App Market.
 - **`memory.add` provenance** — a custom app can write a long-term memory for any character and shared memory will lend it on. ⚠️ **Correction to how this was first recorded**: nothing needs stamping. `addCustomAppMemory` already writes `id: custom_app_${app.id}_…` **and** `metadata: { origin: "custom_app", appId, appName, reason }`; only `sourceApp` is hardcoded to `"chat"`. The open question is narrower than it looked — should `selectBorrowableMemories` skip entries whose `metadata.origin === "custom_app"`? Awaiting a decision; the marker to filter on already exists.

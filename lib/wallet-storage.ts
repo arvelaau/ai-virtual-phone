@@ -16,13 +16,13 @@ function cleanText(value: unknown, maxLength: number): string {
 }
 
 function normalizeMoney(value: unknown): number {
-  const amount = typeof value === "number" ? value : Number(String(value ?? "").replace(/[¥￥元,\s]/g, ""));
+  const amount = typeof value === "number" ? value : Number(String(value ?? "").replace(/[¥￥元$,\s]/g, ""));
   if (!Number.isFinite(amount)) return 0;
   return Math.max(0, Math.round(amount * 100) / 100);
 }
 
 function normalizeSignedMoney(value: unknown): number {
-  const amount = typeof value === "number" ? value : Number(String(value ?? "").replace(/[¥￥元,\s]/g, ""));
+  const amount = typeof value === "number" ? value : Number(String(value ?? "").replace(/[¥￥元$,\s]/g, ""));
   if (!Number.isFinite(amount)) return 0;
   return Math.round(amount * 100) / 100;
 }
@@ -204,7 +204,7 @@ export function saveWalletState(state: WalletState): WalletState {
 
 export function formatWalletAmount(amount: number): string {
   const safeAmount = normalizeMoney(amount);
-  return `¥${safeAmount.toLocaleString("zh-CN", {
+  return `$${safeAmount.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;

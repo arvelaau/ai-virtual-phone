@@ -128,7 +128,7 @@ export function RedPacketModal({ mode, isGroup, onSend, onClose }: RedPacketModa
                             <span
                                 className="ts-24 font-bold"
                                 style={{ color }}
-                            >¥</span>
+                            >$</span>
                             <input
                                 value={amount}
                                 onChange={e => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}

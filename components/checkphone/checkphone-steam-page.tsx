@@ -72,7 +72,7 @@ function formatHours(value: number): string {
 }
 
 function formatPrice(value: number): string {
-  return value <= 0 ? "Free" : `¥${Number.isInteger(value) ? value : value.toFixed(2).replace(/\.00$/, "")}`;
+  return value <= 0 ? "Free" : `$${Number.isInteger(value) ? value : value.toFixed(2).replace(/\.00$/, "")}`;
 }
 
 function formatCompactHours(value: number): string {

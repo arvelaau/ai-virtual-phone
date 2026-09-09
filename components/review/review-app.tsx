@@ -1,12 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Clapperboard, Plus, RefreshCw, Send, Trash2, X } from "lucide-react";
-import { PageShell } from "@/components/ui/page-shell";
-import { GlassCard, EmptyState, Avatar } from "@/components/ui/primitives";
-import { Button } from "@/components/ui/button";
-import { Input, Textarea, Select } from "@/components/ui/form";
-import { BottomSheet, ConfirmDialog } from "@/components/ui/modal";
+import { ChevronLeft, Film, Plus, RefreshCw, Send, Trash2, X } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/modal";
 import { StarRating } from "@/components/ui/star-rating";
 import { loadCharacters } from "@/lib/character-storage";
 import type { Character } from "@/lib/character-types";
@@ -36,7 +32,7 @@ import {
 import { generateReviewDiscussReply, generatePublishedReview, resolveDiscussMode } from "@/lib/review-engine";
 import { recordReviewJournalEvent, recordPublishedReviewEvent } from "@/lib/review-memory";
 
-type Screen = "list" | "search" | "detail";
+type Screen = "home" | "journal" | "detail";
 
 async function urlToBlob(url: string): Promise<Blob | null> {
   try {
@@ -48,63 +44,28 @@ async function urlToBlob(url: string): Promise<Blob | null> {
   }
 }
 
-function StatusPicker({ status, onChange }: { status: ReviewStatus; onChange: (next: ReviewStatus) => void }) {
-  const options: { id: ReviewStatus; label: string }[] = [
-    { id: "not_started", label: "Not started" },
-    { id: "in_progress", label: "In progress" },
-    { id: "finished", label: "Finished" },
-  ];
+const STATUS_OPTIONS: { id: ReviewStatus; label: string }[] = [
+  { id: "not_started", label: "Not started" },
+  { id: "in_progress", label: "In progress" },
+  { id: "finished", label: "Finished" },
+];
+
+function Poster({ url, kind }: { url: string | null; kind?: ReviewTitleKind }) {
   return (
-    <div className="review-status-picker" style={{ display: "flex", gap: 6 }}>
-      {options.map((opt) => (
-        <button
-          key={opt.id}
-          type="button"
-          className="ui-btn"
-          data-active={status === opt.id ? "true" : undefined}
-          style={{
-            flex: 1,
-            background: status === opt.id ? "var(--c-icon-active, #5B8FB9)" : undefined,
-            color: status === opt.id ? "#fff" : undefined,
-          }}
-          onClick={() => onChange(opt.id)}
-        >
-          {opt.label}
-        </button>
-      ))}
+    <div className="review-poster">
+      {url ? <img src={url} alt="" /> : <Film size={22} strokeWidth={1.25} />}
+      {kind && <span className="review-poster-kind-badge">{kind === "movie" ? "Film" : "Book"}</span>}
     </div>
   );
 }
 
-function TitleCard({ title, coverUrl, onOpen }: { title: ReviewTitle; coverUrl: string | null; onOpen: () => void }) {
-  return (
-    <button type="button" className="review-title-card" onClick={onOpen} style={{ textAlign: "left", display: "flex", flexDirection: "column", gap: 6, border: "none", background: "none", padding: 0, cursor: "pointer" }}>
-      <div style={{ width: "100%", aspectRatio: "2/3", borderRadius: 10, overflow: "hidden", background: "var(--c-card, rgba(255,255,255,0.7))" }}>
-        {coverUrl ? (
-          <img src={coverUrl} alt={title.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-        ) : (
-          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Clapperboard size={28} strokeWidth={1.25} />
-          </div>
-        )}
-      </div>
-      <div>
-        <strong style={{ display: "block", fontSize: 13, lineHeight: 1.3 }}>{title.title}</strong>
-        <span style={{ fontSize: 11, opacity: 0.65 }}>
-          {title.kind === "movie" ? "Movie" : "Book"}
-          {title.year ? ` · ${title.year}` : ""}
-        </span>
-      </div>
-    </button>
-  );
-}
-
 export function ReviewApp({ onClose }: { onClose: () => void }) {
-  const [screen, setScreen] = useState<Screen>("list");
+  const [screen, setScreen] = useState<Screen>("home");
   const [titles, setTitles] = useState<ReviewTitle[]>([]);
   const [coverUrls, setCoverUrls] = useState<Record<string, string>>({});
   const [selectedTitleId, setSelectedTitleId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [railTab, setRailTab] = useState<"recent" | "all">("recent");
 
   const refreshTitles = useCallback(() => {
     setTitles(loadReviewTitles());
@@ -132,6 +93,18 @@ export function ReviewApp({ onClose }: { onClose: () => void }) {
 
   const selectedTitle = useMemo(() => titles.find((t) => t.id === selectedTitleId) ?? null, [titles, selectedTitleId]);
 
+  const sortedByRecency = useMemo(
+    () => [...titles].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    [titles],
+  );
+  const featured = sortedByRecency[0] ?? null;
+  const railItems = railTab === "recent" ? sortedByRecency.slice(0, 12) : sortedByRecency;
+
+  const openTitle = (id: string) => {
+    setSelectedTitleId(id);
+    setScreen("detail");
+  };
+
   const handleAdded = (title: ReviewTitle) => {
     upsertReviewTitle(title);
     refreshTitles();
@@ -145,7 +118,7 @@ export function ReviewApp({ onClose }: { onClose: () => void }) {
     setConfirmDeleteId(null);
     if (selectedTitleId === id) {
       setSelectedTitleId(null);
-      setScreen("list");
+      setScreen("home");
     }
   };
 
@@ -160,66 +133,107 @@ export function ReviewApp({ onClose }: { onClose: () => void }) {
     />
   ) : null;
 
-  if (screen === "search") {
-    return <ReviewSearchScreen onClose={() => setScreen("list")} onAdded={handleAdded} />;
+  if (screen === "journal") {
+    return <ReviewJournalIntake onClose={() => setScreen("home")} onAdded={handleAdded} />;
   }
 
   if (screen === "detail" && selectedTitle) {
     return (
-      <>
+      <div className="review-app-shell">
         <ReviewTitleDetail
           title={selectedTitle}
           coverUrl={coverUrls[selectedTitle.id] ?? null}
-          onBack={() => setScreen("list")}
+          onBack={() => setScreen("home")}
           onUpdated={refreshTitles}
           onDelete={() => setConfirmDeleteId(selectedTitle.id)}
         />
         {confirmDeleteDialog}
-      </>
+      </div>
     );
   }
 
   return (
-    <PageShell
-      title="Review"
-      onBack={onClose}
-      rightAction={
-        <Button variant="ghost" aria-label="Add title" onClick={() => setScreen("search")}>
-          <Plus size={20} strokeWidth={1.8} />
-        </Button>
-      }
-    >
-      {titles.length === 0 ? (
-        <EmptyState
-          icon={Clapperboard}
-          message="No titles yet -- add a movie or book to start a journal and discuss it with a character."
-          action={
-            <Button variant="primary" onClick={() => setScreen("search")}>
-              Add a title
-            </Button>
-          }
-        />
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, padding: 12 }}>
-          {titles.map((title) => (
-            <TitleCard
-              key={title.id}
-              title={title}
-              coverUrl={coverUrls[title.id] ?? null}
-              onOpen={() => {
-                setSelectedTitleId(title.id);
-                setScreen("detail");
-              }}
-            />
-          ))}
+    <div className="review-app-shell">
+      <div className="review-app-page">
+        <div className="review-topbar">
+          <button type="button" className="review-icon-btn" aria-label="Back" onClick={onClose}>
+            <ChevronLeft size={20} strokeWidth={1.8} />
+          </button>
+          <span className="review-topbar-title">Film Archive</span>
+          <button type="button" className="review-icon-btn" aria-label="Add title" onClick={() => setScreen("journal")}>
+            <Plus size={19} strokeWidth={1.8} />
+          </button>
         </div>
-      )}
+
+        <div className="review-scroll">
+          {titles.length === 0 ? (
+            <div className="review-empty">
+              <p>No titles yet -- add a movie or book to start a journal and discuss it with a character.</p>
+              <button type="button" className="review-confirm-btn" style={{ maxWidth: 220, margin: "0 auto" }} onClick={() => setScreen("journal")}>
+                Start a Film Journal
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="review-home-header">
+                <p className="review-home-eyebrow">Recently kept</p>
+                <h1 className="review-home-title">MY FILM ARCHIVE</h1>
+              </div>
+
+              {featured && (
+                <div className="review-hero">
+                  <button type="button" className="review-hero-stack" onClick={() => openTitle(featured.id)} style={{ border: "none", background: "none", padding: 0, cursor: "pointer" }}>
+                    <span className="review-hero-stack-layer" aria-hidden="true">
+                      {coverUrls[featured.id] ? <img src={coverUrls[featured.id]} alt="" /> : <span className="review-hero-stack-placeholder"><Film size={20} /></span>}
+                    </span>
+                    <span className="review-hero-stack-layer" aria-hidden="true">
+                      {coverUrls[featured.id] ? <img src={coverUrls[featured.id]} alt="" /> : <span className="review-hero-stack-placeholder"><Film size={20} /></span>}
+                    </span>
+                    <span className="review-hero-stack-layer">
+                      {coverUrls[featured.id] ? <img src={coverUrls[featured.id]} alt={featured.title} /> : <span className="review-hero-stack-placeholder"><Film size={28} /></span>}
+                    </span>
+                  </button>
+                  <strong className="review-hero-title">{featured.title}</strong>
+                  <span className="review-hero-meta">
+                    {featured.kind === "movie" ? "Movie" : "Book"}{featured.year ? ` · ${featured.year}` : ""}
+                  </span>
+                </div>
+              )}
+
+              <div className="review-rail-section">
+                <div className="review-rail-head">
+                  <span className="review-rail-title">All Displayed</span>
+                  <div className="review-rail-tabs">
+                    <button type="button" className="review-rail-tab" data-active={railTab === "recent" ? "true" : undefined} onClick={() => setRailTab("recent")}>Recent</button>
+                    <button type="button" className="review-rail-tab" data-active={railTab === "all" ? "true" : undefined} onClick={() => setRailTab("all")}>All</button>
+                  </div>
+                </div>
+                <div className="review-rail-scroll">
+                  {railItems.map((title) => (
+                    <button key={title.id} type="button" className="review-rail-card" onClick={() => openTitle(title.id)}>
+                      <Poster url={coverUrls[title.id] ?? null} kind={title.kind} />
+                      <span className="review-rail-card-title">{title.title}</span>
+                      <span className="review-rail-card-meta">{title.year ?? ""}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        <button type="button" className="review-fab" aria-label="New Film Journal" onClick={() => setScreen("journal")}>
+          <Plus size={24} strokeWidth={2} />
+        </button>
+      </div>
       {confirmDeleteDialog}
-    </PageShell>
+    </div>
   );
 }
 
-function ReviewSearchScreen({ onClose, onAdded }: { onClose: () => void; onAdded: (title: ReviewTitle) => void }) {
+/* ── "New Film Journal": merged search + manual add flow ── */
+function ReviewJournalIntake({ onClose, onAdded }: { onClose: () => void; onAdded: (title: ReviewTitle) => void }) {
+  const [mode, setMode] = useState<"search" | "manual">("search");
   const [kind, setKind] = useState<ReviewTitleKind>("movie");
   const [bookProvider, setBookProvider] = useState<"open_library" | "google_books">("google_books");
   const [query, setQuery] = useState("");
@@ -227,6 +241,14 @@ function ReviewSearchScreen({ onClose, onAdded }: { onClose: () => void; onAdded
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingResult, setPendingResult] = useState<MediaSearchResult | null>(null);
+
+  // Manual-entry fields
+  const [manualTitle, setManualTitle] = useState("");
+  const [manualCreator, setManualCreator] = useState("");
+  const [manualYear, setManualYear] = useState("");
+  const [manualNotes, setManualNotes] = useState("");
+  const [manualFile, setManualFile] = useState<File | null>(null);
+  const [manualSaving, setManualSaving] = useState(false);
 
   const runSearch = async () => {
     if (!query.trim()) return;
@@ -242,65 +264,152 @@ function ReviewSearchScreen({ onClose, onAdded }: { onClose: () => void; onAdded
     setResults(result.data);
   };
 
+  const finishManual = async () => {
+    if (!manualTitle.trim()) return;
+    setManualSaving(true);
+    try {
+      let coverAssetId: string | null = null;
+      if (manualFile) coverAssetId = await saveThemeAssetFromBlob(manualFile, "review_cover");
+      const now = new Date().toISOString();
+      const title: ReviewTitle = {
+        id: `review_title_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        kind,
+        title: manualTitle.trim(),
+        year: manualYear.trim() || undefined,
+        creator: manualCreator.trim(),
+        overview: manualNotes.trim(),
+        coverAssetId,
+        source: { kind, provider: "manual" },
+        status: "not_started",
+        grounding: null,
+        myRating: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      onAdded(title);
+    } finally {
+      setManualSaving(false);
+    }
+  };
+
   if (pendingResult) {
-    return (
-      <ReviewGroundingFlow
-        pick={pendingResult}
-        onBack={() => setPendingResult(null)}
-        onDone={onAdded}
-      />
-    );
+    return <ReviewGroundingFlow pick={pendingResult} onBack={() => setPendingResult(null)} onDone={onAdded} />;
   }
 
   return (
-    <PageShell title="Add a Title" onBack={onClose}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: 12 }}>
-        <div style={{ display: "flex", gap: 6 }}>
-          <Button variant={kind === "movie" ? "primary" : "outline"} onClick={() => { setKind("movie"); setResults([]); }}>
-            Movie
-          </Button>
-          <Button variant={kind === "book" ? "primary" : "outline"} onClick={() => { setKind("book"); setResults([]); }}>
-            Book
-          </Button>
+    <div className="review-app-shell">
+      <div className="review-app-page">
+        <div className="review-topbar">
+          <button type="button" className="review-icon-btn" aria-label="Back" onClick={onClose}>
+            <ChevronLeft size={20} strokeWidth={1.8} />
+          </button>
+          <span className="review-topbar-title">New Film Journal</span>
+          <span style={{ width: 38 }} />
         </div>
-        {kind === "book" && (
-          <Select value={bookProvider} onChange={(e) => setBookProvider(e.target.value as "open_library" | "google_books")}>
-            <option value="google_books">Google Books</option>
-            <option value="open_library">Open Library</option>
-          </Select>
-        )}
-        <div style={{ display: "flex", gap: 6 }}>
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={kind === "movie" ? "Search for a movie..." : "Search for a book..."}
-            onKeyDown={(e) => { if (e.key === "Enter") void runSearch(); }}
-          />
-          <Button variant="primary" onClick={() => void runSearch()} disabled={loading}>
-            {loading ? "..." : "Search"}
-          </Button>
-        </div>
-        {error && <GlassCard variant="section"><p style={{ fontSize: 13 }}>{error}</p></GlassCard>}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {results.map((item) => (
-            <GlassCard key={`${item.provider}_${item.externalId}`} onClick={() => setPendingResult(item)}>
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <div style={{ width: 44, height: 64, borderRadius: 6, overflow: "hidden", flexShrink: 0, background: "var(--c-panel, #fff)" }}>
-                  {item.coverUrl && <img src={item.coverUrl} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+
+        <div className="review-scroll">
+          <div className="review-journal-hero">
+            <p className="review-journal-tagline">Find a film worth keeping.</p>
+            <div className="review-mode-toggle">
+              <button type="button" className="review-mode-toggle-btn" data-active={mode === "search" ? "true" : undefined} onClick={() => setMode("search")}>
+                <span className="review-mode-toggle-dot" />Search
+              </button>
+              <button type="button" className="review-mode-toggle-btn" data-active={mode === "manual" ? "true" : undefined} onClick={() => setMode("manual")}>
+                <span className="review-mode-toggle-dot" />Manual
+              </button>
+            </div>
+          </div>
+
+          <div className="review-kind-row">
+            <button type="button" className="review-kind-chip" data-active={kind === "movie" ? "true" : undefined} onClick={() => { setKind("movie"); setResults([]); }}>Movie</button>
+            <button type="button" className="review-kind-chip" data-active={kind === "book" ? "true" : undefined} onClick={() => { setKind("book"); setResults([]); }}>Book</button>
+          </div>
+
+          {mode === "search" ? (
+            <>
+              {kind === "book" && (
+                <div className="review-provider-row">
+                  <select className="review-select" value={bookProvider} onChange={(e) => setBookProvider(e.target.value as "open_library" | "google_books")}>
+                    <option value="google_books">Google Books</option>
+                    <option value="open_library">Open Library</option>
+                  </select>
                 </div>
-                <div>
-                  <strong style={{ display: "block", fontSize: 14 }}>{item.title}</strong>
-                  <span style={{ fontSize: 12, opacity: 0.65 }}>{item.year ?? ""}</span>
+              )}
+              <div className="review-search-row">
+                <input
+                  className="review-input"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Foreign title, original title, or keyword"
+                  onKeyDown={(e) => { if (e.key === "Enter") void runSearch(); }}
+                />
+                <button type="button" className="review-search-btn" onClick={() => void runSearch()} disabled={loading}>
+                  {loading ? "..." : "Search"}
+                </button>
+              </div>
+              {error && <p className="review-error-note">{error}</p>}
+              <div className="review-result-list">
+                {results.map((item) => (
+                  <button key={`${item.provider}_${item.externalId}`} type="button" className="review-result-row" onClick={() => setPendingResult(item)}>
+                    <span className="review-result-poster">
+                      {item.coverUrl && <img src={item.coverUrl} alt="" />}
+                    </span>
+                    <span>
+                      <span className="review-result-title">{item.title}</span>
+                      <span className="review-result-sub">
+                        {item.creator ? `${kind === "movie" ? "Director" : "Author"}: ${item.creator}` : ""}
+                        {item.year ? `  ·  ${item.year}` : ""}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div className="review-manual-link">
+                <button type="button" onClick={() => setMode("manual")}>Can&apos;t find it? Add manually</button>
+              </div>
+            </>
+          ) : (
+            <div className="review-form">
+              <div>
+                <label className="review-field-label">Title<sup>*</sup></label>
+                <input className="review-input" style={{ width: "100%" }} value={manualTitle} onChange={(e) => setManualTitle(e.target.value)} placeholder="Title" />
+              </div>
+              <div>
+                <label className="review-field-label">{kind === "movie" ? "Director" : "Author"}</label>
+                <input className="review-input" style={{ width: "100%" }} value={manualCreator} onChange={(e) => setManualCreator(e.target.value)} placeholder={kind === "movie" ? "Director" : "Author"} />
+              </div>
+              <div>
+                <label className="review-field-label">Year</label>
+                <input className="review-input" style={{ width: "100%" }} value={manualYear} onChange={(e) => setManualYear(e.target.value)} placeholder="Year" />
+              </div>
+              <div>
+                <label className="review-field-label">Notes</label>
+                <textarea
+                  className="review-textarea"
+                  rows={3}
+                  value={manualNotes}
+                  onChange={(e) => setManualNotes(e.target.value)}
+                  placeholder="A word beyond the one-line summary..."
+                />
+              </div>
+              <div>
+                <label className="review-field-label">Cover</label>
+                <div className="review-file-picker">
+                  <label className="review-file-picker-btn">
+                    Choose file
+                    <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setManualFile(e.target.files?.[0] ?? null)} />
+                  </label>
+                  <span className="review-file-picker-name">{manualFile ? manualFile.name : "No file chosen"}</span>
                 </div>
               </div>
-            </GlassCard>
-          ))}
+              <button type="button" className="review-confirm-btn" onClick={() => void finishManual()} disabled={!manualTitle.trim() || manualSaving}>
+                {manualSaving ? "Saving..." : "Confirm & Collect Film"}
+              </button>
+            </div>
+          )}
         </div>
-        <Button variant="outline" onClick={() => setPendingResult({ kind, provider: "tmdb", externalId: "", title: query || "Untitled", creator: "" })}>
-          Can&apos;t find it? Add manually
-        </Button>
       </div>
-    </PageShell>
+    </div>
   );
 }
 
@@ -313,11 +422,7 @@ function ReviewGroundingFlow({
   onBack: () => void;
   onDone: (title: ReviewTitle) => void;
 }) {
-  const isManual = !pick.externalId;
-  const [loading, setLoading] = useState(!isManual);
-  const [manualTitle, setManualTitle] = useState(pick.title);
-  const [manualCreator, setManualCreator] = useState(pick.creator);
-  const [manualYear, setManualYear] = useState(pick.year ?? "");
+  const [loading, setLoading] = useState(true);
   const [overview, setOverview] = useState("");
   const [coverUrl, setCoverUrl] = useState<string | undefined>(pick.coverUrl);
   const [creator, setCreator] = useState(pick.creator);
@@ -326,7 +431,6 @@ function ReviewGroundingFlow({
   const [cleared, setCleared] = useState(false);
 
   useEffect(() => {
-    if (isManual) return;
     let cancelled = false;
     (async () => {
       if (pick.kind === "movie") {
@@ -358,7 +462,7 @@ function ReviewGroundingFlow({
     return () => {
       cancelled = true;
     };
-  }, [isManual, pick]);
+  }, [pick]);
 
   const finish = async () => {
     let coverAssetId: string | null = null;
@@ -370,16 +474,14 @@ function ReviewGroundingFlow({
     const title: ReviewTitle = {
       id: `review_title_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       kind: pick.kind,
-      title: isManual ? manualTitle.trim() || "Untitled" : pick.title,
-      year: isManual ? manualYear || undefined : pick.year,
-      creator: isManual ? manualCreator : creator,
+      title: pick.title,
+      year: pick.year,
+      creator,
       overview,
       coverAssetId,
-      source: isManual
-        ? { kind: pick.kind, provider: "manual" }
-        : pick.kind === "movie"
-          ? { kind: "movie", provider: "tmdb", externalId: pick.externalId }
-          : { kind: "book", provider: pick.provider as "open_library" | "google_books", externalId: pick.externalId },
+      source: pick.kind === "movie"
+        ? { kind: "movie", provider: "tmdb", externalId: pick.externalId }
+        : { kind: "book", provider: pick.provider as "open_library" | "google_books", externalId: pick.externalId },
       status: "not_started",
       grounding: snippet && !cleared
         ? {
@@ -397,52 +499,48 @@ function ReviewGroundingFlow({
     onDone(title);
   };
 
-  if (isManual) {
-    return (
-      <PageShell title="Add Manually" onBack={onBack}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: 12 }}>
-          <label className="menu-desc">Title</label>
-          <Input value={manualTitle} onChange={(e) => setManualTitle(e.target.value)} />
-          <label className="menu-desc">{pick.kind === "movie" ? "Director" : "Author"}</label>
-          <Input value={manualCreator} onChange={(e) => setManualCreator(e.target.value)} />
-          <label className="menu-desc">Year</label>
-          <Input value={manualYear} onChange={(e) => setManualYear(e.target.value)} />
-          <label className="menu-desc">Overview (optional)</label>
-          <Textarea value={overview} onChange={(e) => setOverview(e.target.value)} rows={4} />
-          <Button variant="primary" onClick={() => void finish()}>Add</Button>
-        </div>
-      </PageShell>
-    );
-  }
-
   return (
-    <PageShell title={pick.title} onBack={onBack}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: 12 }}>
-        {loading ? (
-          <p style={{ fontSize: 13, opacity: 0.65 }}>Loading details...</p>
-        ) : (
-          <>
-            <p style={{ fontSize: 13 }}>{overview}</p>
-            {snippet && !cleared && (
-              <GlassCard variant="section">
-                <strong style={{ fontSize: 12, opacity: 0.7 }}>{snippet.sourceLabel} (cached, edit or clear if it looks wrong)</strong>
-                <Textarea value={snippetEdited} onChange={(e) => setSnippetEdited(e.target.value)} rows={5} style={{ marginTop: 6 }} />
-                <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                  <Button variant="ghost" onClick={() => setSnippetEdited(snippet.text)}>Revert to fetched</Button>
-                  <Button variant="ghost" onClick={() => setCleared(true)}>Clear</Button>
+    <div className="review-app-shell">
+      <div className="review-app-page">
+        <div className="review-topbar">
+          <button type="button" className="review-icon-btn" aria-label="Back" onClick={onBack}>
+            <ChevronLeft size={20} strokeWidth={1.8} />
+          </button>
+          <span className="review-topbar-title">{pick.title}</span>
+          <span style={{ width: 38 }} />
+        </div>
+        <div className="review-scroll">
+          {loading ? (
+            <p style={{ textAlign: "center", padding: 40, color: "var(--rv-sub)", fontSize: 13 }}>Loading details...</p>
+          ) : (
+            <>
+              <div className="review-ground-cover">
+                {coverUrl ? <img src={coverUrl} alt={pick.title} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--rv-faint)" }}><Film size={28} /></div>}
+              </div>
+              <p className="review-ground-overview">{overview}</p>
+              {snippet && !cleared ? (
+                <div className="review-snippet-card">
+                  <span className="review-snippet-label">{snippet.sourceLabel}</span>
+                  <span className="review-snippet-hint">cached -- edit or clear if it looks wrong</span>
+                  <textarea className="review-textarea" style={{ marginTop: 8 }} rows={5} value={snippetEdited} onChange={(e) => setSnippetEdited(e.target.value)} />
+                  <div className="review-snippet-actions">
+                    <button type="button" className="review-link-btn" onClick={() => setSnippetEdited(snippet.text)}>Revert to fetched</button>
+                    <button type="button" className="review-link-btn" onClick={() => setCleared(true)}>Clear</button>
+                  </div>
                 </div>
-              </GlassCard>
-            )}
-            {(!snippet || cleared) && (
-              <p style={{ fontSize: 12, opacity: 0.6 }}>
-                {pick.kind === "movie" ? "No cached review found for this title." : "No description available for this title."}
-              </p>
-            )}
-            <Button variant="primary" onClick={() => void finish()}>Add to my titles</Button>
-          </>
-        )}
+              ) : (
+                <p style={{ padding: "0 22px", fontSize: 12, color: "var(--rv-faint)" }}>
+                  {pick.kind === "movie" ? "No cached review found for this title." : "No description available for this title."}
+                </p>
+              )}
+              <div style={{ padding: "18px 22px 0" }}>
+                <button type="button" className="review-confirm-btn" onClick={() => void finish()}>Add to My Archive</button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
-    </PageShell>
+    </div>
   );
 }
 
@@ -506,7 +604,7 @@ function ReviewTitleDetail({
   const sendDiscussMessage = async () => {
     if (!discussDraft.trim() || !threadId || !selectedCharacterId) return;
     const mode = resolveDiscussMode(title);
-    const userMsg = addReviewDiscussionMessage({ threadId, authorType: "user", content: discussDraft.trim(), modeAtSend: mode });
+    addReviewDiscussionMessage({ threadId, authorType: "user", content: discussDraft.trim(), modeAtSend: mode });
     setMessages(loadReviewDiscussionMessages(threadId));
     setDiscussDraft("");
     setDiscussBusy(true);
@@ -520,7 +618,6 @@ function ReviewTitleDetail({
     } finally {
       setDiscussBusy(false);
     }
-    void userMsg;
   };
 
   const askForReview = async () => {
@@ -543,132 +640,147 @@ function ReviewTitleDetail({
   const selectedCharacter = characters.find((c) => c.id === selectedCharacterId) ?? null;
 
   return (
-    <PageShell
-      title={title.title}
-      onBack={onBack}
-      rightAction={
-        <Button variant="ghost" aria-label="Delete title" onClick={onDelete}>
-          <Trash2 size={18} strokeWidth={1.8} />
-        </Button>
-      }
-    >
-      <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: 12 }}>
-        <div style={{ display: "flex", gap: 12 }}>
-          <div style={{ width: 84, height: 124, borderRadius: 10, overflow: "hidden", flexShrink: 0, background: "var(--c-card, rgba(255,255,255,0.7))" }}>
-            {coverUrl && <img src={coverUrl} alt={title.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <strong>{title.title}</strong>
-            <span style={{ fontSize: 12, opacity: 0.65 }}>{title.creator}{title.year ? ` · ${title.year}` : ""}</span>
-            <div style={{ marginTop: 4 }}>
-              <span style={{ fontSize: 11, opacity: 0.6 }}>My rating</span>
-              <StarRating value={title.myRating?.value ?? 0} onChange={(next) => updateTitle({ myRating: makeReviewRating(next) })} size={16} />
-            </div>
-          </div>
+    <div className="review-app-page">
+      <div className="review-detail-hero">
+        {coverUrl && <img src={coverUrl} alt={title.title} />}
+        <div className="review-detail-hero-gradient" />
+        <div className="review-detail-hero-bar">
+          <button type="button" className="review-icon-btn" aria-label="Back" onClick={onBack}>
+            <ChevronLeft size={20} strokeWidth={1.8} />
+          </button>
+          <button type="button" className="review-icon-btn" aria-label="Delete title" onClick={onDelete}>
+            <Trash2 size={17} strokeWidth={1.8} />
+          </button>
         </div>
+        <div className="review-detail-hero-title-wrap">
+          <p className="review-detail-title">{title.title}</p>
+          <p className="review-detail-meta">{title.creator}{title.year ? ` · ${title.year}` : ""}</p>
+        </div>
+      </div>
 
-        <StatusPicker status={title.status} onChange={(status) => updateTitle({ status })} />
+      <div className="review-scroll">
+        <div className="review-detail-body">
+          <div className="review-rating-row">
+            <span className="review-rating-label">My Rating</span>
+            <StarRating value={title.myRating?.value ?? 0} onChange={(next) => updateTitle({ myRating: makeReviewRating(next) })} size={18} />
+          </div>
 
-        {title.grounding && title.grounding.status !== "cleared" && (
-          <GlassCard variant="section">
-            <strong style={{ fontSize: 12, opacity: 0.7 }}>{title.grounding.sourceLabel}</strong>
-            <p style={{ fontSize: 13, marginTop: 4 }}>{title.grounding.text}</p>
-          </GlassCard>
-        )}
+          <div className="review-status-row">
+            {STATUS_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                className="review-status-chip"
+                data-active={title.status === opt.id ? "true" : undefined}
+                onClick={() => updateTitle({ status: opt.id })}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
 
-        <GlassCard>
-          <strong style={{ fontSize: 13 }}>Journal</strong>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+          {title.grounding && title.grounding.status !== "cleared" && (
+            <div className="review-panel">
+              <span className="review-snippet-label">{title.grounding.sourceLabel}</span>
+              <p style={{ fontSize: 13, marginTop: 6, lineHeight: 1.55, color: "var(--rv-sub)" }}>{title.grounding.text}</p>
+            </div>
+          )}
+
+          <div className="review-panel">
+            <p className="review-panel-title">Journal</p>
             {journal.map((entry) => (
-              <div key={entry.id} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                <p style={{ fontSize: 13, margin: 0 }}>{entry.body}</p>
-                <button type="button" onClick={() => removeJournalEntry(entry.id)} style={{ background: "none", border: "none", opacity: 0.5 }}>
+              <div key={entry.id} className="review-journal-entry">
+                <p>{entry.body}</p>
+                <button type="button" className="review-journal-entry-del" onClick={() => removeJournalEntry(entry.id)}>
                   <X size={14} />
                 </button>
               </div>
             ))}
-            <Textarea value={journalDraft} onChange={(e) => setJournalDraft(e.target.value)} placeholder="Write down your thoughts..." rows={2} />
-            <Button variant="outline" onClick={addJournalEntry}>Add entry</Button>
+            <textarea
+              className="review-textarea"
+              style={{ marginTop: 10 }}
+              value={journalDraft}
+              onChange={(e) => setJournalDraft(e.target.value)}
+              placeholder="Write down your thoughts..."
+              rows={2}
+            />
+            <button type="button" className="review-ask-btn" style={{ marginTop: 8 }} onClick={addJournalEntry}>Add entry</button>
           </div>
-        </GlassCard>
 
-        <GlassCard>
-          <strong style={{ fontSize: 13 }}>Discuss</strong>
-          {characters.length === 0 ? (
-            <p style={{ fontSize: 12, opacity: 0.6 }}>No characters yet.</p>
-          ) : (
-            <>
-              <Select value={selectedCharacterId} onChange={(e) => setSelectedCharacterId(e.target.value)} style={{ marginTop: 8 }}>
-                {characters.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </Select>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8, maxHeight: 260, overflowY: "auto" }}>
-                {messages.map((msg, idx) => {
-                  const prevMode = idx > 0 ? messages[idx - 1].modeAtSend : msg.modeAtSend;
-                  const modeChanged = idx > 0 && prevMode !== msg.modeAtSend;
-                  return (
-                    <div key={msg.id}>
-                      {modeChanged && (
-                        <div style={{ fontSize: 10, opacity: 0.5, textAlign: "center", margin: "4px 0" }}>
-                          {msg.modeAtSend === "discuss_free" ? "-- now unrestricted (finished) --" : "-- back to spoiler-safe --"}
+          <div className="review-panel">
+            <p className="review-panel-title">Discuss</p>
+            {characters.length === 0 ? (
+              <p style={{ fontSize: 12, color: "var(--rv-faint)" }}>No characters yet.</p>
+            ) : (
+              <>
+                <select className="review-select" value={selectedCharacterId} onChange={(e) => setSelectedCharacterId(e.target.value)}>
+                  {characters.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <div className="review-discuss-thread">
+                  {messages.map((msg, idx) => {
+                    const prevMode = idx > 0 ? messages[idx - 1].modeAtSend : msg.modeAtSend;
+                    const modeChanged = idx > 0 && prevMode !== msg.modeAtSend;
+                    return (
+                      <div key={msg.id}>
+                        {modeChanged && (
+                          <div className="review-discuss-divider">
+                            {msg.modeAtSend === "discuss_free" ? "— now unrestricted (finished) —" : "— back to spoiler-safe —"}
+                          </div>
+                        )}
+                        <div className="review-discuss-row" data-mine={msg.authorType === "user" ? "true" : undefined}>
+                          <p className="review-discuss-bubble">{msg.content}</p>
                         </div>
-                      )}
-                      <div style={{ display: "flex", gap: 6, alignItems: "flex-start", flexDirection: msg.authorType === "user" ? "row-reverse" : "row" }}>
-                        {msg.authorType === "character" && <Avatar src={selectedCharacter?.avatar ?? undefined} name={selectedCharacter?.name ?? "?"} size="sm" />}
-                        <p style={{ fontSize: 13, background: "var(--c-card, rgba(255,255,255,0.7))", borderRadius: 10, padding: "6px 10px", margin: 0, maxWidth: "78%" }}>
-                          {msg.content}
-                        </p>
                       </div>
-                    </div>
-                  );
-                })}
-                {discussBusy && <p style={{ fontSize: 12, opacity: 0.5 }}>Typing...</p>}
-              </div>
-              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                <Input
-                  value={discussDraft}
-                  onChange={(e) => setDiscussDraft(e.target.value)}
-                  placeholder="Say something..."
-                  onKeyDown={(e) => { if (e.key === "Enter") void sendDiscussMessage(); }}
-                  disabled={discussBusy}
-                />
-                <Button variant="primary" onClick={() => void sendDiscussMessage()} disabled={discussBusy}>
-                  <Send size={16} />
-                </Button>
-              </div>
-            </>
-          )}
-        </GlassCard>
+                    );
+                  })}
+                  {discussBusy && <p style={{ fontSize: 12, color: "var(--rv-faint)" }}>Typing...</p>}
+                </div>
+                <div className="review-discuss-input-row">
+                  <input
+                    className="review-input"
+                    value={discussDraft}
+                    onChange={(e) => setDiscussDraft(e.target.value)}
+                    placeholder="Say something..."
+                    onKeyDown={(e) => { if (e.key === "Enter") void sendDiscussMessage(); }}
+                    disabled={discussBusy}
+                  />
+                  <button type="button" className="review-send-btn" onClick={() => void sendDiscussMessage()} disabled={discussBusy}>
+                    <Send size={16} />
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
 
-        <GlassCard>
-          <strong style={{ fontSize: 13 }}>Reviews</strong>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+          <div className="review-panel">
+            <p className="review-panel-title">Reviews</p>
             {reviews.map((review) => (
-              <div key={review.id}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <strong style={{ fontSize: 13 }}>{review.characterName}</strong>
+              <div key={review.id} className="review-published">
+                <div className="review-published-head">
+                  <span className="review-published-name">{review.characterName}</span>
                   <StarRating value={review.rating.value} readOnly size={14} />
                 </div>
-                <p style={{ fontSize: 13, fontStyle: "italic", margin: "4px 0" }}>{review.headline}</p>
+                <p className="review-published-headline">{review.headline}</p>
                 {review.body.map((para, i) => (
-                  <p key={i} style={{ fontSize: 13, margin: "4px 0" }}>{para}</p>
+                  <p key={i} className="review-published-body">{para}</p>
                 ))}
               </div>
             ))}
-            {reviewError && <p style={{ fontSize: 12, color: "var(--c-danger)" }}>{reviewError}</p>}
-            <Button variant="outline" onClick={() => void askForReview()} disabled={reviewBusy || !selectedCharacterId}>
+            {reviewError && <p style={{ fontSize: 12, color: "var(--rv-danger)" }}>{reviewError}</p>}
+            <button type="button" className="review-ask-btn" onClick={() => void askForReview()} disabled={reviewBusy || !selectedCharacterId}>
               {reviewBusy ? (
                 <>
-                  <RefreshCw size={14} className="animate-spin" /> Writing...
+                  <RefreshCw size={14} className="review-spin" /> Writing...
                 </>
               ) : (
                 `Ask ${selectedCharacter?.name ?? "them"} for their review`
               )}
-            </Button>
+            </button>
           </div>
-        </GlassCard>
+        </div>
       </div>
-    </PageShell>
+    </div>
   );
 }

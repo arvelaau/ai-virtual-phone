@@ -44,7 +44,7 @@ function cleanText(text: unknown): string {
 
 function moneyText(amount: unknown): string {
     return typeof amount === "number" && Number.isFinite(amount)
-        ? `¥${amount.toFixed(2).replace(/\.00$/, "")}`
+        ? `$${amount.toFixed(2).replace(/\.00$/, "")}`
         : "";
 }
 
@@ -230,7 +230,7 @@ function clipRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w:
     ctx.clip();
 }
 
-function drawMoneyIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, fill: string, text = "¥") {
+function drawMoneyIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, fill: string, text = "$") {
     ctx.fillStyle = fill;
     ctx.beginPath();
     ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
@@ -353,7 +353,7 @@ function renderTransferCard(part: ParsedMessagePart): string | null {
     drawMoneyIcon(ctx, 16, 23, 34, "rgba(255,255,255,0.22)");
     ctx.fillStyle = "#ffffff";
     ctx.font = canvasFont(800, 24);
-    ctx.fillText(moneyText(data.amount) || "¥0", 62, 38);
+    ctx.fillText(moneyText(data.amount) || "$0", 62, 38);
     ctx.font = canvasFont(500, 13);
     ctx.fillStyle = "rgba(255,255,255,0.86)";
     drawSingleLineText(ctx, cleanText(data.label) || "转账", 62, 59, 154);
@@ -384,7 +384,7 @@ function renderPaymentRequestCard(part: ParsedMessagePart): string | null {
     const canvasPack = makeCanvas(260, 132);
     if (!canvasPack) return null;
     const { canvas, ctx } = canvasPack;
-    const amountText = moneyText(data.amount) || (cleanText(data.paymentRequestAmountLabel) ? `¥${cleanText(data.paymentRequestAmountLabel)}` : "¥0");
+    const amountText = moneyText(data.amount) || (cleanText(data.paymentRequestAmountLabel) ? `$${cleanText(data.paymentRequestAmountLabel)}` : "$0");
     const itemsText = cleanText(data.paymentRequestItemsText)
         || (Array.isArray(data.paymentRequestItems)
             ? data.paymentRequestItems

@@ -5,6 +5,8 @@ import {
   DEFAULT_SHOPPING_SEARCH_PROMPT,
   SHOPPING_CN_DEFAULT_REFRESH_PROMPT,
   SHOPPING_CN_DEFAULT_SEARCH_PROMPT,
+  SHOPPING_PRE_USD_REFRESH_PROMPT,
+  SHOPPING_PRE_USD_SEARCH_PROMPT,
   findShoppingCategoryByTitle,
 } from "./shopping-engine";
 
@@ -31,8 +33,8 @@ function normalizeArray<T>(value: unknown, guard: (item: unknown) => T | null): 
 // loadInterviewHostPrompt()'s recognition list; see CLAUDE.md.
 //
 // Only ever ADD to these lists. Removing an entry re-strands whoever still has it stored.
-const SUPERSEDED_REFRESH_PROMPTS = [SHOPPING_CN_DEFAULT_REFRESH_PROMPT];
-const SUPERSEDED_SEARCH_PROMPTS = [SHOPPING_CN_DEFAULT_SEARCH_PROMPT];
+const SUPERSEDED_REFRESH_PROMPTS = [SHOPPING_CN_DEFAULT_REFRESH_PROMPT, SHOPPING_PRE_USD_REFRESH_PROMPT];
+const SUPERSEDED_SEARCH_PROMPTS = [SHOPPING_CN_DEFAULT_SEARCH_PROMPT, SHOPPING_PRE_USD_SEARCH_PROMPT];
 
 function normalizeRefreshPrompt(value: unknown): string {
   const prompt = cleanText(value, 12000);

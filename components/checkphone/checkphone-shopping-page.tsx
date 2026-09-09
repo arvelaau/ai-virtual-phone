@@ -87,7 +87,7 @@ function toProductDetail(
 }
 
 function parseShoppingAmount(label: string): number {
-  const match = label.replace(/[¥￥元,\s]/g, "").match(/-?\d+(?:\.\d+)?/);
+  const match = label.replace(/[¥￥元$,\s]/g, "").match(/-?\d+(?:\.\d+)?/);
   const amount = match ? Number(match[0]) : 0;
   return Number.isFinite(amount) ? amount : 0;
 }
@@ -100,7 +100,7 @@ function parseShoppingQuantity(label?: string): number {
 
 function formatShoppingAmount(amount: number): string {
   const safeAmount = Number.isFinite(amount) ? Math.max(0, amount) : 0;
-  return `¥${Number.isInteger(safeAmount) ? safeAmount : safeAmount.toFixed(2).replace(/\.00$/, "")}`;
+  return `$${Number.isInteger(safeAmount) ? safeAmount : safeAmount.toFixed(2).replace(/\.00$/, "")}`;
 }
 
 function getStableShoppingHash(value: string): number {

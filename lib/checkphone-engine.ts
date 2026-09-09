@@ -1862,7 +1862,7 @@ const CHECKPHONE_TAKEOUT_CATEGORIES: CheckPhoneTakeoutCategory[] = [
 
 function parseTakeoutAmount(value: string | undefined): number {
   if (!value) return Number.NaN;
-  const normalized = value.replace(/[¥￥元,\s]/g, "").trim();
+  const normalized = value.replace(/[¥￥元$,\s]/g, "").trim();
   return Number(normalized);
 }
 
@@ -2146,7 +2146,7 @@ function diagnoseTakeoutNormalizeFailure(payload: unknown): string {
 
 function parseSteamNumericField(value: string | undefined): number {
   if (!value) return Number.NaN;
-  const normalized = value.replace(/[¥￥元小时,\s]/g, "").trim();
+  const normalized = value.replace(/[¥￥元小时$,\s]/g, "").trim();
   const wanMatch = normalized.match(/^(-?\d+(?:\.\d+)?)万$/);
   if (wanMatch) return Math.round(Number(wanMatch[1]) * 10000);
   return Number(normalized);
