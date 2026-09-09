@@ -699,11 +699,13 @@ export function saveImageGenerationSettings(settings: ImageGenerationSettings): 
 
 export const DEFAULT_MEDIA_LOOKUP_SETTINGS: MediaLookupSettings = {
     tmdbApiKey: "",
+    googleBooksApiKey: "",
 };
 
 function normalizeMediaLookupSettings(settings: Partial<MediaLookupSettings> | null | undefined): MediaLookupSettings {
     return {
         tmdbApiKey: typeof settings?.tmdbApiKey === "string" ? settings.tmdbApiKey.trim() : "",
+        googleBooksApiKey: typeof settings?.googleBooksApiKey === "string" ? settings.googleBooksApiKey.trim() : "",
     };
 }
 

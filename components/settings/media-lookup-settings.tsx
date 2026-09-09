@@ -52,6 +52,20 @@ export function MediaLookupSettings() {
                         Book search uses Open Library and Google Books, both free and requiring no API key.
                     </span>
                 </div>
+                <div className="menu-group p-4 flex flex-col gap-1">
+                    <label className="menu-desc ml-1">Google Books API Key (optional)</label>
+                    <Input
+                        type="password"
+                        value={settings.googleBooksApiKey}
+                        onChange={(event) => update({ googleBooksApiKey: event.target.value })}
+                        placeholder="Get a free key from console.cloud.google.com"
+                    />
+                    <span className="menu-desc ml-1">
+                        Google Books works without a key, but its anonymous quota is shared across many
+                        callers and can return a &quot;429&quot; rate-limit error under load. Adding your
+                        own free key raises that limit. Open Library never needs one.
+                    </span>
+                </div>
             </div>
         </div>
     );

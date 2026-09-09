@@ -33,6 +33,16 @@ function normalizeProvider(value: string | null): BookProvider {
   return value === "open_library" ? "open_library" : "google_books";
 }
 
+// Optional -- Google Books' keyless/anonymous quota is shared across whoever else is calling it
+// from the same IP pool and can 429 quickly on shared hosting infra. A key (free from Google
+// Cloud Console) raises the ceiling substantially, but search still works without one.
+function resolveGoogleBooksApiKey(request: Request): string {
+  const envKey = process.env.GOOGLE_BOOKS_API_KEY;
+  if (envKey && envKey.trim()) return envKey.trim();
+  const url = new URL(request.url);
+  return (url.searchParams.get("apiKey") || "").trim();
+}
+
 function asDescriptionText(description: unknown): string {
   if (typeof description === "string") return description;
   if (description && typeof description === "object" && "value" in description) {
@@ -100,8 +110,9 @@ async function detailOpenLibrary(id: string): Promise<BookDetail> {
   };
 }
 
-async function searchGoogleBooks(query: string): Promise<BookSearchResult[]> {
-  const response = await fetch(`${GOOGLE_BOOKS_BASE_URL}?q=${encodeURIComponent(query)}&maxResults=20`, {
+async function searchGoogleBooks(query: string, apiKey: string): Promise<BookSearchResult[]> {
+  const keyParam = apiKey ? `&key=${encodeURIComponent(apiKey)}` : "";
+  const response = await fetch(`${GOOGLE_BOOKS_BASE_URL}?q=${encodeURIComponent(query)}&maxResults=20${keyParam}`, {
     headers: { Accept: "application/json" },
   });
   if (!response.ok) throw new Error(`Google Books request failed (${response.status})`);
@@ -122,8 +133,9 @@ async function searchGoogleBooks(query: string): Promise<BookSearchResult[]> {
   });
 }
 
-async function detailGoogleBooks(id: string): Promise<BookDetail> {
-  const response = await fetch(`${GOOGLE_BOOKS_BASE_URL}/${encodeURIComponent(id)}`, { headers: { Accept: "application/json" } });
+async function detailGoogleBooks(id: string, apiKey: string): Promise<BookDetail> {
+  const keyParam = apiKey ? `?key=${encodeURIComponent(apiKey)}` : "";
+  const response = await fetch(`${GOOGLE_BOOKS_BASE_URL}/${encodeURIComponent(id)}${keyParam}`, { headers: { Accept: "application/json" } });
   if (!response.ok) throw new Error(`Google Books request failed (${response.status})`);
   const data = (await response.json()) as Record<string, unknown>;
   const volumeInfo = (data.volumeInfo && typeof data.volumeInfo === "object" ? data.volumeInfo : {}) as Record<string, unknown>;
@@ -151,17 +163,18 @@ export async function GET(request: Request) {
   const query = url.searchParams.get("query") || "";
   const id = url.searchParams.get("id") || "";
   const provider = normalizeProvider(url.searchParams.get("provider"));
+  const googleBooksApiKey = resolveGoogleBooksApiKey(request);
 
   try {
     if (action === "search") {
       if (!query.trim()) return jsonError("A search query is required.");
-      const results = provider === "open_library" ? await searchOpenLibrary(query.trim()) : await searchGoogleBooks(query.trim());
+      const results = provider === "open_library" ? await searchOpenLibrary(query.trim()) : await searchGoogleBooks(query.trim(), googleBooksApiKey);
       return NextResponse.json({ ok: true, results });
     }
 
     if (action === "detail") {
       if (!id.trim()) return jsonError("A book id is required.");
-      const detail = provider === "open_library" ? await detailOpenLibrary(id.trim()) : await detailGoogleBooks(id.trim());
+      const detail = provider === "open_library" ? await detailOpenLibrary(id.trim()) : await detailGoogleBooks(id.trim(), googleBooksApiKey);
       return NextResponse.json({ ok: true, detail });
     }
 

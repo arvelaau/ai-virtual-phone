@@ -100,6 +100,10 @@ export async function searchBooks(
   provider: "open_library" | "google_books" = "google_books",
 ): Promise<MediaLookupResult<MediaSearchResult[]>> {
   const params = new URLSearchParams({ action: "search", query, provider });
+  if (provider === "google_books") {
+    const apiKey = loadMediaLookupSettings().googleBooksApiKey;
+    if (apiKey) params.set("apiKey", apiKey);
+  }
   const response = await fetch(`/api/media-lookup/book?${params.toString()}`);
   const data = await readJson(response);
   if (!response.ok || data.ok === false) return { ok: false, error: String(data.error ?? "search_failed") };
@@ -123,6 +127,10 @@ export async function detailBook(
   provider: "open_library" | "google_books" = "google_books",
 ): Promise<MediaLookupResult<{ detail: MediaDetail; grounding: ReviewGroundingSnippet | null }>> {
   const params = new URLSearchParams({ action: "detail", id, provider });
+  if (provider === "google_books") {
+    const apiKey = loadMediaLookupSettings().googleBooksApiKey;
+    if (apiKey) params.set("apiKey", apiKey);
+  }
   const response = await fetch(`/api/media-lookup/book?${params.toString()}`);
   const data = await readJson(response);
   if (!response.ok || data.ok === false) return { ok: false, error: String(data.error ?? "detail_failed") };

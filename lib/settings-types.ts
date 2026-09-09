@@ -175,8 +175,12 @@ export type ImageGenerationSettings = {
 // --- Media Lookup (movie/book metadata for the Review app) ---
 // Open Library and Google Books need no key at all; only TMDB (movies) requires one, which
 // the user registers themselves, mirroring ImageHostingSettings.imgbbApiKey above.
+// googleBooksApiKey is optional -- Google Books' keyless quota is shared/anonymous and can be
+// exhausted quickly (a 429 was observed from this app's own hosting infra), so a key is offered
+// to raise the ceiling, but book search still works without one, unlike TMDB's required key.
 export type MediaLookupSettings = {
     tmdbApiKey: string;
+    googleBooksApiKey: string;
 };
 
 // --- Configuration Binding System ---

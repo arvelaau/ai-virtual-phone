@@ -3874,6 +3874,40 @@ route through — was already directly source-verified and confirmed working in 
 similar Transfer modal); a live checkphone-shopping generation showing real `$`-priced products
 end-to-end also needs a bound API this environment doesn't have.
 
+## Review app — optional Google Books API key, fixing a real user-hit 429: DONE (2026-09-10)
+User-reported: searching a book (e.g. "the mistake") returned "Google Books request failed
+(429)". **Diagnosed, not assumed**: the route's error handling was already correct — it caught
+the real, honest `429 Too Many Requests` Google's own server returned and surfaced it rather than
+failing silently or mis-parsing anything. This is the same 429 already recorded in this file's own
+Review-app verification section from the day before ("Google Books returned a genuine 429..."),
+which is corroborating evidence it's a persistent quota issue with this environment's outbound
+IP, not a one-off. Google Books' keyless/anonymous quota is shared across every caller on the
+same IP pool; on shared hosting infra that pool fills up fast.
+
+**Fix, mirroring the existing TMDB-key pattern but optional rather than required** (Google Books
+search already works without a key today — a required key would have been a regression, not a
+fix): `MediaLookupSettings` gained `googleBooksApiKey: string` (`lib/settings-types.ts`,
+`lib/settings-storage.ts`'s default/normalize pair); `app/api/media-lookup/book/route.ts` gained
+`resolveGoogleBooksApiKey()` (env `GOOGLE_BOOKS_API_KEY` override, else a client-supplied
+`apiKey` query param — same precedence as `resolveApiKey` in the movie route), threaded through
+`searchGoogleBooks`/`detailGoogleBooks` as an optional `&key=` URL param (empty string when
+absent, so behavior is unchanged for anyone who doesn't set one); `lib/review-lookup-client.ts`'s
+`searchBooks`/`detailBook` read the key from settings and attach it only when
+`provider === "google_books"` (Open Library never needs one, untouched). Settings UI
+(`components/settings/media-lookup-settings.tsx`) gained a "Google Books API Key (optional)"
+field under the existing "Books" section, explicitly explaining the 429 and that it's optional.
+
+**Immediate workaround told to the user, independent of the code fix**: the New Film Journal
+search screen's provider `<select>` (shown only when "Book" is selected) can be switched from
+"Google Books" to "Open Library", which has no such quota ceiling.
+
+**Verification**: `npx tsc --noEmit` clean, `npm run build` clean, all 25 repo fixtures
+unaffected (none reference `MediaLookupSettings`), control-character sweep clean on all 5 touched
+files. **Not verified live**: no real Google Books API key was obtained/tested in this
+environment, so the actual quota-raising effect is unconfirmed beyond the URL being constructed
+correctly; the review-app's own three fixtures don't cover this settings surface, and adding one
+was judged unnecessary for a five-line, directly-inspectable URL-building change.
+
 ## Still open / not yet done
 - ~~**Custom app imports**~~ — **DONE (2026-08-23), all 9 translated.** Zips in `App\translated\*-EN.zip`; see the CUSTOM APP IMPORTS section. Not installed — the user installs them through the App Market.
 - **`memory.add` provenance** — a custom app can write a long-term memory for any character and shared memory will lend it on. ⚠️ **Correction to how this was first recorded**: nothing needs stamping. `addCustomAppMemory` already writes `id: custom_app_${app.id}_…` **and** `metadata: { origin: "custom_app", appId, appName, reason }`; only `sourceApp` is hardcoded to `"chat"`. The open question is narrower than it looked — should `selectBorrowableMemories` skip entries whose `metadata.origin === "custom_app"`? Awaiting a decision; the marker to filter on already exists.
