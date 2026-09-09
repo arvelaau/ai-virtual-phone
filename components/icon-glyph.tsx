@@ -38,6 +38,7 @@ import {
   mdiAccount,
   mdiHome,
   mdiCardsOutline,
+  mdiStarBoxMultipleOutline,
 } from "@mdi/js";
 
 type IconGlyphProps = {
@@ -73,6 +74,7 @@ const MDI_PATHS: Record<IconId, string> = {
   characters: mdiAccount,
   dwelling: mdiHome,
   studio: mdiCardsOutline,
+  review: mdiStarBoxMultipleOutline,
 };
 
 export function IconGlyph({ id, className }: IconGlyphProps) {

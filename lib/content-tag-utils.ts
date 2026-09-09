@@ -49,6 +49,9 @@ const EXTRA_TAG_LABELS: Record<string, string> = {
     article: "Published issue",
     archive: "Close chapter",
     write: "Draft writing",
+    review: "Review",
+    discuss_safe: "Discuss (spoiler-safe)",
+    discuss_free: "Discuss (unrestricted)",
 };
 
 export type TagProfile = {
@@ -202,6 +205,17 @@ export const CONTENT_SCOPE_TAG_GROUPS: TagGroupProfile[] = [
             profile("cocreate", "write", "Draft writing", ["cocreate", "write"]),
             profile("cocreate", "discuss", "Discuss", ["cocreate", "discuss"]),
             profile("cocreate", "action", "Executable actions", ["cocreate", "action"]),
+        ],
+    },
+    {
+        id: "review",
+        label: "Review",
+        tags: ["review"],
+        minors: [
+            commonMinor("review", ["review"]),
+            profile("review", "discuss_safe", "Discuss (spoiler-safe)", ["review", "discuss_safe"]),
+            profile("review", "discuss_free", "Discuss (unrestricted)", ["review", "discuss_free"]),
+            profile("review", "write", "Write review", ["review", "write"]),
         ],
     },
 ];

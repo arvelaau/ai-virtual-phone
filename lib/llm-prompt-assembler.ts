@@ -166,6 +166,15 @@ export interface AssemblerInput {
     cocreateChapterIndex?: string;
     cocreateArchivedChapterContext?: string;
     cocreateWriterNotebook?: string;
+    reviewTitleKind?: string;
+    reviewTitle?: string;
+    reviewYear?: string;
+    reviewCreator?: string;
+    reviewOverview?: string;
+    reviewGroundingLabel?: string;
+    reviewGroundingText?: string;
+    reviewJournalHistory?: string;
+    reviewDiscussionHistory?: string;
 }
 
 type PromptBlock = {
@@ -767,6 +776,15 @@ export function assemblePromptPayload(input: AssemblerInput): LLMMessage[] {
         engine.cocreateChapterIndex = input.cocreateChapterIndex ?? "";
         engine.cocreateArchivedChapterContext = input.cocreateArchivedChapterContext ?? "";
         engine.cocreateWriterNotebook = input.cocreateWriterNotebook ?? "";
+        engine.reviewTitleKind = input.reviewTitleKind ?? "";
+        engine.reviewTitle = input.reviewTitle ?? "";
+        engine.reviewYear = input.reviewYear ?? "";
+        engine.reviewCreator = input.reviewCreator ?? "";
+        engine.reviewOverview = input.reviewOverview ?? "";
+        engine.reviewGroundingLabel = input.reviewGroundingLabel ?? "";
+        engine.reviewGroundingText = input.reviewGroundingText ?? "";
+        engine.reviewJournalHistory = input.reviewJournalHistory ?? "";
+        engine.reviewDiscussionHistory = input.reviewDiscussionHistory ?? "";
 
         const userPersonaText = buildUserPersonaText(userIdentity, resolvedUserName);
         const processingOrder = buildProcessingOrder(preset!);
@@ -1014,6 +1032,15 @@ export function assemblePromptPayload(input: AssemblerInput): LLMMessage[] {
         engine.cocreateCurrentChapter = input.cocreateCurrentChapter ?? "";
         engine.cocreateChapterIndex = input.cocreateChapterIndex ?? "";
         engine.cocreateArchivedChapterContext = input.cocreateArchivedChapterContext ?? "";
+        engine.reviewTitleKind = input.reviewTitleKind ?? "";
+        engine.reviewTitle = input.reviewTitle ?? "";
+        engine.reviewYear = input.reviewYear ?? "";
+        engine.reviewCreator = input.reviewCreator ?? "";
+        engine.reviewOverview = input.reviewOverview ?? "";
+        engine.reviewGroundingLabel = input.reviewGroundingLabel ?? "";
+        engine.reviewGroundingText = input.reviewGroundingText ?? "";
+        engine.reviewJournalHistory = input.reviewJournalHistory ?? "";
+        engine.reviewDiscussionHistory = input.reviewDiscussionHistory ?? "";
 
             preset.prompts.forEach((p, idx) => {
                 if (p.enabled && !p.marker) {

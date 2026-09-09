@@ -12,7 +12,8 @@ export type ThemeAssetType =
   | "chat_bg"
   | "sticker"
   | "vn_scene"
-  | "vn_sprite";
+  | "vn_sprite"
+  | "review_cover";
 
 /* ═══════════════════════════════════════════
    Icon skin scheme (multi-scheme preserved)

@@ -7,6 +7,7 @@ import type {
     ApiConfig,
     VoiceApiConfig,
     ImageGenerationSettings,
+    MediaLookupSettings,
     BindingConfig,
     BindingSlot,
     CharacterBinding,
@@ -64,6 +65,7 @@ function isUnsupportedWorldBookFormat(obj: Record<string, unknown>): boolean {
 const API_CONFIGS_KEY = "ai_phone_api_configs_v1";
 const VOICE_CONFIGS_KEY = "ai_phone_voice_configs_v1";
 const IMAGE_GENERATION_SETTINGS_KEY = "ai_phone_image_generation_settings_v1";
+const MEDIA_LOOKUP_SETTINGS_KEY = "ai_phone_media_lookup_settings_v1";
 const BINDINGS_KEY = "ai_phone_bindings_v1";
 const FOLLOW_UP_CONFIG_KEY = "ai_phone_follow_up_config_v1";
 const CHAT_SEND_CONFIG_KEY = "ai_phone_chat_send_config_v1";
@@ -74,6 +76,7 @@ const LEGACY_OVERRIDES_KEY = "ai_phone_char_settings_v1";
 registerKvMigration(API_CONFIGS_KEY);
 registerKvMigration(VOICE_CONFIGS_KEY);
 registerKvMigration(IMAGE_GENERATION_SETTINGS_KEY);
+registerKvMigration(MEDIA_LOOKUP_SETTINGS_KEY);
 registerKvMigration(BINDINGS_KEY);
 registerKvMigration(FOLLOW_UP_CONFIG_KEY);
 registerKvMigration(CHAT_SEND_CONFIG_KEY);
@@ -690,6 +693,34 @@ export function saveImageGenerationSettings(settings: ImageGenerationSettings): 
     if (typeof window === "undefined") return;
     kvSet(IMAGE_GENERATION_SETTINGS_KEY, JSON.stringify(normalizeImageGenerationSettings(settings)));
     window.dispatchEvent(new CustomEvent("settings-image-generation-updated"));
+}
+
+// --- Media Lookup Settings (Review app) ─────────────────────────────────
+
+export const DEFAULT_MEDIA_LOOKUP_SETTINGS: MediaLookupSettings = {
+    tmdbApiKey: "",
+};
+
+function normalizeMediaLookupSettings(settings: Partial<MediaLookupSettings> | null | undefined): MediaLookupSettings {
+    return {
+        tmdbApiKey: typeof settings?.tmdbApiKey === "string" ? settings.tmdbApiKey.trim() : "",
+    };
+}
+
+export function loadMediaLookupSettings(): MediaLookupSettings {
+    if (typeof window === "undefined") return { ...DEFAULT_MEDIA_LOOKUP_SETTINGS };
+    try {
+        const raw = kvGet(MEDIA_LOOKUP_SETTINGS_KEY);
+        if (!raw) return { ...DEFAULT_MEDIA_LOOKUP_SETTINGS };
+        return normalizeMediaLookupSettings(JSON.parse(raw) as Partial<MediaLookupSettings>);
+    } catch {
+        return { ...DEFAULT_MEDIA_LOOKUP_SETTINGS };
+    }
+}
+
+export function saveMediaLookupSettings(settings: MediaLookupSettings): void {
+    if (typeof window === "undefined") return;
+    kvSet(MEDIA_LOOKUP_SETTINGS_KEY, JSON.stringify(normalizeMediaLookupSettings(settings)));
 }
 
 // --- Binding Config ──────────────────────────────────────────

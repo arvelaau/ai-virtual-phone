@@ -1,4 +1,4 @@
-import { jsonrepair } from "jsonrepair";
+import { parseJsonLike } from "./llm-json-parse";
 
 import { loadCharacters } from "./character-storage";
 import type { Character } from "./character-types";
@@ -83,26 +83,6 @@ function cleanArray(value: unknown, maxItems: number, maxLength: number): string
     .map((item) => cleanText(item, maxLength))
     .filter(Boolean)
     .slice(0, maxItems);
-}
-
-function parseJsonLike<T>(raw: string): T | null {
-  const source = raw
-    .replace(/<think>[\s\S]*?<\/think>/gi, "")
-    .replace(/```(?:json)?\s*([\s\S]*?)```/i, "$1")
-    .trim();
-  const first = source.indexOf("{");
-  const last = source.lastIndexOf("}");
-  const candidate = first >= 0 && last > first ? source.slice(first, last + 1) : source;
-
-  try {
-    return JSON.parse(candidate) as T;
-  } catch {
-    try {
-      return JSON.parse(jsonrepair(candidate)) as T;
-    } catch {
-      return null;
-    }
-  }
 }
 
 export function makeInterviewMessage(

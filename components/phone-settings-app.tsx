@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, createContext, type CSSProperties, type ReactNode } from "react";
-import { ArrowUpDown, Bell, Check, ChevronRight, Clock, Database, FileText, Fingerprint, Globe, HardDrive, Image, Info, KeyRound, Layers, Link2, Loader2, LogOut, MessageSquare, Mic, SlidersHorizontal, UserCircle, Wrench, X } from "lucide-react";
+import { ArrowUpDown, Bell, Check, ChevronRight, Clapperboard, Clock, Database, FileText, Fingerprint, Globe, HardDrive, Image, Info, KeyRound, Layers, Link2, Loader2, LogOut, MessageSquare, Mic, SlidersHorizontal, UserCircle, Wrench, X } from "lucide-react";
 import { ConfirmDialog } from "./ui/modal";
 import { useAccount } from "@/lib/account-context";
 import { changeAccountPassword } from "@/lib/account-client";
 import { ApiSettings } from "./settings/api-settings";
 import { VoiceSettings } from "./settings/voice-settings";
 import { ImageGenerationSettings } from "./settings/image-generation-settings";
+import { MediaLookupSettings } from "./settings/media-lookup-settings";
 import { PresetManager } from "./settings/preset-manager";
 import { WorldBookManager } from "./settings/worldbook-manager";
 import { RegexManager } from "./settings/regex-manager";
@@ -52,6 +53,7 @@ type SubPage =
     | "weixin"
     | "toolbox"
     | "proactivePush"
+    | "mediaLookup"
     | "moderation"
     | "about";
 
@@ -67,6 +69,7 @@ const SETTINGS_MENU = [
     { id: "weixin", icon: MessageSquare, label: "WeChat Integration", desc: "iLink Bot", iconColor: CONTENT_APP_ACCENTS.chat },
     { id: "toolbox", icon: Wrench, label: "Chat Toolbox", desc: "External tool calls", iconColor: BINDING_ACCENTS.voice },
     { id: "proactivePush", icon: Bell, label: "Proactive Push", desc: "Notifications that arrive even when the app is closed", iconColor: CONTENT_APP_ACCENTS.calendar },
+    { id: "mediaLookup", icon: Clapperboard, label: "Media Lookup", desc: "TMDB / Open Library / Google Books for the Review app", iconColor: CONTENT_APP_ACCENTS.moments },
     { id: "identity", icon: UserCircle, label: "User Identity", desc: "Personal info", iconColor: BINDING_ACCENTS.identity },
     { id: "about", icon: Info, label: "About & Disclaimer", desc: "Version & terms", iconColor: BINDING_ACCENTS.memory },
 ] as const;
@@ -264,6 +267,8 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                 return <VoiceSettings />;
             case "imageGeneration":
                 return <ImageGenerationSettings />;
+            case "mediaLookup":
+                return <MediaLookupSettings />;
             case "presets":
                 return <PresetManager isActive />;
             case "worldbook":
@@ -374,7 +379,7 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                         <CardGrid
                             label="Connections"
                             labelClassName="settings-menu-section-title"
-                            items={SETTINGS_MENU.filter(item => ["weixin", "toolbox", "proactivePush"].includes(item.id)).map(makeCardItem)}
+                            items={SETTINGS_MENU.filter(item => ["weixin", "toolbox", "proactivePush", "mediaLookup"].includes(item.id)).map(makeCardItem)}
                         />
                         <div className="settings-realtime-section">
                             <h3 className="settings-menu-section-title">Realtime</h3>

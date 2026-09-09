@@ -99,6 +99,15 @@ export class MacroEngine {
     cocreateChapterIndex: string = "";
     cocreateArchivedChapterContext: string = "";
     cocreateWriterNotebook: string = "";
+    reviewTitleKind: string = "";
+    reviewTitle: string = "";
+    reviewYear: string = "";
+    reviewCreator: string = "";
+    reviewOverview: string = "";
+    reviewGroundingLabel: string = "";
+    reviewGroundingText: string = "";
+    reviewJournalHistory: string = "";
+    reviewDiscussionHistory: string = "";
 
     constructor(charName: string, userName: string) {
         this.charName = charName;
@@ -234,6 +243,15 @@ export class MacroEngine {
         if (body === "cocreateChapterIndex") return this.cocreateChapterIndex || "No chapter index yet.";
         if (body === "cocreateArchivedChapterContext") return this.cocreateArchivedChapterContext || "No finished chapters yet.";
         if (body === "cocreateWriterNotebook") return this.cocreateWriterNotebook || "No notes yet.";
+        if (body === "reviewTitleKind") return this.reviewTitleKind || "\x00TRIM\x00";
+        if (body === "reviewTitle") return this.reviewTitle || "\x00TRIM\x00";
+        if (body === "reviewYear") return this.reviewYear || "\x00TRIM\x00";
+        if (body === "reviewCreator") return this.reviewCreator || "\x00TRIM\x00";
+        if (body === "reviewOverview") return this.reviewOverview || "\x00TRIM\x00";
+        if (body === "reviewGroundingLabel") return this.reviewGroundingLabel || "\x00TRIM\x00";
+        if (body === "reviewGroundingText") return this.reviewGroundingText || "(no external review or description available)";
+        if (body === "reviewJournalHistory") return this.reviewJournalHistory || "(no journal entries yet)";
+        if (body === "reviewDiscussionHistory") return this.reviewDiscussionHistory || "(no discussion yet)";
 
         // realCharacterList — the other characters the user has created (excluding the current one),
         // used by Moments and similar surfaces to decide what counts as a "real character"

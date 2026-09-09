@@ -1245,6 +1245,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
     const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
     const [showConfirmMultiDelete, setShowConfirmMultiDelete] = useState(false);
+    const [pendingOfflineConfirm, setPendingOfflineConfirm] = useState<"enter" | "exit" | null>(null);
     const [expandedMonologueId, setExpandedThinkingId] = useState<string | null>(null);
     // 思维链底部弹窗：存当前查看的 reasoning 文本，null = 关闭
     const [reasoningSheetText, setReasoningSheetText] = useState<string | null>(null);
@@ -4009,15 +4010,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         }
     };
 
-    const toggleOfflineMode = () => {
-        if (!offlineMode && isGenerating) {
-            showChatToast("Please wait for a reply first");
-            return;
-        }
-        if (offlineMode && isOfflineGenerating) {
-            showChatToast("Generating offline reply");
-            return;
-        }
+    const performToggleOfflineMode = () => {
         cancelFollowUp(session.id);
         setShowPlusMenu(false);
         setShowEmojiPanel(false);
@@ -4044,6 +4037,18 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         if (ended && ended.turnCount > 0) {
             void finalizeOfflineSessionSummary(ended.session);
         }
+    };
+
+    const toggleOfflineMode = () => {
+        if (!offlineMode && isGenerating) {
+            showChatToast("Please wait for a reply first");
+            return;
+        }
+        if (offlineMode && isOfflineGenerating) {
+            showChatToast("Generating offline reply");
+            return;
+        }
+        setPendingOfflineConfirm(offlineMode ? "exit" : "enter");
     };
 
     const toggleTheaterMode = () => {
@@ -6080,6 +6085,21 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 onSendSticker={(name, url) => { setShowStickerPanel(false); sendRichMessage("sticker", { label: name, stickerUrl: url }); }}
             />
             ))}
+
+            {pendingOfflineConfirm && (
+                <ConfirmDialog
+                    title={pendingOfflineConfirm === "enter" ? "Enter offline mode?" : "Exit offline mode?"}
+                    message={pendingOfflineConfirm === "enter"
+                        ? "You'll step away from the live chat. Messages sent here happen while you're both offline, and won't interrupt your regular conversation."
+                        : "You'll return to the live chat. This visit will be summarized and added to your history."}
+                    icon={AlertCircle}
+                    variant="action"
+                    confirmLabel={pendingOfflineConfirm === "enter" ? "Enter" : "Exit"}
+                    cancelLabel="Cancel"
+                    onConfirm={() => { performToggleOfflineMode(); setPendingOfflineConfirm(null); }}
+                    onCancel={() => setPendingOfflineConfirm(null)}
+                />
+            )}
 
             {showConfirmMultiDelete && (
                 <ConfirmDialog

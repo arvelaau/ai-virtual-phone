@@ -172,6 +172,13 @@ export type ImageGenerationSettings = {
     imageHosting: ImageHostingSettings;
 };
 
+// --- Media Lookup (movie/book metadata for the Review app) ---
+// Open Library and Google Books need no key at all; only TMDB (movies) requires one, which
+// the user registers themselves, mirroring ImageHostingSettings.imgbbApiKey above.
+export type MediaLookupSettings = {
+    tmdbApiKey: string;
+};
+
 // --- Configuration Binding System ---
 
 // Content apps that can have per-character bindings.
@@ -179,13 +186,13 @@ export type ContentAppId =
     | "chat" | "diary" | "music" | "reading"
     | "forum" | "cocreate" | "story" | "game" | "xiaohongshu" | "dwelling"
     | "checkphone" | "shopping" | "calendar" | "interview_magazine"
-    | "moments" | "group_chat" | "vn" | "adventure";
+    | "moments" | "group_chat" | "vn" | "adventure" | "review";
 
 export const CONTENT_APP_IDS: ContentAppId[] = [
     "chat", "diary", "music", "reading",
     "cocreate", "story", "game", "xiaohongshu", "dwelling",
     "checkphone", "shopping", "calendar", "interview_magazine",
-    "moments", "group_chat", "vn", "adventure"
+    "moments", "group_chat", "vn", "adventure", "review"
 ];
 
 // Display only — the app names shown in Binding Manager and, via content-tag-utils.ts,
@@ -210,6 +217,7 @@ export const CONTENT_APP_LABELS: Record<ContentAppId, string> = {
     group_chat: "Group Chat",
     vn: "Visual Novel",
     adventure: "Adventure",
+    review: "Review",
 };
 
 // Binding slot — config selections for a given scope

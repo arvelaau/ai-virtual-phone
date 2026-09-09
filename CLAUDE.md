@@ -3521,6 +3521,172 @@ been observed. The drag-free multi-day event save path (create an event spanning
 confirm one schedule item per day, confirm a cross-week move works) was reviewed in source but
 not exercised in the browser.
 
+## Movie/Book Review app — built from a planning-only spec: DONE (2026-09-09)
+Section 2.3 of `PROACTIVE-MESSAGE-2.0-PLAN.md` (planning-only until now) is implemented: add a
+film or book (TMDB / Open Library / Google Books, or manual entry with a custom cover), keep a
+personal journal about it, discuss it with a chosen character in two spoiler-gated modes, set
+your own personal star rating, and have the character publish its own independent
+rating/review — honestly grounded in metadata, a cached real-review/description snippet, and
+whatever you've shared — despite never having watched or read it itself.
+
+Full architecture research (3 parallel Explore agents + 1 Plan agent, cross-checked against the
+actual source before finalizing — corrected the agent's proposed desktop page from
+`PAGE_2_DEFAULT` to `PAGE_3_DEFAULT`, the only lightly-loaded page) was written to a plan file
+and approved before any code; see that plan's own "Architecture decisions" section for the
+full reasoning. Six build stages, in dependency order:
+
+**Stage 0 — shared groundwork.** Extracted `lib/llm-json-parse.ts`'s `parseJsonLike<T>()` out of
+`lib/interview-magazine-engine.ts` (pure extraction, zero behavior change) so the review-write
+step has a second, non-duplicated consumer of the same strip-fence/extract-braces/`jsonrepair`
+logic. `lib/checkphone-json-repair.ts`'s richer, diagnostic-carrying API was deliberately left
+alone — different shape, tightly coupled to its own callers.
+
+**Stage 1 — types + local storage.** `lib/review-types.ts` (`ReviewTitle` unifies movie/book via
+a `kind` discriminant rather than two parallel tables — journal/discussion/reviews all key off
+`titleId` regardless of kind), `lib/review-storage.ts` (pure `kv-db` CRUD mirroring
+`lib/diary-entry-storage.ts`'s shape — deliberately **not** `notewall`'s Supabase-backed shape,
+since a personal review journal needs no cross-user sync). `ReviewGroundingSnippet.sourceLabel:
+"Review" | "Description"` is the mechanism behind the plan's own book/movie asymmetry: TMDB has
+real audience reviews, Google Books only has a publisher synopsis, so the UI is told which one
+it's showing rather than overclaiming. `ReviewTitle.myRating` is the user's own personal rating,
+independent of any character's `PublishedReview.rating` — added mid-planning after the user
+explicitly asked for dual ratings (character + personal), not just the character's.
+
+**Stage 2 — external metadata lookup.** `MediaLookupSettings.tmdbApiKey` (new, in
+`lib/settings-types.ts`/`settings-storage.ts`, mirroring `ImageHostingSettings.imgbbApiKey`'s
+shape exactly) + a Settings page (`components/settings/media-lookup-settings.tsx`, wired into
+`phone-settings-app.tsx`'s "Connections" card group next to WeChat/Toolbox/Proactive Push).
+`app/api/media-lookup/movie/route.ts` (TMDB search/detail/review, key precedence
+`process.env.TMDB_API_KEY || <client-supplied>` matching ImgBB's route) and `.../book/route.ts`
+(Open Library + Google Books, no key gating at all — confirmed via the plan's own research that
+neither needs one). Missing TMDB key returns the exact string `"missing_tmdb_key"` at status
+**503**, mirroring `missing_supabase_env`'s pattern; the UI catches that exact string and shows
+"add your TMDB key in Settings" instead of a raw error. `lib/review-lookup-client.ts` is the only
+place the UI talks to these two routes. `"review_cover"` added to `ThemeAssetType`
+(`lib/theme-types.ts`) — both an auto-fetched poster (fetched as a URL, converted to a `Blob`,
+then `saveThemeAssetFromBlob`) and a manually-uploaded cover go through the same existing asset
+store, no new image infrastructure.
+
+**Stage 3 — engine + preset layer.** Three new tagged preset entries in `lib/builtin-preset.ts`
+near `reading_annotation`/`reading_discuss`: `review_discuss_safe` (tags `["review",
+"discuss_safe"]`, explicit spoiler guardrail), `review_discuss_free` (tags `["review",
+"discuss_free"]`, guardrail lifted), `review_write` (tags `["review","write"]`, teaches a literal
+JSON contract — `{"rating":N,"headline":"...","body":["...","..."]}` — directly in a normal,
+persona-respecting preset entry, the same "teach structured output inline, no bypass" idea
+`checkphone_shopping` uses, just with JSON instead of that entry's own bracket-field format).
+**`BUILTIN_PRESET_VERSION` bumped 283 → 284** — required, or the three entries are dead code per
+this file's own standing trap. All three go through the **real** preset system
+(`assemblePromptPayload` + `sendLLMRequest`, not `interview-magazine`'s host-bypass shape),
+deliberately, so a review sounds like the reviewing character's own persona rather than a
+neutral narrator's. New `AssemblerInput` macro fields (`reviewTitleKind/Title/Year/Creator/
+Overview/GroundingLabel/GroundingText/JournalHistory/DiscussionHistory`) added at **both**
+expansion sites in `lib/llm-prompt-assembler.ts` (1:1 and group) and as `\x00TRIM\x00`-sentinel
+resolvers in `lib/macro-engine.ts`. `"review"` registered as a `ContentAppId`
+(`lib/settings-types.ts`) with a `CONTENT_APP_LABELS`/`CONTENT_APP_ACCENTS` entry, and a
+`TagGroupProfile` in `lib/content-tag-utils.ts`'s `CONTENT_SCOPE_TAG_GROUPS` with one minor per
+tag pair — Binding Manager needed this because the app makes its own LLM calls.
+`lib/review-engine.ts` resolves the API config the same three-call way
+`interview-magazine-engine.ts:255-274` does (`loadBindingConfig`+`loadApiConfigs`+
+`resolveBinding(bindings, characterId, "review")`), and exports a pure
+`parseReviewWriteResponse()` (extracted specifically so the JSON-contract parsing is
+fixture-testable without a live API call) plus `resolveDiscussMode()` (reads the title's
+*current* `status` at send time, per-message — not frozen at thread creation — so a single
+thread can legitimately mix spoiler-safe and unrestricted turns if the user finishes the title
+mid-conversation, exactly as decided during planning).
+
+**Stage 4 — UI.** `components/ui/star-rating.tsx` (new, no prior precedent beyond a single
+static `Star`/`#ffb800` icon in `checkphone-shopping-page.tsx` — built fresh with both a
+read-only half-star display mode, for a character's own published rating, and an interactive
+tappable mode, for the user's `myRating`) and `components/review/review-app.tsx` (one
+consolidated file covering the list/grid, search+add flow for both kinds, the grounding
+confirm/edit/clear step, and the title-detail view with status toggle, journal, character-picked
+discussion thread, and the "ask for their review" generation button).
+
+**Stage 5 — memory projection.** `lib/review-memory.ts` mirrors `lib/notewall-memory.ts` exactly
+(capped rolling KV log per character, `afterTimestamp` filtering), with an `authorType: "user" |
+"character"` field on `ReviewProjectionEntry` since journal events (user) and published-review
+events (character) share one log per character. `"review"` added to `short-term-assembler.ts`'s
+`sourceApp`/`sourceDetail` unions, `FEATURE_ORDER.review = 2.55` (the exact slot the now-removed
+Couple Space projection used) / `FEATURE_TAG.review = "recent_review"`, the `loadNativeTimeline`
+loading block, and — the documented two-site trap this codebase has now hit three times — **both**
+`prepareShortTermContext` and `prepareGroupShortTermContext`'s `filter(...)+raw.push(...)` blocks.
+
+**A third, previously-undocumented site was found while wiring this up, and it would have been a
+real silent bug.** `prepareGroupShortTermContext` doesn't return `recentBlocks` from `raw`
+directly the way the 1:1 function does — it rebuilds each entry's `sourceTag` via its **own**
+hardcoded ternary chain (`entry.sourceDetail === "group" ? "recent_group_chat" : (entry.sourceApp
+=== "moments" ? ... )`), completely independent of the `raw.push` tag. Missing a `review` branch
+there meant review entries would still *appear* in group `unifiedRecentItems` (so a naive check
+would look fine) but mislabeled as the generic `"recent_events"` fallback instead of
+`"recent_review"`. Found and fixed before it shipped, confirmed non-vacuous by reverting the
+branch and watching the fixture fail exactly there (`got: ["recent_events","recent_events"]`) —
+this is now the specific site to check first if a future feature's group-chat memory shows up
+under the wrong tag.
+
+**Stage 6 — desktop registration (last).** `"review"` added to `IconId` (`lib/desktop-config.ts`),
+placed on **`PAGE_3_DEFAULT`** (corrected from the Plan agent's `PAGE_2_DEFAULT` suggestion after
+checking the actual file — page 2 already has 8 icons, page 3 only had 3), `mdiStarBoxMultipleOutline`
+icon (confirmed present in the installed `@mdi/js` package before using it), and the
+`activeApp === "review"` branch in `desktop-shell.tsx`.
+
+**Two NUL-byte corruption hits during this build** — the same recurring trap this file has
+documented many times before (a `\u0000`-stripping regex written directly in a tool-call
+parameter gets JSON-decoded into an actual NUL byte before it reaches the file). Hit once in
+`lib/review-storage.ts` and once in `lib/review-engine.ts`, both caught immediately by the
+standard control-character sweep and fixed with the standard standalone-script remedy (never
+`node -e` for this).
+
+**One real UI bug caught only by browser-testing, not by any fixture**: the delete-confirmation
+`ConfirmDialog` was rendered only in `ReviewApp`'s list-screen JSX branch, but the detail
+screen's trash button set the same `confirmDeleteId` state from a **different, earlier `return`**
+that never reached that branch — so clicking delete while viewing a title's detail did nothing
+visible at all, no error, no dialog. Fixed by hoisting the dialog into a shared
+`confirmDeleteDialog` variable rendered from both the list and detail return branches. Exactly
+the kind of bug this project's standing practice of "start the dev server and use the feature in
+a browser before reporting done" exists to catch — a type-correct, fixture-clean component can
+still have a screen-routing bug no unit test would think to check.
+
+**Verification**: `npx tsc --noEmit` clean, `npm run build` clean (registers both new
+`/api/media-lookup/*` routes), all 25 repo fixtures green (908 total assertions) including three
+new ones — `_fx-review-storage.mjs` (46/46: CRUD round-trips, cascade delete, the dual-rating
+independence, grounding-snippet lifecycle transitions, the standing "multi-word English string
+survives `clean*`" check), `_fx-review-engine.mjs` (20/20: `resolveDiscussMode`, the
+`parseReviewWriteResponse` JSON contract across well-formed/repairable/totally-broken input with
+non-vacuity confirmed by breaking the fallback rating, and a cross-check that
+`content-tag-utils.ts`'s tag-profile minors exactly match the three real preset entries' tags),
+`_fx-review-memory.mjs` (12/12: both `prepareShortTermContext` and `prepareGroupShortTermContext`
+driven for real, non-vacuity confirmed twice — once for the loading block, once for the
+third-site `sourceTag` ternary). Control-character sweep clean across all 28 touched/created
+files. Browser smoke test (fresh `.next` wipe + single dev server, per this file's own
+operational rule): opened the app from its new icon on page 3, added a book manually end to end
+(status toggle, interactive star rating persisting a 4-star tap, a journal entry, the delete
+flow after the bug fix above), and exercised the search flow against the **real** external
+APIs — Google Books returned a genuine `429` (proving the request reached the real internet
+through the new proxy route rather than failing at the network layer) and the UI displayed
+`"Google Books request failed (429)"` correctly; Open Library returned a genuine `fetch failed`
+(this sandbox's outbound access apparently doesn't reach that host), also displayed correctly.
+Zero new console errors beyond this project's own already-documented, pre-existing,
+unrelated `NotFoundError`/`ERR_CONNECTION_RESET` noise.
+
+**Not verified by me (no live network/paid-API access in this environment)**: a real TMDB search
+with a valid key (movie search, detail, and the `/reviews` grounding fetch, plus the
+confirm/edit/clear snippet step actually being shown before use); a successful Open Library or
+Google Books search actually returning results (both attempts here hit environment-level network
+limits before reaching that point); any of the three real LLM generation calls
+(`review_discuss_safe`/`review_discuss_free`/`review_write`) against a bound character —
+specifically whether the persona/worldbook context actually shows up, whether the honest "I
+haven't seen this, but…" framing reads naturally, and whether the model's JSON comes back
+well-formed in practice rather than needing the `jsonrepair` fallback; the short-term-memory
+projection actually surfacing in a **real** subsequent chat generation (the mechanism is
+fixture-verified end-to-end, but the visual "does the character actually reference it" check
+needs a bound API and a real turn).
+
+**Deliberately out of v1, per the approved plan**: the "look up more opinions" MCP web-search
+button (plan doc's own step 4) — the data model needs no migration to add it later. NYT Books
+API as a second book-review source is a clean, additive fast-follow if genuine third-party book
+reviews are ever wanted (would only need to flip a `Description`-labeled snippet back to
+`Review`-labeled, nothing structural).
+
 ## Still open / not yet done
 - ~~**Custom app imports**~~ — **DONE (2026-08-23), all 9 translated.** Zips in `App\translated\*-EN.zip`; see the CUSTOM APP IMPORTS section. Not installed — the user installs them through the App Market.
 - **`memory.add` provenance** — a custom app can write a long-term memory for any character and shared memory will lend it on. ⚠️ **Correction to how this was first recorded**: nothing needs stamping. `addCustomAppMemory` already writes `id: custom_app_${app.id}_…` **and** `metadata: { origin: "custom_app", appId, appName, reason }`; only `sourceApp` is hardcoded to `"chat"`. The open question is narrower than it looked — should `selectBorrowableMemories` skip entries whose `metadata.origin === "custom_app"`? Awaiting a decision; the marker to filter on already exists.

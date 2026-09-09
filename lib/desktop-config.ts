@@ -27,7 +27,8 @@ export type IconId =
   | "characters"
   | "worldbuilder"
   | "mixology"
-  | "studio";
+  | "studio"
+  | "review";
 
 export type DesktopIconId = IconId | CustomAppIconId;
 
@@ -55,7 +56,7 @@ export const PAGE_2_DEFAULT: IconId[] = [
 ];
 
 // Default icons for page three (centred; see createDefaultDesktopIconLayout for placement)
-export const PAGE_3_DEFAULT: IconId[] = ["worldbuilder", "mixology", "studio"];
+export const PAGE_3_DEFAULT: IconId[] = ["worldbuilder", "mixology", "studio", "review"];
 
 export const DOCK_DEFAULT: IconId[] = ["settings", "theme", "resources", "characters"];
 
@@ -63,6 +64,7 @@ export const ICONS: Record<IconId, IconMeta> = {
   chat: { id: "chat", label: "Chat", tone: "var(--c-icon-green)", placeholder: false },
   mixology: { id: "mixology", label: "House Special", tone: "var(--c-icon-violet)", placeholder: false },
   studio: { id: "studio", label: "Studio", tone: "var(--c-icon-amber)", placeholder: false },
+  review: { id: "review", label: "Reviews", tone: "var(--c-icon-coral)", placeholder: false },
   diary: { id: "diary", label: "Notes", tone: "var(--c-icon-violet)", placeholder: false },
   music: { id: "music", label: "Music", tone: "var(--c-icon-coral)", placeholder: false },
   reading: { id: "reading", label: "Reading", tone: "var(--c-icon-amber)", placeholder: false },
