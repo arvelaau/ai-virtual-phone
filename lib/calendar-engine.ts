@@ -73,7 +73,7 @@ function buildCalendarTriggerInstruction(ownerName: string, weekDates: string[])
     `Generate the schedule for ${ownerName} for the week of ${weekDates[0]} to ${weekDates[6]}.`,
     "Take the existing schedule into account and produce a complete plan for this week.",
     "One line per item, format: YYYY-MM-DD|weekday|start time|end time|location|emoji|activity. Put a single emoji that best fits the activity in the emoji field.",
-    "Activities can happen at any hour (early mornings, night runs, all-nighters are all fine), but at most 5 items per day -- fewer, better items beat a crowded schedule.",
+    "Activities must be realistic and can happen at any hour (early mornings, night runs, all-nighters are all fine), but at most 5 items per day -- fewer, better items beat a crowded schedule.",
   ].join("\n");
 }
 
