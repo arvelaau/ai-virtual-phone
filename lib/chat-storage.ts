@@ -1966,30 +1966,55 @@ export function updateChatMessage(
     return updated;
 }
 
-function replacePhotoDirectiveDescription(text: string | undefined, oldDescription: string, nextDescription: string): string | undefined {
+function replacePhotoDirectiveDescription(
+    text: string | undefined,
+    oldDescription: string,
+    nextDescription: string,
+    nextUseReferenceImage?: boolean,
+): string | undefined {
     const oldDesc = oldDescription.trim();
     const nextDesc = nextDescription.trim();
-    if (!text || !oldDesc || !nextDesc || oldDesc === nextDesc) return text;
+    // The description must match one specific photo tag to be rewritten: a single reply can
+    // contain several photos, and treating an empty old description as "match anything" would
+    // overwrite every other photo's description too. No longer short-circuits on
+    // oldDesc === nextDesc -- a retry can change ONLY the reference-image mode while leaving
+    // the description untouched, and that case must still reach the replace below.
+    if (!text || !oldDesc || !nextDesc) return text;
 
     // Rewrites a photo tag inside already-stored text, so it must recognise BOTH
     // the legacy Chinese tag and the English one now emitted by
     // lib/rich-tag-builders.ts — and it must rewrite it back in the SAME language
     // it found, otherwise editing an old message would silently switch its tag.
+    // The reference-mode word gets the same treatment: an English tag always gets
+    // WithRef/NoRef, a Chinese tag always gets 使用参考图/不使用参考图.
     let changed = false;
     const withExplicitMode = text.replace(
         /\[(照片|Photo)[:：]\s*(使用参考图|不使用参考图|WithRef|NoRef)\s*[:：]\s*([^\]]+?)\]/g,
         (full, tag: string, mode: string, desc: string) => {
             if (desc.trim() !== oldDesc) return full;
+            const targetMode = nextUseReferenceImage === undefined
+                ? mode
+                : tag === "Photo"
+                    ? (nextUseReferenceImage ? "WithRef" : "NoRef")
+                    : (nextUseReferenceImage ? "使用参考图" : "不使用参考图");
+            if (targetMode === mode && desc.trim() === nextDesc) return full;
             changed = true;
-            return `[${tag}:${mode}:${nextDesc}]`;
+            return `[${tag}:${targetMode}:${nextDesc}]`;
         },
     );
     if (changed) return withExplicitMode;
 
     return text.replace(/\[(照片|Photo)[:：]\s*([^\]]+?)\]/g, (full, tag: string, desc: string) => {
         if (desc.trim() !== oldDesc) return full;
+        const targetMode = nextUseReferenceImage === undefined
+            ? undefined
+            : tag === "Photo"
+                ? (nextUseReferenceImage ? "WithRef" : "NoRef")
+                : (nextUseReferenceImage ? "使用参考图" : "不使用参考图");
+        const replacement = targetMode ? `[${tag}:${targetMode}:${nextDesc}]` : `[${tag}:${nextDesc}]`;
+        if (replacement === full) return full;
         changed = true;
-        return `[${tag}:${nextDesc}]`;
+        return replacement;
     });
 }
 
@@ -1997,13 +2022,14 @@ export function syncChatGeneratedImagePromptText(
     messageId: string,
     oldDescription: string,
     nextDescription: string,
+    nextUseReferenceImage?: boolean,
 ): ChatMessage[] {
     const target = _messagesCache.find(m => m.id === messageId);
     if (!target) return [];
 
     const changed = new Map<string, ChatMessage>();
-    const targetNextRaw = replacePhotoDirectiveDescription(target.rawResponseText, oldDescription, nextDescription);
-    const targetNextEditable = replacePhotoDirectiveDescription(target.editableResponseText, oldDescription, nextDescription);
+    const targetNextRaw = replacePhotoDirectiveDescription(target.rawResponseText, oldDescription, nextDescription, nextUseReferenceImage);
+    const targetNextEditable = replacePhotoDirectiveDescription(target.editableResponseText, oldDescription, nextDescription, nextUseReferenceImage);
 
     if (target.rawResponseText && targetNextRaw && targetNextRaw !== target.rawResponseText && target.responseBatchId) {
         for (const msg of _messagesCache) {

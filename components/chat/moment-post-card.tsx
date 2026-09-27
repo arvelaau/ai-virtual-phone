@@ -18,6 +18,7 @@ import { buildTwoLevelMomentThreads } from "@/lib/moments-comment-threading";
 import { getChatImageFromIndexedDB } from "@/lib/chat-asset-storage";
 import { splitBilingualText } from "@/lib/bilingual-text";
 import { retryMomentGeneratedPhoto } from "@/lib/generated-image-retry";
+import { hasCharacterReferenceImage } from "@/lib/image-generation-service";
 import { RefreshCw, Trash2, MoreHorizontal, MapPin, Heart, MessageCircle, Pencil } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui";
 
@@ -37,10 +38,15 @@ function MomentDefaultAvatar({ alt = "" }: { alt?: string }) {
 
 export function MomentPostCard({ post, onUpdate, onRequestDelete, onOpenCommentComposer, onOpenReplyComposer }: Props) {
     const [comments, setComments] = useState<MomentComment[]>(() => loadMomentComments(post.id));
+    // A character's own post's user-facing identity uses the user persona bound to that
+    // character; the user's own post uses the default persona.
+    const characterId = post.authorType === "character" ? post.authorId : undefined;
     const [showPhotoPromptEditor, setShowPhotoPromptEditor] = useState(false);
     const [photoPromptDraft, setPhotoPromptDraft] = useState("");
     const [photoRegenerating, setPhotoRegenerating] = useState(false);
     const [photoRetryError, setPhotoRetryError] = useState("");
+    const [hasRef, setHasRef] = useState(() => hasCharacterReferenceImage(characterId));
+    const [photoUseReferenceDraft, setPhotoUseReferenceDraft] = useState(post.photoUseReferenceImage === true);
     const [showPostActions, setShowPostActions] = useState(false);
     const [editingPostOpen, setEditingPostOpen] = useState(false);
     const [postContentDraft, setPostContentDraft] = useState("");
@@ -73,9 +79,7 @@ export function MomentPostCard({ post, onUpdate, onRequestDelete, onOpenCommentC
     }, [post.photoUrl]);
 
     const chars = loadCharacters();
-    // 角色帖子下，用户名用该角色绑定的用户人设；用户自己的帖子用默认人设
-    const contextCharId = post.authorType === "character" ? post.authorId : undefined;
-    const userIdentity = resolveUserIdentity(contextCharId, "chat");
+    const userIdentity = resolveUserIdentity(characterId, "chat");
 
     const getCharName = (charId: string): string => {
         return chars.find(c => c.id === charId)?.name ?? "Unknown";
@@ -222,20 +226,24 @@ export function MomentPostCard({ post, onUpdate, onRequestDelete, onOpenCommentC
         && Boolean(post.photoDescription?.trim())
         && (post.photoGenerationStatus === "generated" || Boolean(post.photoGenerationPrompt));
     const openPhotoPromptEditor = useCallback(() => {
+        const latestHasRef = hasCharacterReferenceImage(characterId);
+        setHasRef(latestHasRef);
         setPhotoPromptDraft(post.photoDescription?.trim() || "");
+        setPhotoUseReferenceDraft(latestHasRef && post.photoUseReferenceImage === true);
         setPhotoRetryError("");
         setShowPhotoPromptEditor(true);
-    }, [post.photoDescription]);
+    }, [characterId, post.photoDescription, post.photoUseReferenceImage]);
     const handleRegeneratePhotoWithPrompt = useCallback(() => {
         const nextDescription = photoPromptDraft.trim();
         if (!nextDescription) {
             setPhotoRetryError("Prompt cannot be empty");
             return;
         }
+        const latestHasRef = hasCharacterReferenceImage(characterId);
         setShowPhotoPromptEditor(false);
         setPhotoRegenerating(true);
         setPhotoRetryError("");
-        retryMomentGeneratedPhoto(post, nextDescription)
+        retryMomentGeneratedPhoto(post, nextDescription, latestHasRef ? photoUseReferenceDraft : undefined)
             .then(() => onUpdate())
             .catch(error => {
                 setPhotoRetryError(error instanceof Error ? error.message : String(error));
@@ -243,7 +251,7 @@ export function MomentPostCard({ post, onUpdate, onRequestDelete, onOpenCommentC
             .finally(() => {
                 setPhotoRegenerating(false);
             });
-    }, [onUpdate, photoPromptDraft, post]);
+    }, [characterId, onUpdate, photoPromptDraft, photoUseReferenceDraft, post]);
 
     return (
         <div data-moment-post-id={post.id} className="feed-post relative border-b-[2.5px] border-[var(--c-card-border)] pb-5 mb-5 w-full bg-transparent px-4 pt-2">
@@ -385,6 +393,19 @@ export function MomentPostCard({ post, onUpdate, onRequestDelete, onOpenCommentC
                                 placeholder="Enter an image prompt"
                                 disabled={photoRegenerating}
                             />
+                            {hasRef ? (
+                                <label className="chat-generated-image-prompt-check">
+                                    <input
+                                        type="checkbox"
+                                        checked={photoUseReferenceDraft}
+                                        disabled={photoRegenerating}
+                                        onChange={e => setPhotoUseReferenceDraft(e.target.checked)}
+                                    />
+                                    <span>Use the character's reference image (shows the character)</span>
+                                </label>
+                            ) : (
+                                <div className="chat-generated-image-prompt-empty-hint">This character has no reference image configured</div>
+                            )}
                             {photoRetryError && <div className="feed-post-photo-retry-error">Generation failed: {photoRetryError}</div>}
                         </div>
                         <div className="modal-footer" data-ui="modal-footer">

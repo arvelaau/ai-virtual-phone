@@ -1285,14 +1285,14 @@ export async function runCustomAppAiClassify(app: InstalledCustomApp, record: Re
 
 export async function generateCustomAppImage(app: InstalledCustomApp, record: Record<string, unknown>): Promise<Record<string, unknown>> {
   const description = cleanText(record.prompt ?? record.description, 4000);
-  if (!description) throw new Error("ai.generateImage 需要 prompt。");
+  if (!description) throw new Error("ai.generateImage requires prompt.");
   const characterId = cleanText(record.characterId, 160) || undefined;
   const useReferenceImage = record.useReferenceImage === true;
   const timeoutMs = optionalCustomAppTimeoutMs(record.timeoutMs);
   const result = await withOptionalCustomAppTimeout(timeoutMs, "ai.generateImage", signal => (
-    generateImageFromConfiguredApi({ description, characterId, useReferenceImage, signal })
+    generateImageFromConfiguredApi({ description, characterId, appId: `custom_app:${app.id}`, useReferenceImage, signal })
   ));
-  if (!result) throw new Error("生图功能未配置或未启用，请先在小手机设置里配置生图 API。");
+  if (!result) throw new Error("Image generation is not configured or is not enabled. Please configure the image-generation API under Settings first.");
   return {
     ok: true,
     dataUrl: result.dataUrl,
