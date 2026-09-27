@@ -36,7 +36,7 @@ const CJK = /[一-鿿]/;
     check("A5 prompt_order places it right after chat_output_format",
         built.prompt_order.findIndex(p => p.identifier === "chat_blacklist")
         === built.prompt_order.findIndex(p => p.identifier === "chat_output_format") + 1);
-    check("A6 BUILTIN_PRESET_VERSION bumped to 286", preset.BUILTIN_PRESET_VERSION === 286);
+    check("A6 BUILTIN_PRESET_VERSION bumped to at least 286 (the blacklist entry's own bump)", preset.BUILTIN_PRESET_VERSION >= 286);
 }
 
 // ── B. appendEmptyGenerateGuardMessage: blacklist-event exemption ──

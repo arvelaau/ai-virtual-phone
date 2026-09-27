@@ -70,14 +70,21 @@ export const BUILTIN_PRESET_ID = "builtin_default_v1";
 //                   prompt_order toggle added in 279. No stored-preset content survives a
 //                   bump anyway (factory content wins, preserveCustomAppPresetPrompts is the
 //                   only exception), so this is a clean removal, not a migration.
-export const BUILTIN_PRESET_VERSION = 286;
+// 287: fixes createBuiltinPreset()'s own `name`/`description` fields, which were still
+//      Chinese ("默认预设（内置）" / a matching description) -- a stray Phase-1 miss, found
+//      only because the momo-sync Binding Manager rewrite surfaced it in the Preset picker.
+//      Pure display text on the PresetConfig object itself (confirmed zero other references
+//      anywhere in the repo), not a taught/parsed prompt entry, so translating it needed no
+//      lockstep change elsewhere -- but reaching existing/fresh installs still needs this bump,
+//      same as any other builtin-preset.ts edit.
+export const BUILTIN_PRESET_VERSION = 287;
 
 export function createBuiltinPreset(): PresetConfig {
     const now = Date.now();
     return {
         id: BUILTIN_PRESET_ID,
-        name: "默认预设（内置）",
-        description: "内置聊天预设，包含线上聊天所需的标准功能条目。",
+        name: "Default Preset (Built-in)",
+        description: "The built-in chat preset, containing the standard entries needed for online chat.",
         createdAt: now,
         updatedAt: now,
         builtIn: true,
