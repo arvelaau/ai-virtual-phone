@@ -10,6 +10,7 @@ export type ThemeAssetType =
   | "font"
   | "bg"
   | "chat_bg"
+  | "chat_sound"
   | "sticker"
   | "vn_scene"
   | "vn_sprite"

@@ -5,9 +5,14 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# 字体/模型/图片是不带指纹的静态资源，体积大（中文字体 7~24MB、3D 模型 10MB+）。
-# 设为一年 immutable，浏览器命中后回访零带宽。更新这些文件时请改文件名（加版本后缀），
-# 否则旧客户端会一直用缓存。
+# Keep this marker with the story tail-editor release so Netlify receives a
+# conventional config-file change and performs a fresh production build.
+# story-tail-editor-modal: 2026-09-11
+
+# Fonts/models/images are static assets with no fingerprint, and large (CJK
+# fonts 7-24MB, 3D models 10MB+). Set to one-year immutable so a repeat visit
+# costs zero bandwidth once cached. When updating these files, rename them
+# (add a version suffix) or old clients will keep serving the cached copy.
 [[headers]]
   for = "/fonts/*"
   [headers.values]
@@ -23,9 +28,11 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
-# 其余稳定静态资源：HDR 环境光、地图边界数据、音效，以及组件/主题/装饰图等目录。
-# 这些走 fetch()/Audio()/Environment 加载，绕过了 SW 按类型的缓存，需 HTTP 头兜底。
-# 同样：更新内容请改文件名。
+# Other stable static assets: HDR environment lighting, map boundary data,
+# sound effects, and the widget/theme/decoration image directories. These load
+# via fetch()/Audio()/Environment, which bypasses the service worker's
+# per-type cache, so they need this HTTP-header fallback instead. Same rule:
+# rename the file when updating its content.
 [[headers]]
   for = "/hdri/*"
   [headers.values]
@@ -66,7 +73,7 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
-# 根目录散图（吉祥物小卷、默认壁纸）——同样改文件名才更新。
+# Loose root-level images (mascot Scroll, default wallpaper) — same rule, rename to update.
 [[headers]]
   for = "/mascot.png"
   [headers.values]
