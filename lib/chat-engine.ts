@@ -462,6 +462,12 @@ function isRealUserHistoryMessage(message: ChatMessage): boolean {
     );
 }
 
+/** The history's tail is a blacklist/unblock event -- let the character react to it. */
+function isBlacklistEventHistoryMessage(message: ChatMessage): boolean {
+    return message.role === "system"
+        && (message.mediaData?.blacklistEvent === "block" || message.mediaData?.blacklistEvent === "unblock");
+}
+
 export function appendEmptyGenerateGuardMessage(
     messages: LLMMessage[],
     config: ApiConfig,
@@ -471,6 +477,12 @@ export function appendEmptyGenerateGuardMessage(
 
     const hasRealUserHistory = history.some(isRealUserHistoryMessage);
     if (!hasRealUserHistory) return;
+
+    // Blacklist-simulation exemption: when history ends on a block/unblock event, the
+    // character must react to it -- the continuation guard's own "never restate a system
+    // message" instruction would otherwise suppress that reaction entirely.
+    const lastHistoryMessage = history[history.length - 1];
+    if (lastHistoryMessage && isBlacklistEventHistoryMessage(lastHistoryMessage)) return;
 
     let lastAssistantIndex = -1;
     for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -1768,6 +1780,10 @@ export async function buildChatPromptMessages(
     userIdentity: ReturnType<typeof resolveUserIdentity>;
     toolsEnabled: boolean;
 }> {
+    // The settings panel can update the session object while the chat room is still mounted.
+    // Re-read the stored state on every prompt build, so a blacklist toggle right before
+    // sending doesn't still see the stale session snapshot from when the room was opened.
+    session = loadChatSessions().find(item => item.id === session.id) ?? session;
     const chars = loadCharacters();
     const character = chars.find(c => c.id === session.contactId);
     if (!character) throw new ChatEngineError(`Character not found: ${session.contactId}`);
@@ -1926,6 +1942,14 @@ export async function buildChatPromptMessages(
         offlineSummaryTag: preset?.story_summary_tag?.trim() || "summary",
         nativeToolHistory: usesNativeActions,
     });
+    // Current status backstops a plain heads-up line; the specific block/unblock event has
+    // already been written into the character's private-chat short-term memory.
+    if (!session.isGroup && session.isBlacklisted) {
+        llmMessages.push({
+            role: "system",
+            content: `Current session status: ${character.name} has been blacklisted by ${userIdentity?.name || "the user"}; ${character.name} knows that messages they send will be rejected.`,
+        });
+    }
     const avatarChangeIntent = !session.isGroup
         ? findUserAvatarChangeIntent(historyForPrompt, session.id, character.id)
         : null;

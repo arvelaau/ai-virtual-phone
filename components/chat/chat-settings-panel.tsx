@@ -36,7 +36,7 @@ import { clearChatOfflineTurns } from "@/lib/chat-offline-storage";
 import { triggerDeleteFriendReaction } from "@/lib/friend-request-engine";
 import { loadCharacters } from "@/lib/character-storage";
 import { resolveUserIdentity } from "@/lib/settings-storage";
-import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, MessageSquare, Search, AlertCircle, Code, Trash2, Smile, Sparkles, Cloud, Loader2, type LucideIcon } from "lucide-react";
+import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, MessageSquare, Search, AlertCircle, Code, Trash2, Smile, Sparkles, Cloud, Loader2, Ban, type LucideIcon } from "lucide-react";
 import {
     isProactiveCloudSyncEnabled,
     setProactiveCloudSyncEnabled,
@@ -172,6 +172,9 @@ export function ChatSettingsPanel({
     const [videoBackground, setVideoBackground] = useState<string>(session.videoBackground || "");
     const [voiceBackground, setVoiceBackground] = useState<string>(session.voiceBackground || "");
     const [isPinned, setIsPinned] = useState(session.isPinned || false);
+    // Blacklist simulation: while blacklisted, messages the character sends are rejected by
+    // the user (a WeChat-style red exclamation mark).
+    const [isBlacklisted, setIsBlacklisted] = useState(session.isBlacklisted || false);
     const [visionImagePromptLimit, setVisionImagePromptLimit] = useState(() => normalizeVisionImagePromptLimit(session.visionImagePromptLimit));
     const [bilingualTranslationEnabled, setBilingualTranslationEnabled] = useState(session.bilingualTranslationEnabled !== false);
     const [collapseBilingualTranslation, setCollapseBilingualTranslation] = useState(session.collapseBilingualTranslation !== false);
@@ -408,6 +411,34 @@ export function ChatSettingsPanel({
             saveChatSessions(sessions);
             Object.assign(session, updates);
         }
+    };
+
+    // Blacklist simulation: write an explicit direct-chat system event straight into this
+    // character's short-term memory. This only stores a local message -- it never makes an
+    // extra AI request on its own.
+    const handleToggleBlacklist = (blocked: boolean) => {
+        setIsBlacklisted(blocked);
+        updateSession({ isBlacklisted: blocked });
+
+        const charLabel = character?.name || characterName;
+        const userLabel = userIdentity?.name || "the user";
+        const occurredAt = new Date();
+        const padTimePart = (value: number) => String(value).padStart(2, "0");
+        const occurredAtText = `${occurredAt.getFullYear()}-${padTimePart(occurredAt.getMonth() + 1)}-${padTimePart(occurredAt.getDate())} ${padTimePart(occurredAt.getHours())}:${padTimePart(occurredAt.getMinutes())}:${padTimePart(occurredAt.getSeconds())}`;
+        const eventContent = blocked
+            ? `Direct chat: time: ${occurredAtText}; ${userLabel} blacklisted ${charLabel} in this direct chat -- messages ${charLabel} sends will be rejected.`
+            : `Direct chat: time: ${occurredAtText}; ${userLabel} unblocked ${charLabel} in this direct chat -- messages ${charLabel} sends will be received normally again.`;
+
+        pushChatMessage({
+            sessionId: session.id,
+            role: "system",
+            content: eventContent,
+            mediaData: {
+                blacklistEvent: blocked ? "block" : "unblock",
+                blacklistCharacterName: charLabel,
+                blacklistUserName: userLabel,
+            },
+        });
     };
 
     const handleClearHistory = () => {
@@ -702,6 +733,19 @@ export function ChatSettingsPanel({
                             <Toggle checked={isPinned} onChange={c => { setIsPinned(c); updateSession({ isPinned: c }); }} />
                         </div>
                     </div>
+                    {/* Blacklist simulation: direct chat only */}
+                    {!session.isGroup && (
+                        <div className="menu-item">
+                            <ChatInfoIcon icon={Ban} color="#e5484d" />
+                            <div className="menu-label-group">
+                                <span className="menu-label">Blacklist Them</span>
+                                <span className="menu-desc">Once blacklisted, they'll know and react to it; messages they send will be rejected (a red exclamation mark shows next to their messages) -- your own messages aren't affected</span>
+                            </div>
+                            <div className="menu-right">
+                                <Toggle checked={isBlacklisted} onChange={handleToggleBlacklist} />
+                            </div>
+                        </div>
+                    )}
                     <div className="menu-item">
                         <ChatInfoIcon icon={ImageIcon} color={BINDING_ACCENTS.api} />
                         <div className="menu-label-group">

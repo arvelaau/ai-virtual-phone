@@ -1241,6 +1241,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
 
     // Message Actions state
     const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
+    const [expandedBlacklistEventIds, setExpandedBlacklistEventIds] = useState<Set<string>>(new Set());
     const [contextMenuAnchor, setContextMenuAnchor] = useState<ContextMenuAnchor | null>(null);
     const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
     const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
@@ -5696,6 +5697,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
 
                     const renderMsg = msg;
                     const isSystemInstruction = isSystemInstructionMessage(renderMsg);
+                    const blacklistEvent = renderMsg.mediaData?.blacklistEvent;
+                    const isBlacklistEventExpanded = expandedBlacklistEventIds.has(msg.id);
                     const bubbleDisplayContent = getMessageDisplayContent(renderMsg);
                     let prevVisibleMsg: RenderChatMessage | null = null;
                     for (let prevIdx = idx - 1; prevIdx >= 0; prevIdx -= 1) {
@@ -5777,7 +5780,18 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                 {uiRole(msg) === "system" ? (
                                     <div
                                         onPointerDown={(e) => { e.stopPropagation(); handleMessagePointerDown(e, msg.id); }}
-                                        onPointerUp={(e) => handleMessagePointerUp(e)}
+                                        onPointerUp={(e) => {
+                                            const wasLongPress = longPressTriggeredRef.current;
+                                            handleMessagePointerUp(e);
+                                            if (blacklistEvent && !wasLongPress) {
+                                                setExpandedBlacklistEventIds(prev => {
+                                                    const next = new Set(prev);
+                                                    if (next.has(msg.id)) next.delete(msg.id);
+                                                    else next.add(msg.id);
+                                                    return next;
+                                                });
+                                            }
+                                        }}
                                         onPointerCancel={handleMessagePointerCancel}
                                         onPointerLeave={handleMessagePointerCancel}
                                         onPointerMove={(e) => {
@@ -5790,8 +5804,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                         onContextMenu={(e) => { e.preventDefault(); openMessageContextMenu(msg.id, { x: e.clientX, y: e.clientY }); }}
                                         className={isSystemInstruction
                                             ? "chat-system-instruction-card relative cursor-pointer"
-                                            : `chat-sys-msg break-all max-w-[90%] relative cursor-pointer${
-                                                // 骰子旁白：等骰子落定再淡入，避免剧透点数
+                                            : `chat-sys-msg break-all max-w-[90%] relative cursor-pointer${blacklistEvent ? " chat-blacklist-event" : ""}${
+                                                // Dice aside: wait for the roll to settle before fading in, so the number isn't spoiled early
                                                 msg.content.startsWith("🎲 掷出了") && Date.now() - new Date(msg.createdAt).getTime() < 6000
                                                     ? " dice-aside-reveal"
                                                     : ""
@@ -5806,6 +5820,22 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                                 onApprove={handleApproveMemoryWrite}
                                                 onIgnore={handleIgnoreMemoryWrite}
                                             />
+                                        ) : blacklistEvent ? (
+                                            <div className="chat-blacklist-event-content">
+                                                <span className="chat-blacklist-event-summary">
+                                                    {blacklistEvent === "block"
+                                                        ? `You blacklisted ${msg.mediaData?.blacklistCharacterName || character?.name || "them"}`
+                                                        : `You unblocked ${msg.mediaData?.blacklistCharacterName || character?.name || "them"}`}
+                                                </span>
+                                                {isBlacklistEventExpanded && (
+                                                    <span className="chat-blacklist-event-detail">
+                                                        <span>Time: {formatChatUiTime(msg.createdAt)}</span>
+                                                        <span>{blacklistEvent === "block"
+                                                            ? `${msg.mediaData?.blacklistUserName || userIdentity?.name || "The user"} blacklisted ${msg.mediaData?.blacklistCharacterName || character?.name || "them"} in this direct chat; messages ${msg.mediaData?.blacklistCharacterName || character?.name || "they"} send will be rejected.`
+                                                            : `${msg.mediaData?.blacklistUserName || userIdentity?.name || "The user"} unblocked ${msg.mediaData?.blacklistCharacterName || character?.name || "them"} in this direct chat; messages ${msg.mediaData?.blacklistCharacterName || character?.name || "they"} send will be received normally again.`}</span>
+                                                    </span>
+                                                )}
+                                            </div>
                                         ) : (
                                             <>
                                                 {msg.mediaType === "poke"
@@ -5964,6 +5994,21 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                                     <path d="M8 14s-6-4-6-8c0-2.5 1.5-4 3.5-4 1 0 2 .5 2.5 1.5C8.5 2.5 9.5 2 10.5 2 12.5 2 14 3.5 14 6c0 4-6 8-6 8z" fill="currentColor"/>
                                                 </svg>
                                             </button>
+                                        )}
+                                        {/* Blacklist simulation: WeChat-style red exclamation mark next to a character message the user rejected */}
+                                        {msg.role === "assistant" && !isSilentThought && !isEmptyBubble && msg.status === "rejected" && (
+                                            <span
+                                                className="chat-msg-rejected-mark"
+                                                role="img"
+                                                aria-label="Message sent, but rejected by the other party"
+                                                title="Message sent, but rejected by the other party"
+                                            >
+                                                <svg viewBox="0 0 20 20" width="18" height="18" style={{ display: "block" }}>
+                                                    <circle cx="10" cy="10" r="9" fill="#fa5151" />
+                                                    <rect x="9" y="4.6" width="2" height="7.4" rx="1" fill="#fff" />
+                                                    <circle cx="10" cy="14.9" r="1.15" fill="#fff" />
+                                                </svg>
+                                            </span>
                                         )}
                                         {msg.role === "user" && !isEmptyBubble && (
                                             <div className="chat-msg-avatar w-[40px] h-[40px] rounded-[20px] bg-[var(--c-page-body-bg)] shrink-0 flex items-center justify-center overflow-hidden">

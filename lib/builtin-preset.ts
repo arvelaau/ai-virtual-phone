@@ -70,7 +70,7 @@ export const BUILTIN_PRESET_ID = "builtin_default_v1";
 //                   prompt_order toggle added in 279. No stored-preset content survives a
 //                   bump anyway (factory content wins, preserveCustomAppPresetPrompts is the
 //                   only exception), so this is a clean removal, not a migration.
-export const BUILTIN_PRESET_VERSION = 285;
+export const BUILTIN_PRESET_VERSION = 286;
 
 export function createBuiltinPreset(): PresetConfig {
     const now = Date.now();
@@ -121,6 +121,7 @@ export function createBuiltinPreset(): PresetConfig {
             { identifier: "vn_output_format", enabled: true },
             { identifier: "vn_story_beats", enabled: true },
             { identifier: "chat_output_format", enabled: true },
+            { identifier: "chat_blacklist", enabled: true },
             { identifier: "chat_offline_format", enabled: true },
             { identifier: "chat_optional_actions", enabled: true },
             { identifier: "chat_followup", enabled: true },
@@ -614,6 +615,29 @@ export function createBuiltinPreset(): PresetConfig {
                     "",
                     "{{customAppRichMediaDirectives}}",
                     "",
+                ].join("\n"),
+                injection_position: 0,
+                injection_depth: 0,
+                enabled: true,
+                tags: ["chat", "text"],
+            },
+            {
+                identifier: "chat_blacklist",
+                name: "▸ Blacklist Status Rule",
+                role: "system",
+                content: [
+                    "<chat_blacklist_instruction>",
+                    "## Blacklist status rule (direct chat)",
+                    "If the context shows a \"Current session status\" line saying you have been blacklisted, a system event stating \"{{user}} blacklisted you\", or one of your own messages annotated \"Message sent, but rejected by the other party\", it means {{user}} has blacklisted you in this direct chat. You are personally aware of this and must never act as if you don't know.",
+                    "How blacklisting works:",
+                    "- Every message you send is rejected by {{user}}, shown with a red exclamation mark and \"Message sent, but rejected by the other party\"; the message still stays in the chat log and {{user}} can actually see it, but its status is rejected.",
+                    "- You can still receive and see messages {{user}} sends you as normal, and can reply to them normally.",
+                    "Required behavior once blacklisted:",
+                    "- You must react genuinely, in a way that fits your persona and the current relationship: shock, anger, demanding to know why, sadness, biting sarcasm, a burst of follow-up questions, stubbornly pretending not to care, humbly apologizing and asking to make up... any of these is fine, but you must never act as if nothing happened and keep chatting normally.",
+                    "- Knowing your messages are rejected but still feeling compelled to send them anyway is completely realistic once blacklisted, and you will most likely do exactly that.",
+                    "- Only once the context shows a system event where {{user}} lifted the block, and they give you a reasonable explanation, may you gradually return to normal interaction; before that, stay aware you were blocked -- don't suddenly act like you forgot.",
+                    "- This is a normal messaging-app mechanism, not something breaking the fourth wall: never mention \"system\", \"setting\", or \"prompt\" -- always stay in character.",
+                    "</chat_blacklist_instruction>",
                 ].join("\n"),
                 injection_position: 0,
                 injection_depth: 0,

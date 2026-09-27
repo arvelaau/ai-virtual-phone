@@ -83,7 +83,7 @@ export type ChatSession = {
     isSpectator?: boolean; // 围观群：用户不在群内，只能生成/线下
 };
 
-export type ChatMessageStatus = "sending" | "sent" | "read" | "failed";
+export type ChatMessageStatus = "sending" | "sent" | "read" | "failed" | "rejected";
 export type ChatMessageRole = "user" | "assistant" | "system" | "tool";
 
 export type StateValue = { name: string; value: number };
@@ -237,6 +237,9 @@ export type ChatMessage = {
         appHistoryRole?: ChatMessageRole;
         avatarRecommendationForCharacterId?: string;
         avatarRecommendationStatus?: "pending" | "accepted" | "declined";
+        blacklistEvent?: "block" | "unblock"; // Blacklist-simulation system event type (direct chat: user blocked/unblocked the character)
+        blacklistCharacterName?: string; // Character's display name at the time of the blacklist event (for the event detail and prompt context)
+        blacklistUserName?: string; // User's display name at the time of the blacklist event
     };
     isTyping?: boolean; // temporary flag for UI rendering
     statusPanel?: string; // AI display-only status content from [状态栏] tags
@@ -1210,6 +1213,18 @@ export function pushChatMessage(msg: Omit<ChatMessage, "id" | "createdAt" | "sta
     const pluginResult = runChatPluginTransformSync("message.beforePersist", { message: newMsg });
     if (pluginResult.message && typeof pluginResult.message === "object" && pluginResult.message.id === newMsg.id) {
         newMsg = pluginResult.message;
+    }
+
+    // Blacklist simulation (direct chat): once the user has blacklisted the character, every
+    // message the character sends afterward is marked rejected (shown as a WeChat-style red
+    // exclamation mark + rejection note); the user's own messages are delivered normally and
+    // never marked. Handled centrally here so every write path -- chat-room generation,
+    // background fallback replies, follow-ups -- is covered.
+    if (newMsg.role === "assistant") {
+        const sessionForBlock = _sessionsCache.find(s => s.id === newMsg.sessionId);
+        if (sessionForBlock && !sessionForBlock.isGroup && sessionForBlock.isBlacklisted) {
+            newMsg.status = "rejected";
+        }
     }
 
     _messagesCache.push(newMsg);
