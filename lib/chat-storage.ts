@@ -298,6 +298,8 @@ export type ChatAppSettings = {
     globalChatBackgroundImage?: string;
     /** Default recent-image count fed into direct chats; a per-session override takes priority over this. */
     globalVisionImagePromptLimit?: number;
+    /** Default chat-room CSS; a per-session CSS override takes priority over this, and the homepage appearance CSS has the lowest priority of all three. */
+    globalChatCustomCSS?: string;
     /** Global notification-sound config (new message/send/incoming call/outgoing call/hangup), set in Global Chat Info. */
     globalChatSounds?: ChatSoundsConfig;
 };

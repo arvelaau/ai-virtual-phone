@@ -1167,6 +1167,11 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         () => resolveChatUserAvatar(session, userIdentity?.avatarUrl),
         [session.userAvatarOverride, session.isGroup, userIdentity?.avatarUrl, chatAppSettingsRevision],
     );
+    // CSS priority: session > global chat info > homepage appearance CSS.
+    const globalChatCSS = useMemo(
+        () => loadChatAppSettings().globalChatCustomCSS || "",
+        [chatAppSettingsRevision],
+    );
     const [bgImageResolved, setBgImageResolved] = useState<string | null>(null);
     const [bgLoading, setBgLoading] = useState(!!effectiveBackgroundImage);
 
@@ -5329,6 +5334,10 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
 
     return (
         <div ref={wrapperRef} className={`session-${session.id} chat-room-wrapper page-shell inset-0 flex flex-col z-20`} style={chatRoomBackgroundStyle} {...(bgLoading ? { "data-loading": "" } : {})} {...(bgImageResolved ? { "data-has-bg-image": "" } : {})} {...(showSettings ? { "data-settings-open": "" } : {})}>
+            {/* CSS priority: session > global chat info > homepage appearance CSS. */}
+            {globalChatCSS && (
+                <style dangerouslySetInnerHTML={{ __html: scopeSessionCSS(globalChatCSS, `.session-${session.id}`) }} />
+            )}
             {/* Custom CSS Injection for this session — scoped to prevent leaking */}
             {liveCSS && (
                 <style dangerouslySetInnerHTML={{ __html: scopeSessionCSS(liveCSS, `.session-${session.id}`) }} />
