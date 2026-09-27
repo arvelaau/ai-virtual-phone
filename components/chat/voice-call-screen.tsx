@@ -19,6 +19,7 @@ import { useCallKeyboardOffsetStyle } from "./use-call-keyboard-offset";
 import { CallSttWarningDialog, hideCallSttWarningPermanently, isCallSttWarningHidden } from "./call-stt-warning-dialog";
 import { isAndroidBrowser } from "./voice-input-platform";
 import { CallVolumeControl } from "./call-volume-control";
+import { useCallScreenSounds } from "@/lib/chat-sound";
 
 // ── Types ───────────────────────────────────────────
 
@@ -67,6 +68,10 @@ export function VoiceCallScreen({ session, character, onEnd, onConnect, initiato
     const [typedText, setTypedText] = useState("");
     const [bgImageResolved, setBgImageResolved] = useState<string | null>(null);
     const [showSttWarning, setShowSttWarning] = useState(false);
+
+    // Ringtone/waiting tone + hangup sound (that character's own sound beats the global "Chat
+    // Info -> Sounds" config).
+    useCallScreenSounds({ initiator, callState, session });
 
     const sttRef = useRef<STTSession | null>(null);
     const audioAbortRef = useRef<(() => void) | null>(null);

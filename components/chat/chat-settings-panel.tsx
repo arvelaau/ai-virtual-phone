@@ -58,6 +58,7 @@ import {
     DEFAULT_OFFLINE_CHAT_BILINGUAL_PROMPT,
 } from "@/lib/bilingual-prompt-defaults";
 import { ChatFallbackAvatar } from "./chat-fallback-avatar";
+import { SessionChatSoundsSection } from "./session-chat-sounds";
 import { MessageBubble, isStandaloneHtmlPreviewContent } from "./message-bubble";
 import { ScreenEffectSettingsModal } from "./screen-effect-settings-modal";
 
@@ -912,6 +913,14 @@ export function ChatSettingsPanel({
                         </button>
                     </>
                 </div>
+
+                {/* Character-specific notification sounds: set on this direct chat, take priority over Global Chat Info's sounds */}
+                {!session.isGroup && (
+                    <>
+                        <div className="px-4 pt-3 pb-2 ts-12 font-medium text-[var(--c-text-title)] opacity-80">Character-Specific Sounds</div>
+                        <SessionChatSoundsSection session={session} accent={BINDING_ACCENTS.voice} onUpdate={updateSession} />
+                    </>
+                )}
 
                 {/* Backgrounds & UI */}
                 <div className="menu-group">

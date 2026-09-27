@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ChatSession, ChatMessage, loadChatMessages, pushChatMessage, getLatestCharacterStateValues } from "@/lib/chat-storage";
+import { ChatSession, ChatMessage, loadChatMessages, pushChatMessage, getLatestCharacterStateValues, resolveChatUserAvatar } from "@/lib/chat-storage";
 import type { StateValue } from "@/lib/chat-storage";
 import { buildCallCancelTag, buildCallHangupTag, buildCallInitiateTag, buildCallRejectTag } from "@/lib/call-tag-patterns";
 import { parseStateValues, mergeStateValues } from "@/lib/state-value-parser";
@@ -19,6 +19,7 @@ import { useCallKeyboardOffsetStyle } from "./use-call-keyboard-offset";
 import { CallSttWarningDialog, hideCallSttWarningPermanently, isCallSttWarningHidden } from "./call-stt-warning-dialog";
 import { isAndroidBrowser } from "./voice-input-platform";
 import { CallVolumeControl } from "./call-volume-control";
+import { useCallScreenSounds } from "@/lib/chat-sound";
 
 // ── Types ───────────────────────────────────────────
 
@@ -88,7 +89,11 @@ export function VideoCallScreen({ session, character, onEnd, onConnect, initiato
     const isSpeakerMutedRef = useRef<boolean>(false);
     const _initUi = resolveUserIdentity(session.contactId, "chat");
     const userNameRef = useRef<string>(_initUi?.name || "你");
-    const userAvatarRef = useRef<string | null>(_initUi?.avatarUrl || null);
+    const userAvatarRef = useRef<string | null>(resolveChatUserAvatar(session, _initUi?.avatarUrl) || null);
+
+    // Ringtone/waiting tone + hangup sound (that character's own sound beats the global "Chat
+    // Info -> Sounds" config).
+    useCallScreenSounds({ initiator, callState, session });
 
     useEffect(() => { stateRef.current = callState; }, [callState]);
 
@@ -264,7 +269,7 @@ export function VideoCallScreen({ session, character, onEnd, onConnect, initiato
 
         const ui = resolveUserIdentity(session.contactId, "chat");
         userNameRef.current = ui?.name || "你";
-        userAvatarRef.current = ui?.avatarUrl || null;
+        userAvatarRef.current = resolveChatUserAvatar(session, ui?.avatarUrl) || null;
 
         messagesRef.current = loadChatMessages(session.id);
 

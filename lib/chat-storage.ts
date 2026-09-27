@@ -76,6 +76,13 @@ export type ChatSession = {
     userAvatarOverride?: string;
     /** Whether to notify the character after the user changes this session's avatar. Defaults to on when unset. */
     notifyCharacterOnUserAvatarChange?: boolean;
+    /**
+     * This character's own notification sounds (set in its direct-chat info page). Overrides
+     * the global chat settings' sounds of the same kind: a field set explicitly on the session
+     * wins, everything else (audio source, sub-toggles) is inherited from global. No setup entry
+     * for group chats yet.
+     */
+    sounds?: ChatSoundsConfig;
     // Group chat fields
     isGroup?: boolean;
     groupName?: string;
@@ -291,7 +298,62 @@ export type ChatAppSettings = {
     globalChatBackgroundImage?: string;
     /** Default recent-image count fed into direct chats; a per-session override takes priority over this. */
     globalVisionImagePromptLimit?: number;
+    /** Global notification-sound config (new message/send/incoming call/outgoing call/hangup), set in Global Chat Info. */
+    globalChatSounds?: ChatSoundsConfig;
 };
+
+// ── Chat notification sounds ────────────────────────────────
+
+export type ChatSoundKind = "newMessage" | "sendMessage" | "incomingCall" | "outgoingCall" | "hangup";
+
+export type ChatSoundConfig = {
+    /** Whether this sound is enabled. */
+    enabled?: boolean;
+    /** Audio source: "file" = a user-uploaded audio file (IndexedDB asset id); "url" = an audio URL. */
+    sourceType?: "file" | "url";
+    /** The asset id when sourceType is "file"; the audio URL when sourceType is "url". */
+    value?: string;
+    /** (New-message sound only) when on, a character's new message plays no sound while that chat is the one currently open. */
+    muteActiveChat?: boolean;
+    /** (New-message sound only) when on, several messages in a row from the same character play the sound only once. */
+    notifyOncePerBurst?: boolean;
+};
+
+export type ChatSoundsConfig = {
+    newMessage?: ChatSoundConfig;
+    sendMessage?: ChatSoundConfig;
+    incomingCall?: ChatSoundConfig;
+    outgoingCall?: ChatSoundConfig;
+    hangup?: ChatSoundConfig;
+};
+
+/**
+ * Resolves a sound's config: character-specific (this session's own `sounds`) beats the global
+ * chat settings' `globalChatSounds`. A field explicitly set on the session (toggle / audio
+ * source / sub-toggles) overrides the global value for that field; every other field is
+ * inherited from global. "Character-specific is on but has no audio configured" falls back to
+ * the global audio; "character-specific is off" mutes that sound for this character entirely.
+ */
+export function resolveChatSoundConfig(
+    kind: ChatSoundKind,
+    session: Pick<ChatSession, "sounds"> | null | undefined,
+): ChatSoundConfig {
+    const merged: ChatSoundConfig = { ...(loadChatAppSettings().globalChatSounds?.[kind] ?? {}) };
+    const own = session?.sounds?.[kind];
+    if (own) {
+        // Only override fields explicitly set on the session; undefined (e.g. a leftover key
+        // after "clear audio") does not participate in the override.
+        for (const [key, value] of Object.entries(own)) {
+            if (value !== undefined) (merged as Record<string, unknown>)[key] = value;
+        }
+    }
+    return merged;
+}
+
+/** Looks up a session by id from the session cache (used by sound-effect sync reads; returns null if not found). */
+export function findChatSessionById(sessionId: string): ChatSession | null {
+    return loadChatSessions().find(s => s.id === sessionId) ?? null;
+}
 
 export const CHAT_APP_SETTINGS_UPDATED_EVENT = "chat-app-settings-updated";
 export const CHAT_MESSAGE_PUSHED_EVENT = "chat-message-pushed";
