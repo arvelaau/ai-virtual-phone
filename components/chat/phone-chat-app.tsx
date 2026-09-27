@@ -8,7 +8,7 @@ import { ChatRoom } from "./chat-room";
 import { MascotChatRoom } from "./mascot-chat-room";
 import { UserProfilePanel } from "./user-profile-panel";
 import { MessageCircle, Users, Aperture, UserRound } from "lucide-react";
-import { ChatSession, loadChatSessions, pushChatMessage, hydrateChatStorage } from "@/lib/chat-storage";
+import { ChatSession, loadChatSessions, pushChatMessage, hydrateChatStorage, markChatSessionRead, setActiveChatSessionId } from "@/lib/chat-storage";
 import { notifyMascotPageContext } from "@/lib/mascot-events";
 import { loadCharacters } from "@/lib/character-storage";
 import { scopeSessionCSS } from "@/lib/css-scoper";
@@ -133,6 +133,24 @@ export const PhoneChatApp = memo(function PhoneChatApp({ onClose, initialSession
             });
         }
     }, [activeSession]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        const sessionId = activeSession?.id ?? null;
+        setActiveChatSessionId(sessionId);
+        if (sessionId) markChatSessionRead(sessionId);
+    }, [activeSession?.id]);
+
+    useEffect(() => () => setActiveChatSessionId(null), []);
+
+    useEffect(() => {
+        const markVisibleRoomRead = () => {
+            if (document.visibilityState !== "visible") return;
+            const sessionId = activeSessionIdRef.current;
+            if (sessionId) markChatSessionRead(sessionId);
+        };
+        document.addEventListener("visibilitychange", markVisibleRoomRead);
+        return () => document.removeEventListener("visibilitychange", markVisibleRoomRead);
+    }, []);
 
     useEffect(() => {
         if (!activeMascot) return;

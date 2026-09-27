@@ -286,6 +286,28 @@ export const CHAT_MESSAGE_PUSHED_EVENT = "chat-message-pushed";
 export const CHAT_MESSAGES_DELETED_EVENT = "chat-messages-deleted";
 export const CHAT_REQUEST_REPLY_EVENT = "chat-request-reply";
 
+let _activeChatSessionId: string | null = null;
+
+/** Tells the shared message layer which chat room is actually in the foreground right now, so unread counting can tell it apart. */
+export function setActiveChatSessionId(sessionId: string | null): void {
+    _activeChatSessionId = sessionId;
+}
+
+/** The chat room currently in the foreground (null when no chat room is open). */
+export function getActiveChatSessionId(): string | null {
+    return _activeChatSessionId;
+}
+
+export function markChatSessionRead(sessionId: string): void {
+    const session = _sessionsCache.find(item => item.id === sessionId);
+    if (!session || session.unreadCount === 0) return;
+    session.unreadCount = 0;
+    dbPutSessions([session]);
+    if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("chat-messages-updated", { detail: { sessionId } }));
+    }
+}
+
 // ── Media Preview Map ─────────────────────────
 const MEDIA_PREVIEW_MAP: Record<string, string> = {
     image: "[图片]", audio: "[语音]", video: "[视频]",
@@ -1241,6 +1263,13 @@ export function pushChatMessage(msg: Omit<ChatMessage, "id" | "createdAt" | "sta
             sessions[sessIdx].lastMessagePreview = preview;
         }
         sessions[sessIdx].updatedAt = newMsg.createdAt;
+        if (
+            newMsg.role === "assistant"
+            && (_activeChatSessionId !== newMsg.sessionId
+                || (typeof document !== "undefined" && document.visibilityState !== "visible"))
+        ) {
+            sessions[sessIdx].unreadCount = Math.max(0, sessions[sessIdx].unreadCount || 0) + 1;
+        }
         saveChatSessions(sessions);
     }
 
