@@ -70,6 +70,12 @@ export type ChatSession = {
     offlineBilingualTranslationPrompt?: string;
     nativeExpandedToolSourceIds?: string[];
     visionImagePromptLimit?: number;
+    /** false means this direct chat explicitly overrides the global recent-image count; older sessions follow whatever global value is set. */
+    visionImagePromptLimitUsesGlobal?: boolean;
+    /** The avatar shown as "me" only in this direct chat; does not change the user's identity, profile, or any other session. */
+    userAvatarOverride?: string;
+    /** Whether to notify the character after the user changes this session's avatar. Defaults to on when unset. */
+    notifyCharacterOnUserAvatarChange?: boolean;
     // Group chat fields
     isGroup?: boolean;
     groupName?: string;
@@ -279,6 +285,12 @@ export type ChatAppSettings = {
     /** When true, a directive card renders BEFORE the message's main text instead of after
      *  (the long-standing default, unchanged unless this is explicitly turned on). */
     appCardPositionBeforeText?: boolean;
+    /** Default "my avatar" for direct chats; a per-session override takes priority over this. */
+    globalChatUserAvatar?: string;
+    /** Default direct-chat background; a per-session override takes priority over this. */
+    globalChatBackgroundImage?: string;
+    /** Default recent-image count fed into direct chats; a per-session override takes priority over this. */
+    globalVisionImagePromptLimit?: number;
 };
 
 export const CHAT_APP_SETTINGS_UPDATED_EVENT = "chat-app-settings-updated";
@@ -1774,6 +1786,29 @@ export function saveChatAppSettings(settings: ChatAppSettings) {
     if (typeof window === "undefined") return;
     kvSet(SETTINGS_KEY, JSON.stringify(settings));
     window.dispatchEvent(new CustomEvent(CHAT_APP_SETTINGS_UPDATED_EVENT, { detail: settings }));
+}
+
+/** Recent-image count: per-session override > global chat setting > built-in default. Same rule for direct and group chats. */
+export function resolveVisionImagePromptLimit(session: Pick<ChatSession, "visionImagePromptLimit" | "visionImagePromptLimitUsesGlobal" | "isGroup"> | null | undefined): number {
+    const globalValue = loadChatAppSettings().globalVisionImagePromptLimit;
+    if (session?.visionImagePromptLimitUsesGlobal === false) {
+        return normalizeVisionImagePromptLimit(session.visionImagePromptLimit);
+    }
+    return normalizeVisionImagePromptLimit(globalValue ?? session?.visionImagePromptLimit);
+}
+
+/** The user's avatar shown in chat: per-session override > global chat setting > the user's own profile avatar. Same rule for direct and group chats. */
+export function resolveChatUserAvatar(
+    session: Pick<ChatSession, "userAvatarOverride" | "isGroup"> | null | undefined,
+    identityAvatar?: string | null,
+): string {
+    return session?.userAvatarOverride || loadChatAppSettings().globalChatUserAvatar || identityAvatar || "";
+}
+
+/** Chat background: per-session override > global chat setting. Same rule for direct and group chats. */
+export function resolveChatBackgroundImage(session: Pick<ChatSession, "backgroundImage" | "isGroup"> | null | undefined): string {
+    if (session?.backgroundImage) return session.backgroundImage;
+    return loadChatAppSettings().globalChatBackgroundImage || "";
 }
 
 // --- Follow-up schedule persistence (supports multiple sessions) ---

@@ -15,6 +15,9 @@ import {
     pushChatMessage,
     removeChatContact,
     normalizeVisionImagePromptLimit,
+    resolveVisionImagePromptLimit,
+    resolveChatUserAvatar,
+    loadChatAppSettings,
     MAX_VISION_IMAGE_PROMPT_LIMIT,
     type ChatMessage,
 } from "@/lib/chat-storage";
@@ -175,7 +178,8 @@ export function ChatSettingsPanel({
     // Blacklist simulation: while blacklisted, messages the character sends are rejected by
     // the user (a WeChat-style red exclamation mark).
     const [isBlacklisted, setIsBlacklisted] = useState(session.isBlacklisted || false);
-    const [visionImagePromptLimit, setVisionImagePromptLimit] = useState(() => normalizeVisionImagePromptLimit(session.visionImagePromptLimit));
+    const [visionImagePromptLimit, setVisionImagePromptLimit] = useState(() => resolveVisionImagePromptLimit(session));
+    const [visionLimitUsesGlobal, setVisionLimitUsesGlobal] = useState(session.visionImagePromptLimitUsesGlobal !== false);
     const [bilingualTranslationEnabled, setBilingualTranslationEnabled] = useState(session.bilingualTranslationEnabled !== false);
     const [collapseBilingualTranslation, setCollapseBilingualTranslation] = useState(session.collapseBilingualTranslation !== false);
     const [discardInvalidStickers, setDiscardInvalidStickers] = useState(session.discardInvalidStickers === true);
@@ -307,6 +311,7 @@ export function ChatSettingsPanel({
         ? (session.participantIds || []).map(id => characters.find(c => c.id === id)).filter(Boolean)
         : [];
     const userIdentity = resolveUserIdentity(undefined, session.isGroup ? "group_chat" : "chat");
+    const effectiveUserAvatar = resolveChatUserAvatar(session, userIdentity?.avatarUrl);
 
     // ── Group member management ──
     const [, setRosterVersion] = useState(0); // bump to re-render after admin actions
@@ -462,7 +467,8 @@ export function ChatSettingsPanel({
     const updateVisionImagePromptLimit = (value: unknown) => {
         const next = normalizeVisionImagePromptLimit(value);
         setVisionImagePromptLimit(next);
-        updateSession({ visionImagePromptLimit: next });
+        setVisionLimitUsesGlobal(false);
+        updateSession({ visionImagePromptLimit: next, visionImagePromptLimitUsesGlobal: false });
     };
 
     const openBilingualPromptEditor = () => {
@@ -612,8 +618,8 @@ export function ChatSettingsPanel({
                         </div>
                         {resultRole === "user" && (
                             <div className="chat-msg-avatar w-[40px] h-[40px] rounded-[20px] bg-[var(--c-page-body-bg)] shrink-0 flex items-center justify-center overflow-hidden">
-                                {userIdentity?.avatarUrl ? (
-                                    <img src={userIdentity.avatarUrl} alt="Me" className="w-full h-full object-cover rounded-[20px]" />
+                                {effectiveUserAvatar ? (
+                                    <img src={effectiveUserAvatar} alt="Me" className="w-full h-full object-cover rounded-[20px]" />
                                 ) : (
                                     <ChatFallbackAvatar />
                                 )}
@@ -750,7 +756,7 @@ export function ChatSettingsPanel({
                         <ChatInfoIcon icon={ImageIcon} color={BINDING_ACCENTS.api} />
                         <div className="menu-label-group">
                             <span className="menu-label">Recent Images Sent to Model</span>
-                            <span className="menu-desc">Number of recent images sent to the model's vision context, 0 means no images are sent</span>
+                            <span className="menu-desc">Number of recent images sent to the model's vision context; currently {visionLimitUsesGlobal ? "following the global setting" : "overridden for this chat"}</span>
                         </div>
                         <div className="menu-right gap-2">
                             <button
@@ -777,6 +783,14 @@ export function ChatSettingsPanel({
                             >
                                 +
                             </button>
+                            {!visionLimitUsesGlobal && (
+                                <button type="button" className="ui-btn ui-btn-ghost h-8 px-2" onClick={() => {
+                                    const next = normalizeVisionImagePromptLimit(loadChatAppSettings().globalVisionImagePromptLimit);
+                                    setVisionImagePromptLimit(next);
+                                    setVisionLimitUsesGlobal(true);
+                                    updateSession({ visionImagePromptLimitUsesGlobal: true });
+                                }}>Global</button>
+                            )}
                         </div>
                     </div>
                     <>

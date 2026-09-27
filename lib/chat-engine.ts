@@ -16,6 +16,7 @@ import {
     saveChatSessions,
     getLatestCharacterStateValues,
     normalizeVisionImagePromptLimit,
+    resolveVisionImagePromptLimit,
     createResponseBatchId,
     createToolExecutionId,
 } from "./chat-storage";
@@ -1859,7 +1860,7 @@ export async function buildChatPromptMessages(
     });
     const promptHistory = applyVisionImagePromptLimit(
         truncatedHistory.map(msg => ({ ...msg })),
-        session.visionImagePromptLimit,
+        resolveVisionImagePromptLimit(session),
     );
 
     if (config.enableImageRecognition) {
