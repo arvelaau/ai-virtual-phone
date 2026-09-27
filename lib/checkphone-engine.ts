@@ -1649,7 +1649,7 @@ async function buildCheckPhoneAppMessages(
   preset: PresetConfig | null,
   worldBooks: WorldBookConfig[],
   regexes: RegexConfig[],
-  options?: { snapshotSummary?: string; lastRefreshAt?: string },
+  options?: { snapshotSummary?: string; lastRefreshAt?: string; batchAppIds?: CheckPhoneAppId[] },
 ): Promise<LLMMessage[]> {
   const character = loadCharacters().find((item) => item.id === characterId);
   if (!character) throw new Error("character not found");
@@ -1667,7 +1667,12 @@ async function buildCheckPhoneAppMessages(
     retrieveCoreMemoriesForPrompt(characterId, memConfig).catch(() => null),
   ]);
 
-  return assemblePromptPayload({
+  const batchAppIds = options?.batchAppIds?.length ? options.batchAppIds : [appId];
+  const appTags = [
+    "checkphone",
+    ...batchAppIds.map((targetId) => getCheckPhonePromptTags(targetId)[1]),
+  ];
+  const messages = assemblePromptPayload({
     character,
     history: [],
     preset,
@@ -1675,7 +1680,7 @@ async function buildCheckPhoneAppMessages(
     regexes,
     userIdentity,
     appId: "checkphone",
-    appTags: getCheckPhonePromptTags(appId),
+    appTags,
     scheduleSummary: buildCalendarScheduleMarker("character", characterId, getWeekStartIso(new Date())),
     coreMemories: coreMemories ? formatCoreMemories(coreMemories) : "",
     longTermMemories: memories ? formatLongTermMemories(memories) : "",
@@ -1683,7 +1688,7 @@ async function buildCheckPhoneAppMessages(
     recentBlocks,
     unifiedRecentItems,
     phoneAppId: appId,
-    phoneAppLabel: CHECKPHONE_APP_SPECS[appId].englishLabel,
+    phoneAppLabel: batchAppIds.map((targetId) => CHECKPHONE_APP_SPECS[targetId].englishLabel).join(", "),
     phoneSnapshotSummary: options?.snapshotSummary ?? "",
     phoneLastRefreshAt: options?.lastRefreshAt ?? "",
     checkPhoneBilingualInstruction: buildCheckPhoneBilingualInstruction(
@@ -1691,6 +1696,22 @@ async function buildCheckPhoneAppMessages(
       settings.bilingualTranslationPrompt,
     ),
   });
+  if (batchAppIds.length > 1) {
+    messages.push({
+      role: "system",
+      content: [
+        `This round must generate ${batchAppIds.length} Check Phone apps at once: ${batchAppIds.map((id) => `${id} (${CHECKPHONE_APP_SPECS[id].englishLabel})`).join(", ")}.`,
+        "The output contract for each app was already given above. Complete every app in turn; within each section, follow that app's own contract strictly and do not mix apps together.",
+        "You must wrap each app's output in exactly these plain-text boundaries, with nothing outside them and no Markdown code block:",
+        ...batchAppIds.flatMap((id) => [
+          `<<<APP:${id}>>>`,
+          "(put that app's full contract-required output here)",
+          "<<<END_APP>>>",
+        ]),
+      ].join("\n"),
+    });
+  }
+  return messages;
 }
 
 function normalizeNotesPayload(payload: unknown): CheckPhoneNotesPayload | null {
@@ -8541,7 +8562,7 @@ export async function generateCheckPhoneReading(
       return {
         payload: null,
         summary: "",
-        error: "无法解析阅读内容",
+        error: "Unable to parse the reading content",
         debugRawOutput: rawOutput ?? "",
         debugSanitizedOutput: parseMode === "failed" ? sanitizedCandidate : undefined,
         debugParseMode: parseMode,
@@ -8558,5 +8579,189 @@ export async function generateCheckPhoneReading(
   } catch (error) {
     const message = error instanceof Error ? error.message : "generation failed";
     return { payload: null, summary: "", error: message, debugRawOutput: "", debugParseMode: "failed", debugParseError: message };
+  }
+}
+
+type CheckPhoneBatchItem = {
+  appId: CheckPhoneAppId;
+  payload: unknown | null;
+  summary: string;
+  error?: string;
+};
+
+export function parseCheckPhoneBatchAppOutput(
+  appId: CheckPhoneAppId,
+  rawOutput: string,
+  characterId: string,
+  characterName: string,
+): CheckPhoneBatchItem {
+  let parsed: unknown = null;
+  let payload: unknown | null = null;
+
+  switch (appId) {
+    case "notes":
+      parsed = parseNotesBlockPayload(rawOutput).parsed;
+      payload = normalizeNotesPayload(parsed);
+      break;
+    case "email":
+      parsed = parseEmailBlockPayload(rawOutput).parsed;
+      payload = normalizeEmailPayload(parsed);
+      break;
+    case "takeout":
+      parsed = parseTakeoutBlockPayload(rawOutput).parsed;
+      payload = normalizeTakeoutPayload(parsed);
+      break;
+    case "telegram":
+      parsed = parseTelegramBlockPayload(rawOutput).parsed;
+      payload = normalizeTelegramPayload(parsed);
+      break;
+    case "steam":
+      parsed = parseSteamBlockPayload(rawOutput).parsed;
+      payload = normalizeSteamPayload(parsed);
+      break;
+    case "reddit":
+      parsed = parseRedditBlockPayload(rawOutput).parsed;
+      payload = normalizeRedditPayload(parsed);
+      break;
+    case "x":
+      parsed = parseXBlockPayload(rawOutput).parsed;
+      payload = normalizeXPayload(parsed, characterName);
+      break;
+    case "youtube":
+      parsed = parseYoutubeBlockPayload(rawOutput).parsed;
+      payload = normalizeYoutubePayload(parsed);
+      break;
+    case "bilibili":
+      parsed = parseBilibiliBlockPayload(rawOutput).parsed;
+      payload = normalizeBilibiliPayload(parsed);
+      break;
+    case "douyin":
+      parsed = parseDouyinBlockPayload(rawOutput).parsed;
+      payload = normalizeDouyinPayload(parsed, characterName);
+      break;
+    case "instagram":
+      parsed = parseInstagramBlockPayload(rawOutput).parsed;
+      payload = normalizeInstagramPayload(parsed);
+      break;
+    case "messages":
+      parsed = parseMessagesBlockPayload(rawOutput).parsed;
+      payload = normalizeMessagesPayload(parsed);
+      break;
+    case "browser":
+      parsed = parseBrowserBlockPayload(rawOutput).parsed;
+      payload = normalizeBrowserPayload(parsed);
+      break;
+    case "photos":
+      parsed = parsePhotosBlockPayload(rawOutput).parsed;
+      payload = normalizePhotosPayload(parsed);
+      break;
+    case "chat": {
+      parsed = parseChatBlockPayload(rawOutput).parsed;
+      const supplemental = normalizeChatPayload(parsed);
+      payload = supplemental
+        ? mergeChatPayload(buildRealCheckPhoneChatPayload(characterId), supplemental, characterId)
+        : null;
+      break;
+    }
+    case "assets":
+      parsed = parseAssetsBlockPayload(rawOutput).parsed;
+      payload = normalizeAssetsPayload(parsed);
+      break;
+    case "phone":
+      parsed = parsePhoneBlockPayload(rawOutput).parsed;
+      payload = normalizePhonePayload(parsed);
+      break;
+    case "shopping":
+      parsed = parseShoppingBlockPayload(rawOutput).parsed;
+      payload = normalizeShoppingPayload(parsed);
+      break;
+    case "music":
+      parsed = parseMusicBlockPayload(rawOutput).parsed;
+      payload = normalizeMusicPayload(parsed);
+      break;
+    case "douban":
+      parsed = parseDoubanBlockPayload(rawOutput).parsed;
+      payload = normalizeDoubanPayload(parsed);
+      break;
+    case "xiaohongshu":
+      parsed = parseXiaohongshuBlockPayload(rawOutput).parsed;
+      payload = normalizeXiaohongshuPayload(parsed, characterName);
+      break;
+    case "weibo":
+      parsed = parseWeiboBlockPayload(rawOutput).parsed;
+      payload = normalizeWeiboPayload(parsed, characterName);
+      break;
+    case "reading":
+      parsed = parseReadingBlockPayload(rawOutput).parsed;
+      payload = normalizeReadingPayload(parsed);
+      break;
+  }
+
+  return payload
+    ? { appId, payload, summary: formatSnapshotSummary(payload) }
+    : { appId, payload: null, summary: "", error: `Unable to parse the ${CHECKPHONE_APP_SPECS[appId].englishLabel} content` };
+}
+
+/**
+ * One request generates up to four app payloads. Each app keeps its existing
+ * prompt contract and parser; only the network/model round trip is shared.
+ */
+export async function generateCheckPhoneAppBatch(
+  characterId: string,
+  requestedAppIds: CheckPhoneAppId[],
+): Promise<{ items: CheckPhoneBatchItem[]; error?: string; debugRawOutput?: string }> {
+  const appIds = uniqueAppIds(requestedAppIds).slice(0, 4);
+  if (appIds.length === 0) return { items: [], error: "Select at least one app" };
+
+  const { apiConfig, preset, worldBooks, regexes } = resolveCheckPhoneConfigs(characterId);
+  if (!apiConfig) return { items: [], error: "No usable API config found" };
+
+  try {
+    const snapshots = await Promise.all(appIds.map((appId) => loadPhoneSnapshot(characterId, appId)));
+    const snapshotSummary = snapshots
+      .map((snapshot, index) => snapshot?.payload
+        ? `[Previous ${CHECKPHONE_APP_SPECS[appIds[index]].englishLabel} snapshot]\n${formatSnapshotSummary(snapshot.payload)}`
+        : "")
+      .filter(Boolean)
+      .join("\n\n");
+    const messages = await buildCheckPhoneAppMessages(characterId, appIds[0], preset, worldBooks, regexes, {
+      snapshotSummary,
+      lastRefreshAt: snapshots.map((snapshot) => snapshot?.updatedAt || "").filter(Boolean).sort().at(-1) || "",
+      batchAppIds: appIds,
+    });
+    const characterName = loadCharacters().find((item) => item.id === characterId)?.name ?? "";
+    const rawOutput = await sendLLMRequest(
+      apiConfig,
+      preset,
+      messages,
+      regexes,
+      { characterName },
+      { skipOutputRegex: true, appId: "checkphone_batch" },
+    );
+    if (!rawOutput?.trim()) return { items: [], error: "The model returned nothing", debugRawOutput: rawOutput ?? "" };
+
+    if (appIds.length === 1) {
+      return {
+        items: [parseCheckPhoneBatchAppOutput(appIds[0], rawOutput, characterId, characterName)],
+        debugRawOutput: rawOutput,
+      };
+    }
+
+    const sections = new Map<CheckPhoneAppId, string>();
+    const sectionPattern = /<<<APP:([a-z]+)>>>([\s\S]*?)<<<END_APP>>>/gi;
+    for (const match of rawOutput.matchAll(sectionPattern)) {
+      const candidate = match[1].toLowerCase();
+      if (isCheckPhoneAppId(candidate) && appIds.includes(candidate)) sections.set(candidate, match[2].trim());
+    }
+    const items = appIds.map((appId): CheckPhoneBatchItem => {
+      const section = sections.get(appId);
+      return section
+        ? parseCheckPhoneBatchAppOutput(appId, section, characterId, characterName)
+        : { appId, payload: null, summary: "", error: `The response is missing the ${CHECKPHONE_APP_SPECS[appId].englishLabel} section` };
+    });
+    return { items, debugRawOutput: rawOutput };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Batch generation failed";
+    return { items: [], error: message, debugRawOutput: "" };
   }
 }
