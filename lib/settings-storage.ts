@@ -7,6 +7,9 @@ import type {
     ApiConfig,
     VoiceApiConfig,
     ImageGenerationSettings,
+    NovelAiPreset,
+    NovelAiSettings,
+    OpenAiImagePreset,
     MediaLookupSettings,
     BindingConfig,
     BindingSlot,
@@ -16,6 +19,21 @@ import type {
 } from "./settings-types";
 import type { UserIdentity } from "@/components/settings/user-identity";
 import { createBuiltinPreset, BUILTIN_PRESET_VERSION } from "./builtin-preset";
+import {
+    NOVELAI_DEFAULT_MODEL,
+    NOVELAI_DEFAULT_NOISE_SCHEDULE,
+    NOVELAI_DEFAULT_RESOLUTION,
+    NOVELAI_DEFAULT_SAMPLER,
+    NOVELAI_DEFAULT_SCALE,
+    NOVELAI_DEFAULT_STEPS,
+    normalizeNovelAiModel,
+    normalizeNovelAiNoiseSchedule,
+    normalizeNovelAiResolution,
+    normalizeNovelAiSampler,
+    normalizeNovelAiScale,
+    normalizeNovelAiSteps,
+} from "./novelai-image-config";
+import { getActiveImageGenerationBindingId, getImageGenerationBindingOptions } from "./image-generation-binding";
 import { areTagsEqual, normalizePromptScopeTags, normalizeTags } from "./content-tag-utils";
 import {
     readPresetsCache, writePresetsCache,
@@ -623,8 +641,25 @@ export function saveVoiceConfigs(configs: VoiceApiConfig[]): void {
 
 // --- Image Generation Settings ──────────────────────────────────────────
 
+export const DEFAULT_NOVELAI_PRESET: NovelAiPreset = {
+    id: "preset_default_anime",
+    name: "Default Anime Preset",
+    model: NOVELAI_DEFAULT_MODEL,
+    resolution: NOVELAI_DEFAULT_RESOLUTION,
+    steps: NOVELAI_DEFAULT_STEPS,
+    scale: NOVELAI_DEFAULT_SCALE,
+    sampler: NOVELAI_DEFAULT_SAMPLER,
+    noiseSchedule: NOVELAI_DEFAULT_NOISE_SCHEDULE,
+    positivePrompt: "masterpiece, best quality, amazing quality, very aesthetic, absurdres",
+    negativePrompt: "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name",
+    qualityToggle: true,
+    smea: false,
+    smeaDyn: false,
+};
+
 export const DEFAULT_IMAGE_GENERATION_SETTINGS: ImageGenerationSettings = {
     enabled: false,
+    provider: "openai",
     requestMode: "direct",
     apiKey: "",
     baseUrl: "https://api.openai.com/v1",
@@ -632,6 +667,12 @@ export const DEFAULT_IMAGE_GENERATION_SETTINGS: ImageGenerationSettings = {
     size: "1024x1024",
     quality: "auto",
     extraPrompt: "",
+    novelai: {
+        apiKey: "",
+        requestMode: "direct",
+        activePresetId: DEFAULT_NOVELAI_PRESET.id,
+        presets: [DEFAULT_NOVELAI_PRESET],
+    },
     characterReferences: {},
     imageHosting: {
         provider: "none",
@@ -643,32 +684,134 @@ export const DEFAULT_IMAGE_GENERATION_SETTINGS: ImageGenerationSettings = {
     },
 };
 
+function normalizeNovelAiPreset(preset: Partial<NovelAiPreset> | null | undefined, index: number): NovelAiPreset {
+    return {
+        id: typeof preset?.id === "string" && preset.id.trim() ? preset.id.trim() : `preset_nai_${Date.now()}_${index}`,
+        name: typeof preset?.name === "string" && preset.name.trim() ? preset.name.trim() : `Preset ${index + 1}`,
+        model: normalizeNovelAiModel(preset?.model),
+        resolution: normalizeNovelAiResolution(preset?.resolution),
+        steps: normalizeNovelAiSteps(preset?.steps),
+        scale: normalizeNovelAiScale(preset?.scale),
+        sampler: normalizeNovelAiSampler(preset?.sampler),
+        noiseSchedule: normalizeNovelAiNoiseSchedule(preset?.noiseSchedule),
+        positivePrompt: typeof preset?.positivePrompt === "string" ? preset.positivePrompt : DEFAULT_NOVELAI_PRESET.positivePrompt,
+        negativePrompt: typeof preset?.negativePrompt === "string" ? preset.negativePrompt : DEFAULT_NOVELAI_PRESET.negativePrompt,
+        qualityToggle: preset?.qualityToggle !== false,
+        smea: preset?.smea === true,
+        smeaDyn: preset?.smeaDyn === true,
+    };
+}
+
+function normalizeOpenAiImagePreset(preset: Partial<OpenAiImagePreset> | null | undefined, index: number): OpenAiImagePreset {
+    return {
+        id: typeof preset?.id === "string" && preset.id.trim() ? preset.id.trim() : `preset_openai_${Date.now()}_${index}`,
+        name: typeof preset?.name === "string" && preset.name.trim() ? preset.name.trim() : "Default Preset",
+        requestMode: preset?.requestMode === "server" || preset?.requestMode === "direct" ? preset.requestMode : DEFAULT_IMAGE_GENERATION_SETTINGS.requestMode,
+        apiKey: typeof preset?.apiKey === "string" ? preset.apiKey : "",
+        baseUrl: typeof preset?.baseUrl === "string" ? preset.baseUrl : DEFAULT_IMAGE_GENERATION_SETTINGS.baseUrl,
+        model: typeof preset?.model === "string" ? preset.model : DEFAULT_IMAGE_GENERATION_SETTINGS.model,
+        size: typeof preset?.size === "string" ? preset.size : DEFAULT_IMAGE_GENERATION_SETTINGS.size,
+        quality: typeof preset?.quality === "string" ? preset.quality : DEFAULT_IMAGE_GENERATION_SETTINGS.quality,
+        extraPrompt: typeof preset?.extraPrompt === "string" ? preset.extraPrompt : "",
+    };
+}
+
 function normalizeImageGenerationSettings(settings: Partial<ImageGenerationSettings> | null | undefined): ImageGenerationSettings {
-    const refs = settings?.characterReferences && typeof settings.characterReferences === "object"
+    const rawRefs = settings?.characterReferences && typeof settings.characterReferences === "object"
         ? settings.characterReferences
         : {};
+    const refs: ImageGenerationSettings["characterReferences"] = {};
+    for (const [characterId, rawRef] of Object.entries(rawRefs)) {
+        if (!rawRef || typeof rawRef !== "object") continue;
+        const crop = rawRef.faceCrop;
+        const size = crop && typeof crop.size === "number" ? Math.max(0.18, Math.min(1, crop.size)) : 0.46;
+        refs[characterId] = {
+            assetId: typeof rawRef.assetId === "string" && rawRef.assetId ? rawRef.assetId : undefined,
+            updatedAt: typeof rawRef.updatedAt === "number" ? rawRef.updatedAt : Date.now(),
+            featurePrompt: typeof rawRef.featurePrompt === "string" ? rawRef.featurePrompt : "",
+            enabled: rawRef.enabled !== false,
+            selfieOnly: rawRef.selfieOnly !== false,
+            faceCrop: crop && typeof crop.x === "number" && typeof crop.y === "number"
+                ? {
+                    x: Math.max(0, Math.min(1, crop.x)),
+                    y: Math.max(0, Math.min(1, crop.y)),
+                    size,
+                }
+                : { x: 0.27, y: 0.12, size: 0.46 },
+        };
+    }
+    const provider = settings?.provider === "novelai" ? "novelai" : "openai";
     const requestMode = settings?.requestMode === "server" || settings?.requestMode === "direct"
         ? settings.requestMode
         : DEFAULT_IMAGE_GENERATION_SETTINGS.requestMode;
     const hosting: Partial<ImageGenerationSettings["imageHosting"]> = settings?.imageHosting && typeof settings.imageHosting === "object"
         ? settings.imageHosting
         : {};
-    const provider = hosting.provider === "imgbb" ? "imgbb" : "none";
+    const hostingProvider = hosting.provider === "imgbb" ? "imgbb" : "none";
     const defaultExpirationSeconds = typeof hosting.defaultExpirationSeconds === "number"
         ? Math.max(0, Math.min(15552000, Math.floor(hosting.defaultExpirationSeconds)))
         : DEFAULT_IMAGE_GENERATION_SETTINGS.imageHosting.defaultExpirationSeconds;
     const maxUploadBytes = typeof hosting.maxUploadBytes === "number"
         ? Math.max(64 * 1024, Math.min(32 * 1024 * 1024, Math.floor(hosting.maxUploadBytes)))
         : DEFAULT_IMAGE_GENERATION_SETTINGS.imageHosting.maxUploadBytes;
+
+    const rawOpenAiPresets = settings?.openaiPresets;
+    const openaiPresets = Array.isArray(rawOpenAiPresets) && rawOpenAiPresets.length > 0
+        ? rawOpenAiPresets.map((preset, index) => normalizeOpenAiImagePreset(preset, index))
+        : [normalizeOpenAiImagePreset({
+            id: "preset_openai_default",
+            name: "Default Preset",
+            requestMode,
+            apiKey: settings?.apiKey,
+            baseUrl: settings?.baseUrl,
+            model: settings?.model,
+            size: settings?.size,
+            quality: settings?.quality,
+            extraPrompt: settings?.extraPrompt,
+        }, 0)];
+    const activeOpenAiPresetId = typeof settings?.activeOpenAiPresetId === "string"
+        && openaiPresets.some(preset => preset.id === settings.activeOpenAiPresetId)
+        ? settings.activeOpenAiPresetId
+        : openaiPresets[0].id;
+    const activeOpenAiPreset = openaiPresets.find(preset => preset.id === activeOpenAiPresetId) || openaiPresets[0];
+
+    const rawNai = settings?.novelai;
+    let naiPresets = Array.isArray(rawNai?.presets) && rawNai.presets.length > 0
+        ? rawNai.presets.map((p, idx) => normalizeNovelAiPreset(p, idx))
+        : [DEFAULT_NOVELAI_PRESET];
+    let activePresetId = typeof rawNai?.activePresetId === "string" ? rawNai.activePresetId : naiPresets[0].id;
+    if (!naiPresets.some(p => p.id === activePresetId)) {
+        activePresetId = naiPresets[0].id;
+    }
+
+    const novelai: NovelAiSettings = {
+        apiKey: typeof rawNai?.apiKey === "string" ? rawNai.apiKey : "",
+        requestMode: rawNai?.requestMode === "server" || rawNai?.requestMode === "direct"
+            ? rawNai.requestMode
+            : requestMode,
+        activePresetId,
+        presets: naiPresets,
+    };
+
     return {
         ...DEFAULT_IMAGE_GENERATION_SETTINGS,
         ...(settings || {}),
-        requestMode,
+        provider,
+        requestMode: activeOpenAiPreset.requestMode,
+        apiKey: activeOpenAiPreset.apiKey,
+        baseUrl: activeOpenAiPreset.baseUrl,
+        model: activeOpenAiPreset.model,
+        size: activeOpenAiPreset.size,
+        quality: activeOpenAiPreset.quality,
+        extraPrompt: activeOpenAiPreset.extraPrompt,
+        openaiPresets,
+        activeOpenAiPresetId,
+        novelai,
         characterReferences: refs,
         imageHosting: {
             ...DEFAULT_IMAGE_GENERATION_SETTINGS.imageHosting,
             ...hosting,
-            provider,
+            provider: hostingProvider,
             defaultExpirationSeconds,
             maxUploadBytes,
             autoConvertToWebp: hosting.autoConvertToWebp !== false,
@@ -791,6 +934,47 @@ export function saveBindingConfig(config: BindingConfig, notify: boolean = true)
     if (notify) window.dispatchEvent(new CustomEvent("settings-bindings-updated"));
 }
 
+/**
+ * Global-default binding, "what you see is what's in effect": text API, image generation,
+ * preset, and user identity no longer have an "unset" state. When one is unset (or points at a
+ * deleted object), the actual fallback value is written into storage -- API = first config,
+ * preset = built-in preset, identity = first in the list -- so the binding UI always shows what
+ * is really taking effect, eliminating the silent fallback of "not bound, but quietly using the
+ * first one anyway" (a multi-identity user once had their memories cross-contaminated by this).
+ * A list that's empty keeps its default. Run once on app start and once when the binding UI
+ * loads; not meant for a hot path.
+ */
+export function ensureGlobalBindingDefaults(): void {
+    if (typeof window === "undefined") return;
+    const config = loadBindingConfig();
+    const global = config.globalDefaults;
+    let changed = false;
+
+    const apiConfigs = loadApiConfigs();
+    if (apiConfigs.length > 0 && !apiConfigs.some(c => c.id === global.apiConfigId)) {
+        global.apiConfigId = apiConfigs[0].id;
+        changed = true;
+    }
+    const imageSettings = loadImageGenerationSettings();
+    const imageBindingOptions = getImageGenerationBindingOptions(imageSettings);
+    if (imageBindingOptions.length > 0 && !imageBindingOptions.some(option => option.id === global.imageConfigId)) {
+        global.imageConfigId = getActiveImageGenerationBindingId(imageSettings);
+        changed = true;
+    }
+    const presets = loadPresets();
+    if (presets.length > 0 && !presets.some(p => p.id === global.presetId)) {
+        global.presetId = (presets.find(p => p.builtIn) ?? presets[0]).id;
+        changed = true;
+    }
+    const identities = loadUserIdentities();
+    if (identities.length > 0 && !identities.some(i => i.id === global.userIdentityId)) {
+        global.userIdentityId = identities[0].id;
+        changed = true;
+    }
+
+    if (changed) saveBindingConfig(config);
+}
+
 export function getCharacterBinding(config: BindingConfig, characterId: string): CharacterBinding {
     const existing = config.characterBindings.find(b => b.characterId === characterId);
     if (existing) return existing;
@@ -809,7 +993,8 @@ export function setCharacterBinding(config: BindingConfig, binding: CharacterBin
 }
 
 /**
- * Cascade resolution: global defaults → character defaults → app overrides.
+ * Cascade resolution: global defaults → APP defaults → character defaults → character APP overrides.
+ * Effective priority: character binding > APP binding > global binding.
  * undefined/empty fields mean "inherit from parent level".
  */
 export function resolveBinding(
@@ -822,6 +1007,7 @@ export function resolveBinding(
     // Start with global defaults
     const resolved: BindingSlot = {
         apiConfigId: global.apiConfigId,
+        imageConfigId: global.imageConfigId,
         voiceConfigId: global.voiceConfigId,
         presetId: global.presetId,
         userIdentityId: global.userIdentityId,
@@ -829,14 +1015,20 @@ export function resolveBinding(
         regexIds: global.regexIds ? [...global.regexIds] : undefined,
     };
 
-    const applySlot = (slot: BindingSlot): void => {
+    const applySlot = (slot: BindingSlot, includeVoice = true): void => {
         if (slot.apiConfigId) resolved.apiConfigId = slot.apiConfigId;
-        if (slot.voiceConfigId) resolved.voiceConfigId = slot.voiceConfigId;
+        if (slot.imageConfigId) resolved.imageConfigId = slot.imageConfigId;
+        if (includeVoice && slot.voiceConfigId) resolved.voiceConfigId = slot.voiceConfigId;
         if (slot.presetId) resolved.presetId = slot.presetId;
         if (slot.userIdentityId) resolved.userIdentityId = slot.userIdentityId;
         if (slot.worldBookIds && slot.worldBookIds.length > 0) resolved.worldBookIds = [...slot.worldBookIds];
         if (slot.regexIds && slot.regexIds.length > 0) resolved.regexIds = [...slot.regexIds];
     };
+
+    // APP defaults outrank global defaults, and must apply even with no character (e.g. group chat).
+    if (appId && config.appDefaults?.[appId]) {
+        applySlot(config.appDefaults[appId]!, false);
+    }
 
     if (!characterId) return resolved;
 
@@ -846,12 +1038,9 @@ export function resolveBinding(
         applySlot(charBinding.defaults);
     }
 
-    if (appId && config.appDefaults?.[appId]) {
-        applySlot(config.appDefaults[appId]!);
-    }
-
+    // A character's own APP override is the most precise layer, and takes the highest priority.
     if (appId && charBinding?.appOverrides[appId]) {
-        applySlot(charBinding.appOverrides[appId]!);
+        applySlot(charBinding.appOverrides[appId]!, false);
     }
 
     return resolved;
@@ -994,7 +1183,7 @@ export const USER_IDENTITIES_UPDATED_EVENT = "user-identities-updated";
 
 /**
  * Resolve user identity through the binding cascade:
- *   global defaults → character defaults → app overrides.
+ *   global defaults → APP defaults → character defaults → character APP overrides.
  * Falls back to first identity if binding has no userIdentityId set.
  */
 export function resolveUserIdentity(characterId?: string, appId?: string): UserIdentity | null {

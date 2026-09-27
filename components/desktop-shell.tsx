@@ -113,7 +113,7 @@ import type { DIYWidgetTemplate } from "@/lib/widget-types";
 import { DebugPromptPanel } from "@/components/debug-prompt-panel";
 import { QuickActionFloat } from "@/components/quick-action-float";
 import { CHAT_MESSAGE_PUSHED_EVENT, CHAT_REQUEST_REPLY_EVENT, hydrateChatStorage, loadChatSessions, loadChatMessages, pushChatMessage, findChatSessionById, type ChatMessage, type ChatSession } from "@/lib/chat-storage";
-import { resolveUserIdentity } from "@/lib/settings-storage";
+import { ensureGlobalBindingDefaults, resolveUserIdentity } from "@/lib/settings-storage";
 import { loadCharacters } from "@/lib/character-storage";
 import { generateChatCompletion, flattenCompletionResult } from "@/lib/chat-engine";
 import { parseAIResponse } from "@/lib/rich-message-parser";
@@ -1576,6 +1576,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       }
 
       if (cancelled) return;
+      ensureGlobalBindingDefaults();
       startFollowUpService();
       startMomentsService();
       startDiaryEntryTimerService();

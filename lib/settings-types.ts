@@ -138,13 +138,29 @@ export type VoiceApiConfig = {
     defaultVoice: string;
     languageBoost?: string;
     speechSpeed?: number;
+    /** Minimax voice_setting.pitch (semitones, +/-12). A missing value keeps the old behavior (0, unmodified pitch). */
+    speechPitch?: number;
     customVoices?: { id: string; name: string; createdAt?: number }[];
     enableSTT: boolean;
     enableTTS: boolean;
 };
 
 // --- Image Generation ---
+export type ImageGenerationProvider = "openai" | "novelai";
+
 export type ImageGenerationRequestMode = "server" | "direct";
+
+export type OpenAiImagePreset = {
+    id: string;
+    name: string;
+    requestMode: ImageGenerationRequestMode;
+    apiKey: string;
+    baseUrl: string;
+    model: string;
+    size: string;
+    quality: string;
+    extraPrompt: string;
+};
 
 export type ImageHostingProvider = "none" | "imgbb";
 
@@ -157,18 +173,61 @@ export type ImageHostingSettings = {
     allowMascotUpload: boolean;
 };
 
+export type NovelAiPreset = {
+    id: string;
+    name: string;
+    model: string;
+    resolution: string; // e.g. "832x1216", "1216x832", "1024x1024", "1024x1536"
+    steps: number;
+    scale: number;
+    sampler: string; // e.g. "k_euler", "k_dpmpp_2m", "k_euler_ancestral"
+    noiseSchedule?: string; // e.g. "karras", "native", "exponential"
+    positivePrompt: string; // artist tags / style / quality boosters
+    negativePrompt: string; // negative prompt / undesired content
+    qualityToggle?: boolean;
+    smea?: boolean;
+    smeaDyn?: boolean;
+};
+
+export type NovelAiSettings = {
+    apiKey: string;
+    requestMode?: ImageGenerationRequestMode;
+    activePresetId: string;
+    presets: NovelAiPreset[];
+};
+
 export type ImageGenerationSettings = {
     enabled: boolean;
+    provider?: ImageGenerationProvider;
     requestMode: ImageGenerationRequestMode;
+    // OpenAI-mode config (legacy fields, kept for compatibility migration)
     apiKey: string;
     baseUrl: string;
     model: string;
     size: string;
     quality: string;
     extraPrompt: string;
+    openaiPresets?: OpenAiImagePreset[];
+    activeOpenAiPresetId?: string;
+    // NovelAI-mode config
+    novelai?: NovelAiSettings;
     characterReferences: Record<string, {
-        assetId: string;
+        assetId?: string;
         updatedAt: number;
+        /** The character's fixed appearance features, appended to every image-generation prompt for this character. */
+        featurePrompt?: string;
+        /** Whether NovelAI appends the character-specific feature prompt; on by default. */
+        novelAiFeaturePromptEnabled?: boolean;
+        /** Temporarily disables the reference image while keeping the photo and the selected face region; on by default. */
+        enabled?: boolean;
+        /** When on, the reference image is only used for selfie-like images; on by default. */
+        selfieOnly?: boolean;
+        /** Normalized square face-selection region. */
+        faceCrop?: {
+            x: number;
+            y: number;
+            size: number;
+        };
     }>;
     imageHosting: ImageHostingSettings;
 };
@@ -228,6 +287,8 @@ export const CONTENT_APP_LABELS: Record<ContentAppId, string> = {
 // Binding slot — config selections for a given scope
 export type BindingSlot = {
     apiConfigId?: string;
+    /** Image-generation preset id, formatted as openai:<presetId> or novelai:<presetId>. */
+    imageConfigId?: string;
     voiceConfigId?: string;
     presetId?: string;
     userIdentityId?: string;
