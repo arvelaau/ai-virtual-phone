@@ -7,11 +7,12 @@ import {
     dbReplaceContacts, dbReplaceSessions,
 } from "./chat-db";
 import { resolveUserIdentity } from "./settings-storage";
-import { loadCharacters } from "./character-storage";
+import { loadCharacters, saveCharacters } from "./character-storage";
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
 import { emitChatPluginEvent, runChatPluginTransformSync } from "./chat-plugin-hooks";
 import { parseAIResponse } from "./rich-message-parser";
 import { extractTextToolDirectiveText } from "./text-tool-protocol";
+import { AVATAR_ACCEPT_RE, AVATAR_DECLINE_RE, findUserAvatarChangeIntent, inferAvatarDecisionFromReply } from "./chat-avatar-intent";
 import {
     GROUP_CALL_TARGET,
     matchCallCancel,
@@ -57,6 +58,10 @@ export type ChatSession = {
     isBlacklisted?: boolean;
     customCSS?: string;
     isMuted?: boolean;
+    /** The character's remark for the user in this direct chat; shown in Check Phone's real direct-chat list. */
+    characterRemarkForUser?: string;
+    /** When the character last updated its remark for the user. */
+    characterRemarkForUserUpdatedAt?: string;
     bilingualTranslationEnabled?: boolean;
     collapseBilingualTranslation?: boolean;
     /** 丢弃角色输出的无效表情包（名称不在角色表情包与内置表情中时直接滤除该消息） */
@@ -230,6 +235,8 @@ export type ChatMessage = {
         appTags?: string[];
         appHistoryText?: string;
         appHistoryRole?: ChatMessageRole;
+        avatarRecommendationForCharacterId?: string;
+        avatarRecommendationStatus?: "pending" | "accepted" | "declined";
     };
     isTyping?: boolean; // temporary flag for UI rendering
     statusPanel?: string; // AI display-only status content from [状态栏] tags
@@ -1137,6 +1144,59 @@ export function createToolExecutionId(): string {
     return `toolrun_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
+function resolvePendingAvatarRecommendation(message: ChatMessage): void {
+    if (message.role !== "assistant" || !message.rawResponseText) return;
+
+    const session = _sessionsCache.find(item => item.id === message.sessionId);
+    if (!session || session.isGroup) return;
+    const legacyRecommendation = [..._messagesCache].reverse().find(item =>
+        item.sessionId === message.sessionId
+        && item.role === "user"
+        && item.mediaType === "image"
+        && item.mediaData?.avatarRecommendationForCharacterId === session.contactId
+        && item.mediaData?.avatarRecommendationStatus === "pending"
+        && Boolean(item.mediaUrl),
+    );
+    const recommendation = legacyRecommendation
+        || findUserAvatarChangeIntent(_messagesCache, message.sessionId, session.contactId)?.image;
+    if (!recommendation) return;
+
+    const explicitAccepted = AVATAR_ACCEPT_RE.test(message.rawResponseText);
+    const explicitDeclined = AVATAR_DECLINE_RE.test(message.rawResponseText);
+    const inferredDecision = !explicitAccepted && !explicitDeclined
+        ? inferAvatarDecisionFromReply(`${message.rawResponseText}\n${message.content}`)
+        : null;
+    const accepted = explicitAccepted || inferredDecision === "accepted";
+    const declined = explicitDeclined || inferredDecision === "declined";
+    if (!accepted && !declined) return;
+
+    recommendation.mediaData = {
+        ...recommendation.mediaData,
+        avatarRecommendationForCharacterId: session.contactId,
+        avatarRecommendationStatus: accepted ? "accepted" : "declined",
+    };
+    dbPutMessage(recommendation);
+
+    if (accepted && recommendation.mediaUrl) {
+        const characters = loadCharacters();
+        const index = characters.findIndex(character => character.id === session.contactId);
+        if (index >= 0) {
+            characters[index] = {
+                ...characters[index],
+                avatar: recommendation.mediaUrl,
+                updatedAt: new Date().toISOString(),
+            };
+            saveCharacters(characters);
+        }
+    }
+
+    if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("chat-avatar-recommendation-resolved", {
+            detail: { sessionId: message.sessionId, accepted },
+        }));
+    }
+}
+
 export function pushChatMessage(msg: Omit<ChatMessage, "id" | "createdAt" | "status"> & { status?: ChatMessageStatus }): ChatMessage {
     let newMsg: ChatMessage = {
         ...msg,
@@ -1154,6 +1214,7 @@ export function pushChatMessage(msg: Omit<ChatMessage, "id" | "createdAt" | "sta
 
     _messagesCache.push(newMsg);
     dbPutMessage(newMsg);
+    resolvePendingAvatarRecommendation(newMsg);
 
     // Auto update session last message only for records that can produce a list preview.
     const preview = getChatMessagePreview(newMsg);

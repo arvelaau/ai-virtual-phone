@@ -2748,7 +2748,30 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             ? getLatestStateValues(session.id)
             : getLatestCharacterStateValues(session.contactId);
 
-        const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue } = parseAIResponse(aiResponseText, previousState);
+        const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue, characterRemarkForUser } = parseAIResponse(aiResponseText, previousState);
+        if (!session.isGroup && characterRemarkForUser) {
+            const normalizedRemark = characterRemarkForUser.replace(/[\r\n]/g, " ").trim().slice(0, 20);
+            if (normalizedRemark) {
+                const updatedAt = new Date().toISOString();
+                const sessions = loadChatSessions();
+                const index = sessions.findIndex(item => item.id === session.id);
+                if (index >= 0) {
+                    sessions[index] = {
+                        ...sessions[index],
+                        characterRemarkForUser: normalizedRemark,
+                        characterRemarkForUserUpdatedAt: updatedAt,
+                    };
+                    saveChatSessions(sessions);
+                }
+                Object.assign(session, {
+                    characterRemarkForUser: normalizedRemark,
+                    characterRemarkForUserUpdatedAt: updatedAt,
+                });
+                window.dispatchEvent(new CustomEvent("chat-character-remark-updated", {
+                    detail: { sessionId: session.id, remark: normalizedRemark, updatedAt },
+                }));
+            }
+        }
         const parts = stripInvalidStickerParts(rawParts);
         throwIfGenerationStopped(options);
 

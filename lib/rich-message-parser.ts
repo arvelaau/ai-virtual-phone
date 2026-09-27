@@ -14,6 +14,7 @@ import type { StateValue } from "./chat-storage";
 import { parseStateValues, mergeStateValues } from "./state-value-parser";
 import { stripActionShells } from "./action-parser";
 import { stripTextToolDirectives } from "./text-tool-protocol";
+import { AVATAR_ACCEPT_RE, AVATAR_DECLINE_RE, CHARACTER_REMARK_RE } from "./chat-avatar-intent";
 import {
     DEFAULT_GIFT_MERCHANT_LABEL,
     DEFAULT_GIFT_PRICE_LABEL,
@@ -47,6 +48,8 @@ export interface ParsedAIResponse {
     freshStateValues: StateValue[];
     statusPanel: string;
     innerMonologue: string;
+    /** The character's own remark for the user, set proactively in the reply; the control marker itself is not shown. */
+    characterRemarkForUser?: string;
 }
 
 // Ported from upstream (2026-08-04, "修复：媒体消息后的零宽字符被存成空气泡").
@@ -763,6 +766,10 @@ function parseSegment(segment: string, parts: ParsedMessagePart[]) {
 // ── Main parser ──────────────────────────────────────────
 
 export function parseAIResponse(rawText: string, previousState: StateValue[]): ParsedAIResponse {
+    const acceptedAvatarRecommendation = AVATAR_ACCEPT_RE.test(rawText);
+    const declinedAvatarRecommendation = AVATAR_DECLINE_RE.test(rawText);
+    const characterRemarkMatch = rawText.match(CHARACTER_REMARK_RE);
+    const characterRemarkForUser = characterRemarkMatch?.[1]?.trim();
     // 0. FIRST of all: drop literal <think>…</think> the model wrote into its content.
     // Must run before the ```html / <style> protection below, otherwise a reasoning
     // block containing markup gets captured as a "real" HTML block and preserved.
@@ -798,7 +805,17 @@ export function parseAIResponse(rawText: string, previousState: StateValue[]): P
     const stateValues = mergeStateValues(previousState, parsedSV.stateValues);
 
     // 1.5. Strip AI hallucination XML/bracket action shells
-    const actionCleaned = stripActionShells(parsedSV.cleanText);
+    let actionCleaned = stripActionShells(parsedSV.cleanText)
+        .replace(new RegExp(AVATAR_ACCEPT_RE.source, "gi"), "")
+        .replace(new RegExp(AVATAR_DECLINE_RE.source, "gi"), "")
+        .replace(new RegExp(CHARACTER_REMARK_RE.source, "gi"), "")
+        .trim();
+    // A model that returns ONLY a control marker still needs a natural, visible reply
+    // — otherwise no message is stored and the shared-message layer has nothing to act
+    // this avatar choice on.
+    if (!actionCleaned && acceptedAvatarRecommendation) actionCleaned = "I've switched to the avatar you suggested.";
+    if (!actionCleaned && declinedAvatarRecommendation) actionCleaned = "I'd rather keep my current avatar.";
+    if (!actionCleaned && characterRemarkForUser) actionCleaned = `From now on, I'll call you "${characterRemarkForUser}".`;
 
     // 2. Extract display-only status panel, then inner monologue
     const status = extractBracketBlock(actionCleaned, BLOCK_TAG_STATUS_PANEL);
@@ -846,5 +863,6 @@ export function parseAIResponse(rawText: string, previousState: StateValue[]): P
         freshStateValues: parsedSV.stateValues,
         statusPanel: restore(status.content),
         innerMonologue: restore(mono.content),
+        characterRemarkForUser,
     };
 }
