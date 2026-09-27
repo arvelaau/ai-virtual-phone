@@ -1,8 +1,19 @@
-import type { ImageGenerationSettings } from "./settings-types";
-import { loadImageGenerationSettings } from "./settings-storage";
+import type { ImageGenerationSettings, NovelAiPreset } from "./settings-types";
+import { loadBindingConfig, loadImageGenerationSettings, resolveBinding, DEFAULT_NOVELAI_PRESET } from "./settings-storage";
+import { applyImageGenerationBinding } from "./image-generation-binding";
+import JSZip from "jszip";
 import { getChatImageFromIndexedDB } from "./chat-asset-storage";
 import { storeMediaBlob } from "./media-cache-storage";
 import { throwIfAborted } from "./abort-utils";
+import {
+  NOVELAI_COMMON_MODELS,
+  getNovelAiResolution,
+  normalizeNovelAiModel,
+  normalizeNovelAiNoiseSchedule,
+  normalizeNovelAiSampler,
+  normalizeNovelAiScale,
+  normalizeNovelAiSteps,
+} from "./novelai-image-config";
 
 export type ImageGenerationResult = {
   mediaRef: string;
@@ -79,13 +90,16 @@ function loadDataUrlImage(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("参考图解码失败"));
+    image.onerror = () => reject(new Error("Failed to decode the reference image"));
     image.src = dataUrl;
   });
 }
 
-async function normalizeReferenceImageForEdit(dataUrl: string): Promise<string> {
-  if (dataUrlMimeType(dataUrl) === "image/png") return dataUrl;
+async function normalizeReferenceImageForEdit(
+  dataUrl: string,
+  crop?: { x: number; y: number; size: number },
+): Promise<string> {
+  if (!crop && dataUrlMimeType(dataUrl) === "image/png") return dataUrl;
   if (typeof document === "undefined") return dataUrl;
 
   try {
@@ -95,11 +109,23 @@ async function normalizeReferenceImageForEdit(dataUrl: string): Promise<string> 
     if (!width || !height) return dataUrl;
 
     const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
+    const normalizedSize = crop ? Math.max(0.18, Math.min(1, crop.size)) : 1;
+    const sourceSize = Math.max(1, Math.round(Math.min(width, height) * normalizedSize));
+    const sourceX = crop
+      ? Math.round(Math.max(0, Math.min(width - sourceSize, crop.x * width)))
+      : 0;
+    const sourceY = crop
+      ? Math.round(Math.max(0, Math.min(height - sourceSize, crop.y * height)))
+      : 0;
+    canvas.width = crop ? sourceSize : width;
+    canvas.height = crop ? sourceSize : height;
     const context = canvas.getContext("2d");
     if (!context) return dataUrl;
-    context.drawImage(image, 0, 0, width, height);
+    if (crop) {
+      context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, 0, 0, sourceSize, sourceSize);
+    } else {
+      context.drawImage(image, 0, 0, width, height);
+    }
     return canvas.toDataURL("image/png");
   } catch {
     return dataUrl;
@@ -218,7 +244,7 @@ async function fetchImageUrlAsBase64(url: string, signal?: AbortSignal): Promise
   const res = await fetch(url, { signal });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`图片 URL 下载失败 ${res.status}: ${text.slice(0, 160)}`);
+    throw new Error(`Failed to download the image URL ${res.status}: ${text.slice(0, 160)}`);
   }
   const blob = await res.blob();
   const dataUrl = await blobToDataUrl(blob);
@@ -231,7 +257,7 @@ async function parseImageGenerationResponse(res: Response, signal?: AbortSignal)
   const contentType = (res.headers.get("content-type") || "").toLowerCase();
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`生图 API 错误 ${res.status}: ${text.slice(0, 600)}`);
+    throw new Error(`Image-generation API error ${res.status}: ${text.slice(0, 600)}`);
   }
 
   if (contentType.startsWith("image/")) {
@@ -246,7 +272,7 @@ async function parseImageGenerationResponse(res: Response, signal?: AbortSignal)
   throwIfAborted(signal);
   const extracted = extractFromObject(json);
   if (!extracted) {
-    throw new Error(`生图 API 返回中没有找到图片字段：${JSON.stringify(Object.keys(json || {})).slice(0, 200)}`);
+    throw new Error(`No image field found in the image-generation API's response: ${JSON.stringify(Object.keys(json || {})).slice(0, 200)}`);
   }
 
   if (extracted.kind === "url") {
@@ -278,12 +304,12 @@ export async function fetchImageGenerationModels(settings: Pick<ImageGenerationS
       });
       const text = await res.text();
       if (!res.ok) {
-        throw new Error(`模型列表 API 错误 ${res.status}: ${text.slice(0, 400)}`);
+        throw new Error(`Model-list API error ${res.status}: ${text.slice(0, 400)}`);
       }
       return extractModels(JSON.parse(text));
     } catch (error) {
       if (error instanceof TypeError) {
-        throw new Error("浏览器直连失败：该 API 可能未允许跨域请求。");
+        throw new Error("Direct browser connection failed: this API may not allow cross-origin requests.");
       }
       throw error;
     }
@@ -299,15 +325,17 @@ export async function fetchImageGenerationModels(settings: Pick<ImageGenerationS
   });
   const data = await res.json().catch(() => ({})) as { models?: string[]; error?: string };
   if (!res.ok || data.error) {
-    throw new Error(data.error || `模型列表请求失败 ${res.status}`);
+    throw new Error(data.error || `Model-list request failed ${res.status}`);
   }
   return Array.isArray(data.models) ? data.models : [];
 }
 
-// 通用生图代理(Cloudflare Worker)。配置后,「服务端中转」模式改为:
-// 浏览器 → 本代理(带CORS、等待无时长限制) → 用户自己的生图API,
-// 不再经过 Netlify 函数(其流式响应有 60s 硬上限,慢生图必死且中转站照样计费)。
-// 留空 = 关闭,沿用 Netlify 心跳流式路由。自部署请配置自己的代理地址。
+// General-purpose image-generation proxy (Cloudflare Worker). Once configured, "server relay"
+// mode changes to: browser -> this proxy (has CORS, no wait-time limit) -> the user's own
+// image-generation API, no longer going through the Netlify function (whose streamed response
+// has a hard 60s cap -- a slow generation is doomed there and the relay still gets billed
+// regardless). Leave empty = off, falls back to the old Netlify heartbeat-streaming route.
+// Self-hosters should configure their own proxy address.
 export const IMAGE_GEN_PROXY_URL = (process.env.NEXT_PUBLIC_IMAGE_GEN_PROXY_URL || "").trim().replace(/\/+$/, "");
 
 async function generateImageDirect(params: {
@@ -315,7 +343,7 @@ async function generateImageDirect(params: {
   prompt: string;
   referenceImageDataUrl: string | null;
   signal?: AbortSignal;
-  /** 走通用代理:请求发往代理地址,真实上游放进 x-upstream-base-url 头 */
+  /** Via the general-purpose proxy: the request goes to the proxy address, with the real upstream in the x-upstream-base-url header. */
   proxyBaseUrl?: string;
 }): Promise<ImageGenerationApiResponse> {
   const { settings, prompt, referenceImageDataUrl, signal, proxyBaseUrl } = params;
@@ -328,7 +356,7 @@ async function generateImageDirect(params: {
 
   if (hasReference) {
     const converted = dataUrlToBlob(referenceImageDataUrl || "");
-    if (!converted) throw new Error("参考图格式无效");
+    if (!converted) throw new Error("Invalid reference-image format");
     const form = new FormData();
     form.set("model", settings.model);
     form.set("prompt", prompt);
@@ -346,8 +374,10 @@ async function generateImageDirect(params: {
     });
   }
 
-  // 总超时 360s,外部 signal 联动;防止上游悬挂导致界面永久转圈。
-  // 部分中转的按次生图（如 gpt-image 系）单张实测 3~5 分钟,180s 会在完成前掐断(钱照扣图丢失)。
+  // Total timeout 360s, tied to the outer signal; guards against the UI spinning forever if the
+  // upstream hangs. Some relays' per-image generation (e.g. the gpt-image family) is observed to
+  // take 3-5 minutes for a single image; 180s would cut it off before it finishes (money still
+  // charged, image lost).
   const controller = new AbortController();
   const onOuterAbort = () => controller.abort();
   if (signal) signal.addEventListener("abort", onOuterAbort, { once: true });
@@ -356,10 +386,10 @@ async function generateImageDirect(params: {
     return await parseImageGenerationResponse(await fetch(url, { method: "POST", headers, body, signal: controller.signal }), signal);
   } catch (error) {
     if (controller.signal.aborted && !signal?.aborted) {
-      throw new Error(proxyBaseUrl ? "生图代理超时（360 秒未返回）" : "生图请求超时（360 秒未返回）");
+      throw new Error(proxyBaseUrl ? "Image-generation proxy timed out (no response after 360 seconds)" : "Image-generation request timed out (no response after 360 seconds)");
     }
     if (error instanceof TypeError) {
-      throw new Error(proxyBaseUrl ? "生图代理连接失败" : "浏览器直连失败：该 API 可能未允许跨域请求。");
+      throw new Error(proxyBaseUrl ? "Failed to connect to the image-generation proxy" : "Direct browser connection failed: this API may not allow cross-origin requests.");
     }
     throw error;
   } finally {
@@ -368,9 +398,20 @@ async function generateImageDirect(params: {
   }
 }
 
-// 「代理中转」模式:配置了通用代理(CF Worker)就只走它——用户选择什么模式就走什么链路,
-// 不做隐藏回落(不再兜底到 Netlify 函数,那会消耗站点额度且有 60s 上限)。
-// 常量未配置时保留旧的 Netlify 心跳流式路由(自部署无 Worker 的场景)。
+// "Server relay" mode: if a general-purpose proxy (CF Worker) is configured, ONLY it is used --
+// whatever mode the user picked is the one that's actually used, with no hidden fallback (no
+// longer falling back to the Netlify function, which burns site quota and has a 60s cap).
+// When the constant isn't configured, the old Netlify heartbeat-streaming route is kept (for
+// self-hosted deployments with no Worker).
+//
+// The Netlify heartbeat route is one of the biggest compute costs against site quota (each image
+// occupies the function for 30-120s), and plenty of users who picked "server relay" actually have
+// an image-generation API that allows cross-origin requests. So before going through Netlify, a
+// direct browser connection is tried first: only when it fails due to CORS (the preflight was
+// rejected, the real request never went out, so upstream is never billed for it) does it fall
+// back to the server -- remembered per baseUrl so the same failure isn't re-probed again this session.
+const directCorsFailedBaseUrls = new Set<string>();
+
 async function generateImageViaServerOrProxy(params: {
   settings: ImageGenerationSettings;
   prompt: string;
@@ -382,10 +423,25 @@ async function generateImageViaServerOrProxy(params: {
       return await generateImageDirect({ ...params, proxyBaseUrl: IMAGE_GEN_PROXY_URL });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (message.includes("生图代理连接失败")) {
-        throw new Error("生图代理连接失败:当前网络可能无法访问代理服务器(部分地区需开启代理),或稍后重试。");
+      if (message.includes("Failed to connect to the image-generation proxy")) {
+        throw new Error("Failed to connect to the image-generation proxy: the current network may not be able to reach the proxy server (a VPN/proxy may be required in some regions), or try again later.");
       }
       throw error;
+    }
+  }
+  const baseUrlKey = normalizeBaseUrl(params.settings.baseUrl);
+  if (!directCorsFailedBaseUrls.has(baseUrlKey)) {
+    try {
+      return await generateImageDirect(params);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // Only fall back on a connection-layer failure (CORS/offline); an error from the API
+      // itself (invalid key, insufficient balance, etc.) means the direct connection DID go
+      // through, so a server relay would hit the same error -- throw immediately to avoid
+      // getting billed twice.
+      if (!message.includes("Direct browser connection failed")) throw error;
+      throwIfAborted(params.signal);
+      directCorsFailedBaseUrls.add(baseUrlKey);
     }
   }
   return generateImageViaServer(params);
@@ -399,15 +455,17 @@ async function generateImageViaServer(params: {
 }): Promise<ImageGenerationApiResponse> {
   const { settings, prompt, referenceImageDataUrl, signal } = params;
   throwIfAborted(signal);
-  // 防"无限卡住":函数被平台中途击杀时流可能既不关闭也不报错。
-  // 总超时 180s + 断流检测(心跳每 3s 一个字节,超过 25s 没有任何字节视为断流)。
+  // Guards against hanging forever: if the platform kills the function mid-stream, the stream may neither close nor error out.
+  // Total timeout 180s + stall detection (a heartbeat byte every 3s; no byte at all for over 25s counts as stalled).
   const controller = new AbortController();
   const onOuterAbort = () => controller.abort();
   if (signal) signal.addEventListener("abort", onOuterAbort, { once: true });
   const totalTimer = setTimeout(() => controller.abort(), 180_000);
   try {
-    // x-stream-heartbeat:服务端以心跳流响应,真正的结果附在流末尾的 @@RESULT@@ 标记后。
-    // 避免托管平台对缓冲响应的 10~26s 超时把慢生图(30~120s)掐成 504。
+    // x-stream-heartbeat: the server responds with a heartbeat stream; the real result is
+    // attached after the @@RESULT@@ marker at the end of the stream. Avoids the hosting
+    // platform's 10-26s timeout on a buffered response from cutting a slow generation
+    // (30-120s) short as a 504.
     const res = await fetch("/api/image-generation", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-stream-heartbeat": "1" },
@@ -445,7 +503,7 @@ async function generateImageViaServer(params: {
         } catch (err) {
           clearTimeout(idleTimer);
           if (controller.signal.aborted && !signal?.aborted) {
-            throw new Error("生图请求失败（服务器连接中断,超过 25 秒没有响应）");
+            throw new Error("Image-generation request failed (server connection interrupted, no response for over 25 seconds)");
           }
           throw err;
         }
@@ -454,22 +512,22 @@ async function generateImageViaServer(params: {
       }
       const marker = "@@RESULT@@";
       const idx = text.lastIndexOf(marker);
-      if (idx < 0) throw new Error(`生图请求失败 ${res.status}（流式响应中断,未收到结果）`);
+      if (idx < 0) throw new Error(`Image-generation request failed ${res.status} (streamed response interrupted, no result received)`);
       try {
         data = JSON.parse(text.slice(idx + marker.length)) as ServerImagePayload;
       } catch {
-        throw new Error("生图请求失败（流式结果解析出错）");
+        throw new Error("Image-generation request failed (error parsing the streamed result)");
       }
       throwIfAborted(signal);
       if (data.error || !data.b64) {
-        throw new Error(data.error || `生图请求失败 ${data.httpStatus ?? res.status}`);
+        throw new Error(data.error || `Image-generation request failed ${data.httpStatus ?? res.status}`);
       }
     } else {
-      // 非流式回退(旧服务端等)
+      // Non-streamed fallback (older server, etc.)
       data = await res.json().catch(() => ({})) as ServerImagePayload;
       throwIfAborted(signal);
       if (!res.ok || data.error || !data.b64) {
-        throw new Error(data.error || `生图请求失败 ${res.status}`);
+        throw new Error(data.error || `Image-generation request failed ${res.status}`);
       }
     }
     return { b64: data.b64, mimeType: data.mimeType, revisedPrompt: data.revisedPrompt };
@@ -479,33 +537,319 @@ async function generateImageViaServer(params: {
   }
 }
 
+async function generateNovelAiDirect(params: {
+  apiKey: string;
+  preset: NovelAiPreset;
+  prompt: string;
+  signal?: AbortSignal;
+}): Promise<ImageGenerationApiResponse> {
+  const { apiKey, preset, prompt, signal } = params;
+  throwIfAborted(signal);
+
+  const { width, height } = getNovelAiResolution(preset.resolution);
+
+  const url = "https://image.novelai.net/ai/generate-image";
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+  };
+
+  const body = JSON.stringify({
+    input: prompt,
+    model: normalizeNovelAiModel(preset.model),
+    action: "generate",
+    parameters: {
+      width,
+      height,
+      scale: normalizeNovelAiScale(preset.scale),
+      sampler: normalizeNovelAiSampler(preset.sampler),
+      steps: normalizeNovelAiSteps(preset.steps),
+      n_samples: 1,
+      ucPreset: 0,
+      qualityToggle: preset.qualityToggle !== false,
+      sm: preset.smea === true,
+      sm_dyn: preset.smeaDyn === true,
+      dynamic_thresholding: false,
+      controlnet_strength: 1,
+      legacy: false,
+      add_original_image: false,
+      uncond_scale: 1,
+      cfg_rescale: 0,
+      noise_schedule: normalizeNovelAiNoiseSchedule(preset.noiseSchedule),
+      negative_prompt: preset.negativePrompt || "",
+    },
+  });
+
+  const controller = new AbortController();
+  const onOuterAbort = () => controller.abort();
+  if (signal) signal.addEventListener("abort", onOuterAbort, { once: true });
+  const totalTimer = setTimeout(() => controller.abort(), 180_000);
+
+  try {
+    const res = await fetch(url, { method: "POST", headers, body, signal: controller.signal });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(`NovelAI API error ${res.status}: ${errText.slice(0, 200)}`);
+    }
+
+    const arrayBuf = await res.arrayBuffer();
+    const uint8 = new Uint8Array(arrayBuf);
+    const isZip = (uint8[0] === 0x50 && uint8[1] === 0x4b && uint8[2] === 0x03 && uint8[3] === 0x04)
+      || (res.headers.get("content-type") || "").toLowerCase().includes("zip");
+
+    if (isZip) {
+      const zip = await JSZip.loadAsync(arrayBuf);
+      const files = Object.keys(zip.files);
+      const pngFile = files.find(f => f.endsWith(".png")) || files[0];
+      if (!pngFile) throw new Error("No image found inside the zip returned by NovelAI");
+      const b64 = await zip.files[pngFile].async("base64");
+      return { b64, mimeType: "image/png" };
+    }
+
+    let binary = "";
+    for (let i = 0; i < uint8.length; i++) {
+      binary += String.fromCharCode(uint8[i]);
+    }
+    return { b64: btoa(binary), mimeType: res.headers.get("content-type") || "image/png" };
+  } catch (error) {
+    if (controller.signal.aborted && !signal?.aborted) {
+      throw new Error("Direct NovelAI request timed out (no response after 180 seconds)");
+    }
+    if (error instanceof TypeError) {
+      throw new Error("Direct browser connection to NovelAI failed: this may be a browser CORS restriction -- switch the request mode to \"server relay\" in the image-generation settings.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(totalTimer);
+    if (signal) signal.removeEventListener("abort", onOuterAbort);
+  }
+}
+
+async function generateNovelAiViaServer(params: {
+  apiKey: string;
+  preset: NovelAiPreset;
+  prompt: string;
+  signal?: AbortSignal;
+}): Promise<ImageGenerationApiResponse> {
+  const { apiKey, preset, prompt, signal } = params;
+  throwIfAborted(signal);
+
+  const controller = new AbortController();
+  const onOuterAbort = () => controller.abort();
+  if (signal) signal.addEventListener("abort", onOuterAbort, { once: true });
+  const totalTimer = setTimeout(() => controller.abort(), 180_000);
+
+  try {
+    const resolution = getNovelAiResolution(preset.resolution);
+    const res = await fetch("/api/image-generation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-stream-heartbeat": "1" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        provider: "novelai",
+        apiKey,
+        model: normalizeNovelAiModel(preset.model),
+        prompt,
+        size: resolution.value,
+        negativePrompt: preset.negativePrompt || "",
+        steps: normalizeNovelAiSteps(preset.steps),
+        scale: normalizeNovelAiScale(preset.scale),
+        sampler: normalizeNovelAiSampler(preset.sampler),
+        noiseSchedule: normalizeNovelAiNoiseSchedule(preset.noiseSchedule),
+        qualityToggle: preset.qualityToggle,
+        smea: preset.smea,
+        smeaDyn: preset.smeaDyn,
+      }),
+    });
+    throwIfAborted(signal);
+
+    type ServerImagePayload = { httpStatus?: number; b64?: string; mimeType?: string; revisedPrompt?: string; error?: string };
+    const contentType = (res.headers.get("content-type") || "").toLowerCase();
+    let data: ServerImagePayload;
+
+    if (contentType.includes("text/plain")) {
+      let text = "";
+      if (res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let idleTimer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          for (;;) {
+            idleTimer = setTimeout(() => controller.abort(), 25_000);
+            const { done, value } = await reader.read();
+            clearTimeout(idleTimer);
+            if (done) break;
+            text += decoder.decode(value, { stream: true });
+          }
+          text += decoder.decode();
+        } catch (err) {
+          clearTimeout(idleTimer);
+          if (controller.signal.aborted && !signal?.aborted) {
+            throw new Error("NovelAI request failed (server connection interrupted, no response for over 25 seconds)");
+          }
+          throw err;
+        }
+      } else {
+        text = await res.text();
+      }
+      const marker = "@@RESULT@@";
+      const idx = text.lastIndexOf(marker);
+      if (idx < 0) throw new Error(`NovelAI request failed ${res.status} (streamed response interrupted, no result received)`);
+      try {
+        data = JSON.parse(text.slice(idx + marker.length)) as ServerImagePayload;
+      } catch {
+        throw new Error("NovelAI request failed (error parsing the streamed result)");
+      }
+      throwIfAborted(signal);
+      if (data.error || !data.b64) {
+        throw new Error(data.error || `NovelAI request failed ${data.httpStatus ?? res.status}`);
+      }
+    } else {
+      data = await res.json().catch(() => ({})) as ServerImagePayload;
+      throwIfAborted(signal);
+      if (!res.ok || data.error || !data.b64) {
+        throw new Error(data.error || `NovelAI request failed ${res.status}`);
+      }
+    }
+    return { b64: data.b64, mimeType: data.mimeType, revisedPrompt: data.revisedPrompt };
+  } finally {
+    clearTimeout(totalTimer);
+    if (signal) signal.removeEventListener("abort", onOuterAbort);
+  }
+}
+
+export async function fetchNovelAiModels(apiKey: string): Promise<string[]> {
+  const token = apiKey.trim();
+  if (!token) throw new Error("Enter your NovelAI API Token first.");
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const res = await fetch("https://image.novelai.net/user/data", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      if (res.status === 401 || res.status === 403) {
+        throw new Error("The NovelAI API Token is invalid or expired -- get a new one and try again.");
+      }
+      throw new Error(`NovelAI Token verification failed ${res.status}${detail ? `: ${detail.slice(0, 160)}` : ""}`);
+    }
+    return [...NOVELAI_COMMON_MODELS];
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error("NovelAI Token verification timed out -- check your network and try again.");
+    }
+    if (error instanceof TypeError) {
+      throw new Error("Could not connect to NovelAI -- check your network and try again.");
+    }
+    if (error instanceof Error) throw error;
+    throw new Error("NovelAI Token verification failed -- check your network and try again.");
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function generateImageFromConfiguredApi(params: {
   description: string;
   characterId?: string;
+  /** The APP the content belongs to; used to resolve the image-generation preset via "character > APP > global". */
+  appId?: string;
   useReferenceImage?: boolean;
   settings?: ImageGenerationSettings;
   signal?: AbortSignal;
 }): Promise<ImageGenerationResult | null> {
-  const settings = params.settings ?? loadImageGenerationSettings();
+  const storedSettings = params.settings ?? loadImageGenerationSettings();
+  // A config passed in explicitly (a settings-page test / a direct tool call) is kept as-is;
+  // only a normal business call reads the binding.
+  const settings = params.settings
+    ? storedSettings
+    : applyImageGenerationBinding(
+        storedSettings,
+        resolveBinding(loadBindingConfig(), params.characterId, params.appId).imageConfigId,
+      );
   if (!settings.enabled) return null;
 
   const description = params.description.trim();
-  if (!description || !settings.apiKey.trim() || !settings.baseUrl.trim() || !settings.model.trim()) return null;
+  if (!description) return null;
 
-  const reference = params.characterId ? settings.characterReferences[params.characterId] : undefined;
-  const rawReferenceImageDataUrl = params.useReferenceImage && reference?.assetId
+  // NovelAI mode
+  if (settings.provider === "novelai") {
+    const naiApiKey = settings.novelai?.apiKey?.trim();
+    if (!naiApiKey) return null;
+
+    const presets = settings.novelai?.presets && settings.novelai.presets.length > 0
+      ? settings.novelai.presets
+      : [DEFAULT_NOVELAI_PRESET];
+    const activePreset = presets.find(p => p.id === settings.novelai?.activePresetId) || presets[0];
+
+    const positiveParts: string[] = [];
+    if (activePreset.positivePrompt?.trim()) positiveParts.push(activePreset.positivePrompt.trim());
+    const novelAiCharacterReference = params.characterId
+      ? settings.characterReferences?.[params.characterId]
+      : undefined;
+    const characterFeaturePrompt = novelAiCharacterReference?.novelAiFeaturePromptEnabled !== false
+      ? novelAiCharacterReference?.featurePrompt?.trim()
+      : "";
+    if (characterFeaturePrompt) positiveParts.push(characterFeaturePrompt);
+    if (description) positiveParts.push(description);
+    const fullPrompt = positiveParts.join(", ");
+
+    const novelAiRequestMode = settings.novelai?.requestMode || settings.requestMode;
+    const data = novelAiRequestMode === "direct"
+      ? await generateNovelAiDirect({ apiKey: naiApiKey, preset: activePreset, prompt: fullPrompt, signal: params.signal })
+      : await generateNovelAiViaServer({ apiKey: naiApiKey, preset: activePreset, prompt: fullPrompt, signal: params.signal });
+
+    throwIfAborted(params.signal);
+    const mimeType = data.mimeType || "image/png";
+    const blob = base64ToBlob(data.b64, mimeType);
+    throwIfAborted(params.signal);
+    const mediaRef = await storeMediaBlob(blob, mimeType, "image");
+    throwIfAborted(params.signal);
+    return {
+      mediaRef,
+      dataUrl: `data:${mimeType};base64,${data.b64}`,
+      blob,
+      mimeType,
+      prompt: fullPrompt,
+      usedReferenceImage: false,
+      revisedPrompt: data.revisedPrompt,
+    };
+  }
+
+  // OpenAI-compatible mode: use the currently active preset (an old, pre-migration config keeps working after the storage layer migrates it).
+  const openaiPreset = settings.openaiPresets?.find(preset => preset.id === settings.activeOpenAiPresetId)
+    || settings.openaiPresets?.[0];
+  const openaiSettings = openaiPreset ? { ...settings, ...openaiPreset } : settings;
+  if (!openaiSettings.apiKey.trim() || !openaiSettings.baseUrl.trim() || !openaiSettings.model.trim()) return null;
+
+  const reference = params.characterId ? settings.characterReferences?.[params.characterId] : undefined;
+  // The "don't use the reference image for non-selfies" toggle was removed from the image-
+  // generation settings page: once the reference image is enabled, it's always used for generation.
+  const shouldUseReference = Boolean(
+    params.useReferenceImage
+    && reference?.assetId
+    && reference.enabled !== false,
+  );
+  const rawReferenceImageDataUrl = shouldUseReference && reference?.assetId
     ? await getChatImageFromIndexedDB(reference.assetId)
     : null;
   throwIfAborted(params.signal);
   const referenceImageDataUrl = rawReferenceImageDataUrl
-    ? await normalizeReferenceImageForEdit(rawReferenceImageDataUrl)
+    ? await normalizeReferenceImageForEdit(rawReferenceImageDataUrl, reference?.faceCrop)
     : null;
   throwIfAborted(params.signal);
-  const prompt = mergePrompt(description, settings.extraPrompt);
+  const characterPrompt = reference?.featurePrompt?.trim() || "";
+  const prompt = mergePrompt(
+    characterPrompt ? `${description}\n\n[Character's fixed appearance] ${characterPrompt}` : description,
+    openaiSettings.extraPrompt,
+  );
 
-  const data = settings.requestMode === "direct"
-    ? await generateImageDirect({ settings, prompt, referenceImageDataUrl, signal: params.signal })
-    : await generateImageViaServerOrProxy({ settings, prompt, referenceImageDataUrl, signal: params.signal });
+  const data = openaiSettings.requestMode === "direct"
+    ? await generateImageDirect({ settings: openaiSettings, prompt, referenceImageDataUrl, signal: params.signal })
+    : await generateImageViaServerOrProxy({ settings: openaiSettings, prompt, referenceImageDataUrl, signal: params.signal });
 
   throwIfAborted(params.signal);
   const mimeType = data.mimeType || "image/png";
@@ -530,4 +874,11 @@ export function generatedImageFilename(description: string, mimeType = "image/pn
     .replace(/[^\u4e00-\u9fa5A-Za-z0-9_-]+/g, "")
     .slice(0, 28) || "generated-image";
   return `${safe}.${imageExtension(mimeType)}`;
+}
+
+export function hasCharacterReferenceImage(characterId?: string): boolean {
+  if (!characterId) return false;
+  const settings = loadImageGenerationSettings();
+  const ref = settings.characterReferences?.[characterId];
+  return Boolean(ref?.assetId);
 }
