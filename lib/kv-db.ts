@@ -17,6 +17,8 @@ const kvDb = new KvDatabase();
 // ── In-memory cache ──
 const _cache = new Map<string, string>();
 let _hydrated = false;
+let _hydratePromise: Promise<void> | null = null;
+let _hydrateError: unknown = null;
 
 // ── Migration registry ──
 const _fixedKeys: string[] = [];
@@ -84,8 +86,9 @@ function removeLegacyLocalStorageKeyIfValue(key: string, value: string): void {
     }
 }
 
-// localStorage 配额只有 ~5MB,超过这个量级的 value(如自定义APP的整批
-// 音频/封面 dataURL)镜像必失败,setItem 前还得整份拷贝一次内存——直接跳过。
+// localStorage's quota is only ~5MB; mirroring a value past that size (e.g. a
+// custom app's whole batch of audio/cover data URLs) is guaranteed to fail, and
+// setItem would still need to copy the whole string into memory first -- skip it.
 const LOCAL_STORAGE_MIRROR_MAX_LENGTH = 400_000;
 
 function writeFallbackLocalStorage(key: string, value: string): void {
@@ -109,9 +112,17 @@ function isAbortLikeError(err: unknown): boolean {
 }
 
 // ── Hydration (call once at app startup) ──
-export async function hydrateKvDb(): Promise<void> {
-    if (_hydrated || typeof window === "undefined") return;
-    try {
+// Semantics match chat-storage.ts's own hydration: only a successful run sets
+// _hydrated, and a failure clears the in-flight promise so the next call retries
+// instead of quietly wedging. Before this, a failure ALSO set _hydrated = true: one
+// transient IndexedDB read failure left the cache empty, and kvGet returned null
+// for everything -- indistinguishable from "this key was never set" -- so the very
+// next read-modify-write of a whole-record value (e.g. appending an offline-mode
+// entry) would save that empty data straight over the real history in IndexedDB.
+export function hydrateKvDb(): Promise<void> {
+    if (_hydrated || typeof window === "undefined") return Promise.resolve();
+    if (_hydratePromise) return _hydratePromise;
+    _hydratePromise = (async () => {
         // Load existing IDB data into cache
         const all = await kvDb.entries.toArray();
         for (const { key, value } of all) {
@@ -149,13 +160,39 @@ export async function hydrateKvDb(): Promise<void> {
 
         if (batch.length > 0) await kvDb.entries.bulkPut(batch);
         for (const k of removeKeys) localStorage.removeItem(k);
-    } catch (err) {
-        console.warn("[KvDB] hydration error:", err);
-    }
-    _hydrated = true;
+    })().then(() => {
+        _hydrated = true;
+        _hydrateError = null;
+        _hydratePromise = null;
+    }).catch(err => {
+        // Deliberately not re-thrown: most existing callers don't attach a catch.
+        // Failure is exposed through isKvHydrated() / getKvHydrationError() instead,
+        // and the entry point (MainApp) is responsible for blocking the user out and
+        // offering a retry.
+        console.warn("[KvDB] hydration failed, will retry on next call:", err);
+        _hydrateError = err;
+        _hydratePromise = null;
+    });
+    return _hydratePromise;
+}
+
+/** The most recent hydration failure (cleared on success). Pairs with isKvHydrated() to detect the failed state. */
+export function getKvHydrationError(): unknown {
+    return _hydrateError;
 }
 
 // ── Synchronous read (IndexedDB-backed in-memory cache only) ──
+/**
+ * Whether the kv cache has finished hydrating from IndexedDB. Anything that treats
+ * kv content as its safety net for a destructive action (e.g. orphaned-asset
+ * cleanup) must check this first: kvEntries() is empty before hydration, and
+ * scanning it for "is this still referenced" would find nothing and delete
+ * something that's actually still in use.
+ */
+export function isKvHydrated(): boolean {
+    return _hydrated;
+}
+
 export function kvGet(key: string): string | null {
     const cached = _cache.get(key);
     if (cached !== undefined) return cached;

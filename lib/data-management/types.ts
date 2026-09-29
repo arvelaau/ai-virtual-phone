@@ -77,6 +77,8 @@ export type IndexedDbSourceBackup = {
   type: "indexeddb";
   dbName: string;
   stores: StoreBackup[];
+  /** Set when the database failed to open during export (cleared by the browser, corrupted, or locked) -- any value here means this data is incomplete. */
+  error?: string;
 };
 
 export type KvSourceBackup = {
