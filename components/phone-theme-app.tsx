@@ -19,7 +19,7 @@ import CSSSchemeBar from "@/components/ui/css-scheme-picker";
 import { normalizeThemeProfile, resolveActiveIconSkins, DEFAULT_THEME_PROFILE, type ThemeProfile } from "@/lib/theme-types";
 import type { DesktopIconId, IconId } from "@/lib/desktop-config";
 import { DOCK_DEFAULT, PAGE_1_DEFAULT, PAGE_2_DEFAULT, ICONS } from "@/lib/desktop-config";
-import type { DesktopIconLayout } from "@/lib/desktop-layout-storage";
+import type { DesktopFolderMap, DesktopIconLayout } from "@/lib/desktop-layout-storage";
 import { CUSTOM_APPS_UPDATED_EVENT, loadInstalledCustomApps } from "@/lib/custom-app-storage";
 import { toCustomAppIconId, type InstalledCustomApp } from "@/lib/custom-app-types";
 import { PageShell } from "@/components/ui/page-shell";
@@ -81,6 +81,7 @@ type PhoneThemeAppProps = {
     widgets: WidgetInstance[];
     iconLayout: DesktopIconLayout;
     dock?: DesktopIconId[];
+    folders?: DesktopFolderMap;
   }) => void;
   pageIcons: DesktopIconLayout;
   iconSkins: Record<string, string | null>;
