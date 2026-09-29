@@ -47,30 +47,51 @@ export async function initChatDb(): Promise<{
     const alreadyMigrated = window.localStorage.getItem(LS_MIGRATED_FLAG);
 
     if (!alreadyMigrated) {
-        // Guard against a lost migration flag while IndexedDB still holds data.
-        // The flag lives in volatile localStorage; the actual data lives in the far
-        // more durable IndexedDB. The flag can disappear independently of the data
-        // (e.g. clearing the "cache" data module, privacy tooling, partial eviction).
-        // If we blindly "re-migrated" from now-empty localStorage we would shadow
-        // real data with empty caches, and the next write would wipe IndexedDB.
-        // So when IDB already has data, treat it as already migrated and reuse it.
+        // ── Anti-wipe guard ──────────────────────────────────────
+        // The migration flag lives in volatile localStorage; the real data lives in
+        // the far more durable IndexedDB. The flag can disappear independently of
+        // the data (clearing the "cache" data module, privacy tooling, partial
+        // eviction). No failure on this path may be allowed to fall through into
+        // the "fresh install" migration branch below -- that branch treats an
+        // empty localStorage read as real data and deletes the old keys, so the
+        // very first full save after hydration (dbReplaceSessions = clear + put)
+        // would wipe the real sessions/contacts tables in IndexedDB. That is the
+        // "the phone reset to its initial state" incident.
+        let indexedDbHasData = false;
         try {
             const existingCount =
                 (await chatDb.messages.count()) +
                 (await chatDb.sessions.count()) +
                 (await chatDb.contacts.count());
-            if (existingCount > 0) {
-                window.localStorage.setItem(LS_MIGRATED_FLAG, "1");
-                const [messages, sessions, contacts] = await Promise.all([
-                    chatDb.messages.toArray(),
-                    chatDb.sessions.toArray(),
-                    chatDb.contacts.toArray(),
-                ]);
-                console.log(`[ChatDB] Migration flag missing but IndexedDB has data; reusing it: ${messages.length} messages, ${sessions.length} sessions, ${contacts.length} contacts`);
-                return { messages, sessions, contacts };
-            }
+            indexedDbHasData = existingCount > 0;
         } catch (err) {
-            console.warn("[ChatDB] Pre-migration IndexedDB check failed:", err);
+            // A failed probe (locked/quota/transient error) is not the same as an
+            // empty database: fall back to a retrying direct IndexedDB read, and if
+            // that also fails, throw and stay unhydrated -- every write path then
+            // degrades to insert-only (see chat-storage.ts). Better to render empty
+            // than to overwrite the real database with empty data.
+            console.warn("[ChatDB] Pre-migration IndexedDB check failed; recovering directly:", err);
+            const recovered = await loadFromIndexedDbWithRetries();
+            if (recovered) {
+                markMigrated();
+                return recovered;
+            }
+            throw new Error(`[ChatDB] Could not read the local chat database (${
+                err instanceof Error ? err.message : String(err)
+            }); staying unhydrated to avoid overwriting real data`);
+        }
+
+        if (indexedDbHasData) {
+            const [messages, sessions, contacts] = await Promise.all([
+                chatDb.messages.toArray(),
+                chatDb.sessions.toArray(),
+                chatDb.contacts.toArray(),
+            ]);
+            // A failed flag write (localStorage quota full) is only a performance
+            // hit -- it must never also discard the data just read from IndexedDB.
+            markMigrated();
+            console.log(`[ChatDB] Migration flag missing but IndexedDB has data; reusing it: ${messages.length} messages, ${sessions.length} sessions, ${contacts.length} contacts`);
+            return { messages, sessions, contacts };
         }
 
         // First run after migration: move localStorage data → IndexedDB
@@ -112,7 +133,29 @@ export async function initChatDb(): Promise<{
         }
     }
 
-    // Already migrated: load from IndexedDB (retry up to 3 times on failure)
+    // Already migrated: load from IndexedDB (with retries)
+    const loaded = await loadFromIndexedDbWithRetries();
+    if (!loaded) {
+        throw new Error("[ChatDB] Failed to load after 3 attempts");
+    }
+    return loaded;
+}
+
+/** Writes the migration flag; a failure (e.g. localStorage quota full) is only a performance hit, never a data incident. */
+function markMigrated(): void {
+    try {
+        window.localStorage.setItem(LS_MIGRATED_FLAG, "1");
+    } catch (err) {
+        console.warn("[ChatDB] Failed to persist migration flag:", err);
+    }
+}
+
+/** Reads everything from IndexedDB, retrying up to 3 times. Returns null on total failure (the caller decides whether to throw). */
+async function loadFromIndexedDbWithRetries(): Promise<{
+    messages: ChatMessage[];
+    sessions: ChatSession[];
+    contacts: ChatContact[];
+} | null> {
     let lastErr: unknown;
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
@@ -133,7 +176,7 @@ export async function initChatDb(): Promise<{
         }
     }
     console.error("[ChatDB] All load attempts failed:", lastErr);
-    throw new Error("[ChatDB] Failed to load after 3 attempts");
+    return null;
 }
 
 function safeParse<T>(raw: string | null): T[] {
@@ -148,6 +191,19 @@ export function dbPutMessage(msg: ChatMessage): void {
 
 export function dbPutMessages(msgs: ChatMessage[]): void {
     chatDb.messages.bulkPut(msgs).catch(err => console.warn("[ChatDB] bulkPut messages failed:", err));
+}
+
+// Awaitable, error-propagating, chunked bulk write. A large batch write like a
+// chat-record import must be able to observe the real result (a quota failure or
+// write error has to reach and inform the user), and chunking avoids one giant
+// transaction freezing the main thread -- the event loop gets a natural yield
+// between chunks, keeping the page responsive.
+const DB_BULK_PUT_CHUNK = 2000;
+export async function dbBulkPutMessages(msgs: ChatMessage[]): Promise<void> {
+    if (msgs.length === 0) return;
+    for (let start = 0; start < msgs.length; start += DB_BULK_PUT_CHUNK) {
+        await chatDb.messages.bulkPut(msgs.slice(start, start + DB_BULK_PUT_CHUNK));
+    }
 }
 
 export function dbDeleteMessage(id: string): void {

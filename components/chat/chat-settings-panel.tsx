@@ -39,7 +39,9 @@ import { clearChatOfflineTurns } from "@/lib/chat-offline-storage";
 import { triggerDeleteFriendReaction } from "@/lib/friend-request-engine";
 import { loadCharacters } from "@/lib/character-storage";
 import { resolveUserIdentity } from "@/lib/settings-storage";
-import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, MessageSquare, Search, AlertCircle, Code, Trash2, Smile, Sparkles, Cloud, Loader2, Ban, type LucideIcon } from "lucide-react";
+import { downloadFile } from "@/lib/download-utils";
+import { createChatRecordExport, importChatRecordFile } from "@/lib/chat-record-transfer";
+import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, MessageSquare, Search, AlertCircle, Code, Trash2, Smile, Sparkles, Cloud, Loader2, Ban, Download, Upload, type LucideIcon } from "lucide-react";
 import {
     isProactiveCloudSyncEnabled,
     setProactiveCloudSyncEnabled,
@@ -215,6 +217,9 @@ export function ChatSettingsPanel({
     const [searchResults, setSearchResults] = useState<ChatMessage[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const searchRunRef = useRef(0);
+    const chatRecordImportRef = useRef<HTMLInputElement | null>(null);
+    const [chatTransferBusy, setChatTransferBusy] = useState(false);
+    const [chatTransferStatus, setChatTransferStatus] = useState<{ success: boolean; message: string } | null>(null);
 
     const loadSearchHistoryWindow = (count = CHAT_INITIAL_VISIBLE_MESSAGE_COUNT) => {
         const visibleMessages = loadChatMessages(session.id).filter(isSearchVisibleMessage);
@@ -306,6 +311,40 @@ export function ChatSettingsPanel({
     const characterName = session.isGroup
         ? (groupName || session.groupName || "Group Chat")
         : (alias || character?.name || `User_${session.contactId.slice(-4)}`);
+
+    const exportChatRecords = async () => {
+        if (chatTransferBusy) return;
+        setChatTransferBusy(true);
+        setChatTransferStatus(null);
+        try {
+            const blob = await createChatRecordExport(session, characterName);
+            const safeName = characterName.replace(/[\\/:*?"<>|]+/g, "-").slice(0, 40) || "Chat";
+            await downloadFile(blob, `Float-${safeName}-chat-records.json`);
+            setChatTransferStatus({ success: true, message: `Exported ${loadChatMessages(session.id).length} messages.` });
+        } catch (error) {
+            setChatTransferStatus({ success: false, message: error instanceof Error ? error.message : "Export failed" });
+        } finally {
+            setChatTransferBusy(false);
+        }
+    };
+
+    const importChatRecords = async (file: File) => {
+        if (chatTransferBusy) return;
+        setChatTransferBusy(true);
+        setChatTransferStatus(null);
+        try {
+            const result = await importChatRecordFile(file, session);
+            setChatTransferStatus({
+                success: true,
+                message: `Imported ${result.inserted} messages, restored ${result.mediaRestored} media file(s)${result.skipped ? `, skipped ${result.skipped} duplicate or invalid record(s)` : ""}.`,
+            });
+        } catch (error) {
+            setChatTransferStatus({ success: false, message: error instanceof Error ? error.message : "Import failed" });
+        } finally {
+            setChatTransferBusy(false);
+            if (chatRecordImportRef.current) chatRecordImportRef.current.value = "";
+        }
+    };
 
     // Group members
     const groupChars = session.isGroup
@@ -653,6 +692,38 @@ export function ChatSettingsPanel({
                         <div className="menu-label-group"><span className="menu-label">Search Chat History</span></div>
                         <div className="menu-right"><ChevronRight size={16} /></div>
                     </button>
+                </div>
+
+                <div className="menu-group">
+                    <button className="menu-item" onClick={exportChatRecords} disabled={chatTransferBusy}>
+                        <ChatInfoIcon icon={Download} color={BINDING_ACCENTS.preset} />
+                        <div className="menu-label-group">
+                            <span className="menu-label">Export Chat Records</span>
+                            <span className="menu-desc">Export this session's messages and local media</span>
+                        </div>
+                    </button>
+                    <button className="menu-item" onClick={() => chatRecordImportRef.current?.click()} disabled={chatTransferBusy}>
+                        <ChatInfoIcon icon={Upload} color={BINDING_ACCENTS.worldBook} />
+                        <div className="menu-label-group">
+                            <span className="menu-label">Import Chat Records</span>
+                            <span className="menu-desc">Merges into this session; duplicate messages are skipped automatically</span>
+                        </div>
+                    </button>
+                    <input
+                        ref={chatRecordImportRef}
+                        type="file"
+                        accept="application/json,.json"
+                        className="hidden"
+                        onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            if (file) void importChatRecords(file);
+                        }}
+                    />
+                    {chatTransferStatus && (
+                        <div className={`px-4 py-3 text-sm ${chatTransferStatus.success ? "text-emerald-700" : "text-red-600"}`}>
+                            {chatTransferStatus.message}
+                        </div>
+                    )}
                 </div>
 
                 {/* Group member management */}

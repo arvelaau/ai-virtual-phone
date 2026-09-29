@@ -4,7 +4,7 @@ import {
     initChatDb,
     dbPutMessage, dbDeleteMessage, dbDeleteMessagesBySession, dbDeleteMessagesByIds,
     dbPutMessages, dbPutSessions, dbPutContacts, dbDeleteSession,
-    dbReplaceContacts, dbReplaceSessions,
+    dbReplaceContacts, dbReplaceSessions, dbBulkPutMessages,
 } from "./chat-db";
 import { resolveUserIdentity } from "./settings-storage";
 import { loadCharacters, saveCharacters } from "./character-storage";
@@ -1371,20 +1371,106 @@ export function upsertImportedChatMessage(msg: ChatMessage): { message: ChatMess
     _messagesCache.push(newMsg);
     dbPutMessage(newMsg);
 
-    const preview = getChatMessagePreview(newMsg);
-    const sessions = loadChatSessions();
-    const sessIdx = sessions.findIndex(s => s.id === newMsg.sessionId);
-    if (sessIdx !== -1 && isSessionPreviewCandidate(newMsg)) {
-        const currentLast = getLastVisibleSessionMessage(newMsg.sessionId);
-        if (!currentLast || currentLast.id === newMsg.id) {
-            sessions[sessIdx].lastMessageId = newMsg.id;
-            if (preview) sessions[sessIdx].lastMessagePreview = preview;
-            sessions[sessIdx].updatedAt = newMsg.createdAt;
-            saveChatSessions(sessions);
+    // Only do the full preview refresh when this message could actually become the
+    // "last visible message": loadChatSessions() walks every session and sorts the
+    // whole message cache, so importing one message at a time (a cloud-sync pull
+    // loop, etc.) degrades to O(count x sessions x messages log messages).
+    if (isSessionPreviewCandidate(newMsg)) {
+        const preview = getChatMessagePreview(newMsg);
+        const sessions = loadChatSessions();
+        const sessIdx = sessions.findIndex(s => s.id === newMsg.sessionId);
+        if (sessIdx !== -1) {
+            const currentLast = getLastVisibleSessionMessage(newMsg.sessionId);
+            if (!currentLast || currentLast.id === newMsg.id) {
+                sessions[sessIdx].lastMessageId = newMsg.id;
+                if (preview) sessions[sessIdx].lastMessagePreview = preview;
+                sessions[sessIdx].updatedAt = newMsg.createdAt;
+                saveChatSessions(sessions);
+            }
         }
     }
 
     return { message: newMsg, inserted: true };
+}
+
+// Bulk import path (for chat-record transfer). The old per-message upsert loop
+// triggered a full preview recompute from loadChatSessions() for every single
+// message (each session does a filter+sort over the whole message cache), and a
+// change to the target session's updatedAt queued a clear+bulkPut transaction on
+// the sessions table each time -- a few thousand records was enough to freeze the
+// main thread and pile up thousands of clear-then-rewrite transactions, and any
+// failure partway through (killed process, quota exhausted) could leave the
+// sessions table itself corrupted. That was the direct cause of "the phone reset
+// to its initial state" reports right after an import.
+// This instead: dedupes once, awaits one chunked write (throwing on failure), and
+// refreshes the preview of only the affected sessions, exactly once, at the end --
+// every other session is left untouched.
+export async function bulkUpsertImportedMessages(
+    messages: ChatMessage[],
+): Promise<{ insertedCount: number; skippedCount: number }> {
+    if (messages.length === 0) return { insertedCount: 0, skippedCount: 0 };
+
+    const existingIds = new Set(_messagesCache.map(item => item.id));
+    const nextOrderBySession = new Map<string, number>();
+    const inserted: ChatMessage[] = [];
+    let skippedCount = 0;
+
+    for (const source of messages) {
+        if (existingIds.has(source.id)) {
+            skippedCount += 1;
+            continue;
+        }
+        let order = getStableMessageOrder(source);
+        if (order === null) {
+            const sessionId = source.sessionId || "";
+            const next = nextOrderBySession.get(sessionId) ?? getNextMessageOrder(sessionId);
+            nextOrderBySession.set(sessionId, next + 1);
+            order = next;
+        }
+        const newMsg: ChatMessage = {
+            ...source,
+            status: source.status || "sent",
+            createdAt: source.createdAt || new Date().toISOString(),
+            order,
+        };
+        existingIds.add(newMsg.id);
+        inserted.push(newMsg);
+    }
+
+    if (inserted.length === 0) return { insertedCount: 0, skippedCount };
+
+    // concat rather than push(...arr): spreading a huge array (tens of thousands
+    // of entries) into push() can throw a RangeError.
+    _messagesCache = _messagesCache.concat(inserted);
+    // A real, awaitable, chunked write whose failure propagates -- so the caller
+    // can tell and warn the user, instead of "import succeeded" in memory while
+    // the data is gone after a restart.
+    await dbBulkPutMessages(inserted);
+
+    // Session previews / updatedAt are refreshed exactly once, after everything
+    // has been written.
+    const affectedSessionIds = new Set(inserted.map(msg => msg.sessionId));
+    const sessions = loadChatSessions();
+    let sessionsChanged = false;
+    for (const sessionId of affectedSessionIds) {
+        const sessIdx = sessions.findIndex(s => s.id === sessionId);
+        if (sessIdx === -1) continue;
+        const currentLast = getLastVisibleSessionMessage(sessionId);
+        if (!currentLast) continue;
+        const preview = getChatMessagePreview(currentLast);
+        if (
+            sessions[sessIdx].lastMessageId === currentLast.id
+            && (sessions[sessIdx].lastMessagePreview || "") === preview
+            && sessions[sessIdx].updatedAt === currentLast.createdAt
+        ) continue;
+        sessions[sessIdx].lastMessageId = currentLast.id;
+        if (preview) sessions[sessIdx].lastMessagePreview = preview;
+        sessions[sessIdx].updatedAt = currentLast.createdAt;
+        sessionsChanged = true;
+    }
+    if (sessionsChanged) saveChatSessions(sessions);
+
+    return { insertedCount: inserted.length, skippedCount };
 }
 
 function removeFirstExactResponsePart(rawResponseText: string, content: string): string {
