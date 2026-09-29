@@ -155,7 +155,7 @@ function makeSchemeId(prefix: string): string {
 export function createDefaultIconScheme(): IconSkinScheme {
   return {
     id: "icon_scheme_default",
-    name: "默认图标方案",
+    name: "Default Icon Scheme",
     iconSkins: {},
     updatedAt: new Date().toISOString()
   };
@@ -166,7 +166,7 @@ export function createDefaultIconScheme(): IconSkinScheme {
    ═══════════════════════════════════════════ */
 export const DEFAULT_THEME_PROFILE: ThemeProfile = {
   version: 2,
-  name: "默认主题",
+  name: "Default Theme",
   wallpaperAssetId: null,
   wallpaperBlur: 0,
   wallpaperOpacity: 0.9,

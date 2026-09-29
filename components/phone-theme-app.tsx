@@ -4,13 +4,17 @@ import { createPortal } from "react-dom";
 import {
   AlertCircle,
   AppWindow,
+  Bookmark,
+  CheckCircle2,
   Code2,
   Download,
   LayoutGrid,
   PaintBucket,
   Plus,
   RotateCcw,
+  Save,
   Smartphone,
+  Trash2,
   Type,
   Upload,
   Wallpaper,
@@ -55,6 +59,13 @@ import {
   installThemePackageFile,
   resetThemePackageState,
 } from "@/lib/theme-package";
+import {
+  deleteThemePreset,
+  readThemePresets,
+  saveThemePreset,
+  THEME_PRESET_LIMIT,
+  type ThemePreset,
+} from "@/lib/theme-preset-storage";
 
 type ThemeSection =
   | "menu"
@@ -66,7 +77,7 @@ type ThemeSection =
   | "text"
   | "css";
 
-type ThemeMenuItemSection = Exclude<ThemeSection, "menu"> | "transfer" | "reset";
+type ThemeMenuItemSection = Exclude<ThemeSection, "menu"> | "presets" | "transfer" | "reset";
 type WallpaperSliderField = "wallpaperOpacity" | "wallpaperBlur" | "wallpaperScale" | "wallpaperX" | "wallpaperY";
 
 type PhoneThemeAppProps = {
@@ -124,6 +135,10 @@ function IconCode() {
   return <Code2 size={22} strokeWidth={1.75} />;
 }
 
+function IconPresets() {
+  return <Bookmark size={22} strokeWidth={1.75} />;
+}
+
 function IconTransfer() {
   return <Download size={22} strokeWidth={1.75} />;
 }
@@ -147,6 +162,7 @@ const MENU_ITEMS: Array<{
   { section: "case", icon: IconCase, label: "Status Bar", color: BINDING_ACCENTS.memory },
   { section: "text", icon: IconText, label: "Text", color: BINDING_ACCENTS.identity, glow: `color-mix(in srgb, ${BINDING_ACCENTS.identity} 35%, transparent)` },
   { section: "css", icon: IconCode, label: "CSS Variables", desc: "Custom global style variables", color: BINDING_ACCENTS.embedding, glow: `color-mix(in srgb, ${BINDING_ACCENTS.embedding} 35%, transparent)` },
+  { section: "presets", icon: IconPresets, label: "Theme Presets", desc: "Save, switch, and manage", color: BINDING_ACCENTS.preset, glow: `color-mix(in srgb, ${BINDING_ACCENTS.preset} 35%, transparent)` },
   { section: "transfer", icon: IconTransfer, label: "Theme Import / Export", desc: "Backup and migration", color: BINDING_ACCENTS.api, glow: `color-mix(in srgb, ${BINDING_ACCENTS.api} 35%, transparent)` },
   { section: "reset", icon: IconReset, label: "Restore Defaults", desc: "Reset appearance", color: BINDING_ACCENTS.regex, glow: `color-mix(in srgb, ${BINDING_ACCENTS.regex} 30%, transparent)` },
 ];
@@ -198,10 +214,74 @@ export function PhoneThemeApp({
   const [showTextAdjust, setShowTextAdjust] = useState(false);
   const [showThemeTransfer, setShowThemeTransfer] = useState(false);
   const [themeTransferBusy, setThemeTransferBusy] = useState(false);
+  const [showThemePresets, setShowThemePresets] = useState(false);
+  const [themePresets, setThemePresets] = useState<ThemePreset[]>([]);
+  const [presetName, setPresetName] = useState("");
+  const [presetBusyId, setPresetBusyId] = useState<string | null>(null);
+  const [presetPendingDelete, setPresetPendingDelete] = useState<ThemePreset | null>(null);
   const [confirmThemeReset, setConfirmThemeReset] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
   const statusBarTop = Number(draft.cssOverrides["--status-bar-top"]?.replace("px", "") || "12");
   const islandHidden = draft.cssOverrides["--status-island-visibility"] === "hidden";
+
+  const openThemePresets = useCallback(() => {
+    setThemePresets(readThemePresets());
+    setPresetName(draft.name === DEFAULT_THEME_PROFILE.name ? "" : draft.name);
+    setShowThemePresets(true);
+  }, [draft.name]);
+
+  const handleSaveThemePreset = useCallback(() => {
+    try {
+      const saved = saveThemePreset(presetName, {
+        themeProfile: draft,
+        iconLayout: pageIcons,
+        widgets,
+      });
+      setThemePresets(readThemePresets());
+      setPresetName(saved.name);
+      onNotice(`Saved theme preset "${saved.name}"`);
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Failed to save the theme preset");
+    }
+  }, [draft, onNotice, pageIcons, presetName, widgets]);
+
+  const handleApplyThemePreset = useCallback(async (preset: ThemePreset) => {
+    setPresetBusyId(preset.id);
+    try {
+      const nextThemeProfile = normalizeThemeProfile({
+        ...preset.themeProfile,
+        // The wallpaper library is the user's shared asset pool -- switching presets
+        // must never drop other wallpapers already uploaded to it.
+        wallpaperLibrary: Array.from(new Set([
+          ...draft.wallpaperLibrary,
+          ...preset.themeProfile.wallpaperLibrary,
+        ])),
+      });
+      onDesktopThemeChange({
+        widgets: preset.widgets,
+        iconLayout: preset.iconLayout,
+        dock: preset.dock,
+        folders: preset.folders,
+      });
+      await onApply(nextThemeProfile);
+      onDraftChange(nextThemeProfile);
+      setShowThemePresets(false);
+      onNotice(`Switched to theme preset "${preset.name}"`);
+    } catch (error) {
+      console.error(error);
+      onNotice(error instanceof Error ? error.message : "Failed to apply the theme preset");
+    } finally {
+      setPresetBusyId(null);
+    }
+  }, [draft.wallpaperLibrary, onApply, onDesktopThemeChange, onDraftChange, onNotice]);
+
+  const handleDeleteThemePreset = useCallback(() => {
+    if (!presetPendingDelete) return;
+    deleteThemePreset(presetPendingDelete.id);
+    setThemePresets(readThemePresets());
+    onNotice(`Deleted theme preset "${presetPendingDelete.name}" -- the current appearance is unaffected`);
+    setPresetPendingDelete(null);
+  }, [onNotice, presetPendingDelete]);
 
   const handleExportTheme = useCallback(async () => {
     setThemeTransferBusy(true);
@@ -287,7 +367,7 @@ export function PhoneThemeApp({
                     className="app-card card-card"
                     type="button"
                     onClick={() => {
-                      if (item.section !== "transfer" && item.section !== "reset") {
+                      if (item.section !== "transfer" && item.section !== "reset" && item.section !== "presets") {
                         setSection(item.section);
                       }
                     }}
@@ -383,7 +463,31 @@ export function PhoneThemeApp({
               );
             })()}
 
-            {/* Section 4: System — 2-column card grid */}
+            {/* Section 4: Theme Presets — Featured card */}
+            {(() => {
+              const presetsItem = MENU_ITEMS.find(i => i.section === "presets")!;
+              return (
+                <div>
+                  <h3 className="appearance-menu-section-title">Theme Presets</h3>
+                  <button
+                    className="app-card card-featured mt-2.5"
+                    type="button"
+                    onClick={openThemePresets}
+                  >
+                    <span className="card-icon" style={menuIconStyle(presetsItem.color)}>
+                      <presetsItem.icon />
+                    </span>
+                    <div className="card-featured-body">
+                      <div className="card-featured-label">{presetsItem.label}</div>
+                      <div className="card-featured-desc">{presetsItem.desc}</div>
+                    </div>
+                    <span className="card-featured-chevron"><IconChevronRight /></span>
+                  </button>
+                </div>
+              );
+            })()}
+
+            {/* Section 5: System — 2-column card grid */}
             <div>
               <h3 className="appearance-menu-section-title">System</h3>
               <div className="card-grid mt-2.5">
@@ -489,6 +593,103 @@ export function PhoneThemeApp({
             </div>
           </div>
         </ContentDialog>,
+        document.querySelector(".phone-shell") ?? document.body
+      )}
+      {showThemePresets && createPortal(
+        <ContentDialog
+          title="Theme Presets"
+          confirmLabel={undefined}
+          cancelLabel="Close"
+          onConfirm={() => setShowThemePresets(false)}
+          onCancel={() => {
+            if (!presetBusyId) setShowThemePresets(false);
+          }}
+        >
+          <div className="flex flex-col gap-4">
+            <div className="flex gap-2">
+              <input
+                className="ui-input min-w-0 flex-1"
+                value={presetName}
+                maxLength={24}
+                placeholder="Enter a preset name"
+                onChange={(event) => setPresetName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") handleSaveThemePreset();
+                }}
+              />
+              <button
+                type="button"
+                className="ui-btn ui-btn-primary shrink-0"
+                onClick={handleSaveThemePreset}
+              >
+                <Save size={16} />
+                Save
+              </button>
+            </div>
+            <p className="ts-11 leading-relaxed text-[var(--c-icon)]">
+              Saves the current theme color, wallpaper, icons, desktop widgets, text, and CSS. Saving under an existing name updates that preset. Up to {THEME_PRESET_LIMIT}.
+            </p>
+            <div className="flex max-h-[46vh] flex-col gap-2 overflow-y-auto pr-1">
+              {themePresets.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-[var(--c-card-border)] px-4 py-8 text-center ts-13 text-[var(--c-icon)]">
+                  No theme presets saved yet
+                </div>
+              ) : themePresets.map((preset) => (
+                <div
+                  key={preset.id}
+                  className="flex items-center gap-3 rounded-2xl border border-[var(--c-card-border)] bg-[var(--c-card)] px-3 py-3"
+                >
+                  <span
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                    style={{ ...menuIconStyle(BINDING_ACCENTS.preset), color: BINDING_ACCENTS.preset, background: `color-mix(in srgb, ${BINDING_ACCENTS.preset} 12%, transparent)` }}
+                  >
+                    <Bookmark size={18} strokeWidth={1.75} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate ts-14 font-semibold text-[var(--c-text-title)]">{preset.name}</div>
+                    <div className="mt-0.5 ts-10 text-[var(--c-icon)]">
+                      {new Date(preset.updatedAt).toLocaleString(undefined, { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="inline-flex h-9 min-w-[56px] shrink-0 items-center justify-center gap-1 rounded-xl bg-[var(--c-icon-active)] px-2 ts-11 font-semibold text-white transition active:scale-95 disabled:opacity-40"
+                    disabled={Boolean(presetBusyId)}
+                    onClick={() => void handleApplyThemePreset(preset)}
+                  >
+                    <CheckCircle2 size={15} />
+                    {presetBusyId === preset.id ? "Switching" : "Use"}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete ${preset.name}`}
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[var(--c-danger)] transition active:scale-90 disabled:opacity-40"
+                    disabled={Boolean(presetBusyId)}
+                    onClick={() => setPresetPendingDelete(preset)}
+                  >
+                    <Trash2 size={17} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="ts-11 leading-relaxed text-[var(--c-icon)]">
+              Deleting a preset does not change the appearance currently in use, and does not remove the picture from your wallpaper library.
+            </p>
+          </div>
+        </ContentDialog>,
+        document.querySelector(".phone-shell") ?? document.body
+      )}
+      {presetPendingDelete && createPortal(
+        <ConfirmDialog
+          title="Delete this theme preset?"
+          message={`This will delete "${presetPendingDelete.name}". The appearance currently in use will not change.`}
+          icon={Trash2}
+          variant="danger"
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          onConfirm={handleDeleteThemePreset}
+          onCancel={() => setPresetPendingDelete(null)}
+        />,
         document.querySelector(".phone-shell") ?? document.body
       )}
       {confirmThemeReset && (
