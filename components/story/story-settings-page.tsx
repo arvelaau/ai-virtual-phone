@@ -570,6 +570,12 @@ export function StorySettingsPage(props: StorySettingsPageProps) {
           onExportAll={props.onExportAll}
         />
 
+        <SettingCard title="Message display" hint="Applies to this story's own page only">
+          <ToggleRow title="Hide bubble background" checked={Boolean(props.uiPrefs.hideBubble)} onChange={(value) => props.onUiPrefsChange({ ...props.uiPrefs, hideBubble: value })} />
+          <ToggleRow title="Hide avatar" checked={Boolean(props.uiPrefs.hideAvatar)} onChange={(value) => props.onUiPrefsChange({ ...props.uiPrefs, hideAvatar: value })} />
+          <ToggleRow title="Hide timestamp" checked={Boolean(props.uiPrefs.hideTimestamp)} onChange={(value) => props.onUiPrefsChange({ ...props.uiPrefs, hideTimestamp: value })} />
+        </SettingCard>
+
         <SettingCard title="Story preset settings" hint="Consider building a dedicated preset just for the Story app, so it doesn't affect other apps">
           <label className="story-settings-field"><span>This character's dedicated preset name</span><input value={normalized.presetName} onChange={(event) => patchSettings({ presetName: event.target.value })} /></label>
           <label className="story-settings-field"><span>Extra story requirements</span><textarea value={normalized.extraPrompt || ""} onChange={(event) => patchSettings({ extraPrompt: event.target.value })} placeholder="Used only when generating this character's story" /></label>
