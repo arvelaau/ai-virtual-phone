@@ -362,10 +362,42 @@ She handed over the boarding passes.
     ok("F20 custom-app-chat-directives.ts exports the shared scope predicate", directives.includes("export function directiveMatchesScope"));
 }
 
+// ── G. group offline turns must not be silently excluded from app-card extraction ───────────
+// User-reported bug: a Studio/custom-app HTML card never rendered in a GROUP offline turn.
+// Root cause was two-layered -- the teaching gap covered by _fx-offline-message.mjs's R-section
+// (group_chat_offline_format never referenced the macro), and this second, independent gap:
+// chat-room.tsx gated the ENTIRE extractOfflineDispatchableMessages() call behind
+// `!session.isGroup`, so even if the model had somehow been taught the directive and used it,
+// the app-card half of the result was discarded before appendChatOfflineTurn ever saw it.
+// [Message] *dispatch* is deliberately still 1:1-only (a separate, existing decision, documented
+// in offline-message-dispatch.ts) -- this section confirms that stayed intact while extraction
+// itself no longer excludes group.
+{
+    const chatRoom = fs.readFileSync(path.join(root, "components/chat/chat-room.tsx"), "utf8");
+
+    ok("G1 chat-room.tsx no longer gates extraction on !session.isGroup",
+        !chatRoom.includes("!session.isGroup\n                    ? extractOfflineDispatchableMessages")
+        && !chatRoom.includes("!session.isGroup\n                ? extractOfflineDispatchableMessages"));
+
+    const extractionCallCount = (chatRoom.match(/const offlineDispatch = extractOfflineDispatchableMessages\(result\.rawText, result\.summaryTag\);/g) || []).length;
+    eq("G2 both offline call sites (send + retry) call extraction unconditionally", extractionCallCount, 2);
+
+    // [Message] dispatch itself must still be 1:1-only -- both call sites gate the
+    // dispatchOfflineMessages() call on !session.isGroup.
+    const dispatchGateCount = (chatRoom.match(/if \(!session\.isGroup && offlineDispatch\.dispatchable\.length\)/g) || []).length;
+    eq("G3 both call sites still gate [Message] *dispatch* to 1:1 only", dispatchGateCount, 2);
+
+    // The appCard fields written into appendChatOfflineTurn must no longer be optional-chained
+    // off a possibly-null offlineDispatch -- confirms the read side isn't still defensively
+    // coded around the old group=null shape in a way that would mask a regression.
+    const appCardFieldCount = (chatRoom.match(/appCardLayout: offlineDispatch\.appCard\?\.appCardLayout,/g) || []).length;
+    eq("G4 both call sites read appCardLayout off the now-unconditional offlineDispatch", appCardFieldCount, 2);
+}
+
 clearApps();
 clearStudioCards();
 
-const EXPECTED = 90;
+const EXPECTED = 94;
 ok(`Z1 ${EXPECTED} assertions ran before this guard`, pass + fail === EXPECTED, `ran ${pass + fail}`);
 console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail ? 1 : 0);

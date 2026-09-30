@@ -193,7 +193,7 @@ She typed "hey" and hit send, then put the phone down.
     ok("P2 it says the message is real", /arrives in their chat app/i.test(entry));
     ok("P3 it places the block outside the offline summary tag", /AFTER <\/\{\{offlineSummaryTag\}\}>/.test(entry));
     ok("P4 it forbids repeating the text in the prose", /Do not write the message text out again/i.test(entry));
-    ok("P5 it carves itself out of the forbidden list", /ONLY chat directive offline mode may use/i.test(entry));
+    ok("P5 it carves itself out of the forbidden list", /ONLY chat directives offline mode may use/i.test(entry));
     ok("P6 it tells the model to omit it when not messaging", /Leave it out entirely/i.test(entry));
     ok("P7 the entry still targets the offline surface", /tags: \["chat", "offline"\]/.test(preset.slice(start, start + entry.length + 400)));
 
@@ -206,7 +206,64 @@ She typed "hey" and hit send, then put the phone down.
     ok("P11 the version was bumped past 280", v && Number(v[1]) >= 281, v && v[1]);
 }
 
-const EXPECTED = 56;
+// ── R. the custom-app/Studio directive macro must have somewhere to land ────────
+// chat-engine.ts computes formatCustomAppChatDirectivesForPrompt("offline") unconditionally on
+// every call (confirmed by E-section wiring checks above and in _fx-narrative-app-card.mjs),
+// but that alone proves nothing -- the resulting text only reaches the model if some preset
+// entry whose tags qualify for the offline surface actually contains the
+// {{customAppRichMediaDirectives}} placeholder. User-reported bug: it didn't, in either offline
+// surface, so a Studio card's syntax was taught in chat/story/group chat but never in offline.
+{
+    const preset = fs.readFileSync(path.join(root, "lib/builtin-preset.ts"), "utf8");
+
+    // Reconstruct which entries actually qualify for a surface the same way the assembler does
+    // (ALL of an entry's own tags must be a subset of the surface's appTags) -- located
+    // structurally by the full "identifier: \"x\",\n   name:" shape, never the prompt_order
+    // toggle list `{ identifier: "x", enabled: true }`, which shadows every real definition in
+    // this file and would make a "no CJK"/"has the macro" check pass vacuously if matched
+    // instead. See this file's own CLAUDE.md history for the size of that trap.
+    function qualifyingEntries(surfaceTags) {
+        const re = /identifier:\s*"([a-z_0-9]+)",\n\s*name:/g;
+        const defs = [];
+        let m;
+        while ((m = re.exec(preset))) defs.push({ id: m[1], defStart: m.index });
+        const out = [];
+        for (let i = 0; i < defs.length; i++) {
+            const start = defs[i].defStart;
+            const nextStart = i + 1 < defs.length ? defs[i + 1].defStart : preset.length;
+            const chunk = preset.slice(start, nextStart);
+            const tagsMatch = chunk.match(/tags:\s*\[([^\]]*)\]/);
+            const tags = tagsMatch
+                ? tagsMatch[1].split(",").map((t) => t.trim().replace(/["']/g, "")).filter(Boolean)
+                : [];
+            // No tags at all (output_language_rule, persona_style_authority, ...) means the
+            // entry is untagged and reaches every surface -- not what this check is about.
+            if (tags.length === 0) continue;
+            const qualifies = tags.every((t) => surfaceTags.includes(t));
+            if (qualifies) out.push({ id: defs[i].id, chunk });
+        }
+        return out;
+    }
+
+    const offline1to1 = qualifyingEntries(["chat", "offline"]);
+    eq("R1 exactly chat_offline_format qualifies for 1:1 offline", offline1to1.map((e) => e.id).join(","), "chat_offline_format");
+    ok("R2 that entry contains the custom-app-directive macro",
+        offline1to1.some((e) => e.chunk.includes("{{customAppRichMediaDirectives}}")));
+
+    const offlineGroup = qualifyingEntries(["group_chat", "offline"]);
+    eq("R3 exactly group_chat_offline_format qualifies for group offline", offlineGroup.map((e) => e.id).join(","), "group_chat_offline_format");
+    ok("R4 that entry contains the custom-app-directive macro",
+        offlineGroup.some((e) => e.chunk.includes("{{customAppRichMediaDirectives}}")));
+
+    // Regression control: chat_optional_actions/group_chat_optional_actions/story_output_format
+    // already carried the macro before this fix -- confirms the detector itself is sound rather
+    // than trivially true for every entry.
+    const liveChat = qualifyingEntries(["chat", "text"]);
+    ok("R5 live 1:1 chat's own qualifying entry still carries the macro (sanity control)",
+        liveChat.some((e) => e.chunk.includes("{{customAppRichMediaDirectives}}")));
+}
+
+const EXPECTED = 61;
 ok(`Z1 ${EXPECTED} assertions ran before this guard`, pass + fail === EXPECTED, `ran ${pass + fail}`);
 console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail ? 1 : 0);

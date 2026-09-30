@@ -4169,15 +4169,17 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     ? await generateGroupOfflineChatCompletion(session, history, { signal: offlineRun.controller.signal })
                     : await generateOfflineChatCompletion(session, history, { signal: offlineRun.controller.signal });
                 if (!isCurrentOfflineRun()) return;
-                // 1:1 only, matching story mode's [Message] -- group action dispatch already
-                // has a known gap (see CLAUDE.md), no need to compound it here. Actions must
-                // come off the raw text BEFORE using its content/summary, or a [Message] block
-                // sitting inside <content> would leak into the displayed offline turn.
-                const offlineDispatch = !session.isGroup
-                    ? extractOfflineDispatchableMessages(result.rawText, result.summaryTag)
-                    : null;
-                const parsedContent = offlineDispatch?.parsed.content ?? result.content;
-                const parsedSummary = offlineDispatch?.parsed.summary ?? result.summary;
+                // Extraction runs for both 1:1 and group -- a Studio/custom-app directive card
+                // has no group restriction (see offline-message-dispatch.ts). Actions must come
+                // off the raw text BEFORE using its content/summary, or a [Message] block or app
+                // card sitting inside <content> would leak into the displayed offline turn.
+                // [Message] *dispatch* stays 1:1-only below: group action dispatch already has a
+                // known gap (see CLAUDE.md), no need to compound it here -- and
+                // group_chat_offline_format is never taught [Message] in the first place, so
+                // `dispatchable` should already come back empty for a group turn.
+                const offlineDispatch = extractOfflineDispatchableMessages(result.rawText, result.summaryTag);
+                const parsedContent = offlineDispatch.parsed.content;
+                const parsedSummary = offlineDispatch.parsed.summary;
                 const assistantContent = parsedContent.trim() || result.rawText.trim();
                 if (!assistantContent) throw new Error("AI did not return offline content");
                 if (!parsedSummary.trim()) showChatToast(`Couldn't extract <${result.summaryTag}> summary`);
@@ -4189,13 +4191,13 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     summaryTag: result.summaryTag,
                     rawText: result.rawText,
                     reasoningText: result.reasoning,
-                    appId: offlineDispatch?.appCard?.appId,
-                    appName: offlineDispatch?.appCard?.appName,
-                    appCardLayout: offlineDispatch?.appCard?.appCardLayout,
+                    appId: offlineDispatch.appCard?.appId,
+                    appName: offlineDispatch.appCard?.appName,
+                    appCardLayout: offlineDispatch.appCard?.appCardLayout,
                     offlineSessionId: activeOfflineSessionId ?? undefined,
                 });
                 setOfflineTurns(prev => [...prev, saved]);
-                if (offlineDispatch?.dispatchable.length) {
+                if (!session.isGroup && offlineDispatch.dispatchable.length) {
                     dispatchOfflineMessages(offlineDispatch.dispatchable, {
                         characterId: session.contactId,
                         signal: offlineRun.controller.signal,
@@ -4303,11 +4305,11 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 ? await generateGroupOfflineChatCompletion(session, history, { signal: offlineRun.controller.signal })
                 : await generateOfflineChatCompletion(session, history, { signal: offlineRun.controller.signal });
             if (!isCurrentOfflineRun()) return;
-            const offlineDispatch = !session.isGroup
-                ? extractOfflineDispatchableMessages(result.rawText, result.summaryTag)
-                : null;
-            const parsedContent = offlineDispatch?.parsed.content ?? result.content;
-            const parsedSummary = offlineDispatch?.parsed.summary ?? result.summary;
+            // Extraction runs for both 1:1 and group; [Message] *dispatch* stays 1:1-only
+            // below. See the matching comment on the send path above.
+            const offlineDispatch = extractOfflineDispatchableMessages(result.rawText, result.summaryTag);
+            const parsedContent = offlineDispatch.parsed.content;
+            const parsedSummary = offlineDispatch.parsed.summary;
             const assistantContent = parsedContent.trim() || result.rawText.trim();
             if (!assistantContent) throw new Error("AI did not return offline content");
             if (!parsedSummary.trim()) showChatToast(`Couldn't extract <${result.summaryTag}> summary`);
@@ -4319,13 +4321,13 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 summaryTag: result.summaryTag,
                 rawText: result.rawText,
                 reasoningText: result.reasoning,
-                appId: offlineDispatch?.appCard?.appId,
-                appName: offlineDispatch?.appCard?.appName,
-                appCardLayout: offlineDispatch?.appCard?.appCardLayout,
+                appId: offlineDispatch.appCard?.appId,
+                appName: offlineDispatch.appCard?.appName,
+                appCardLayout: offlineDispatch.appCard?.appCardLayout,
                 offlineSessionId: targetTurn.offlineSessionId ?? activeOfflineSessionId ?? undefined,
             });
             setOfflineTurns([...baseTurns, saved]);
-            if (offlineDispatch?.dispatchable.length) {
+            if (!session.isGroup && offlineDispatch.dispatchable.length) {
                 dispatchOfflineMessages(offlineDispatch.dispatchable, {
                     characterId: session.contactId,
                     signal: offlineRun.controller.signal,
