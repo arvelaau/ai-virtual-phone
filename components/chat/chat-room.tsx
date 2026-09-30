@@ -91,6 +91,7 @@ import {
 } from "@/lib/generated-image-retry";
 import { scrollElementWithinContainer } from "@/lib/dom-scroll";
 import { ChatFallbackAvatar } from "./chat-fallback-avatar";
+import { StickerSearchSuggest } from "./sticker-search-suggest";
 import { ChatScreenEffectOverlay, type ActiveScreenEffect } from "./chat-screen-effect";
 import {
     formatChatDiceResultMessage,
@@ -678,6 +679,8 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
 }, ref) {
     const [inputText, setInputText] = useState("");
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+    // Sticker search suggestions: ESC/blur set this true to hide it, typing turns it back on.
+    const [suggestClosed, setSuggestClosed] = useState(false);
     // 围观群/被禁言：输入与富媒体入口全部锁定，只留线下切换和生成按钮
     const [muteNowTick, setMuteNowTick] = useState(() => Date.now());
     useEffect(() => {
@@ -726,6 +729,11 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
     };
 
     const panelOpen = showEmojiPanel || showStickerPanel || showPlusMenu;
+    const suggestCharacterIds = useMemo(
+        () => (isGroup ? (stickerCharacterIds || []) : characterId ? [characterId] : []),
+        [isGroup, stickerCharacterIds, characterId],
+    );
+    const suggestEnabled = !inputLocked && !panelOpen && !suggestClosed && inputText.trim().length > 0;
     const plusMenuItems = [
         { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>, label: "Photo Wall", onClick: () => onOpenRichModal("photo") },
         { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><line x1="7" y1="8" x2="17" y2="8" /><line x1="7" y1="12" x2="14" y2="12" /><line x1="7" y1="16" x2="11" y2="16" /></svg>, label: "Text Image", onClick: () => onOpenRichModal("text_photo") },
@@ -775,12 +783,25 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
                 </div>
             )}
 
+            {suggestEnabled && (
+                <StickerSearchSuggest
+                    query={inputText}
+                    characterIds={suggestCharacterIds}
+                    onSend={(name, url) => {
+                        onSendSticker(name, url);
+                        setInputText("");
+                        resetTextareaHeight();
+                    }}
+                    onClose={() => setSuggestClosed(true)}
+                />
+            )}
             <textarea
                 ref={textareaRef}
                 rows={1}
                 value={inputText}
                 onChange={e => {
                     setInputText(e.target.value);
+                    setSuggestClosed(false);
                     e.target.style.height = "auto";
                     e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
                 }}

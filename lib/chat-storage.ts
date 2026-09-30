@@ -302,6 +302,8 @@ export type ChatAppSettings = {
     globalChatCustomCSS?: string;
     /** Global notification-sound config (new message/send/incoming call/outgoing call/hangup), set in Global Chat Info. */
     globalChatSounds?: ChatSoundsConfig;
+    /** Whether an incoming voice/video call vibrates the device while waiting to be answered (see lib/call-vibration.ts). Defaults to on. */
+    callVibrationEnabled?: boolean;
 };
 
 // ── Chat notification sounds ────────────────────────────────

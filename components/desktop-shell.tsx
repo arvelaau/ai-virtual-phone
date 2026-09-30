@@ -126,6 +126,7 @@ import { DESKTOP_WIDGETS_CHANGED_EVENT } from "@/lib/mascot-events";
 import { requestBackgroundChatReply, scheduleFollowUp } from "@/lib/follow-up-service";
 import { CHAT_MESSAGE_NOTICE_EVENT, CHAT_OPEN_SESSION_EVENT, type ChatMessageNoticeDetail } from "@/lib/chat-notification-events";
 import { installChatSoundListener, setMiniChatSoundSessionId, startChatSoundLoop } from "@/lib/chat-sound";
+import { startIncomingCallVibration } from "@/lib/call-vibration";
 import { setMascotContext } from "@/lib/mascot-context";
 import { useWeixinBridge } from "@/lib/use-weixin-bridge";
 import { startWeixinCloudRealtimeSync } from "@/lib/weixin-cloud-sync";
@@ -1088,9 +1089,14 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   const [incomingCall, setIncomingCall] = useState<{
     sessionId: string; type: "voice" | "video"; charName: string; charAvatar: string | null; isGroup?: boolean;
   } | null>(null);
+  // Loop the ringtone (that character's own sound beats the global "Chat Info -> Sounds"
+  // config) and the device vibration for as long as the desktop's own incoming-call banner is
+  // showing (toggle lives on the chat home page).
   useEffect(() => {
     if (!incomingCall) return;
-    return startChatSoundLoop("incomingCall", findChatSessionById(incomingCall.sessionId));
+    const stopRingtone = startChatSoundLoop("incomingCall", findChatSessionById(incomingCall.sessionId));
+    const stopVibration = startIncomingCallVibration();
+    return () => { stopRingtone(); stopVibration(); };
   }, [incomingCall]);
   // Global chat notification sounds (new message / send message): listens for the message-
   // pushed event and plays per each session's own config (character-specific beats global).

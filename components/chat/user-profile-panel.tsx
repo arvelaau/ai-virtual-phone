@@ -52,6 +52,7 @@ import {
     ThumbsUp,
     Trash2,
     User,
+    Vibrate,
     type LucideIcon,
 } from "lucide-react";
 import { BINDING_ACCENTS, CONTENT_APP_ACCENTS } from "@/lib/ui-accent-colors";
@@ -154,6 +155,7 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
     const [notifHint, setNotifHint] = useState<string | null>(null);
     const [notifChecking, setNotifChecking] = useState(false);
     const [enterToSendEnabled, setEnterToSendEnabled] = useState(false);
+    const [callVibrationEnabled, setCallVibrationEnabled] = useState(true);
     const [userStats, setUserStats] = useState({ chats: 0, moments: 0, visitors: 1234 });
     const [walletSummary, setWalletSummary] = useState(() => {
         const wallet = loadWalletState();
@@ -169,6 +171,7 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
         const browserGranted = isBrowserNotificationGranted();
         setNotifEnabled(settings.browserNotificationsEnabled === true && browserGranted);
         setEnterToSendEnabled(settings.enterToSendEnabled === true);
+        setCallVibrationEnabled(settings.callVibrationEnabled !== false);
         if (settings.browserNotificationsEnabled === true && !browserGranted) {
             setNotifHint(readBrowserNotificationPermissionHint());
         }
@@ -259,6 +262,11 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
     const handleEnterToSendToggle = (enabled: boolean) => {
         setEnterToSendEnabled(enabled);
         saveChatAppSettings({ ...loadChatAppSettings(), enterToSendEnabled: enabled });
+    };
+
+    const handleCallVibrationToggle = (enabled: boolean) => {
+        setCallVibrationEnabled(enabled);
+        saveChatAppSettings({ ...loadChatAppSettings(), callVibrationEnabled: enabled });
     };
 
     if (showFollowUpEditor) {
@@ -477,6 +485,15 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
                                 <span className="ts-11 text-[var(--c-text)] opacity-70">When on, Enter sends the message and Shift+Enter adds a new line</span>
                             </div>
                             <Toggle checked={enterToSendEnabled} onChange={handleEnterToSendToggle} />
+                        </div>
+
+                        <div className="flex items-center gap-3 py-3 w-full border-b border-[color-mix(in_srgb,var(--c-card-border)_20%,transparent)]">
+                            <Vibrate size={18} className="text-[var(--c-icon)] opacity-70" strokeWidth={1.25}/>
+                            <div className="flex flex-col flex-1 text-left gap-0.5">
+                                <span className="ts-14 font-semibold text-[var(--c-text-title)]">Voice/Video Call Vibration</span>
+                                <span className="ts-11 text-[var(--c-text)] opacity-70">Vibrate the device while an incoming call is waiting to be answered (not supported on iOS web)</span>
+                            </div>
+                            <Toggle checked={callVibrationEnabled} onChange={handleCallVibrationToggle} />
                         </div>
 
                         <div className="flex items-center gap-3 py-3 w-full">

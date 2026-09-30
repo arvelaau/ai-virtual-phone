@@ -17,6 +17,7 @@ import { useCallKeyboardOffsetStyle } from "./use-call-keyboard-offset";
 import { isAndroidBrowser } from "./voice-input-platform";
 import { CallVolumeControl } from "./call-volume-control";
 import { useCallScreenSounds } from "@/lib/chat-sound";
+import { startIncomingCallVibration } from "@/lib/call-vibration";
 
 // ── Types ───────────────────────────────────────────
 
@@ -86,6 +87,13 @@ export function GroupCallScreen({ type, session, characters, onEnd, initiator = 
     // Ringtone/waiting tone + hangup sound (that character's own sound beats the global "Chat
     // Info -> Sounds" config).
     useCallScreenSounds({ initiator, callState, session });
+    // Incoming call, waiting to be answered: loop the device vibration (toggle lives on the
+    // chat home page; a no-op on platforms without the Vibration API, e.g. iOS Safari).
+    useEffect(() => {
+        if (initiator !== "character" || callState !== "CONNECTING") return;
+        const stop = startIncomingCallVibration();
+        return stop;
+    }, [initiator, callState]);
 
     // Pause WeChat keep-alive while the call holds the mic/audio; restore on exit.
     useEffect(() => {
