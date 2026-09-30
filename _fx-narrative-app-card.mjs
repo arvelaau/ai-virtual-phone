@@ -223,6 +223,26 @@ She handed over the boarding passes.
     ok("D6 taught in story mode", formatCustomAppChatDirectivesForPrompt("story").includes("### Show boarding pass"));
     eq("D7 NOT taught in chat mode", formatCustomAppChatDirectivesForPrompt("chat"), "");
     eq("D8 NOT taught in offline mode", formatCustomAppChatDirectivesForPrompt("offline"), "");
+
+    // ── D9-D12: the placement hint -- narrative modes only, [Message]-shaped guidance ──
+    // User-reported: a directive tag reads as unnatural mid-paragraph in prose-flowing modes,
+    // since (unlike chat) there is no existing convention there for a bracket tag standing on
+    // its own line. This does NOT switch the mechanism to keyword matching (a real design
+    // tradeoff discussed with the user -- keyword matching risks false triggers on ordinary
+    // prose that merely mentions the same word, and there is no way to cleanly remove a keyword
+    // from a sentence the way a whole bracket tag can be cut out); it keeps the deterministic
+    // tag but tells the model explicitly where to put it, mirroring [Message]'s own instruction.
+    seedTestApp("[BoardingPass:destination]", ["story", "offline"]);
+    const storyTaught = formatCustomAppChatDirectivesForPrompt("story");
+    ok("D9 story mode teaches the placement hint", storyTaught.includes("own line") && storyTaught.includes("[Message]"), storyTaught);
+    const offlineTaught = formatCustomAppChatDirectivesForPrompt("offline");
+    ok("D10 offline mode teaches the placement hint too", offlineTaught.includes("own line") && offlineTaught.includes("[Message]"), offlineTaught);
+    const chatTaught2 = formatCustomAppChatDirectivesForPrompt("chat");
+    ok("D11 chat mode does NOT get the placement hint -- bracket tags are already the norm there", !chatTaught2.includes("own line"), chatTaught2);
+    // Placement hint must still be absent (not just present-but-unreachable) when nothing is
+    // taught at all, or D5/D7/D8's exact-"" checks above would have been silently broken by it.
+    clearApps();
+    eq("D12 no directives -> still exactly empty in story mode too (early return beats the hint)", formatCustomAppChatDirectivesForPrompt("story"), "");
 }
 
 // ── E. Studio cards merge into the same directive list, at read time only ───
@@ -397,7 +417,7 @@ She handed over the boarding passes.
 clearApps();
 clearStudioCards();
 
-const EXPECTED = 94;
+const EXPECTED = 98;
 ok(`Z1 ${EXPECTED} assertions ran before this guard`, pass + fail === EXPECTED, `ran ${pass + fail}`);
 console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail ? 1 : 0);

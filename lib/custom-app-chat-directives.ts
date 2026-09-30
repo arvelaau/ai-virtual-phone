@@ -282,6 +282,15 @@ export function formatCustomAppChatDirectivesForPrompt(mode: CustomAppCardScopeM
   const directives = loadCustomAppChatDirectives().filter(d => directiveMatchesScope(d, mode));
   if (directives.length === 0) return "";
   const lines: string[] = [];
+  // In prose-flowing narrative modes there is no existing convention for where a bracket tag
+  // goes (unlike chat, where every message is already its own short bracket-taggable line) --
+  // without this, a model mid-paragraph has no cue that the tag should stand apart from its own
+  // sentence. Mirrors [Message]'s own placement instruction, which the same narrative surfaces
+  // already teach and which is demonstrably something models follow reliably.
+  if (mode === "story" || mode === "offline") {
+    lines.push("");
+    lines.push("【Placement】Write any of the tags below on their own line, after your narration is complete -- the same way you would place a [Message] block. Never fold one into the middle of a sentence.");
+  }
   for (const directive of directives) {
     lines.push("");
     lines.push(`### ${directive.label}`);
