@@ -1,8 +1,16 @@
 "use client";
 
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Loader2, Languages } from "lucide-react";
 import { marked } from "marked";
 import { translateReasoningText } from "@/lib/reasoning-translate";
+import { CustomStatusFrame } from "@/components/chat/custom-status-frame";
+
+export type StoryVoiceSegment = {
+    id: string;
+    text: string;
+    speaker?: string;
+};
 
 /** Standard HTML tags — anything not in this set gets stripped (content kept) */
 const STANDARD_TAGS = new Set([
@@ -21,6 +29,13 @@ const STANDARD_TAGS = new Set([
     "use","clippath","mask","filter","lineargradient","radialgradient","stop",
     "center","font","marquee","strike","tt","big",
 ]);
+
+// Also allow user-defined custom tags starting with story_ (a status-bar/mini-theater scheme's
+// own <story_xxxx> HTML, kept intact through the sanitize step below).
+function isSafeTag(tag: string) {
+    const lower = tag.toLowerCase();
+    return STANDARD_TAGS.has(lower) || lower.startsWith("story_");
+}
 
 // ── Content splitting: separate ```html blocks from regular content ──
 
@@ -76,8 +91,16 @@ function StoryFoldBlock({ label, content, scopeClass, children }: {
             <summary>
                 {label}
                 {canTranslate && !translation && (
-                    <button type="button" className="story-fold-translate-btn" onClick={handleTranslate}>
-                        {translating ? "Translating…" : "Translate"}
+                    <button
+                        type="button"
+                        className="story-fold-translate-btn story-fold-translate-icon"
+                        onClick={handleTranslate}
+                        aria-label={translating ? "Translating" : "Translate"}
+                        title={translating ? "Translating" : "Translate"}
+                    >
+                        {translating
+                            ? <Loader2 size={13} className="story-fold-icon-spin" aria-hidden="true" />
+                            : <Languages width={13} height={13} aria-hidden="true" />}
                     </button>
                 )}
                 {canTranslate && translation && (
@@ -125,6 +148,13 @@ function splitContent(text: string): Segment[] {
 }
 
 function splitNonFoldContent(text: string): Segment[] {
+    const whole = text.trim();
+    // A generated page containing a <script> tag must go into the script-capable, isolated
+    // iframe -- the markdown path strips <script> for safety, which is exactly why story-page
+    // HTML can otherwise look "non-interactive".
+    if (whole && /<script\b/i.test(whole)) {
+        return [{ type: "html-page", content: whole }];
+    }
     const segments: Segment[] = [];
     const rx = /```html\s*\n([\s\S]*?)```/g;
     let lastIndex = 0;
@@ -175,12 +205,108 @@ marked.setOptions({
     gfm: true,         // GitHub Flavored Markdown (tables, strikethrough)
 });
 
-function MarkdownSegment({ content, scopeClass }: { content: string; scopeClass: string }) {
+function escapeHtmlAttribute(value: string): string {
+    return value
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+
+// The pre-STORY_VOICE_FORMAT_PROMPT dialogue convention wrapped an attributed line as
+// ⌈speaker：text⌋ or ⌈speaker:text⌋; kept for content generated before that format existed.
+function parseLegacyStoryVoiceMarker(inner: string): { text: string; speaker?: string } {
+    const normalized = inner.trim();
+    const separator = normalized.match(/^([^：:\n]{1,32})[：:]\s*([\s\S]+)$/);
+    if (!separator) return { text: normalized };
+    return { speaker: separator[1].trim(), text: separator[2].trim() };
+}
+
+function MarkdownSegment({
+    content,
+    scopeClass,
+    voiceIdPrefix,
+    playingVoiceSegmentId,
+}: {
+    content: string;
+    scopeClass: string;
+    voiceIdPrefix?: string;
+    playingVoiceSegmentId?: string | null;
+}) {
     const html = useMemo(() => {
+        const voicePlaceholders: Array<{ token: string; html: string }> = [];
+        const semanticPlaceholders: Array<{ token: string; html: string }> = [];
+        let voiceIndex = 0;
+        // 「」 is STORY_VOICE_FORMAT_PROMPT's own taught dialogue marker (lib/story-engine.ts);
+        // ⌈⌋ is the legacy attributed-speaker form above; "…" curly quotes are recognized for
+        // backward compatibility with content written before the format existed.
+        const voicePrepared = voiceIdPrefix
+            ? content.replace(/「([^」\n]+)」|⌈([^⌈⌋]+)⌋|“([^“”\n]+)”/g, (_whole, standardInner: string | undefined, legacyInner: string | undefined, curlyInner: string | undefined) => {
+                // Per the story format convention, "…" content that is ENTIRELY punctuation/
+                // silence (ellipsis, dots, tildes, "!"/"?") is ambient sound, not a spoken line,
+                // so it gets no play button. Other "…" dialogue is still recognized for
+                // backward compatibility and remains clickable to read aloud.
+                if (curlyInner != null && /^[…．.。・~～！!？?\s]+$/.test(curlyInner)) return _whole;
+                const parsed = legacyInner == null
+                    ? { text: (standardInner ?? curlyInner ?? "").trim(), speaker: undefined }
+                    : parseLegacyStoryVoiceMarker(legacyInner);
+                if (!parsed.text) return _whole;
+                const id = `${voiceIdPrefix}:${voiceIndex++}`;
+                const token = `STORYVOICEPLACEHOLDER${voicePlaceholders.length}END`;
+                const speakerAttr = parsed.speaker
+                    ? ` data-story-voice-speaker="${escapeHtmlAttribute(encodeURIComponent(parsed.speaker))}"`
+                    : "";
+                // Playback state doesn't participate in HTML generation (highlighting and the
+                // button state are toggled by the DOM effect below): switching lines during
+                // continuous read-aloud doesn't re-run the whole markdown/regex pipeline, so
+                // even a very long story doesn't lock up.
+                voicePlaceholders.push({
+                    token,
+                    html: `<span class="story-voice-segment" data-story-voice-segment="${escapeHtmlAttribute(id)}" data-story-voice-text="${escapeHtmlAttribute(encodeURIComponent(parsed.text))}"${speakerAttr}>「${escapeHtmlAttribute(parsed.text)}」<button type="button" class="story-voice-play" data-story-voice-play="${escapeHtmlAttribute(id)}" aria-label="Read this line aloud" title="Play"><span aria-hidden="true">▶</span></button></span>`,
+                });
+                return token;
+            })
+            : content;
+
+        const scenePrepared = voicePrepared.replace(/^\s*【([^】\n]{1,80})】\s*$/gm, (_whole, label: string) => {
+            const token = `STORYSCENEPLACEHOLDER${semanticPlaceholders.length}END`;
+            semanticPlaceholders.push({
+                token,
+                html: `<div class="story-scene"><span aria-hidden="true">— </span>${escapeHtmlAttribute(label.trim())}<span aria-hidden="true"> —</span></div>`,
+            });
+            return token;
+        });
+
+        // Allow directly rendering any user-defined <story_xxxx> tag, HTML content inside it
+        // included. These are no longer forcibly escaped -- they're kept as legitimate HTML
+        // tags. To stop them being stripped by the later sanitize step, swap them out for a
+        // placeholder first and restore them once sanitizing is done.
+        let customTagsPrepared = scenePrepared;
+        const customTagPlaceholders: Array<{ token: string; html: string }> = [];
+
+        customTagsPrepared = customTagsPrepared.replace(/<(story_[a-zA-Z0-9_-]+)([^>]*)>([\s\S]*?)<\/\1>/g, (wholeMatch, tagName, attrs, innerHTML) => {
+            const token = `STORYCUSTOMTAGPLACEHOLDER${customTagPlaceholders.length}END`;
+            // innerHTML is not escaped, so a scheme can write raw HTML like <div class="..."> directly.
+            customTagPlaceholders.push({
+                token,
+                html: `<${tagName}${attrs}>${innerHTML}</${tagName}>`,
+            });
+            return token;
+        });
+
+        const semanticPrepared = customTagsPrepared.replace(/(^|[^~])~([^~\n<>{};]{1,60})~(?!~)/g, (_whole, prefix: string, emphasized: string) => {
+            const token = `STORYACCENTPLACEHOLDER${semanticPlaceholders.length}END`;
+            semanticPlaceholders.push({
+                token,
+                html: `<span class="story-accent">${escapeHtmlAttribute(emphasized)}</span>`,
+            });
+            return `${prefix}${token}`;
+        });
+
         // 0. Pre-process:
-        const preprocessed = content
+        const preprocessed = semanticPrepared
             .replace(/<\/?([a-zA-Z][a-zA-Z0-9_-]*)[^>]*>/g, (match, tag) =>  // strip all non-standard HTML tags (keep content)
-                STANDARD_TAGS.has(tag.toLowerCase()) ? match : "")
+                isSafeTag(tag) ? match : "")
             .replace(/^[ \t]+/gm, "")                     // strip leading whitespace (prevents marked treating indented HTML as code blocks)
             .replace(/\n{3,}/g, "\n\n")                    // max 2 consecutive newlines
             .replace(/(>)\s*\n\n\s*(<)/g, "$1\n$2");       // remove blank lines between HTML tags
@@ -202,16 +328,60 @@ function MarkdownSegment({ content, scopeClass }: { content: string; scopeClass:
         const scoped = scopeStyles(clean, scopeClass);
 
         // 4. Clean up whitespace artifacts
-        const trimmed = scoped
+        let trimmed = scoped
             .replace(/(<\/div>|<\/details>|<\/table>|<\/p>)\s*(<br\s*\/?>)\s*/gi, "$1")
             .replace(/(<br\s*\/?>){3,}/gi, "<br>")
             .replace(/<p>\s*<\/p>/gi, "")
             .replace(/<p>\s*(<br\s*\/?>)\s*<\/p>/gi, "");
 
-        return trimmed;
-    }, [content, scopeClass]);
+        for (const placeholder of voicePlaceholders) {
+            trimmed = trimmed.replace(placeholder.token, placeholder.html);
+        }
+        for (const placeholder of semanticPlaceholders) {
+            trimmed = trimmed.replace(placeholder.token, placeholder.html);
+        }
+        for (const placeholder of customTagPlaceholders) {
+            trimmed = trimmed.replace(placeholder.token, placeholder.html);
+        }
+        // *inner voice* is STORY_VOICE_FORMAT_PROMPT's own taught form for unspoken thought;
+        // markdown turns *text* into <em>, so it's tagged here for its own styling.
+        trimmed = trimmed.replace(/<em>/g, '<em class="story-thought">');
 
-    return <div className={scopeClass} style={{ whiteSpace: "normal" }} dangerouslySetInnerHTML={{ __html: html }} />;
+        return trimmed;
+    }, [content, scopeClass, voiceIdPrefix]);
+
+    // Read-aloud highlighting: mutate the DOM directly rather than rebuilding the whole
+    // innerHTML on every playback-state change -- avoids repeated reflow (and the page locking
+    // up) during continuous playback of long prose.
+    const rootRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        const root = rootRef.current;
+        if (!root) return;
+        root.querySelectorAll<HTMLElement>(".story-voice-segment.is-playing").forEach((element) => {
+            element.classList.remove("is-playing");
+            const button = element.querySelector<HTMLElement>(".story-voice-play");
+            if (button) {
+                button.setAttribute("aria-label", "Read this line aloud");
+                button.setAttribute("title", "Play");
+                const label = button.querySelector("span");
+                if (label) label.textContent = "▶";
+            }
+        });
+        if (!playingVoiceSegmentId) return;
+        const selectorId = playingVoiceSegmentId.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+        const active = root.querySelector<HTMLElement>(`.story-voice-segment[data-story-voice-segment="${selectorId}"]`);
+        if (!active) return;
+        active.classList.add("is-playing");
+        const button = active.querySelector<HTMLElement>(".story-voice-play");
+        if (button) {
+            button.setAttribute("aria-label", "Stop reading");
+            button.setAttribute("title", "Stop");
+            const label = button.querySelector("span");
+            if (label) label.textContent = "■";
+        }
+    }, [playingVoiceSegmentId, html]);
+
+    return <div ref={rootRef} className={scopeClass} style={{ whiteSpace: "normal" }} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 // ── Inline action click delegate ──
@@ -233,6 +403,36 @@ function useActionDelegate(containerRef: React.RefObject<HTMLDivElement | null>,
         el.addEventListener("click", handler, true);
         return () => el.removeEventListener("click", handler, true);
     }, [containerRef, onAction]);
+}
+
+function useStoryVoiceDelegate(
+    containerRef: React.RefObject<HTMLDivElement | null>,
+    onVoicePlay?: (segment: StoryVoiceSegment) => void,
+) {
+    useEffect(() => {
+        if (!onVoicePlay) return;
+        const el = containerRef.current;
+        if (!el) return;
+        const handler = (event: MouseEvent) => {
+            const button = (event.target as HTMLElement).closest<HTMLElement>("[data-story-voice-play]");
+            if (!button) return;
+            const segment = button.closest<HTMLElement>("[data-story-voice-segment]");
+            const id = button.dataset.storyVoicePlay;
+            const encodedText = segment?.dataset.storyVoiceText;
+            if (!id || !encodedText) return;
+            event.preventDefault();
+            event.stopPropagation();
+            onVoicePlay({
+                id,
+                text: decodeURIComponent(encodedText),
+                speaker: segment?.dataset.storyVoiceSpeaker
+                    ? decodeURIComponent(segment.dataset.storyVoiceSpeaker)
+                    : undefined,
+            });
+        };
+        el.addEventListener("click", handler, true);
+        return () => el.removeEventListener("click", handler, true);
+    }, [containerRef, onVoicePlay]);
 }
 
 // ── HTML page segment: srcDoc iframe ──
@@ -282,7 +482,20 @@ function HtmlPageSegment({ html, onOptionSelect, htmlPageMode, serifIframeFallba
         //    and each measurement locks in the previous one.
         //  - a zero-width frame (display:none, or not laid out yet) measures garbage, so both
         //    measure() and send() bail out instead of reporting it.
-        const bridge = `<style>html,body{overflow:hidden!important;height:auto!important;min-height:0!important}</style><script>(function(){function measure(){var b=document.body;if(!b)return 0;if(window.innerWidth<50)return 0;var br=b.getBoundingClientRect();var h=Math.max(br.height,b.scrollHeight||0);for(var i=0;i<b.children.length;i++){var c=b.children[i];var r=c.getBoundingClientRect();if(r.width||r.height)h=Math.max(h,r.bottom-br.top,c.scrollHeight||0)}return Math.ceil(h)}function send(){var h=measure();if(!h)return;window.parent.postMessage({type:"_rhr",h:h},"*")}function schedule(){requestAnimationFrame(function(){send();requestAnimationFrame(send)})}window.addEventListener("load",schedule);window.addEventListener("resize",schedule);document.addEventListener("click",function(e){var t=e.target&&e.target.closest&&e.target.closest("[data-action]");if(t){var a=t.getAttribute("data-action");if(a){e.preventDefault();e.stopPropagation();window.parent.postMessage({type:"_rhr_opt",text:a},"*")}}schedule()},true);document.addEventListener("toggle",schedule,true);document.addEventListener("transitionend",schedule,true);document.addEventListener("animationend",schedule,true);if(window.MutationObserver)new MutationObserver(schedule).observe(document.documentElement,{attributes:true,childList:true,subtree:true,characterData:true});if(window.ResizeObserver){var ro=new ResizeObserver(schedule);ro.observe(document.documentElement);if(document.body)ro.observe(document.body)}setTimeout(send,80);setTimeout(send,500);setTimeout(send,1600)})();<\/script>`;
+        //
+        // A third guard, on top of the two above: the user actually clicking inside the
+        // generated page (an accordion expanding, say) is a genuine, user-triggered height
+        // jump, never a vh feedback loop (which has nothing to do with interaction) -- that
+        // signal (_rhr_act) clears the lock and the sample window immediately, so the growth
+        // that follows a real click always takes effect. And a CSS transition/animation in
+        // progress grows the content every frame in exactly the SHAPE of a feedback loop (a
+        // run of small, steady increases) but converges along its easing curve -- feeding
+        // those frames into the runaway check would misfire constantly (a 0.55s transition
+        // ticks 6 frames in ~100ms and would already read as runaway); while animEnd/animStart
+        // listeners report `anim: true`, the measurement is followed directly instead and the
+        // sample window is cleared, so frames from before/after the transition can't be
+        // stitched into a false positive.
+        const bridge = `<style>html,body{overflow:hidden!important;height:auto!important;min-height:0!important}</style><script>(function(){function measure(){var b=document.body;if(!b)return 0;if(window.innerWidth<50)return 0;var br=b.getBoundingClientRect();var h=Math.max(br.height,b.scrollHeight||0);for(var i=0;i<b.children.length;i++){var c=b.children[i];var r=c.getBoundingClientRect();if(r.width||r.height)h=Math.max(h,r.bottom-br.top,c.scrollHeight||0)}return Math.ceil(h)}var animCount=0,animUntil=0;function isAnim(){return animCount>0&&Date.now()<animUntil}function animStart(){animCount++;animUntil=Date.now()+2000;schedule()}function animStop(){if(animCount>0)animCount--;schedule()}function send(){var h=measure();if(!h)return;window.parent.postMessage({type:"_rhr",h:h,anim:isAnim()},"*")}function schedule(){requestAnimationFrame(function(){send();requestAnimationFrame(send)})}window.addEventListener("load",schedule);window.addEventListener("resize",schedule);document.addEventListener("click",function(e){var t=e.target&&e.target.closest&&e.target.closest("[data-action]");if(t){var a=t.getAttribute("data-action");if(a){e.preventDefault();e.stopPropagation();window.parent.postMessage({type:"_rhr_opt",text:a},"*")}}window.parent.postMessage({type:"_rhr_act"},"*");schedule()},true);document.addEventListener("toggle",function(){window.parent.postMessage({type:"_rhr_act"},"*");schedule()},true);document.addEventListener("transitionrun",animStart,true);document.addEventListener("transitionend",animStop,true);document.addEventListener("transitioncancel",animStop,true);document.addEventListener("animationstart",animStart,true);document.addEventListener("animationend",animStop,true);document.addEventListener("animationcancel",animStop,true);if(window.MutationObserver)new MutationObserver(schedule).observe(document.documentElement,{attributes:true,childList:true,subtree:true,characterData:true});if(window.ResizeObserver){var ro=new ResizeObserver(schedule);ro.observe(document.documentElement);if(document.body)ro.observe(document.body)}setTimeout(send,80);setTimeout(send,500);setTimeout(send,1600)})();<\/script>`;
         // Default-font fallback: an iframe is its own document, so it cannot inherit the
         // story page's serif (--story-font) and falls back to the UA sans-serif. Injecting
         // a serif default at the very front of the document means a generated page's own
@@ -305,12 +518,19 @@ function HtmlPageSegment({ html, onOptionSelect, htmlPageMode, serifIframeFallba
         if (h.includes("</body>")) h = h.replace("</body>", bridge + "</body>");
         else h = h + bridge;
         return h;
-    }, [html, contained]);
+    }, [html, contained, serifIframeFallback]);
 
     useEffect(() => {
         const handler = (e: MessageEvent) => {
             if (!e.data || typeof e.data !== "object") return;
             if (iframeRef.current && e.source !== iframeRef.current.contentWindow) return;
+            // A genuine user-triggered height jump (an accordion click, etc.) clears the lock
+            // and the sample window immediately, so the growth that follows always applies.
+            if (e.data.type === "_rhr_act") {
+                feedbackLockRef.current = null;
+                recentHeightsRef.current = [];
+                return;
+            }
             if (e.data.type === "_rhr" && typeof e.data.h === "number") {
                 const next = Math.max(e.data.h, 50);
                 const lock = feedbackLockRef.current;
@@ -321,6 +541,14 @@ function HtmlPageSegment({ html, onOptionSelect, htmlPageMode, serifIframeFallba
                     } else {
                         return; // while locked, ignore measurements that keep growing
                     }
+                }
+                // A CSS transition/animation is in progress: follow the measurement directly
+                // and clear the sample window, so frames from before/after the transition can't
+                // be mistaken for a vh feedback loop (see the long comment above).
+                if (e.data.anim === true) {
+                    recentHeightsRef.current = [];
+                    setHeight(next);
+                    return;
                 }
                 const recent = recentHeightsRef.current;
                 // The bridge fires several identical messages per change; dedupe before
@@ -340,8 +568,13 @@ function HtmlPageSegment({ html, onOptionSelect, htmlPageMode, serifIframeFallba
                     });
                 if (isRunaway) {
                     // The vh content wants to fill the viewport, so lock a near-full-screen
-                    // height rather than whatever small value it started from.
+                    // height rather than whatever small value it started from. .story-stage
+                    // only exists in story mode; other hosts of this renderer (e.g. Dwelling)
+                    // fall back to their own outer scroll container, then to the full screen --
+                    // using the full screen as the viewport there would lock in a value taller
+                    // than the container.
                     const viewport = iframeRef.current?.closest(".story-stage")?.clientHeight
+                        || iframeRef.current?.parentElement?.clientHeight
                         || (typeof window !== "undefined" ? window.innerHeight : 600);
                     const locked = Math.max(recent[0].h, Math.round(viewport * 0.68));
                     feedbackLockRef.current = locked;
@@ -363,6 +596,7 @@ function HtmlPageSegment({ html, onOptionSelect, htmlPageMode, serifIframeFallba
             ref={iframeRef}
             srcDoc={srcDoc}
             title="HTML content"
+            sandbox="allow-scripts"
             style={{
                 width: "100%",
                 height,
@@ -400,13 +634,21 @@ export interface StoryHtmlRendererProps {
     htmlPageMode?: "auto" | "contained";
     /** Story mode only: inject a serif default into generated-page iframes. */
     serifIframeFallback?: boolean;
+    onVoicePlay?: (segment: StoryVoiceSegment) => void;
+    playingVoiceSegmentId?: string | null;
+    /** The story_status scheme's own render HTML (from the shared scheme repository), if voice/tail rendering is configured. */
+    statusRenderHtml?: string;
+    /** The story_theater scheme's own render HTML, same source. */
+    theaterRenderHtml?: string;
 }
 
-function StoryHtmlRendererInner({ content, messageId, onOptionSelect, htmlPageMode = "auto", serifIframeFallback }: StoryHtmlRendererProps) {
+function StoryHtmlRendererInner({ content, messageId, onOptionSelect, htmlPageMode = "auto", serifIframeFallback = false, onVoicePlay, playingVoiceSegmentId, statusRenderHtml, theaterRenderHtml }: StoryHtmlRendererProps) {
     const segments = useMemo(() => splitContent(content), [content]);
     const scopeClass = `smsg-${messageId.slice(-8)}`;
     const containerRef = useRef<HTMLDivElement>(null);
     useActionDelegate(containerRef, onOptionSelect);
+    useStoryVoiceDelegate(containerRef, onVoicePlay);
+    const voicePrefix = (suffix: string) => onVoicePlay ? `${messageId}:${suffix}` : undefined;
 
     return (
         <div className="story-richtext" ref={containerRef}>
@@ -415,25 +657,43 @@ function StoryHtmlRendererInner({ content, messageId, onOptionSelect, htmlPageMo
                     return <HtmlPageSegment key={`hp-${i}`} html={seg.content} onOptionSelect={onOptionSelect} htmlPageMode={htmlPageMode} serifIframeFallback={serifIframeFallback} />;
                 }
                 if (seg.type === "fold") {
+                    // A recognized story_status/story_theater fold with a configured scheme
+                    // render HTML renders through the same sandboxed CustomStatusFrame the
+                    // settings page previews with, instead of the generic markdown/html-page
+                    // splitting below -- and its summary label reads "Status Bar"/"Mini
+                    // Theater" rather than the raw tag name.
+                    const tailKind = seg.label.toLowerCase() === "story_status"
+                        ? "status"
+                        : seg.label.toLowerCase() === "story_theater"
+                            ? "theater"
+                            : null;
+                    const tailRenderHtml = tailKind === "status" ? statusRenderHtml : tailKind === "theater" ? theaterRenderHtml : "";
                     return (
-                        <StoryFoldBlock key={`fold-${i}`} label={seg.label} content={seg.content} scopeClass={scopeClass}>
-                            {splitContent(seg.content).map((innerSeg, innerIndex) => {
+                        <StoryFoldBlock key={`fold-${i}`} label={tailKind === "status" ? "Status Bar" : tailKind === "theater" ? "Mini Theater" : seg.label} content={seg.content} scopeClass={scopeClass}>
+                            {tailKind && tailRenderHtml ? (
+                                <CustomStatusFrame
+                                    html={tailRenderHtml}
+                                    raw={seg.content}
+                                    kind={tailKind}
+                                    title={tailKind === "status" ? "Story status bar" : "Story mini theater"}
+                                />
+                            ) : splitContent(seg.content).map((innerSeg, innerIndex) => {
                                 if (innerSeg.type === "html-page") {
                                     return <HtmlPageSegment key={`fold-hp-${i}-${innerIndex}`} html={innerSeg.content} onOptionSelect={onOptionSelect} htmlPageMode={htmlPageMode} serifIframeFallback={serifIframeFallback} />;
                                 }
                                 if (innerSeg.type === "fold") {
                                     return (
                                         <StoryFoldBlock key={`fold-inner-${i}-${innerIndex}`} label={innerSeg.label} content={innerSeg.content} scopeClass={scopeClass}>
-                                            <MarkdownSegment content={innerSeg.content} scopeClass={scopeClass} />
+                                            <MarkdownSegment content={innerSeg.content} scopeClass={scopeClass} voiceIdPrefix={voicePrefix(`fold:${i}:${innerIndex}`)} playingVoiceSegmentId={playingVoiceSegmentId} />
                                         </StoryFoldBlock>
                                     );
                                 }
-                                return <MarkdownSegment key={`fold-md-${i}-${innerIndex}`} content={innerSeg.content} scopeClass={scopeClass} />;
+                                return <MarkdownSegment key={`fold-md-${i}-${innerIndex}`} content={innerSeg.content} scopeClass={scopeClass} voiceIdPrefix={voicePrefix(`fold:${i}:${innerIndex}`)} playingVoiceSegmentId={playingVoiceSegmentId} />;
                             })}
                         </StoryFoldBlock>
                     );
                 }
-                return <MarkdownSegment key={`md-${i}`} content={seg.content} scopeClass={scopeClass} />;
+                return <MarkdownSegment key={`md-${i}`} content={seg.content} scopeClass={scopeClass} voiceIdPrefix={voicePrefix(`md:${i}`)} playingVoiceSegmentId={playingVoiceSegmentId} />;
             })}
         </div>
     );
