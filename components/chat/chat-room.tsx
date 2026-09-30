@@ -38,6 +38,7 @@ import { sendBrowserNotification } from "@/lib/browser-notification";
 import { dispatchChatMessageNotice } from "@/lib/chat-notification-events";
 import { shouldSendChatInputOnEnter } from "@/lib/chat-input-keyboard";
 import { useChatBottomReserve } from "./use-chat-bottom-reserve";
+import { useKeyboardDismissAutoSend } from "./use-keyboard-dismiss-auto-send";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
@@ -3789,6 +3790,19 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         }
         if (shouldRunDeclineReply) await triggerReply();
     };
+
+    // Dismissing the keyboard (or closing the emoji/plus panel) and staying quiet for N
+    // seconds auto-triggers a reply, equivalent to tapping "Trigger Reply" on the user's
+    // behalf. All the decision logic lives inside the hook; with the config toggle off,
+    // behavior matches manual mode.
+    useKeyboardDismissAutoSend(wrapperRef, {
+        active: !offlineMode && !isMultiSelectMode,
+        pending: pendingGenerate,
+        generating: isGenerating,
+        panelOpen: showEmojiPanel || showStickerPanel || showPlusMenu,
+        sessionId: session.id,
+        onTrigger: () => { void triggerAIResponse(); },
+    });
 
     useEffect(() => {
         const handleCustomAppReplyRequest = (event: Event) => {

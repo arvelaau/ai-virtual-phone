@@ -52,6 +52,7 @@ import CSSSchemeBar from "@/components/ui/css-scheme-picker";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { CHAT_SESSION_CSS_EXAMPLE } from "@/lib/css-examples";
 import { Toggle, Input } from "@/components/ui/form";
+import { KeyboardAutoSendDebounceItem } from "@/components/chat/keyboard-auto-send-debounce-item";
 import { PageShell } from "@/components/ui/page-shell";
 import {
     DEFAULT_CHAT_BILINGUAL_PROMPT,
@@ -1063,6 +1064,7 @@ export function ChatSettingsPanel({
 
                 {/* Advanced */}
                 <div className="menu-group">
+                    <KeyboardAutoSendDebounceItem sessionId={session.id} />
                     <button className="menu-item" onClick={() => setEditingCSS(true)}>
                         <ChatInfoIcon icon={Code} color={BINDING_ACCENTS.embedding} />
                         <div className="menu-label-group"><span className="menu-label">Custom CSS Style</span></div>
