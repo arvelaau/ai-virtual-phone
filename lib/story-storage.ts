@@ -31,8 +31,15 @@ export type StoryUiPrefs = {
   quickInputCursor?: "left" | "middle" | "right";
 };
 
-/** Quick-input panel default options: paired quotes + common punctuation. */
-export const STORY_DEFAULT_QUICK_INPUT_OPTIONS = ["“”", "「」", "，", "？", "……"];
+/**
+ * Quick-input panel default options: paired quotes + common punctuation. "" and 「」 are kept
+ * as-is -- 「」 is the literal dialogue marker STORY_VOICE_FORMAT_PROMPT teaches the AI to
+ * write (see lib/story-engine.ts), so it belongs here as a genuine quick-insert shortcut for
+ * that convention. The three plain-punctuation entries were full-width Chinese forms carried
+ * over unchanged from the original port (","/"?"/"......") -- switched to their ASCII
+ * equivalents here, since this fork's users write in English.
+ */
+export const STORY_DEFAULT_QUICK_INPUT_OPTIONS = ["\u201c\u201d", "「」", ",", "?", "..."];
 
 export type StoryTailScheme = {
   id: string;
