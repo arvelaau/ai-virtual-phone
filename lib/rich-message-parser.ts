@@ -24,6 +24,7 @@ import {
 } from "./rich-tag-builders";
 import {
     directiveMatchesScope,
+    directiveUsesTag,
     formatCustomAppDirectiveSummary,
     getCustomAppDirectiveSyntaxHead,
     loadCustomAppChatDirectives,
@@ -650,7 +651,13 @@ function findBuiltInRichCandidate(segment: string): RichPatternCandidate | null 
 }
 
 function findCustomAppRichCandidate(segment: string, mode: CustomAppCardScopeMode): RichPatternCandidate | null {
-    const directives = loadCustomAppChatDirectives().filter(d => directiveMatchesScope(d, mode));
+    // In a narrative mode, a directive with `keywords` set is matched by
+    // findCustomAppKeywordCandidate instead -- excluded here so it can't ALSO respond to a
+    // stale/leftover bracket tag once it's been migrated to keyword triggering. In chat mode
+    // directiveUsesTag() is always true, so this filter is a no-op there (unchanged behavior).
+    const directives = loadCustomAppChatDirectives()
+        .filter(d => directiveMatchesScope(d, mode))
+        .filter(d => directiveUsesTag(d, mode));
     if (directives.length === 0) return null;
     const bySyntaxHead = new Map(directives.map(item => [getCustomAppDirectiveSyntaxHead(item.syntax), item]));
     const bracketPattern = /\[([^\]\n：:]{1,24})([：:][^\]\n]*)?\]/g;
@@ -664,6 +671,35 @@ function findCustomAppRichCandidate(segment: string, mode: CustomAppCardScopeMod
             index: match.index,
             matchText: raw,
             build: () => buildCustomAppDirectivePart(directive, args, raw),
+        };
+    }
+    return null;
+}
+
+/**
+ * Narrative-mode-only counterpart to findCustomAppRichCandidate: matches a directive whose
+ * author set `keywords` (see CustomAppChatDirective.keywords) by plain, case-insensitive
+ * substring search -- same convention as WorldBookEntry keyword activation
+ * (isWorldBookEntryActivated in llm-prompt-assembler.ts), which is what this was modeled after.
+ * Returns a ZERO-LENGTH match (matchText: "") on purpose: unlike a bracket tag, a keyword lives
+ * inside a real sentence and can't be cut out of it without breaking the narration, so nothing
+ * is ever spliced out of the text -- the card just renders alongside the untouched prose.
+ */
+function findCustomAppKeywordCandidate(segment: string, mode: CustomAppCardScopeMode): RichPatternCandidate | null {
+    if (mode === "chat") return null; // chat never uses keyword triggering, see directiveUsesTag
+    const directives = loadCustomAppChatDirectives()
+        .filter(d => directiveMatchesScope(d, mode))
+        .filter(d => !directiveUsesTag(d, mode));
+    if (directives.length === 0) return null;
+    const lowerSegment = segment.toLowerCase();
+    for (const directive of directives) {
+        const keys = (directive.keywords || "").split(",").map(k => k.trim()).filter(Boolean);
+        const hit = keys.find(k => lowerSegment.includes(k.toLowerCase()));
+        if (!hit) continue;
+        return {
+            index: 0,
+            matchText: "",
+            build: () => buildCustomAppDirectivePart(directive, [], hit),
         };
     }
     return null;
@@ -686,9 +722,17 @@ export type ExtractedCustomAppCard = {
  * directive produced no renderable card layout (a directive with only structured
  * title/body/actions fields and no card.html would still build a part, but narrative modes only
  * care about the rich HTML-card case).
+ *
+ * Tries keyword matching first, then falls back to the bracket tag -- the two never compete for
+ * the same directive (directiveUsesTag partitions them exclusively), so the order only matters
+ * when DIFFERENT directives are both present in one turn's text, and even then either order
+ * would return "the first candidate found", just possibly a different one. A zero-length
+ * keyword match (matchIndex: 0, matchLength: 0) is a deliberate no-op splice downstream: slicing
+ * `text` at the same index and concatenating recovers it unchanged, which is what leaves the
+ * narration untouched -- see findCustomAppKeywordCandidate above.
  */
 export function extractCustomAppCard(text: string, mode: CustomAppCardScopeMode): ExtractedCustomAppCard | null {
-    const candidate = findCustomAppRichCandidate(text, mode);
+    const candidate = findCustomAppKeywordCandidate(text, mode) || findCustomAppRichCandidate(text, mode);
     if (!candidate) return null;
     const part = candidate.build();
     const data = part.mediaData as Record<string, unknown> | undefined;

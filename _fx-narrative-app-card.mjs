@@ -34,7 +34,7 @@ let pass = 0, fail = 0;
 const ok = (n, c, x) => { if (c) pass++; else { fail++; console.log(`  FAIL ${n}${x === undefined ? "" : ` -- ${JSON.stringify(x).slice(0, 300)}`}`); } };
 const eq = (n, g, w) => ok(n, Object.is(g, w), { got: g, want: w });
 
-function seedTestApp(syntax, scope) {
+function seedTestApp(syntax, scope, keywords) {
     const directive = {
         id: "boarding-pass",
         label: "Show boarding pass",
@@ -47,6 +47,7 @@ function seedTestApp(syntax, scope) {
         },
     };
     if (scope) directive.scope = scope;
+    if (keywords) directive.keywords = keywords;
     const app = {
         id: "test.travelapp",
         name: "Travel Companion",
@@ -245,6 +246,68 @@ She handed over the boarding passes.
     eq("D12 no directives -> still exactly empty in story mode too (early return beats the hint)", formatCustomAppChatDirectivesForPrompt("story"), "");
 }
 
+// ── D13-D24: keyword triggering -- narrative modes only, opt-in per directive ─────────────
+// User decision, after the tag-vs-keyword tradeoff above was explained: for Story/Offline mode
+// specifically, prefer a natural trigger WORD over the bracket tag. Opt-in via
+// CustomAppChatDirective.keywords (unset = the directive above's tag-only behavior, unchanged):
+// when set, story/offline TEACH and DETECT the keyword instead of the tag; chat is untouched
+// either way, since bracket tags are already this app's convention everywhere else in chat.
+{
+    clearApps();
+    seedTestApp("[BoardingPass]", ["chat", "story", "offline"], "boarding pass, gate pass");
+
+    const storyTaught = formatCustomAppChatDirectivesForPrompt("story");
+    ok("D13 story teaches a trigger WORD, not the bracket tag",
+        storyTaught.includes("【Trigger word】") && !storyTaught.includes("【Format】"), storyTaught);
+    ok("D14 both comma-separated keywords are quoted and joined with \"or\"",
+        storyTaught.includes('"boarding pass" or "gate pass"'), storyTaught);
+    const offlineTaught = formatCustomAppChatDirectivesForPrompt("offline");
+    ok("D15 offline teaches the trigger word too", offlineTaught.includes("【Trigger word】"), offlineTaught);
+
+    // Chat NEVER switches to keyword teaching, even though this directive has keywords set --
+    // directiveUsesTag() is hardcoded true for chat.
+    const chatTaught3 = formatCustomAppChatDirectivesForPrompt("chat");
+    ok("D16 chat still teaches the bracket tag, keywords or not",
+        chatTaught3.includes("【Format】[BoardingPass]") && !chatTaught3.includes("【Trigger word】"), chatTaught3);
+
+    // The placement hint is about WHERE to put a TAG -- a pure-keyword prompt has no tag in it
+    // at all, so teaching "put it on its own line" would be actively confusing.
+    ok("D17 the placement hint does NOT appear when every taught directive is keyword-only",
+        !storyTaught.includes("own line"), storyTaught);
+
+    // A SECOND directive that still uses the tag (no keywords) DOES bring the placement hint
+    // back -- it's per-surface, not per-directive, and only needed when a tag is actually taught.
+    const directives = loadCustomAppChatDirectives();
+    ok("D17b sanity: exactly one directive is registered so far", directives.length === 1, directives.length);
+
+    // ── Detection: the keyword triggers WITHOUT any bracket tag, and the narration survives untouched ──
+    const prose = "She hands you the tickets at the gate. \"Here's your boarding pass,\" she says, tucking the rest into her bag.";
+    const found = extractCustomAppCard(prose, "story");
+    ok("D18 a bare keyword in ordinary prose triggers the card -- no bracket tag anywhere", Boolean(found), found);
+    eq("D19 it resolves to the real installed app, same as a tag match would", found?.appId, "test.travelapp");
+
+    // The defining property of keyword triggering: matchLength is ALWAYS 0, so splicing it out
+    // (the same formula offline-message-dispatch.ts / story-engine.ts use) recovers the ORIGINAL
+    // text byte-for-byte -- unlike a tag, a keyword living inside a real sentence can never be
+    // cut out without breaking it, so nothing is ever cut.
+    eq("D20 matchLength is always 0 for a keyword match", found?.matchLength, 0);
+    const spliced = prose.slice(0, found.matchIndex) + prose.slice(found.matchIndex + found.matchLength);
+    eq("D21 splicing the match out recovers the original prose completely unchanged", spliced, prose);
+
+    // Case-insensitive, matching WorldBookEntry's own keyword-activation convention exactly
+    // (isWorldBookEntryActivated in llm-prompt-assembler.ts) -- this was modeled on it directly.
+    const upperCase = extractCustomAppCard("She holds up the BOARDING PASS proudly.", "story");
+    ok("D22 matching is case-insensitive", Boolean(upperCase), upperCase);
+
+    // Chat mode NEVER does keyword detection, even for a directive that has keywords configured
+    // -- a bracket tag is still required there.
+    eq("D23 chat mode does NOT trigger on the bare keyword (no tag present)",
+        extractCustomAppCard("Here's your boarding pass!", "chat"), null);
+
+    // Prose that never mentions any configured keyword triggers nothing, in either narrative mode.
+    eq("D24 prose with no matching keyword triggers nothing", extractCustomAppCard("They walked to the gate in silence.", "story"), null);
+}
+
 // ── E. Studio cards merge into the same directive list, at read time only ───
 {
     clearApps();
@@ -417,7 +480,7 @@ She handed over the boarding passes.
 clearApps();
 clearStudioCards();
 
-const EXPECTED = 98;
+const EXPECTED = 111;
 ok(`Z1 ${EXPECTED} assertions ran before this guard`, pass + fail === EXPECTED, `ran ${pass + fail}`);
 console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail ? 1 : 0);

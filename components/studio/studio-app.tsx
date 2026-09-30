@@ -46,6 +46,7 @@ type Screen = { mode: "list" } | { mode: "edit"; id: string | null };
 const EMPTY_DRAFT: StudioCardInput = {
     name: "",
     syntax: "",
+    keywords: "",
     description: "",
     html: "",
     accentColor: "",
@@ -57,6 +58,7 @@ function draftFromCard(card: StudioCard): StudioCardInput {
     return {
         name: card.name,
         syntax: card.syntax,
+        keywords: card.keywords ?? "",
         description: card.description,
         html: card.html,
         accentColor: card.accentColor ?? "",
@@ -151,6 +153,9 @@ export function StudioApp({ onClose, onNotice }: Props) {
                                             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                                                 <span style={{ fontWeight: 500 }}>{card.name}</span>
                                                 <Badge>{card.syntax}</Badge>
+                                                {card.keywords ? (
+                                                    <Badge>word: {card.keywords}</Badge>
+                                                ) : null}
                                                 {card.scope && card.scope.length > 0 ? (
                                                     <Badge>{card.scope.map(mode => SCOPE_MODE_LABELS[mode].label).join(" + ")}</Badge>
                                                 ) : null}
@@ -200,12 +205,26 @@ export function StudioApp({ onClose, onNotice }: Props) {
                         </label>
                         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                             <span style={{ fontSize: 12.5, opacity: 0.7 }}>
-                                Trigger tag -- what the AI must write to show this card
+                                Trigger tag -- what the AI must write in Chat to show this card (also used
+                                in Story/Offline if no trigger word is set below)
                             </span>
                             <Input
                                 placeholder={draft.name ? `[${draft.name.replace(/[^A-Za-z0-9]/g, "") || "Card"}]` : "[BoardingPass]"}
                                 value={draft.syntax ?? ""}
                                 onChange={event => setDraft(prev => ({ ...prev, syntax: event.target.value }))}
+                            />
+                        </label>
+                        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                            <span style={{ fontSize: 12.5, opacity: 0.7 }}>
+                                Trigger word (optional) -- in Story/Offline mode ONLY, the AI mentions this
+                                naturally in its narration instead of writing the tag above. Comma-separate
+                                a few ways to say it (e.g. "boarding pass, gate pass"). Chat always uses the
+                                tag, since bracket tags already read naturally there.
+                            </span>
+                            <Input
+                                placeholder="boarding pass, gate pass"
+                                value={draft.keywords ?? ""}
+                                onChange={event => setDraft(prev => ({ ...prev, keywords: event.target.value }))}
                             />
                         </label>
                         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
