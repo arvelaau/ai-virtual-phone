@@ -104,6 +104,22 @@ await story.hydrateStoryStorage();
     const second = storyEngine.buildStorySettingsPrompt({}, "User");
     check("3e default (no userPerspective set) teaches second person", second.toLowerCase().includes("second person"), second);
 
+    // ── 3k-3s: "first" -- first-person limited, gender-aware third-person user reference ──
+    const firstUndisclosed = storyEngine.buildStorySettingsPrompt({ userPerspective: "first" }, "Alex", undefined);
+    check("3k first-person is taught (narrate as \"I\")", firstUndisclosed.includes('narrate as "I"'), firstUndisclosed);
+    check("3l limited-knowledge constraint is present", firstUndisclosed.toLowerCase().includes("only ever state what you"), firstUndisclosed);
+    check("3m never addresses the user as \"you\"", firstUndisclosed.includes('never as "you"'), firstUndisclosed);
+    check("3n user is referred to in the third person", firstUndisclosed.includes("Refer to Alex in the third person"), firstUndisclosed);
+    check("3o undisclosed gender (unset) fails closed to they/them", firstUndisclosed.includes("they/them") && firstUndisclosed.includes("has not been set"), firstUndisclosed);
+    check("3p no double period from the perspective+\".\" concatenation", !firstUndisclosed.includes(".."), firstUndisclosed);
+
+    const firstChineseSentinel = storyEngine.buildStorySettingsPrompt({ userPerspective: "first" }, "Alex", "保密");
+    check("3q the raw \"保密\" sentinel (not just an empty string) also fails closed to they/them", firstChineseSentinel.includes("they/them"), firstChineseSentinel);
+
+    const firstMale = storyEngine.buildStorySettingsPrompt({ userPerspective: "first" }, "Alex", "Male");
+    check("3r a disclosed gender is stated as fact, not guessed", firstMale.includes('"Male"') && firstMale.includes("treat it as fact"), firstMale);
+    check("3s a disclosed gender does NOT fall back to they/them", !firstMale.includes("they/them"), firstMale);
+
     // Seed the shared scheme repository with a prose scheme that HAS a prompt.
     const repoWithPrompt = story.loadStorySchemeRepository();
     story.saveStorySchemeRepository({

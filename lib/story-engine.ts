@@ -85,25 +85,46 @@ export function selectStoryPresetPrompts(preset: PresetConfig | null, selectedId
   };
 }
 
+/**
+ * "First person, limited" -- {{char}} narrates as "I" and the prose only ever contains what
+ * they themself can personally see, hear, feel, think or infer; the user's own inner state is
+ * never stated directly, only guessed at from the outside, the way a first-person narrator
+ * would. Paired with third-person, gender-aware pronouns for the user (never "you"), since a
+ * first-person narrator addressing the reader as "you" would read as second person instead.
+ * Gender handling mirrors lib/mascot-engine.ts's formatMascotUserIdentityRule: fail closed to
+ * they/them when unset, since "保密" (undisclosed) is a real, deliberate choice the user made in
+ * Settings -> User Identity, not a missing value to guess past.
+ */
+function buildFirstPersonLimitedPerspective(userName: string, userGender: string | undefined): string {
+  const gender = (userGender ?? "").trim();
+  const undisclosed = !gender || gender === "保密";
+  const pronounInstruction = undisclosed
+    ? `their gender has not been set, so do not assume one -- use they/them`
+    : `use pronouns consistent with their gender ("${gender}") as set in their identity settings -- treat it as fact`;
+  return `Write in first-person limited perspective: narrate as "I", and only ever state what you personally see, hear, feel, think or infer -- never state what ${userName} is thinking or feeling directly, only what you can observe or guess from the outside. Refer to ${userName} in the third person, never as "you": ${pronounInstruction}.`;
+}
+
 /** Exported only so a fixture can drive it directly. */
-export function buildStorySettingsPrompt(settings: StoryCharacterSettings | undefined, userName: string): string {
+export function buildStorySettingsPrompt(settings: StoryCharacterSettings | undefined, userName: string, userGender?: string): string {
   if (!settings) return "";
   // Length clamps to 50-10000: an unset/negative value effectively means 50, anything above
   // 10000 effectively means 10000.
   const minChars = Math.max(50, Math.min(10000, settings.minChars ?? 800));
   const maxChars = Math.max(minChars, Math.min(10000, settings.maxChars ?? 1500));
-  const perspective = settings.userPerspective === "third"
-    ? `Refer to the user in the third person ("they")`
-    : settings.userPerspective === "username"
-      ? `Refer to the user by their name, "${userName}"`
-      : `Refer to the user in the second person ("you")`;
+  const perspective = settings.userPerspective === "first"
+    ? buildFirstPersonLimitedPerspective(userName, userGender)
+    : settings.userPerspective === "third"
+      ? `Refer to the user in the third person ("they")`
+      : settings.userPerspective === "username"
+        ? `Refer to the user by their name, "${userName}"`
+        : `Refer to the user in the second person ("you")`;
   // Scheme definitions live in the shared repository now; a character's settings only carry
   // which one is enabled.
   const { proseStyle, status, theater } = resolveActiveStorySchemes(settings);
   return [
     "# Story app generation settings",
     `Aim for prose length between ${minChars}-${maxChars} characters; never pad with repeated content just to hit the count.`,
-    perspective + ".",
+    perspective.endsWith(".") ? perspective : perspective + ".",
     // Skip a blank line rather than emitting "Prose style [xxx]: " with nothing after it when a
     // newly created scheme has no prompt yet.
     proseStyle?.prompt?.trim() ? `Prose style [${proseStyle.name}] (constrains writing style only, not the tail-output format): ${proseStyle.prompt.trim()}` : (settings.proseStyle ? `Style: ${settings.proseStyle}.` : ""),
@@ -410,7 +431,7 @@ export async function buildStoryPromptMessages(
     customAppRichMediaDirectives: formatCustomAppChatDirectivesForPrompt("story"),
   });
 
-  const settingsPrompt = buildStorySettingsPrompt(settings, userIdentity?.name ?? "User");
+  const settingsPrompt = buildStorySettingsPrompt(settings, userIdentity?.name ?? "User", userIdentity?.gender);
   const participantCharacters = Array.from(new Set(participantIds || []))
     .map((id) => loadCharacters().find((item) => item.id === id))
     .filter((item): item is NonNullable<typeof item> => Boolean(item));

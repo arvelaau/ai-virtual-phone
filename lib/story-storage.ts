@@ -316,7 +316,10 @@ export type StoryCharacterSettings = {
   enabledPresetPromptIds?: string[];
   minChars?: number;
   maxChars?: number;
-  userPerspective?: "second" | "third" | "username";
+  /** "first" = first-person limited: {{char}} narrates as "I" and only ever states what they
+   *  themself can see/hear/feel/infer, while the user is referred to in the third person via
+   *  gender-aware pronouns (see buildStorySettingsPrompt in story-engine.ts). */
+  userPerspective?: "second" | "third" | "username" | "first";
   proseStyle?: string;
   proseStylePrompt?: string;
   /** The prose-style scheme this character has enabled (stored in the shared repository); only the choice is saved here. */

@@ -610,7 +610,7 @@ export function StorySettingsPage(props: StorySettingsPageProps) {
             <CharLimitInput label="Minimum length" value={normalized.minChars ?? 800} onCommit={(minChars) => patchSettings({ minChars })} />
             <CharLimitInput label="Maximum length" value={normalized.maxChars ?? 1500} onCommit={(maxChars) => patchSettings({ maxChars })} />
           </div>
-          <label className="story-settings-field"><span>User perspective</span><select value={normalized.userPerspective} onChange={(event) => patchSettings({ userPerspective: event.target.value as StoryCharacterSettings["userPerspective"] })}><option value="second">Second person ("you")</option><option value="third">Third person ("they")</option><option value="username">By name ("{props.userName}")</option></select></label>
+          <label className="story-settings-field"><span>User perspective</span><select value={normalized.userPerspective} onChange={(event) => patchSettings({ userPerspective: event.target.value as StoryCharacterSettings["userPerspective"] })}><option value="second">Second person ("you")</option><option value="third">Third person ("they")</option><option value="username">By name ("{props.userName}")</option><option value="first">First person, limited ("I" ... "he/she/it")</option></select></label>
           <ProseStyleEditor schemes={repo.proseStyleSchemes} activeId={normalized.activeProseStyleSchemeId!} onChange={(proseStyleSchemes, activeProseStyleSchemeId) => { patchRepo({ proseStyleSchemes }); patchSettings({ activeProseStyleSchemeId }); }} />
         </SettingCard>
 
