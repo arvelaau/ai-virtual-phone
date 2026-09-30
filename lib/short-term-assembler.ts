@@ -965,6 +965,10 @@ export function prepareShortTermContext(
         includeDirectChatEntries?: boolean;
         timeAware?: boolean;
         promptTimestampOptions?: PromptTimestampOptions;
+        /** Only include timeline entries after this ISO timestamp -- e.g. a story branch that
+         * does not inherit memory from before it started. Forwarded straight to
+         * loadNativeTimeline, which already supports it. */
+        afterTimestamp?: string;
     },
 ): {
     recentBlocks: RecentBlock[];
@@ -979,6 +983,7 @@ export function prepareShortTermContext(
         excludeOfflineSessionId: options?.excludeOfflineSessionId,
         timeAware,
         promptTimestampOptions: options?.promptTimestampOptions,
+        afterTimestamp: options?.afterTimestamp,
     });
     // Activation context: full timeline for keyword matching (not truncated)
     const wbActivationContext = timeline.slice(-10).map(e => e.content).join("\n");
