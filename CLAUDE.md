@@ -3961,3 +3961,36 @@ Then `app/**/*.tsx` (much smaller — mostly `verify/`, `app-market/admin/`, `ch
 - Repo root (this file's directory) is nested one level under `D:\Documents\Claude\ai-virtual-phone-main\`.
 - `npm install` was required before `npm run build` worked (node_modules wasn't present).
 - Windows machine; use PowerShell or Git Bash as available.
+## Real iMessage bridge (Photon / Spectrum Cloud) — CODE DONE, NOT YET LIVE-TESTED (2026-10-10)
+1:1 chat only. Uncommitted at the time of writing; `_fx-imessage-webhook.mjs` (25/25) kept.
+
+**Flow.** Browser builds a runtime snapshot (persona/preset/worldbook/memory + a prompt template with a history slot) and uploads it to the user's own Supabase bucket `ai-phone-backup` under `imessage-cloud/`. Photon POSTs each inbound iMessage to `app/api/imessage/webhook`; the route verifies the HMAC (`spectrum.webhook()`), finds the bound line by sender, fills the template, calls the LLM, replies with `space.send`, and writes inbound + outbound records back to Supabase. The browser pulls those into local Chat (`pullIMessageCloudMessages`, auto via `startIMessageCloudSync` in desktop-shell: on open, on tab visible, every 30 s).
+
+**Files.** `lib/imessage-{types,storage,cloud-sync,webhook-core}.ts`, `lib/server/imessage-supabase.ts`, `app/api/imessage/webhook/route.ts`, `components/settings/imessage-settings.tsx` (Settings -> Connections -> iMessage Integration).
+
+**Server env (all required):** `PHOTON_PROJECT_ID`, `PHOTON_PROJECT_SECRET`, `PHOTON_WEBHOOK_SECRET`, `IMESSAGE_SUPABASE_URL`, `IMESSAGE_SUPABASE_SERVICE_ROLE_KEY` (same project as Cloud Backup — the browser's Supabase key lives only in local storage, so the server cannot read it). Photon secrets are deliberately never entered in the UI.
+
+**Design points worth keeping.**
+- The SDK runs the webhook handler fire-and-forget after responding; on serverless that work can be frozen, so the route holds the handler's promise and awaits it before returning.
+- Delivery is at-least-once: the inbound record is written BEFORE generating, so a mid-generation retry is deduped by its existing object.
+- Only records newer than the snapshot are replayed server-side; older ones are already baked into the template history.
+- `upsertImportedChatMessage` returns `{ message, inserted }`; the original sync code treated the object as truthy and counted every duplicate as added.
+
+**NOT verified:** a real Photon delivery. Assumptions to check on first live run: (1) `message.sender.id` is a phone/email (matching normalises to digits / lowercase email); (2) `Spectrum()` per request does not open a stream that outlives `spectrum.stop()`; (3) `space.send(string)` delivers plain text. One-way for now: replies typed into the phone's own Chat for that character are NOT sent out over iMessage. The reference tutorial the user supplied (Uranus_Imessage) is an install guide for a separate local app using `@spectrum-ts/imessage-local` — it did not confirm any of the above.
+### iMessage bridge — UPDATE after the reference review (2026-10-10)
+A third-party bridge (Uranus_Imessage; `imessage.js`, `photon.js`, `实现细节.md` supplied by the user) settled most of the open assumptions above.
+
+**Verified by it:** `message.sender.id` is the sender's address (E.164 or email); `space.send(text)` sends plain text; inbound is filtered on `direction === "outbound"`, `platform === "imessage"`, and deduped on `message.id`.
+
+**Transport decision.** That bridge uses a long-lived `for await (… of instance.messages)` loop, which cannot run on Vercel (functions are short-lived). This deployment is on Vercel, so the **webhook** route stays the transport. Photon's own docs confirm it: dashboard Webhook tab or `POST /webhooks/`, per-webhook 64-char secret returned ONCE (lose it = delete and re-register), `X-Spectrum-Signature: v0=<hmac>` + `X-Spectrum-Timestamp`, up to 6 retries with backoff, at-least-once delivery. A streaming listener would only suit a laptop or an always-on VPS.
+
+**The silent-failure trap, and what now addresses it.** On Photon's shared line, a sender that is not registered to the project is dropped on Photon's side: nothing reaches the app, no log, status still looks healthy. So registration is mandatory and its status must be visible.
+- `app/api/imessage/enroll` — GET `?phone=` reports registered / registered_without_line / not_registered plus the shared line to text; POST registers (idempotent: looks the number up first, so repeat presses cost no quota).
+- `lib/imessage-photon-admin.ts` (pure) and `lib/server/photon-admin.ts` (fetch). Photon management API: `https://spectrum.photon.codes/projects/{id}/users/`, Basic `projectId:projectSecret`; `POST { type: "shared", phoneNumber }` returns `assignedPhoneNumber`.
+- **Access gate**: admin account, or the shared `x-app-market-admin-key`, or self-hosted mode. It spends the owner's Photon quota, so it must not be open on a public deployment. Only the status of the number asked about is returned, never the project's user list or any credential.
+- Photon rejecting OUR credentials is mapped to **502**, not 401, so the browser does not read it as "you are not logged in".
+- Settings page: per-line "Check registration" / "Register this number", shows "Text this number from iMessage: +…", and an admin-key field that appears only on 403 (kept in sessionStorage).
+
+**Fixtures:** `_fx-imessage-enroll.mjs` (45/45) drives the real route with Photon's fetch replaced. Controls run: no idempotency -> 42/45, no access gate -> 41/45, forwarding Photon's 401 -> 44/45.
+
+**Still unproven (needs a live Photon project):** that Photon actually delivers inbound iMessages to the registered webhook URL; that `Spectrum()` per request closes cleanly on `stop()`; and that the Vercel function limit (`maxDuration` in the webhook route is 60) is enough for a slow LLM call. Photon retries on timeout and the inbound record is written before generating, so a retry is deduped rather than answered twice.

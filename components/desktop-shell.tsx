@@ -130,6 +130,7 @@ import { startIncomingCallVibration } from "@/lib/call-vibration";
 import { setMascotContext } from "@/lib/mascot-context";
 import { useWeixinBridge } from "@/lib/use-weixin-bridge";
 import { startWeixinCloudRealtimeSync } from "@/lib/weixin-cloud-sync";
+import { startIMessageCloudSync } from "@/lib/imessage-cloud-sync";
 import { sendBrowserNotification } from "@/lib/browser-notification";
 import type { ChatSharePayload } from "@/lib/chat-share";
 import { completePendingMcpOAuthCallback } from "@/lib/tool-executor";
@@ -1734,8 +1735,12 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       startMomentsService();
       startDiaryEntryTimerService();
       const stopWeixinCloudRealtimeSync = startWeixinCloudRealtimeSync();
+      const stopIMessageCloudSync = startIMessageCloudSync();
       servicesStarted = true;
-      cleanupWeixinCloudRealtimeSync = stopWeixinCloudRealtimeSync;
+      cleanupWeixinCloudRealtimeSync = () => {
+        stopWeixinCloudRealtimeSync();
+        stopIMessageCloudSync();
+      };
 
       // Proactive Message 2.0 (Stage 5): pull whatever the deployed Worker
       // generated while this device was closed, and merge it into local

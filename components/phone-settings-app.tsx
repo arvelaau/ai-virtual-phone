@@ -17,6 +17,7 @@ import { UserIdentitySettings } from "./settings/user-identity";
 import { AboutDeclaration } from "./settings/about-declaration";
 import { BindingManager } from "./settings/binding-manager";
 import { WeixinSettings } from "./settings/weixin-settings";
+import { IMessageSettings } from "./settings/imessage-settings";
 import { ProactivePushSettings } from "./settings/proactive-push-settings";
 import { ToolboxSettings } from "./settings/toolbox-settings";
 import { ModerationCenter } from "./settings/moderation-center";
@@ -51,6 +52,7 @@ type SubPage =
     | "binding"
     | "identity"
     | "weixin"
+    | "imessage"
     | "toolbox"
     | "proactivePush"
     | "mediaLookup"
@@ -67,6 +69,7 @@ const SETTINGS_MENU = [
     { id: "data", icon: Layers, label: "Data Management", desc: "Import & export", iconColor: BINDING_ACCENTS.api },
     { id: "binding", icon: Link2, label: "Config Bindings", desc: "Manage config binding relationships across global defaults, characters, and apps", iconColor: BINDING_ACCENTS.identity },
     { id: "weixin", icon: MessageSquare, label: "WeChat Integration", desc: "iLink Bot", iconColor: CONTENT_APP_ACCENTS.chat },
+    { id: "imessage", icon: MessageSquare, label: "iMessage Integration", desc: "Reply to real iMessages in character (Photon)", iconColor: CONTENT_APP_ACCENTS.chat },
     { id: "toolbox", icon: Wrench, label: "Chat Toolbox", desc: "External tool calls", iconColor: BINDING_ACCENTS.voice },
     { id: "proactivePush", icon: Bell, label: "Proactive Push", desc: "Notifications that arrive even when the app is closed", iconColor: CONTENT_APP_ACCENTS.calendar },
     { id: "mediaLookup", icon: Clapperboard, label: "Media Lookup", desc: "TMDB / Open Library / Google Books for the Review app", iconColor: CONTENT_APP_ACCENTS.moments },
@@ -269,6 +272,8 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                 return <ImageGenerationSettings />;
             case "mediaLookup":
                 return <MediaLookupSettings />;
+            case "imessage":
+                return <IMessageSettings />;
             case "presets":
                 return <PresetManager isActive />;
             case "worldbook":
@@ -379,7 +384,7 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                         <CardGrid
                             label="Connections"
                             labelClassName="settings-menu-section-title"
-                            items={SETTINGS_MENU.filter(item => ["weixin", "toolbox", "proactivePush", "mediaLookup"].includes(item.id)).map(makeCardItem)}
+                            items={SETTINGS_MENU.filter(item => ["weixin", "imessage", "toolbox", "proactivePush", "mediaLookup"].includes(item.id)).map(makeCardItem)}
                         />
                         <div className="settings-realtime-section">
                             <h3 className="settings-menu-section-title">Realtime</h3>
