@@ -99,7 +99,11 @@ function stripPromptMessageForCloud(message: LLMMessage): LLMMessage {
     return next;
 }
 
-function splitPromptMessagesAtHistorySlot(messages: LLMMessage[]): { beforeMessages: LLMMessage[]; afterMessages: LLMMessage[] } {
+export function splitPromptMessagesAtHistorySlot(messages: LLMMessage[]): {
+    beforeMessages: LLMMessage[];
+    afterMessages: LLMMessage[];
+    found: boolean;
+} {
     const beforeMessages: LLMMessage[] = [];
     const afterMessages: LLMMessage[] = [];
     let found = false;
@@ -109,18 +113,41 @@ function splitPromptMessagesAtHistorySlot(messages: LLMMessage[]): { beforeMessa
             afterMessages.push(stripPromptMessageForCloud(message));
             continue;
         }
-        if (typeof message.content !== "string" || !message.content.includes(IMESSAGE_CLOUD_HISTORY_SLOT_TOKEN)) {
+
+        if (typeof message.content === "string") {
+            if (!message.content.includes(IMESSAGE_CLOUD_HISTORY_SLOT_TOKEN)) {
+                beforeMessages.push(stripPromptMessageForCloud(message));
+                continue;
+            }
+            const [beforeText, afterText] = splitTextAtFirstToken(message.content, IMESSAGE_CLOUD_HISTORY_SLOT_TOKEN);
+            if (beforeText.trim()) beforeMessages.push(stripPromptMessageForCloud({ ...message, content: beforeText }));
+            if (afterText.trim()) afterMessages.push(stripPromptMessageForCloud({ ...message, content: afterText }));
+            found = true;
+            continue;
+        }
+
+        // Multi-part content (text + images): the token lives inside one text part.
+        const partIndex = message.content.findIndex(
+            (part) => part.type === "text" && part.text.includes(IMESSAGE_CLOUD_HISTORY_SLOT_TOKEN),
+        );
+        if (partIndex < 0) {
             beforeMessages.push(stripPromptMessageForCloud(message));
             continue;
         }
-        const [beforeText, afterText] = splitTextAtFirstToken(message.content, IMESSAGE_CLOUD_HISTORY_SLOT_TOKEN);
-        if (beforeText.trim()) beforeMessages.push(stripPromptMessageForCloud({ ...message, content: beforeText }));
-        if (afterText.trim()) afterMessages.push(stripPromptMessageForCloud({ ...message, content: afterText }));
+        const slotPart = message.content[partIndex] as { type: "text"; text: string };
+        const [beforeText, afterText] = splitTextAtFirstToken(slotPart.text, IMESSAGE_CLOUD_HISTORY_SLOT_TOKEN);
+        const head = message.content.slice(0, partIndex);
+        if (beforeText.trim()) head.push({ type: "text", text: beforeText });
+        const tail = message.content.slice(partIndex + 1);
+        if (afterText.trim()) tail.unshift({ type: "text", text: afterText });
+        if (head.length) beforeMessages.push(stripPromptMessageForCloud({ ...message, content: head }));
+        if (tail.length) afterMessages.push(stripPromptMessageForCloud({ ...message, content: tail }));
         found = true;
     }
 
-    if (!found) throw new Error("Could not find the message insertion point while building the iMessage runtime package.");
-    return { beforeMessages, afterMessages };
+    // Not found: do NOT fail the whole sync. Keep everything as the "before" part, so a new
+    // message is simply appended last, which is where a live chat puts it anyway.
+    return { beforeMessages, afterMessages, found };
 }
 
 /** Builds the full self-contained snapshot for one bound iMessage line. Runs
@@ -240,6 +267,7 @@ export async function buildIMessageCloudRuntimeSnapshot(
         beforeMessages: split.beforeMessages,
         afterMessages: split.afterMessages,
         baseHistoryLength: promptHistory.length,
+        slotFound: split.found,
         createdAt,
     };
 
@@ -275,7 +303,7 @@ export async function buildIMessageCloudRuntimeSnapshot(
 export async function syncIMessageLineRuntimeToCloud(
     lineId: string,
     options?: { cloudConfig?: CloudBackupConfig; messageLimit?: number },
-): Promise<{ path: string; bytes: number }> {
+): Promise<{ path: string; bytes: number; slotFound: boolean }> {
     const cloudConfig = options?.cloudConfig ?? loadCloudBackupConfig();
     if (!isCloudBackupConfigured(cloudConfig)) {
         throw new Error("Please configure Supabase cloud backup in Data Management first.");
@@ -298,7 +326,7 @@ export async function syncIMessageLineRuntimeToCloud(
         updatedAt: snapshot.createdAt,
     });
 
-    return { path, bytes };
+    return { path, bytes, slotFound: snapshot.promptTemplate.slotFound !== false };
 }
 
 async function loadRuntimeIndex(config: CloudBackupConfig): Promise<IMessageCloudRuntimeIndex> {

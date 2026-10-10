@@ -34,6 +34,12 @@ export type IMessageCloudPromptTemplate = {
     beforeMessages: LLMMessage[];
     afterMessages: LLMMessage[];
     baseHistoryLength: number;
+    /**
+     * False when the history slot could not be located in the assembled prompt and the whole
+     * prompt was kept as the "before" part. Replies still work (the new message goes last), but
+     * any instructions that were meant to follow the history are not repeated after it.
+     */
+    slotFound?: boolean;
     createdAt: string;
 };
 

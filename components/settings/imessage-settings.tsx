@@ -101,7 +101,12 @@ export function IMessageSettings() {
         setMessage("");
         try {
             const result = await syncIMessageLineRuntimeToCloud(line.id);
-            setMessage(`Synced ${characterName(line.characterId)} (${Math.round(result.bytes / 1024)} KB).`);
+            setMessage(
+                `Synced ${characterName(line.characterId)} (${Math.round(result.bytes / 1024)} KB).` +
+                (result.slotFound
+                    ? ""
+                    : " Note: the chat history position was not found in this character's prompt, so replies append the new message at the end. This usually means a custom preset or regex rule is rewriting the history."),
+            );
         } catch (err) {
             setMessage(err instanceof Error ? err.message : "Sync failed.");
         } finally {
