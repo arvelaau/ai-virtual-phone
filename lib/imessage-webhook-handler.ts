@@ -47,7 +47,11 @@ export type HandlerDeps = {
     readJson<T>(path: string): Promise<T | null>;
     putJson(path: string, value: unknown): Promise<void>;
     listRecentStored(lineId: string): Promise<IMessageCloudStoredMessage[]>;
-    generate(snapshot: IMessageCloudRuntimeSnapshot, text: string, recent: IMessageCloudStoredMessage[]): Promise<string>;
+    generate(
+        snapshot: IMessageCloudRuntimeSnapshot,
+        text: string,
+        recent: IMessageCloudStoredMessage[],
+    ): Promise<string | { content: string; note?: string }>;
     send(text: string): Promise<void>;
     now(): number;
 };
@@ -115,8 +119,11 @@ export async function handleInboundMessage(deps: HandlerDeps, input: InboundInpu
         await deps.putJson(inboundMessagePath(IMESSAGE_CLOUD_PREFIX, target.lineId, input.messageId), inbound);
 
         let raw: string;
+        let modelNote = "";
         try {
-            raw = await deps.generate(snapshot, input.text, recent);
+            const generated = await deps.generate(snapshot, input.text, recent);
+            raw = typeof generated === "string" ? generated : generated.content;
+            modelNote = typeof generated === "string" ? "" : (generated.note ?? "");
         } catch (err) {
             await deps.putJson(markerPath, { state: "failed", at: deps.now() } satisfies DeliveryMarker).catch(() => undefined);
             return done("error", "llm_error", errText(err));
@@ -150,14 +157,14 @@ export async function handleInboundMessage(deps: HandlerDeps, input: InboundInpu
         }
 
         await deps.putJson(markerPath, { state: "done", at: deps.now() } satisfies DeliveryMarker);
-        return done("replied", "replied", `${bubbles.length} bubble(s)`);
+        return done("replied", "replied", `${bubbles.length} bubble(s)${modelNote ? `, ${modelNote}` : ""}`);
     } catch (err) {
         return done("error", "handler_error", errText(err));
     }
 }
 
 function errText(err: unknown): string {
-    return (err instanceof Error ? err.message : String(err)).slice(0, 300);
+    return (err instanceof Error ? err.message : String(err)).slice(0, 400);
 }
 
 // Re-exported so callers that already import the handler need only one module.

@@ -27,6 +27,13 @@ import { verifySpectrumSignature } from "@spectrum-ts/core/webhook";
 import { imessage } from "@spectrum-ts/imessage";
 import { buildProviderRequest, parseProviderResponse, toLlmRequestMessages } from "@/lib/llm-provider-adapter";
 import {
+    describeModelTimeout,
+    hostOf,
+    iterateBody,
+    newStreamProgress,
+    readStreamedReply,
+} from "@/lib/imessage-llm-stream";
+import {
     buildPromptFromTemplate,
     messagesAfterSnapshot,
 } from "@/lib/imessage-webhook-core";
@@ -50,7 +57,11 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const HISTORY_LIMIT = 20;
-const LLM_TIMEOUT_MS = 45_000;
+/**
+ * The whole delivery has to fit in maxDuration (60 s). Spectrum start-up, Supabase reads and the
+ * iMessage send need a few seconds, so the model gets the rest.
+ */
+const LLM_DEADLINE_MS = 50_000;
 /** How long to wait for the SDK to hand over a message before calling it "never delivered". */
 const SDK_DELIVERY_WAIT_MS = 10_000;
 
@@ -87,18 +98,54 @@ async function generateReply(
     snapshot: IMessageCloudRuntimeSnapshot,
     inboundText: string,
     recent: IMessageCloudStoredMessage[],
-): Promise<string> {
+): Promise<{ content: string; note: string }> {
     const since = messagesAfterSnapshot(recent, snapshot.createdAt, HISTORY_LIMIT);
     const messages = buildPromptFromTemplate(snapshot.promptTemplate, since, inboundText);
-    const request = buildProviderRequest(snapshot.apiConfig, snapshot.preset, toLlmRequestMessages(messages));
-    const response = await fetch(request.url, {
-        method: "POST",
-        headers: request.headers,
-        body: JSON.stringify(request.body),
-        signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
-    });
-    if (!response.ok) throw new Error(`LLM request failed (${response.status}).`);
-    return parseProviderResponse(request.providerKind, await response.json()).content;
+    // Streamed, like the Chat app: a thinking model behind a relay is silent for a long time,
+    // and a single buffered request is what such relays cut off.
+    const request = buildProviderRequest(snapshot.apiConfig, snapshot.preset, toLlmRequestMessages(messages), { stream: true });
+    const host = hostOf(request.url);
+    const model = snapshot.apiConfig.defaultModel ?? "";
+    const promptChars = JSON.stringify(request.body).length;
+    const progress = newStreamProgress();
+    const controller = new AbortController();
+    const startedAt = Date.now();
+    const timer = setTimeout(() => controller.abort(), LLM_DEADLINE_MS);
+
+    const timeoutError = () => new Error(
+        describeModelTimeout({ host, model, deadlineMs: LLM_DEADLINE_MS, progress, promptChars }),
+    );
+
+    try {
+        const response = await fetch(request.url, {
+            method: "POST",
+            headers: request.headers,
+            body: JSON.stringify(request.body),
+            signal: controller.signal,
+        });
+        if (!response.ok) {
+            const snippet = (await response.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 160);
+            throw new Error(`${host} answered ${response.status}${snippet ? `: ${snippet}` : ""}`);
+        }
+
+        const contentType = response.headers.get("content-type") ?? "";
+        let content: string;
+        if (!response.body || !contentType.includes("text/event-stream")) {
+            // The endpoint ignored stream:true and answered with a plain JSON body.
+            content = parseProviderResponse(request.providerKind, await response.json()).content;
+        } else {
+            content = await readStreamedReply(iterateBody(response.body), request.providerKind, progress);
+        }
+
+        const seconds = Math.round((Date.now() - startedAt) / 100) / 10;
+        const first = progress.firstByteMs === null ? "" : `, first byte ${Math.round(progress.firstByteMs / 100) / 10}s`;
+        return { content, note: `${host} ${seconds}s${first}` };
+    } catch (err) {
+        if (controller.signal.aborted) throw timeoutError();
+        throw err;
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
 function headerRecord(headers: Headers): Record<string, string> {

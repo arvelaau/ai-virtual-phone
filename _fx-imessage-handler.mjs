@@ -191,5 +191,10 @@ allTraces.push(await run(w));
 yes("B34 the model API key never appears in a trace", !JSON.stringify(allTraces).includes(SECRET_KEY));
 yes("B35 every call returns one well-formed trace", allTraces.every((t) => t.at && t.result && t.reason));
 
+// the model's own timing note is carried into the trace
+w = world();
+w.deps.generate = async () => ({ content: "Hi there", note: "relay.example.com 6.2s, first byte 2.1s" });
+r = await run(w);
+eq("B36 a model note is appended to the replied detail", r.detail, "1 bubble(s), relay.example.com 6.2s, first byte 2.1s");
 console.log(`${pass}/${pass + fail}`);
 process.exit(fail ? 1 : 0);
