@@ -20,6 +20,16 @@ import { Input, Select, Toggle } from "@/components/ui/form";
 
 type ServerStatus = "checking" | "ready" | "not_configured" | "unreachable";
 
+type ActivityEvent = { at: string; result: string; reason: string; detail?: string; senderHint?: string; messageType?: string; ms?: number };
+type ActivityView = {
+    env: Record<string, boolean>;
+    indexFound: boolean;
+    indexError?: string;
+    bound: Array<{ phone: string; character: string }>;
+    events: ActivityEvent[];
+    reasons: Record<string, string>;
+};
+
 type EnrollView = { state: "registered" | "registered_without_line" | "not_registered" | "error"; line?: string; message?: string };
 
 const ADMIN_KEY_STORAGE = "imessage_admin_key_session";
@@ -44,6 +54,8 @@ export function IMessageSettings() {
     const [enroll, setEnroll] = useState<Record<string, EnrollView>>({});
     const [adminKey, setAdminKey] = useState("");
     const [needsKey, setNeedsKey] = useState(false);
+    const [activity, setActivity] = useState<ActivityView | null>(null);
+    const [activityError, setActivityError] = useState("");
 
     const refresh = useCallback(() => setLines(loadIMessageLines()), []);
 
@@ -138,6 +150,27 @@ export function IMessageSettings() {
             setEnroll((prev) => ({ ...prev, [line.id]: { state, line: data.assignedPhoneNumber } }));
         } catch (err) {
             setEnroll((prev) => ({ ...prev, [line.id]: { state: "error", message: err instanceof Error ? err.message : "Request failed." } }));
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+    const loadActivity = async () => {
+        setBusyId("activity");
+        setActivityError("");
+        try {
+            const headers: Record<string, string> = adminKey ? { "x-app-market-admin-key": adminKey } : {};
+            const res = await fetch("/api/imessage/status", { headers, cache: "no-store" });
+            if (res.status === 403) {
+                setNeedsKey(true);
+                setActivityError("Admin access is required to see webhook activity.");
+                return;
+            }
+            const data = await res.json() as ActivityView & { ok?: boolean };
+            if (!res.ok || !data.ok) { setActivityError(`Could not load activity (${res.status}).`); return; }
+            setActivity(data);
+        } catch (err) {
+            setActivityError(err instanceof Error ? err.message : "Could not load activity.");
         } finally {
             setBusyId(null);
         }
@@ -291,6 +324,50 @@ export function IMessageSettings() {
                         Messages from this number reach the bot you set up in Photon and are answered in
                         character. After changing the persona, preset, worldbook or memory, press Sync again.
                     </span>
+                </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+                <p className="settings-menu-section-title">Webhook activity</p>
+                <div className="menu-group p-4 flex flex-col gap-2">
+                    <span className="menu-desc ml-1">
+                        What the server did with the most recent messages. If you text the bot and nothing appears
+                        here, Photon is not reaching this deployment at all.
+                    </span>
+                    <Button variant="outline" disabled={busyId !== null} onClick={() => void loadActivity()}>
+                        {busyId === "activity" ? "Loading..." : "Refresh activity"}
+                    </Button>
+                    {activityError && <span className="menu-desc ml-1">{activityError}</span>}
+                    {activity && (
+                        <div className="flex flex-col gap-2">
+                            <span className="menu-desc ml-1">
+                                Server env: {Object.entries(activity.env).map(([k, v]) => `${k} ${v ? "ok" : "MISSING"}`).join(", ")}
+                            </span>
+                            <span className="menu-desc ml-1">
+                                Cloud index: {activity.indexFound
+                                    ? `found, binds ${activity.bound.map((b) => `${b.phone} (${b.character})`).join(", ") || "no numbers"}`
+                                    : "NOT FOUND. Press Sync to cloud, and check IMESSAGE_SUPABASE_URL matches Cloud Backup."}
+                                {activity.indexError ? ` (${activity.indexError})` : ""}
+                            </span>
+                            {activity.events.length === 0 && (
+                                <span className="menu-desc ml-1">No webhook deliveries recorded yet.</span>
+                            )}
+                            {activity.events.map((event, i) => (
+                                <div key={`${event.at}-${i}`} className="flex flex-col">
+                                    <span className="menu-label">
+                                        {event.result === "replied" ? "Replied" : event.result === "ignored" ? "Ignored" : event.result === "rejected" ? "Not answered" : "Error"}
+                                        {" · "}{new Date(event.at).toLocaleString()}
+                                    </span>
+                                    <span className="menu-desc">
+                                        {activity.reasons[event.reason] ?? event.reason}
+                                        {event.detail ? ` (${event.detail})` : ""}
+                                        {event.senderHint ? ` · from ${event.senderHint}` : ""}
+                                        {typeof event.ms === "number" ? ` · ${Math.round(event.ms / 100) / 10}s` : ""}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
 

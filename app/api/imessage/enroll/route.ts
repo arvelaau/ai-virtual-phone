@@ -11,8 +11,7 @@
 // list, and never any credential.
 
 import { NextResponse } from "next/server";
-import { isSelfHostedModeEnabled } from "@/lib/self-hosting";
-import { getModeratorContext } from "@/lib/server/admin-auth";
+import { isIMessageAdminAllowed } from "@/lib/server/imessage-admin-gate";
 import {
     enrollSharedUser,
     getPhotonCredentials,
@@ -27,10 +26,7 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-async function isAllowed(request: Request): Promise<boolean> {
-    if (isSelfHostedModeEnabled()) return true;
-    return Boolean(await getModeratorContext(request).catch(() => null));
-}
+const isAllowed = isIMessageAdminAllowed;
 
 function forbidden() {
     return NextResponse.json(
