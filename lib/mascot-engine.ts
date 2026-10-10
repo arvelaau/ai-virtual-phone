@@ -4,6 +4,7 @@
 
 import { resolveAuxiliaryApiConfig, resolveUserIdentity } from "./settings-storage";
 import { getMascotPersonaPrompt } from "./mascot-settings";
+import { loadMascotFeatureKnowledgePrompt } from "./mascot-feature-knowledge";
 import type { MascotPageContext } from "./mascot-context";
 import {
     buildMascotToolsListPrompt,
@@ -597,6 +598,7 @@ async function callMascotText(
     // ends up resident in context anyway.
     const systemPrompt = [
         getMascotPersonaPrompt(),
+        await loadMascotFeatureKnowledgePrompt(),
         buildMascotUserIdentityRule(),
         `Current page: ${context.label} (${context.mode})`,
         buildMascotToolsListPrompt(),
@@ -674,6 +676,7 @@ async function callMascotNative(
 
     const systemPrompt = [
         getMascotPersonaPrompt(),
+        await loadMascotFeatureKnowledgePrompt(),
         buildMascotUserIdentityRule(),
         `Current page: ${context.label} (${context.mode})`,
         "You have tools available. Each package must be expanded before you can see its detailed actions; the navigation tool is usable directly. Expand at most 2 packages at a time.",

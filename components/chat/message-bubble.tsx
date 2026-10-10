@@ -19,6 +19,7 @@ import { createPortal } from "react-dom";
 import { Maximize2, ReceiptText, RefreshCw } from "lucide-react";
 import { AppCardView } from "./app-card-view";
 import { retryChatGeneratedImage } from "@/lib/generated-image-retry";
+import { hasCharacterReferenceImage } from "@/lib/image-generation-service";
 import { ScanPayCard } from "@/components/chat/scan-pay-card";
 import { payWithWalletBalance } from "@/lib/wallet-storage";
 import { formatShoppingPaymentRequestHistory } from "@/lib/shopping-payment-request";
@@ -1000,6 +1001,9 @@ function GeneratedImagePromptDialog({
     onConfirm,
     busy,
     error,
+    useReferenceImage,
+    onUseReferenceImageChange,
+    hasReferenceImage,
 }: {
     value: string;
     onChange: (value: string) => void;
@@ -1007,6 +1011,9 @@ function GeneratedImagePromptDialog({
     onConfirm: () => void;
     busy: boolean;
     error?: string;
+    useReferenceImage?: boolean;
+    onUseReferenceImageChange?: (useRef: boolean) => void;
+    hasReferenceImage?: boolean;
 }) {
     return (
         <div
@@ -1034,6 +1041,21 @@ function GeneratedImagePromptDialog({
                         placeholder="Enter an image prompt"
                         disabled={busy}
                     />
+                    {onUseReferenceImageChange && (
+                        hasReferenceImage ? (
+                            <label className="chat-generated-image-prompt-check">
+                                <input
+                                    type="checkbox"
+                                    checked={useReferenceImage === true}
+                                    disabled={busy}
+                                    onChange={e => onUseReferenceImageChange(e.target.checked)}
+                                />
+                                <span>Use the character's reference image (shows the character)</span>
+                            </label>
+                        ) : (
+                            <div className="chat-generated-image-prompt-empty-hint">This character has no reference image configured</div>
+                        )
+                    )}
                     {error && <div className="chat-generated-image-retry-error">Generation failed: {error}</div>}
                 </div>
                 <div className="modal-footer" data-ui="modal-footer">
@@ -1071,6 +1093,8 @@ function ImageBubble({
     const [promptDraft, setPromptDraft] = useState("");
     const [regenerating, setRegenerating] = useState(false);
     const [retryError, setRetryError] = useState("");
+    const [hasRef, setHasRef] = useState(() => hasCharacterReferenceImage(characterId));
+    const [useReferenceDraft, setUseReferenceDraft] = useState(d?.useReferenceImage === true);
     const isPending = d?.imageGenerationStatus === "pending";
     const canRetry = (!msg.mediaUrl || refExpired)
         && !isPending
@@ -1091,10 +1115,13 @@ function ImageBubble({
     }, [rawUrl]);
 
     const openPromptEditor = useCallback(() => {
+        const latestHasRef = hasCharacterReferenceImage(characterId);
+        setHasRef(latestHasRef);
         setPromptDraft(d?.label?.trim() || "");
+        setUseReferenceDraft(latestHasRef && d?.useReferenceImage === true);
         setRetryError("");
         setShowPromptEditor(true);
-    }, [d?.label]);
+    }, [characterId, d?.label, d?.useReferenceImage]);
 
     const handleRetry = useCallback(() => {
         const nextDescription = promptDraft.trim();
@@ -1102,10 +1129,11 @@ function ImageBubble({
             setRetryError("Prompt cannot be empty");
             return;
         }
+        const latestHasRef = hasCharacterReferenceImage(characterId);
         setShowPromptEditor(false);
         setRegenerating(true);
         setRetryError("");
-        retryChatGeneratedImage(msg, characterId, nextDescription)
+        retryChatGeneratedImage(msg, characterId, nextDescription, latestHasRef ? useReferenceDraft : undefined)
             .then(updated => {
                 onUpdate?.(updated);
             })
@@ -1115,7 +1143,7 @@ function ImageBubble({
             .finally(() => {
                 setRegenerating(false);
             });
-    }, [characterId, msg, onUpdate, promptDraft]);
+    }, [characterId, msg, onUpdate, promptDraft, useReferenceDraft]);
 
     if (resolvedUrl) {
         return (
@@ -1174,6 +1202,9 @@ function ImageBubble({
                 <GeneratedImagePromptDialog
                     value={promptDraft}
                     onChange={setPromptDraft}
+                    useReferenceImage={useReferenceDraft}
+                    onUseReferenceImageChange={setUseReferenceDraft}
+                    hasReferenceImage={hasRef}
                     onConfirm={handleRetry}
                     onCancel={() => setShowPromptEditor(false)}
                     busy={regenerating}
@@ -1714,6 +1745,8 @@ function MediaFileBubble({
     const [imagePromptDraft, setImagePromptDraft] = useState("");
     const [imageRegenerating, setImageRegenerating] = useState(false);
     const [imageRetryError, setImageRetryError] = useState("");
+    const [hasRef, setHasRef] = useState(() => hasCharacterReferenceImage(characterId));
+    const [imageUseReferenceDraft, setImageUseReferenceDraft] = useState(msg.mediaData?.useReferenceImage === true);
 
     useEffect(() => {
         if (!isMediaStoreRef(rawUrl)) {
@@ -1747,10 +1780,13 @@ function MediaFileBubble({
     }, []);
 
     const openImagePromptEditor = useCallback(() => {
+        const latestHasRef = hasCharacterReferenceImage(characterId);
+        setHasRef(latestHasRef);
         setImagePromptDraft(msg.mediaData?.label?.trim() || "");
+        setImageUseReferenceDraft(latestHasRef && msg.mediaData?.useReferenceImage === true);
         setImageRetryError("");
         setShowImagePromptEditor(true);
-    }, [msg.mediaData?.label]);
+    }, [characterId, msg.mediaData?.label, msg.mediaData?.useReferenceImage]);
 
     const handleRegenerateImage = useCallback(() => {
         const nextDescription = imagePromptDraft.trim();
@@ -1758,10 +1794,11 @@ function MediaFileBubble({
             setImageRetryError("Prompt cannot be empty");
             return;
         }
+        const latestHasRef = hasCharacterReferenceImage(characterId);
         setShowImagePromptEditor(false);
         setImageRegenerating(true);
         setImageRetryError("");
-        retryChatGeneratedImage(msg, characterId, nextDescription)
+        retryChatGeneratedImage(msg, characterId, nextDescription, latestHasRef ? imageUseReferenceDraft : undefined)
             .then(updated => {
                 onUpdate?.(updated);
             })
@@ -1771,7 +1808,7 @@ function MediaFileBubble({
             .finally(() => {
                 setImageRegenerating(false);
             });
-    }, [characterId, imagePromptDraft, msg, onUpdate]);
+    }, [characterId, imagePromptDraft, imageUseReferenceDraft, msg, onUpdate]);
 
     const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
         e.stopPropagation();
@@ -1885,6 +1922,9 @@ function MediaFileBubble({
                     <GeneratedImagePromptDialog
                         value={imagePromptDraft}
                         onChange={setImagePromptDraft}
+                        useReferenceImage={imageUseReferenceDraft}
+                        onUseReferenceImageChange={setImageUseReferenceDraft}
+                        hasReferenceImage={hasRef}
                         onConfirm={handleRegenerateImage}
                         onCancel={() => setShowImagePromptEditor(false)}
                         busy={imageRegenerating}

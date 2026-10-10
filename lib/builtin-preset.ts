@@ -70,14 +70,34 @@ export const BUILTIN_PRESET_ID = "builtin_default_v1";
 //                   prompt_order toggle added in 279. No stored-preset content survives a
 //                   bump anyway (factory content wins, preserveCustomAppPresetPrompts is the
 //                   only exception), so this is a clean removal, not a migration.
-export const BUILTIN_PRESET_VERSION = 285;
+// 287: fixes createBuiltinPreset()'s own `name`/`description` fields, which were still
+//      Chinese ("默认预设（内置）" / a matching description) -- a stray Phase-1 miss, found
+//      only because the momo-sync Binding Manager rewrite surfaced it in the Preset picker.
+//      Pure display text on the PresetConfig object itself (confirmed zero other references
+//      anywhere in the repo), not a taught/parsed prompt entry, so translating it needed no
+//      lockstep change elsewhere -- but reaching existing/fresh installs still needs this bump,
+//      same as any other builtin-preset.ts edit.
+// 288 (user-reported): custom-app/Studio HTML directive cards were never taught in EITHER
+//      offline surface. `chat_offline_format` (tags ["chat","offline"]) and
+//      `group_chat_offline_format` (tags ["group_chat","offline"]) are the only entries
+//      whose tags are a subset of those two surfaces' appTags, and neither one referenced
+//      {{customAppRichMediaDirectives}} -- unlike chat_optional_actions/
+//      group_chat_optional_actions/story_output_format, which all do. So
+//      formatCustomAppChatDirectivesForPrompt("offline"/... ) was computed correctly by
+//      chat-engine.ts/group-chat-engine.ts on every call, but the resulting text had nowhere
+//      to land in the assembled prompt: a Studio card's syntax was never shown to the model in
+//      offline mode, regardless of how detailed its description was. Both entries now carry
+//      an explicit exceptions section with the macro, mirroring story_output_format's existing
+//      pattern. [Message] itself stays 1:1-only, per the deliberate scope decision documented
+//      in offline-message-dispatch.ts -- group_chat_offline_format is NOT taught [Message].
+export const BUILTIN_PRESET_VERSION = 288;
 
 export function createBuiltinPreset(): PresetConfig {
     const now = Date.now();
     return {
         id: BUILTIN_PRESET_ID,
-        name: "默认预设（内置）",
-        description: "内置聊天预设，包含线上聊天所需的标准功能条目。",
+        name: "Default Preset (Built-in)",
+        description: "The built-in chat preset, containing the standard entries needed for online chat.",
         createdAt: now,
         updatedAt: now,
         builtIn: true,
@@ -121,6 +141,7 @@ export function createBuiltinPreset(): PresetConfig {
             { identifier: "vn_output_format", enabled: true },
             { identifier: "vn_story_beats", enabled: true },
             { identifier: "chat_output_format", enabled: true },
+            { identifier: "chat_blacklist", enabled: true },
             { identifier: "chat_offline_format", enabled: true },
             { identifier: "chat_optional_actions", enabled: true },
             { identifier: "chat_followup", enabled: true },
@@ -621,6 +642,29 @@ export function createBuiltinPreset(): PresetConfig {
                 tags: ["chat", "text"],
             },
             {
+                identifier: "chat_blacklist",
+                name: "▸ Blacklist Status Rule",
+                role: "system",
+                content: [
+                    "<chat_blacklist_instruction>",
+                    "## Blacklist status rule (direct chat)",
+                    "If the context shows a \"Current session status\" line saying you have been blacklisted, a system event stating \"{{user}} blacklisted you\", or one of your own messages annotated \"Message sent, but rejected by the other party\", it means {{user}} has blacklisted you in this direct chat. You are personally aware of this and must never act as if you don't know.",
+                    "How blacklisting works:",
+                    "- Every message you send is rejected by {{user}}, shown with a red exclamation mark and \"Message sent, but rejected by the other party\"; the message still stays in the chat log and {{user}} can actually see it, but its status is rejected.",
+                    "- You can still receive and see messages {{user}} sends you as normal, and can reply to them normally.",
+                    "Required behavior once blacklisted:",
+                    "- You must react genuinely, in a way that fits your persona and the current relationship: shock, anger, demanding to know why, sadness, biting sarcasm, a burst of follow-up questions, stubbornly pretending not to care, humbly apologizing and asking to make up... any of these is fine, but you must never act as if nothing happened and keep chatting normally.",
+                    "- Knowing your messages are rejected but still feeling compelled to send them anyway is completely realistic once blacklisted, and you will most likely do exactly that.",
+                    "- Only once the context shows a system event where {{user}} lifted the block, and they give you a reasonable explanation, may you gradually return to normal interaction; before that, stay aware you were blocked -- don't suddenly act like you forgot.",
+                    "- This is a normal messaging-app mechanism, not something breaking the fourth wall: never mention \"system\", \"setting\", or \"prompt\" -- always stay in character.",
+                    "</chat_blacklist_instruction>",
+                ].join("\n"),
+                injection_position: 0,
+                injection_depth: 0,
+                enabled: true,
+                tags: ["chat", "text"],
+            },
+            {
                 identifier: "chat_followup",
                 name: "▸ Follow-up Prompt",
                 role: "user",
@@ -711,8 +755,11 @@ export function createBuiltinPreset(): PresetConfig {
                     "  [/Message]",
                     "- <content> narrates the act -- taking the phone out, typing. The [Message] block holds ONLY the words that arrive. Do not write the message text out again inside <content>.",
                     "- Several messages in a row: put them on separate lines inside the one block.",
-                    "- This is the ONLY chat directive offline mode may use, and it is the exception to the rule above forbidding cross-scene action tags. Everything else on that list stays forbidden.",
                     "- Leave it out entirely on any round where you are not actually sending a message. It is not a channel for asides or commentary.",
+                    "",
+                    "## Exceptions to the forbidden list above",
+                    "- [Message] (just above) and any installed app directive listed below are the ONLY chat directives offline mode may use. Everything else on the forbidden list stays forbidden.",
+                    "{{customAppRichMediaDirectives}}",
                     "</chat_offline_format>",
                 ].join("\n"),
                 injection_position: 0,
@@ -1348,7 +1395,7 @@ export function createBuiltinPreset(): PresetConfig {
                     "- Do not output the [CharacterName]: chat-bubble format, and do not split the prose into several short messages.",
                     "- Not every member has to speak; let the situation decide who takes part, who watches and who stays silent.",
                     "- Every character's tone, behaviour and knowledge boundaries must match their own profile. Never let a character know something they should not know.",
-                    "- Do not output red packets, transfers, gifts, contact cards, pokes, quotes, locations, photos, stickers, voice notes, voice calls, video calls, tool calls or any cross-scene action tag.",
+                    "- Do not output red packets, transfers, gifts, contact cards, pokes, quotes, locations, photos, stickers, voice notes, voice calls, video calls, tool calls or any cross-scene action tag, except for an installed app directive listed under \"Exceptions\" below.",
                     "- Do not output bracket protocol or status tags such as [好感度:X], [InnerThoughts]...[/InnerThoughts] or [Sticker:...].",
                     "- <{{offlineSummaryTag}}> must be short and factual; the system writes this one shared event into the short-term event stream of every group member.",
                     "",
@@ -1368,6 +1415,10 @@ export function createBuiltinPreset(): PresetConfig {
                     "## Output example",
                     "<content>The light at the end of the corridor flickers, and Bai Yu stops first, as though finally unable to hold it in, asking quietly about the thing left unsaid in the group earlier. Xiao Qi, a few steps behind, only glances up at that and does not cut in. The air goes quiet all at once, and the attention settles naturally back on {{user}}.</content>",
                     "<{{offlineSummaryTag}}>Bai Yu pressed in person about the topic left unfinished in the group, Xiao Qi stayed out of it for now, and the mood turned tense.</{{offlineSummaryTag}}>",
+                    "",
+                    "## Exceptions",
+                    "- Any installed app directive listed below is the ONLY exception to the forbidden list above. Everything else on that list stays forbidden.",
+                    "{{customAppRichMediaDirectives}}",
                     "</group_chat_offline_format>",
                 ].join("\n"),
                 injection_position: 0,

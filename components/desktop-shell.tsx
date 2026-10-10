@@ -52,6 +52,8 @@ import {
   PAGE_1_DEFAULT,
   PAGE_2_DEFAULT,
   PAGE_3_DEFAULT,
+  createFolderIconId,
+  isFolderIconId,
   type DesktopIconId,
   type IconId,
   type IconPosition
@@ -103,8 +105,11 @@ import {
   loadDockLayout,
   normalizeDock,
   writeDockLayout,
+  loadDesktopFolders,
+  writeDesktopFolders,
   DOCK_LAYOUT_STORAGE_KEY,
   DOCK_MAX,
+  type DesktopFolderMap,
   type DesktopIconLayout,
   type DesktopPageKey,
 } from "@/lib/desktop-layout-storage";
@@ -112,17 +117,20 @@ import { WidgetRenderer } from "@/components/widgets/widget-renderer";
 import type { DIYWidgetTemplate } from "@/lib/widget-types";
 import { DebugPromptPanel } from "@/components/debug-prompt-panel";
 import { QuickActionFloat } from "@/components/quick-action-float";
-import { CHAT_MESSAGE_PUSHED_EVENT, CHAT_REQUEST_REPLY_EVENT, hydrateChatStorage, loadChatSessions, loadChatMessages, pushChatMessage, type ChatMessage, type ChatSession } from "@/lib/chat-storage";
-import { resolveUserIdentity } from "@/lib/settings-storage";
+import { CHAT_MESSAGE_PUSHED_EVENT, CHAT_REQUEST_REPLY_EVENT, hydrateChatStorage, loadChatSessions, loadChatMessages, pushChatMessage, findChatSessionById, type ChatMessage, type ChatSession } from "@/lib/chat-storage";
+import { ensureGlobalBindingDefaults, resolveUserIdentity } from "@/lib/settings-storage";
 import { loadCharacters } from "@/lib/character-storage";
 import { generateChatCompletion, flattenCompletionResult } from "@/lib/chat-engine";
 import { parseAIResponse } from "@/lib/rich-message-parser";
 import { DESKTOP_WIDGETS_CHANGED_EVENT } from "@/lib/mascot-events";
 import { requestBackgroundChatReply, scheduleFollowUp } from "@/lib/follow-up-service";
 import { CHAT_MESSAGE_NOTICE_EVENT, CHAT_OPEN_SESSION_EVENT, type ChatMessageNoticeDetail } from "@/lib/chat-notification-events";
+import { installChatSoundListener, setMiniChatSoundSessionId, startChatSoundLoop } from "@/lib/chat-sound";
+import { startIncomingCallVibration } from "@/lib/call-vibration";
 import { setMascotContext } from "@/lib/mascot-context";
 import { useWeixinBridge } from "@/lib/use-weixin-bridge";
 import { startWeixinCloudRealtimeSync } from "@/lib/weixin-cloud-sync";
+import { startIMessageCloudSync } from "@/lib/imessage-cloud-sync";
 import { sendBrowserNotification } from "@/lib/browser-notification";
 import type { ChatSharePayload } from "@/lib/chat-share";
 import { completePendingMcpOAuthCallback } from "@/lib/tool-executor";
@@ -401,7 +409,7 @@ function migrateLegacyDesktopIconId(id: string, customIconIds = getInstalledCust
 }
 
 /** Validate an IconPosition[] page, dedup by id and position */
-function normalizePageV2(raw: unknown, pageWidgets: WidgetInstance[]): IconPosition[] {
+function normalizePageV2(raw: unknown, pageWidgets: WidgetInstance[], folderIds: Set<string> = new Set()): IconPosition[] {
   if (!Array.isArray(raw)) return [];
 
   const allKnown = new Set<string>(Object.keys(ICONS));
@@ -415,8 +423,12 @@ function normalizePageV2(raw: unknown, pageWidgets: WidgetInstance[]): IconPosit
     if (!item || typeof item !== "object") continue;
     const { id, row, col } = item as { id: string; row: number; col: number };
     if (typeof id !== "string" || typeof row !== "number" || typeof col !== "number") continue;
-    const iconId = migrateLegacyDesktopIconId(id, customIconIds);
-    if (!iconId || (!allKnown.has(iconId) && !customIconIds.has(iconId))) continue;
+    // A folder tile: only recognize one that genuinely exists in the folder content table,
+    // to prevent a ghost tile with no member list.
+    const iconId = isFolderIconId(id)
+      ? (folderIds.has(id) ? id : null)
+      : migrateLegacyDesktopIconId(id, customIconIds);
+    if (!iconId || (!isFolderIconId(iconId) && !allKnown.has(iconId) && !customIconIds.has(iconId))) continue;
     if (seenIds.has(iconId)) continue;
     if (row < 1 || row > GRID_ROWS || col < 1 || col > GRID_COLS) continue;
     const cellKey = `${row},${col}`;
@@ -470,9 +482,10 @@ function migratePageV1(raw: unknown, defaults: IconId[], pageWidgets: WidgetInst
   return result;
 }
 
-function normalizeLayout(raw: unknown, widgets: WidgetInstance[], dockIds: Set<DesktopIconId> = new Set()): DesktopLayout {
+function normalizeLayout(raw: unknown, widgets: WidgetInstance[], dockIds: Set<DesktopIconId> = new Set(), folders: DesktopFolderMap = {}): DesktopLayout {
   if (!raw || typeof raw !== "object") return createDefaultDesktopIconLayout(widgets);
   const candidate = raw as Record<string, unknown>;
+  const folderIds = new Set(Object.keys(folders));
   const maxPage = Math.max(
     2,
     ...Object.keys(candidate).map(getDesktopPageNumber),
@@ -482,7 +495,7 @@ function normalizeLayout(raw: unknown, widgets: WidgetInstance[], dockIds: Set<D
   for (let page = 1; page <= maxPage; page += 1) {
     const pageKey = getDesktopPageKey(page);
     // Icons that live in the dock must never also appear on a page.
-    layout[pageKey] = normalizePageV2(candidate[pageKey], widgets.filter(w => w.page === page))
+    layout[pageKey] = normalizePageV2(candidate[pageKey], widgets.filter(w => w.page === page), folderIds)
       .filter((ic) => !dockIds.has(ic.id));
   }
 
@@ -491,30 +504,103 @@ function normalizeLayout(raw: unknown, widgets: WidgetInstance[], dockIds: Set<D
   // if a default dock icon (e.g. Settings) is neither on any page nor in the dock
   // (e.g. dock didn't include it after restoring defaults/importing a theme),
   // place it back on the nearest page so the icon is never permanently lost.
+  // "Placed" also includes icons tucked inside a folder, otherwise a folder member
+  // would get a duplicate copy laid back out on the desktop after every restart.
   const allPlaced = new Set<DesktopIconId>(getDesktopIconLayoutItems(layout).map(ic => ic.id));
+  for (const folder of Object.values(folders)) {
+    for (const memberId of folder.icons) allPlaced.add(memberId);
+  }
   const allDefaults = [...PAGE_1_DEFAULT, ...PAGE_2_DEFAULT, ...PAGE_3_DEFAULT, ...DOCK_DEFAULT];
 
   for (const id of allDefaults) {
     if (allPlaced.has(id) || dockIds.has(id)) continue;
     const primaryPage = PAGE_1_DEFAULT.includes(id) ? 1 : PAGE_2_DEFAULT.includes(id) ? 2 : PAGE_3_DEFAULT.includes(id) ? 3 : 1;
-    const fallbackPages = getDesktopPageKeysForState(layout, widgets)
-      .map(getDesktopPageNumber)
-      .filter((page) => page !== primaryPage);
-    for (const page of [primaryPage, ...fallbackPages]) {
-      const pageKey = getDesktopPageKey(page);
-      ensureDesktopPage(layout, pageKey);
-      const widgetOcc = buildWidgetOccupancy(widgets.filter(w => w.page === page));
-      const usedCells = new Set(layout[pageKey].map(ic => `${ic.row},${ic.col}`));
-      const free = findNearestFreeCell(1, 1, widgetOcc, usedCells);
-      if (free) {
-        layout[pageKey] = [...layout[pageKey], { id, row: free.row, col: free.col }];
-        allPlaced.add(id);
-        break;
-      }
-    }
+    // placeIconOnAvailablePage overflows to a new page (even opening one) when every
+    // existing page is full -- the previous inline loop here only searched EXISTING
+    // pages via getDesktopPageKeysForState and silently gave up when all of them were
+    // full of icons/widgets, permanently losing the icon (never recovered on restart).
+    placeIconOnAvailablePage(layout, widgets, { id, row: 1, col: 1 }, primaryPage);
+    allPlaced.add(id);
   }
 
   return trimEmptyTrailingPages(layout, widgets);
+}
+
+/**
+ * Reconciles folders against the layout:
+ * - a member already placed on a page/dock (whichever is actually laid out wins) is dropped
+ *   from the folder;
+ * - a member belonging to an uninstalled custom app is dropped (normalizeDesktopFolders
+ *   already handles this on load; this is a defensive pass for runtime changes);
+ * - a folder left with <=1 member is dissolved: the remaining icon (if any) takes over the
+ *   tile's own cell;
+ * - a layout tile pointing at a folder that no longer exists is filtered by normalizeLayout
+ *   already, so it isn't repeated here.
+ * Returns a new object; when changed=false the original references are returned unchanged so
+ * the caller can skip persisting.
+ */
+function sanitizeDesktopFolders(
+  folders: DesktopFolderMap,
+  layout: DesktopLayout,
+  dock: DesktopIconId[],
+  widgets: WidgetInstance[],
+): { folders: DesktopFolderMap; layout: DesktopLayout; changed: boolean } {
+  const placedOutside = new Set<DesktopIconId>([
+    ...getDesktopIconLayoutItems(layout).map(ic => ic.id),
+    ...dock,
+  ]);
+  const customIconIds = getInstalledCustomIconIds();
+  let changed = false;
+  const nextFolders: DesktopFolderMap = {};
+  let nextLayout = layout;
+
+  const removeTile = (folderId: string): { pageKey: DesktopPageKey; row: number; col: number } | null => {
+    for (const pageKey of getDesktopPageKeysForState(nextLayout, widgets)) {
+      const tile = (nextLayout[pageKey] ?? []).find(ic => ic.id === folderId);
+      if (!tile) continue;
+      if (nextLayout === layout) nextLayout = cloneDesktopLayout(layout, widgets);
+      nextLayout[pageKey] = nextLayout[pageKey].filter(ic => ic.id !== folderId);
+      return { pageKey, row: tile.row, col: tile.col };
+    }
+    return null;
+  };
+
+  for (const [folderId, folder] of Object.entries(folders)) {
+    const members = folder.icons.filter(id =>
+      !placedOutside.has(id)
+      && !isFolderIconId(id)
+      && (id in ICONS || customIconIds.has(id)));
+    if (members.length !== folder.icons.length) changed = true;
+    if (members.length <= 1) {
+      // Dissolve: the tile becomes the one remaining icon (if any).
+      changed = true;
+      const spot = removeTile(folderId);
+      const remaining = members[0];
+      if (remaining) {
+        if (nextLayout === layout) nextLayout = cloneDesktopLayout(layout, widgets);
+        if (spot) {
+          nextLayout[spot.pageKey] = [...(nextLayout[spot.pageKey] ?? []), { id: remaining, row: spot.row, col: spot.col }];
+        } else {
+          placeIconOnAvailablePage(nextLayout, widgets, { id: remaining, row: 1, col: 1 }, 1);
+        }
+      }
+      continue;
+    }
+    nextFolders[folderId] = members.length === folder.icons.length ? folder : { ...folder, icons: members };
+    // A crash or similar could leave "the folder record exists, but its tile is on no page":
+    // the members are held by the folder, but nothing renders on the desktop, and the
+    // default-icon fallback also counts them as "placed" -- so the icon becomes permanently
+    // invisible (symptom: an icon vanishes with no explanation, only restoring defaults
+    // brings it back). Self-heal by placing the tile back on a page here.
+    const tilePlaced = getDesktopIconLayoutItems(nextLayout).some(ic => ic.id === folderId);
+    if (!tilePlaced) {
+      if (nextLayout === layout) nextLayout = cloneDesktopLayout(layout, widgets);
+      placeIconOnAvailablePage(nextLayout, widgets, { id: folderId as DesktopIconId, row: 1, col: 1 }, 1);
+      changed = true;
+    }
+  }
+  if (!changed) return { folders, layout, changed: false };
+  return { folders: nextFolders, layout: trimEmptyTrailingPages(nextLayout, widgets), changed: true };
 }
 
 function StatusClock() {
@@ -662,26 +748,46 @@ function placeIconOnAvailablePage(
 }
 
 /** Convert pointer screen position to a grid cell (0-based) */
-function pointerToGridCell(
-  px: number,
-  py: number,
-  gridEl: HTMLElement
-): { row: number; col: number } | null {
+/**
+ * Grid geometry: cell origin/step/content size (screen pixels). Shared by both
+ * pointer->cell conversion and icon-rectangle collision detection, so the two
+ * judgments can never disagree with each other.
+ */
+type GridGeometry = {
+  originX: number;
+  originY: number;
+  colStep: number;
+  rowStep: number;
+  colWidth: number;
+  rowHeight: number;
+};
+
+function getGridGeometry(gridEl: HTMLElement): GridGeometry {
   const rect = gridEl.getBoundingClientRect();
   const computed = getComputedStyle(gridEl);
   const colWidths = computed.gridTemplateColumns.split(/\s+/).map(parseFloat);
   const colWidth = colWidths[0] || 66;
   const colGap = parseFloat(computed.columnGap) || 20;
   const rowGap = parseFloat(computed.rowGap) || 0;
+  // rect's height is border-box (padding included), but the grid's row tracks only occupy the content box.
+  const padY = (parseFloat(computed.paddingTop) || 0) + (parseFloat(computed.paddingBottom) || 0);
   const contentWidth = colWidths.length * colWidth + (colWidths.length - 1) * colGap;
   const originX = rect.left + (rect.width - contentWidth) / 2;
-  const originY = rect.top;
-  const colStep = colWidth + colGap;
+  const originY = rect.top + (parseFloat(computed.paddingTop) || 0);
   const totalRowGap = (GRID_ROWS - 1) * rowGap;
-  const rowHeight = (rect.height - totalRowGap) / GRID_ROWS;
-  const rowStep = rowHeight + rowGap;
-  const col = Math.floor((px - originX) / colStep);
-  const row = Math.floor((py - originY) / rowStep);
+  const rowHeight = (rect.height - padY - totalRowGap) / GRID_ROWS;
+  return { originX, originY, colStep: colWidth + colGap, rowStep: rowHeight + rowGap, colWidth, rowHeight };
+}
+
+/** Convert pointer screen position to a grid cell (0-based) */
+function pointerToGridCell(
+  px: number,
+  py: number,
+  gridEl: HTMLElement
+): { row: number; col: number } | null {
+  const geom = getGridGeometry(gridEl);
+  const col = Math.floor((px - geom.originX) / geom.colStep);
+  const row = Math.floor((py - geom.originY) / geom.rowStep);
   if (col < 0 || col >= GRID_COLS || row < 0 || row >= GRID_ROWS) return null;
   return { row, col };
 }
@@ -951,6 +1057,12 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   const [layout, setLayout] = useState<DesktopLayout>(DEFAULT_LAYOUT);
   // Dock is an ordered icon-id list (max DOCK_MAX), kept disjoint from `layout`.
   const [dock, setDock] = useState<DesktopIconId[]>(DOCK_DEFAULT);
+  // Desktop folders: the tile occupies a cell in `layout`; this table owns the name and members.
+  const [folders, setFolders] = useState<DesktopFolderMap>({});
+  const [openFolderId, setOpenFolderId] = useState<string | null>(null);
+  const [folderPageIndex, setFolderPageIndex] = useState(0);
+  // Hovering a drag over another icon's center long enough highlights it as a "drop to group" target.
+  const [mergeTargetId, setMergeTargetId] = useState<string | null>(null);
   const [desktopReady, setDesktopReady] = useState(false);
   const [glassPaintPass, setGlassPaintPass] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
@@ -978,6 +1090,18 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   const [incomingCall, setIncomingCall] = useState<{
     sessionId: string; type: "voice" | "video"; charName: string; charAvatar: string | null; isGroup?: boolean;
   } | null>(null);
+  // Loop the ringtone (that character's own sound beats the global "Chat Info -> Sounds"
+  // config) and the device vibration for as long as the desktop's own incoming-call banner is
+  // showing (toggle lives on the chat home page).
+  useEffect(() => {
+    if (!incomingCall) return;
+    const stopRingtone = startChatSoundLoop("incomingCall", findChatSessionById(incomingCall.sessionId));
+    const stopVibration = startIncomingCallVibration();
+    return () => { stopRingtone(); stopVibration(); };
+  }, [incomingCall]);
+  // Global chat notification sounds (new message / send message): listens for the message-
+  // pushed event and plays per each session's own config (character-specific beats global).
+  useEffect(() => installChatSoundListener(), []);
   const [chatMessageNotice, setChatMessageNotice] = useState<{
     sessionId: string;
     title: string;
@@ -1198,6 +1322,23 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
     initialLayout: DesktopLayout;
     initialWidgets: WidgetInstance[];
     initialDock: DesktopIconId[];
+    // ── Folders ──
+    // When dragged out of an open folder: remembers the source folder (a canceled drag puts the member back).
+    sourceFolderId: string | null;
+    initialFolders: DesktopFolderMap;
+    // ── Collision judging (iOS feel) ──
+    // Judged once, the instant the hovering icon's rectangle and the target icon's rectangle
+    // go from separate to overlapping: either edge overlapping by more than half = merge,
+    // otherwise = swap. The verdict doesn't change while they stay overlapping; it resets once
+    // they separate.
+    contactId: DesktopIconId | null;
+    contactIntent: "merge" | "swap" | null;
+    // The merge target highlights and "arms" after ~0.2s of contact; releasing before it's
+    // armed just springs back, guarding against accidentally grouping while passing through.
+    mergeTimer: ReturnType<typeof setTimeout> | null;
+    mergeArmed: boolean;
+    mergeTargetIconId: DesktopIconId | null;
+    mergeTargetPage: DesktopPageKey | null;
   } | null>(null);
   const editTapRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   // Refs to latest state for use in stable callbacks
@@ -1209,6 +1350,8 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   layoutRef.current = layout;
   const dockRef = useRef(dock);
   dockRef.current = dock;
+  const foldersRef = useRef(folders);
+  foldersRef.current = folders;
 
   const activeIconSkins = useMemo(() => resolveActiveIconSkins(draftTheme), [draftTheme]);
   const themeAssetKey = useMemo(() => collectThemeAssetIds(draftTheme).sort().join("|"), [draftTheme]);
@@ -1349,9 +1492,21 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       const hydratedDock = loadDockLayout();
       setDock(hydratedDock);
       const dockIds = new Set<DesktopIconId>(hydratedDock);
+      const hydratedFolders = loadDesktopFolders();
       const rawV2 = kvGet(ICON_LAYOUT_STORAGE_KEY);
       if (rawV2) {
-        try { setLayout(normalizeLayout(JSON.parse(rawV2), hydratedWidgets, dockIds)); setDesktopReady(true); return; } catch {}
+        try {
+          const normalized = normalizeLayout(JSON.parse(rawV2), hydratedWidgets, dockIds, hydratedFolders);
+          const sane = sanitizeDesktopFolders(hydratedFolders, normalized, hydratedDock, hydratedWidgets);
+          setFolders(sane.folders);
+          setLayout(sane.layout);
+          if (sane.changed) {
+            writeDesktopFolders(sane.folders);
+            kvSet(ICON_LAYOUT_STORAGE_KEY, JSON.stringify(sane.layout));
+          }
+          setDesktopReady(true);
+          return;
+        } catch {}
       }
       const rawV1 = kvGet(ICON_LAYOUT_STORAGE_KEY_V1);
       if (rawV1) {
@@ -1387,9 +1542,16 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       }
       const dockIds = new Set<DesktopIconId>(nextDock);
       setLayout(prev => {
-        const next = normalizeLayout(prev, widgetsRef.current, dockIds);
-        kvSet(ICON_LAYOUT_STORAGE_KEY, JSON.stringify(next));
-        return next;
+        const normalized = normalizeLayout(prev, widgetsRef.current, dockIds, foldersRef.current);
+        // A folder whose member got uninstalled needs the member removed (or the folder
+        // dissolved) -- sanitize also adjusts the layout to match.
+        const sane = sanitizeDesktopFolders(foldersRef.current, normalized, nextDock, widgetsRef.current);
+        if (sane.changed) {
+          setFolders(sane.folders);
+          writeDesktopFolders(sane.folders);
+        }
+        kvSet(ICON_LAYOUT_STORAGE_KEY, JSON.stringify(sane.layout));
+        return sane.layout;
       });
       setActiveApp(prev => {
         const appId = prev ? customAppIdFromIconId(prev) : null;
@@ -1568,12 +1730,17 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       }
 
       if (cancelled) return;
+      ensureGlobalBindingDefaults();
       startFollowUpService();
       startMomentsService();
       startDiaryEntryTimerService();
       const stopWeixinCloudRealtimeSync = startWeixinCloudRealtimeSync();
+      const stopIMessageCloudSync = startIMessageCloudSync();
       servicesStarted = true;
-      cleanupWeixinCloudRealtimeSync = stopWeixinCloudRealtimeSync;
+      cleanupWeixinCloudRealtimeSync = () => {
+        stopWeixinCloudRealtimeSync();
+        stopIMessageCloudSync();
+      };
 
       // Proactive Message 2.0 (Stage 5): pull whatever the deployed Worker
       // generated while this device was closed, and merge it into local
@@ -1905,6 +2072,28 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
 
   const activeIcon = activeApp ? getDesktopIconMeta(activeApp) : null;
 
+  // A mini icon inside a folder tile: prefers a skin/custom icon, otherwise draws a small
+  // glyph. Its backing plate is styled entirely from CSS variables, following the icon's own material.
+  const renderFolderMini = (memberId: DesktopIconId) => {
+    const meta = getDesktopIconMeta(memberId);
+    if (!meta) return null;
+    const skinId = activeIconSkins[memberId];
+    const skinUrl = skinId ? themeAssets[skinId] ?? null : null;
+    const customUrl = meta.customApp?.iconDataUrl ?? null;
+    const imageUrl = skinUrl || customUrl;
+    return (
+      <span key={memberId} className="folder-mini" aria-hidden>
+        {imageUrl ? (
+          <span className="icon-skin-layer" style={{ backgroundImage: `url("${imageUrl}")` }} />
+        ) : meta.customApp ? (
+          <CustomAppGlyph seed={meta.customApp.name} className="folder-mini-glyph" />
+        ) : (
+          <IconGlyph id={meta.id as IconId} className="folder-mini-glyph" />
+        )}
+      </span>
+    );
+  };
+
   function openWorldBuilder(path: string): void {
     const targetUrl = new URL(path, window.location.origin).toString();
     const escapedTargetUrl = JSON.stringify(targetUrl);
@@ -2017,6 +2206,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
   }
 
   function openApp(iconId: DesktopIconId): void {
+    if (isFolderIconId(iconId)) return; // A folder tile is opened at the click site instead, not through here.
     if (customAppIdFromIconId(iconId)) {
       openCustomAppWithBackgroundUpdateCheck(iconId);
       return;
@@ -2039,7 +2229,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     setLayout(prev => {
       const widgets = widgetsRef.current;
       const next = cloneDesktopLayout(prev, widgets);
-      if (getDesktopIconLayoutItems(next).some(icon => icon.id === iconId) || dockRef.current.includes(iconId)) {
+      if (getDesktopIconLayoutItems(next).some(icon => icon.id === iconId)
+        || dockRef.current.includes(iconId)
+        || Object.values(foldersRef.current).some(folder => folder.icons.includes(iconId))) {
         return next;
       }
       const pageNumbers = getDesktopPageKeysForState(next, widgets).map(getDesktopPageNumber);
@@ -2109,9 +2301,13 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
   const [showMiniChat, setShowMiniChat] = useState(false);
   const [miniSharePayload, setMiniSharePayload] = useState<ChatSharePayload | null>(null);
   const miniSessionRef = useRef<ChatSession | null>(null);
-  const handleMiniChatClose = useCallback(() => setShowMiniChat(false), []);
+  const handleMiniChatClose = useCallback(() => {
+    setShowMiniChat(false);
+    setMiniChatSoundSessionId(null); // Once the mini window closes, that session no longer counts as "live chatting"
+  }, []);
   const handleMiniChatSessionChange = useCallback((session: ChatSession | null) => {
     miniSessionRef.current = session;
+    setMiniChatSoundSessionId(session?.id ?? null); // The session currently open in the mini window counts as live chatting
   }, []);
   const handleMiniShareDone = useCallback(() => setMiniSharePayload(null), []);
   const handleMiniChatExpand = useCallback(() => {
@@ -2292,7 +2488,35 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     // Save layout, dock and widgets once on exit
     kvSet(ICON_LAYOUT_STORAGE_KEY, JSON.stringify(layoutRef.current));
     kvSet(DOCK_LAYOUT_STORAGE_KEY, JSON.stringify(dockRef.current));
+    writeDesktopFolders(foldersRef.current);
     saveWidgets(widgetsRef.current);
+  }
+
+  /** A folder left with <=1 member dissolves in place: the remaining icon takes over the tile's cell. */
+  function dissolveFolderIfTiny(folderId: string) {
+    const folder = foldersRef.current[folderId];
+    if (!folder || folder.icons.length > 1) return;
+    const remaining = folder.icons[0] ?? null;
+    const widgets = widgetsRef.current;
+    const next = cloneDesktopLayout(layoutRef.current, widgets);
+    let replaced = false;
+    for (const pageKey of getDesktopPageKeysForState(next, widgets)) {
+      const tile = (next[pageKey] ?? []).find(ic => ic.id === folderId);
+      if (!tile) continue;
+      next[pageKey] = next[pageKey].filter(ic => ic.id !== folderId);
+      if (remaining) next[pageKey] = [...next[pageKey], { id: remaining, row: tile.row, col: tile.col }];
+      replaced = true;
+      break;
+    }
+    if (!replaced && remaining) placeIconOnAvailablePage(next, widgets, { id: remaining, row: 1, col: 1 }, 1);
+    const nextFolders = { ...foldersRef.current };
+    delete nextFolders[folderId];
+    const trimmed = trimEmptyTrailingPages(next, widgets);
+    setFolders(nextFolders);
+    setLayout(trimmed);
+    setOpenFolderId(current => (current === folderId ? null : current));
+    writeDesktopFolders(nextFolders);
+    kvSet(ICON_LAYOUT_STORAGE_KEY, JSON.stringify(trimmed));
   }
 
   function startDragPending(
@@ -2315,7 +2539,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
         const colW = parseFloat(cs.gridTemplateColumns.split(/\s+/)[0] || "66");
         const colGap = parseFloat(cs.columnGap) || 20;
         const rowGap = parseFloat(cs.rowGap) || 0;
-        const rowH = (gridEl.getBoundingClientRect().height - (GRID_ROWS - 1) * rowGap) / GRID_ROWS;
+        // rect's height is border-box (padding included), but the grid's row tracks only occupy the content box.
+        const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+        const rowH = (gridEl.getBoundingClientRect().height - padY - (GRID_ROWS - 1) * rowGap) / GRID_ROWS;
         grabCellCol = Math.floor((clientX - rect.left) / (colW + colGap));
         grabCellRow = Math.floor((clientY - rect.top) / (rowH + rowGap));
       }
@@ -2347,6 +2573,14 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
       initialLayout: layoutRef.current,
       initialWidgets: widgetsRef.current,
       initialDock: dockRef.current,
+      sourceFolderId: null,
+      initialFolders: foldersRef.current,
+      contactId: null,
+      contactIntent: null,
+      mergeTimer: null,
+      mergeArmed: false,
+      mergeTargetIconId: null,
+      mergeTargetPage: null,
     };
     // Kill swipe tracking for this pointer
     swipeRef.current.pointerId = null;
@@ -2368,6 +2602,13 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
   }, []);
 
   function activateDrag(e: React.PointerEvent) {
+    activateDragAt(e.pointerId, e.clientX, e.clientY);
+  }
+
+  // Long-pressing to drag out of an open folder panel unmounts the panel immediately, so there's
+  // no React event left to pass along -- the activation logic is written against raw coordinates
+  // instead, and both entry points share it.
+  function activateDragAt(pointerId: number, clientX: number, clientY: number) {
     const drag = editDragRef.current;
     if (!drag) return;
     drag.active = true;
@@ -2400,8 +2641,8 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     drag.shellLeft = shellRect?.left ?? 0;
     drag.shellTop = shellRect?.top ?? 0;
     setDragItem({ type: drag.itemType, id: drag.itemId, sourcePage: drag.sourcePage });
-    workspaceRef.current?.setPointerCapture(e.pointerId);
-    updateGhostPos(e.clientX, e.clientY);
+    try { workspaceRef.current?.setPointerCapture(pointerId); } catch { /* pointer may already have been released */ }
+    updateGhostPos(clientX, clientY);
   }
 
   function updateGhostPos(x: number, y: number) {
@@ -2438,16 +2679,34 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     setDock(drag.initialDock);
   }
 
+  /** Cancel "group" intent: stop the timer, clear the highlight, disarm. */
+  function clearMergeIntent(drag: NonNullable<typeof editDragRef.current>) {
+    if (drag.mergeTimer) { clearTimeout(drag.mergeTimer); drag.mergeTimer = null; }
+    if (drag.mergeTargetIconId) setMergeTargetId(null);
+    drag.mergeArmed = false;
+    drag.mergeTargetIconId = null;
+    drag.mergeTargetPage = null;
+  }
+
+  /** Contact ended (rectangles fully separated / left the grid / entered the dock): reset the verdict so it's rejudged on the next overlap. */
+  function clearContact(drag: NonNullable<typeof editDragRef.current>) {
+    drag.contactId = null;
+    drag.contactIntent = null;
+    clearMergeIntent(drag);
+  }
+
   function updateDropTargetFromPointer(x: number, y: number) {
     const drag = editDragRef.current;
     if (!drag) return;
 
     // ── Dock drop zone (icons only; widgets can't live in the dock) ──
     if (drag.itemType === "icon" && pointerOverDock(x, y)) {
+      clearContact(drag);
       const fromDock = drag.sourcePage === DOCK_PAGE_KEY;
       const baseLen = drag.initialDock.filter((id) => id !== drag.itemId).length;
       // Dock full and the icon comes from a page → not allowed. Behave as no-target.
-      if (!fromDock && baseLen >= DOCK_MAX) {
+      // A folder tile can never go in the dock, so it's always treated as no-target too.
+      if ((!fromDock && baseLen >= DOCK_MAX) || isFolderIconId(drag.itemId)) {
         if (drag.targetPage !== null) resetDragPreview(drag);
         drag.targetPage = null;
         drag.lastTargetKey = "";
@@ -2471,19 +2730,92 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     const gridEl = gridRefs.current[pageKey];
     if (!gridEl) return;
 
-    const cell = pointerToGridCell(x, y, gridEl);
-    if (!cell) {
-      if (drag.targetPage !== null) resetDragPreview(drag);
-      drag.targetPage = null;
-      drag.lastTargetKey = "";
-      setDropTarget(null);
-      return;
-    }
-
     const pageNum = getDesktopPageNumber(pageKey) || 1;
     const ws = widgetsRef.current;
 
     if (drag.itemType === "icon") {
+      // ── Rectangle-collision verdict (iOS feel) ──
+      // The hovering icon's rectangle vs. the candidate target icon's rectangle (positions
+      // taken from the layout at drag-start). Judged once, the instant the two rectangles go
+      // from separate to overlapping: either edge overlapping by more than half = merge
+      // (the target stays put, and after ~0.2s the highlight ring arms, so releasing groups
+      // them); neither edge overlapping by more than half = swap (the target yields, as
+      // before). The verdict doesn't change while they keep overlapping -- edge-on-edge is
+      // always a merge, corner-clipping is always a swap; to change the verdict, pull the icon
+      // back out and re-enter. A folder tile only swaps, never merges (no nesting).
+      const geom = getGridGeometry(gridEl);
+      const dragBoxW = Math.min(58, drag.ghostW);
+      const dragLeft = x - drag.offsetX + (drag.ghostW - dragBoxW) / 2;
+      const dragTop = y - drag.offsetY;
+      const targetBoxW = Math.min(58, geom.colWidth);
+      let best: { id: DesktopIconId; row: number; col: number; ox: number; oy: number; area: number } | null = null;
+      for (const ic of drag.initialLayout[pageKey] ?? []) {
+        if (ic.id === drag.itemId) continue;
+        const tLeft = geom.originX + (ic.col - 1) * geom.colStep + (geom.colWidth - targetBoxW) / 2;
+        const tTop = geom.originY + (ic.row - 1) * geom.rowStep;
+        const ox = Math.min(dragLeft + dragBoxW, tLeft + targetBoxW) - Math.max(dragLeft, tLeft);
+        const oy = Math.min(dragTop + dragBoxW, tTop + targetBoxW) - Math.max(dragTop, tTop);
+        if (ox <= 0 || oy <= 0) continue;
+        const area = ox * oy;
+        if (!best || area > best.area) best = { id: ic.id, row: ic.row, col: ic.col, ox, oy, area };
+      }
+
+      if (best && best.id === drag.contactId) {
+        // The same contact is ongoing: hold the verdict. Merge = frozen, nothing to do; swap = target already locked.
+        return;
+      }
+      if (best) {
+        // New contact: judge exactly once, right now.
+        clearMergeIntent(drag);
+        drag.contactId = best.id;
+        // Merge threshold: at the instant of contact, either edge overlaps more than 60% of
+        // its length (50% felt too eager and mis-triggered grouping too easily).
+        const mergeEdge = Math.min(dragBoxW, targetBoxW) * 0.6;
+        const merge = !isFolderIconId(drag.itemId) && (best.ox > mergeEdge || best.oy > mergeEdge);
+        drag.contactIntent = merge ? "merge" : "swap";
+        if (merge) {
+          const targetId = best.id;
+          drag.mergeTargetIconId = targetId;
+          drag.mergeTargetPage = pageKey;
+          // Freeze the yield preview: the merge target doesn't move.
+          resetDragPreview(drag);
+          drag.targetPage = null;
+          drag.lastTargetKey = `merge:${pageKey}:${targetId}`;
+          setDropTarget(null);
+          drag.mergeTimer = setTimeout(() => {
+            const live = editDragRef.current;
+            if (live !== drag || !drag.active || drag.mergeTargetIconId !== targetId) return;
+            drag.mergeTimer = null;
+            drag.mergeArmed = true;
+            setMergeTargetId(targetId);
+            try { navigator.vibrate?.(10); } catch { /* not supported, ignore */ }
+          }, 180);
+          return;
+        }
+        // Swap: the target is locked to the other icon's own cell.
+        const key = `${pageKey}:${best.row - 1}:${best.col - 1}`;
+        if (key === drag.lastTargetKey) return;
+        drag.lastTargetKey = key;
+        drag.targetPage = pageKey;
+        drag.targetRow = best.row;
+        drag.targetCol = best.col;
+        setDropTarget({ page: pageKey, row: best.row, col: best.col });
+        simulateDragReflow(drag, pageKey, best.row, best.col);
+        return;
+      }
+
+      // ── No contact: an empty/gap drop point, using the cell under the hovering icon box's center ──
+      if (drag.contactId) clearContact(drag);
+      const probeX = x - drag.offsetX + drag.ghostW / 2;
+      const probeY = y - drag.offsetY + dragBoxW / 2;
+      const cell = pointerToGridCell(probeX, probeY, gridEl);
+      if (!cell) {
+        if (drag.targetPage !== null) resetDragPreview(drag);
+        drag.targetPage = null;
+        drag.lastTargetKey = "";
+        setDropTarget(null);
+        return;
+      }
       const key = `${pageKey}:${cell.row}:${cell.col}`;
       if (key === drag.lastTargetKey) return;
       drag.lastTargetKey = key;
@@ -2493,6 +2825,14 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
       setDropTarget({ page: pageKey, row: cell.row + 1, col: cell.col + 1 });
       simulateDragReflow(drag, pageKey, cell.row + 1, cell.col + 1);
     } else {
+      const cell = pointerToGridCell(x, y, gridEl);
+      if (!cell) {
+        if (drag.targetPage !== null) resetDragPreview(drag);
+        drag.targetPage = null;
+        drag.lastTargetKey = "";
+        setDropTarget(null);
+        return;
+      }
       const w = ws.find((ww) => ww.id === drag.itemId);
       if (!w) return;
       const [wRows, wCols] = WIDGET_SIZE_CELLS[w.size];
@@ -2726,24 +3066,103 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     }
   }
 
+  /** Commits a merge drop: creates a new folder (or adds to an existing one) at the target tile. Returns whether it actually committed. */
+  function commitMergeDrop(drag: NonNullable<typeof editDragRef.current>): boolean {
+    const draggedId = drag.itemId as DesktopIconId;
+    const targetId = drag.mergeTargetIconId as DesktopIconId;
+    const tPage = drag.mergeTargetPage as DesktopPageKey;
+    const nextLayout = cloneDesktopLayout(drag.initialLayout, drag.initialWidgets);
+    let nextDock = drag.initialDock;
+
+    // Remove the dragged icon from its source (a folder source was already pre-removed from the table when the drag started).
+    if (drag.sourcePage === DOCK_PAGE_KEY) {
+      nextDock = nextDock.filter(id => id !== draggedId);
+    } else if (!drag.sourceFolderId) {
+      const src = drag.sourcePage as DesktopPageKey;
+      ensureDesktopPage(nextLayout, src);
+      nextLayout[src] = nextLayout[src].filter(ic => ic.id !== draggedId);
+    }
+
+    const nextFolders: DesktopFolderMap = { ...foldersRef.current };
+    const targetTile = (nextLayout[tPage] ?? []).find(ic => ic.id === targetId);
+    if (!targetTile || draggedId === targetId) return false;
+
+    if (isFolderIconId(targetId)) {
+      const folder = nextFolders[targetId];
+      if (!folder) return false;
+      if (!folder.icons.includes(draggedId)) {
+        nextFolders[targetId] = { ...folder, icons: [...folder.icons, draggedId] };
+      }
+    } else {
+      const folderId = createFolderIconId();
+      nextFolders[folderId] = { name: "Folder", icons: [targetId, draggedId] };
+      nextLayout[tPage] = (nextLayout[tPage] ?? []).map(ic =>
+        ic.id === targetId ? { ...ic, id: folderId } : ic);
+    }
+
+    // A source folder left with <=1 member after the drag -> dissolve it in place.
+    const srcFolderId = drag.sourceFolderId;
+    if (srcFolderId && nextFolders[srcFolderId] && nextFolders[srcFolderId].icons.length <= 1) {
+      const remaining = nextFolders[srcFolderId].icons[0] ?? null;
+      delete nextFolders[srcFolderId];
+      for (const pageKey of getDesktopPageKeysForState(nextLayout, drag.initialWidgets)) {
+        const tile = (nextLayout[pageKey] ?? []).find(ic => ic.id === srcFolderId);
+        if (!tile) continue;
+        nextLayout[pageKey] = nextLayout[pageKey].filter(ic => ic.id !== srcFolderId);
+        if (remaining) nextLayout[pageKey] = [...nextLayout[pageKey], { id: remaining, row: tile.row, col: tile.col }];
+        break;
+      }
+    }
+
+    const trimmed = trimEmptyTrailingPages(nextLayout, drag.initialWidgets);
+    setLayout(trimmed);
+    setDock(nextDock);
+    setWidgets(drag.initialWidgets);
+    setFolders(nextFolders);
+    writeDesktopFolders(nextFolders);
+    kvSet(ICON_LAYOUT_STORAGE_KEY, JSON.stringify(trimmed));
+    kvSet(DOCK_LAYOUT_STORAGE_KEY, JSON.stringify(nextDock));
+    return true;
+  }
+
   function commitDrop() {
     const drag = editDragRef.current;
     if (!drag) return;
 
     // Read target from ref (NOT React state — avoids stale closure)
-    const hasTarget = drag.active && drag.targetPage;
-    if (!hasTarget) {
+    // A merge must already be "armed" (the highlight lit up) to count: releasing while
+    // quickly sliding past an icon just springs back, no accidental grouping.
+    const isMergeDrop = Boolean(drag.active && drag.itemType === "icon"
+      && drag.mergeArmed && drag.mergeTargetIconId && drag.mergeTargetPage);
+    const hasTarget = drag.active && (drag.targetPage || isMergeDrop);
+    // If committing the group-entry throws, the drag-preview state (with the icon already
+    // pulled from the dock) must never become the final state -- treat it as a full cancel
+    // and restore everything, so the icon returns to its original spot instead of vanishing.
+    let mergeCommitted = false;
+    if (isMergeDrop) {
+      try { mergeCommitted = commitMergeDrop(drag); } catch { mergeCommitted = false; }
+    }
+    if (mergeCommitted) {
+      // Already merged into the group -- state was written wholesale inside commitMergeDrop.
+    } else if (!hasTarget || isMergeDrop) {
+      // No drop target, or the merge target became invalid mid-drag -> restore everything (including folder membership).
       setLayout(drag.initialLayout);
       setWidgets(drag.initialWidgets);
       setDock(drag.initialDock);
+      setFolders(drag.initialFolders);
     } else {
+      const srcFolderId = drag.sourceFolderId;
       window.setTimeout(() => {
         const trimmedLayout = trimEmptyTrailingPages(layoutRef.current, widgetsRef.current);
         const trimmedPageCount = getDesktopPageKeysForState(trimmedLayout, widgetsRef.current).length;
         setLayout(trimmedLayout);
         setCurrentPageIndex((index) => Math.min(index, Math.max(0, trimmedPageCount - 1)));
+        // Successfully dropped after being dragged out of a folder: the source folder may be down to one member -- dissolve it.
+        if (srcFolderId) dissolveFolderIfTiny(srcFolderId);
       }, 0);
     }
+    if (drag.mergeTimer) clearTimeout(drag.mergeTimer);
+    if (drag.mergeTargetIconId) setMergeTargetId(null);
 
     // Cleanup drag
     if (drag.edgeTimer) clearTimeout(drag.edgeTimer);
@@ -2783,6 +3202,88 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
       ghost.style.transform = `translate3d(${r.left - shellLeft}px, ${r.top - shellTop}px, 0)`;
       window.setTimeout(finalize, 210);
     });
+  }
+
+  // ── Folder panel: long-press a member icon -> drag it out onto the desktop ──
+  const folderPressRef = useRef<{
+    timer: ReturnType<typeof setTimeout>;
+    pointerId: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
+
+  function cancelFolderIconPress() {
+    if (folderPressRef.current) clearTimeout(folderPressRef.current.timer);
+    folderPressRef.current = null;
+  }
+
+  function handleFolderIconPointerDown(e: React.PointerEvent, iconId: DesktopIconId) {
+    const folderId = openFolderId;
+    if (!folderId) return;
+    e.preventDefault();
+    const element = e.currentTarget as HTMLElement;
+    const { pointerId, clientX, clientY } = e;
+    cancelFolderIconPress();
+    folderPressRef.current = {
+      timer: setTimeout(() => {
+        folderPressRef.current = null;
+        beginDragOutOfFolder(pointerId, clientX, clientY, iconId, folderId, element);
+      }, 500),
+      pointerId,
+      startX: clientX,
+      startY: clientY,
+    };
+  }
+
+  function handleFolderIconPointerMove(e: React.PointerEvent) {
+    const press = folderPressRef.current;
+    if (!press || press.pointerId !== e.pointerId) return;
+    const dx = e.clientX - press.startX;
+    const dy = e.clientY - press.startY;
+    // Movement past the threshold is treated as a page-flip/scroll gesture -- abandon the long press.
+    if (dx * dx + dy * dy > 100) cancelFolderIconPress();
+  }
+
+  /**
+   * A panel member is picked up: pre-remove it from the folder (canceling restores it), close
+   * the panel, and hand off seamlessly to the desktop drag engine -- movement/dropping from
+   * here on is identical to an ordinary icon.
+   */
+  function beginDragOutOfFolder(
+    pointerId: number,
+    x: number,
+    y: number,
+    iconId: DesktopIconId,
+    folderId: string,
+    element: HTMLElement
+  ) {
+    const folder = foldersRef.current[folderId];
+    if (!folder || !folder.icons.includes(iconId)) return;
+    setEditMode(true);
+    try { navigator.vibrate?.(30); } catch { /* not supported, ignore */ }
+    const activePageKeys = getDesktopPageKeysForState(layoutRef.current, widgetsRef.current);
+    const pageKey = activePageKeys[Math.min(currentPageIndexRef.current, activePageKeys.length - 1)] ?? "page1";
+    // sourcePage just pins it to the current page as a placeholder; the fromOutside logic branches on sourceFolderId instead.
+    startDragPending(pointerId, x, y, "icon", iconId, pageKey, element);
+    const drag = editDragRef.current;
+    if (!drag) return;
+    drag.sourceFolderId = folderId;
+    setFolders(current => ({
+      ...current,
+      [folderId]: { ...current[folderId], icons: current[folderId].icons.filter(id => id !== iconId) },
+    }));
+    setOpenFolderId(null);
+    activateDragAt(pointerId, x, y);
+  }
+
+  function renameFolder(folderId: string, name: string) {
+    const folder = foldersRef.current[folderId];
+    if (!folder) return;
+    const trimmed = name.trim().slice(0, 24) || "Folder";
+    if (trimmed === folder.name) return;
+    const next = { ...foldersRef.current, [folderId]: { ...folder, name: trimmed } };
+    setFolders(next);
+    writeDesktopFolders(next);
   }
 
   function handleItemPointerDown(
@@ -2876,22 +3377,53 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     setCurrentPageIndex((index) => Math.min(index, Math.max(0, trimmedPageCount - 1)));
   }
 
-  function handleThemeDesktopChange(next: { widgets: WidgetInstance[]; iconLayout: DesktopLayout; dock?: DesktopIconId[] }): void {
+  function handleThemeDesktopChange(next: { widgets: WidgetInstance[]; iconLayout: DesktopLayout; dock?: DesktopIconId[]; folders?: DesktopFolderMap }): void {
     const normalizedWidgets = sanitizeWidgetsForLayout(next.iconLayout, next.widgets);
-    // dock: the factory dock is passed in when restoring defaults; if a theme pack
-    // import doesn't include a dock, the current one is kept.
-    // Icons explicitly placed in the new layout are deduplicated out of the dock
-    // (an icon can only exist in one place).
+    // Reconciliation snapshot: every icon the user currently owns (pages ∪ dock ∪ folder
+    // members). An import/reset-to-default replaces the whole desktop; whatever loses its
+    // spot in the replacement gets placed back on a page -- an icon may only move, never
+    // vanish (a real prior bug: a package with no dock/folders info would silently drop any
+    // icon that had been dragged into the dock or tucked into a folder).
+    const ownedBefore = new Set<DesktopIconId>([
+      ...getDesktopIconLayoutItems(layoutRef.current).map(ic => ic.id).filter(id => !isFolderIconId(id)),
+      ...dockRef.current,
+      ...Object.values(foldersRef.current).flatMap(f => f.icons),
+    ]);
+    // Use the new theme's folder table if it has one (members already filtered to what's
+    // installed on this device); an older package with none means no folders.
+    const nextFolders: DesktopFolderMap = next.folders ?? {};
+    const folderMemberIds = new Set<DesktopIconId>(Object.values(nextFolders).flatMap(f => f.icons));
+    // dock: the factory dock is passed in when restoring defaults; if a theme pack import
+    // doesn't include a dock, the current one is kept. Icons explicitly placed in the new
+    // layout, or tucked into a folder, are deduplicated out of the dock (an icon can only
+    // exist in one place).
     const placedIds = new Set<DesktopIconId>(getDesktopIconLayoutItems(next.iconLayout).map(ic => ic.id));
-    const nextDock = normalizeDock(next.dock ?? dockRef.current).filter(id => !placedIds.has(id));
+    const nextDock = normalizeDock(next.dock ?? dockRef.current).filter(id => !placedIds.has(id) && !folderMemberIds.has(id));
+    const normalizedLayout = normalizeLayout(next.iconLayout, normalizedWidgets, new Set(nextDock), nextFolders);
+    // Folder consistency pass (dissolve empty folders, dedupe members against pages/dock, place back a tile-less folder's tile).
+    const sane = sanitizeDesktopFolders(nextFolders, normalizedLayout, nextDock, normalizedWidgets);
+    // Loss reconciliation: any known icon owned before the import but nowhere after it gets placed back on the nearest page.
+    const customIconIds = getInstalledCustomIconIds();
+    const placedAfter = new Set<DesktopIconId>([
+      ...getDesktopIconLayoutItems(sane.layout).map(ic => ic.id),
+      ...nextDock,
+      ...Object.values(sane.folders).flatMap(f => f.icons),
+    ]);
+    for (const id of ownedBefore) {
+      if (placedAfter.has(id)) continue;
+      if (!(id in ICONS) && !customIconIds.has(id)) continue;
+      placeIconOnAvailablePage(sane.layout, normalizedWidgets, { id, row: 1, col: 1 }, 1);
+    }
     dockRef.current = nextDock;
     setDock(nextDock);
     writeDockLayout(nextDock);
-    const normalizedLayout = normalizeLayout(next.iconLayout, normalizedWidgets, new Set(nextDock));
+    setFolders(sane.folders);
+    writeDesktopFolders(sane.folders);
+    setOpenFolderId(null);
     setWidgets(normalizedWidgets);
-    setLayout(normalizedLayout);
+    setLayout(sane.layout);
     saveWidgets(normalizedWidgets);
-    kvSet(ICON_LAYOUT_STORAGE_KEY, JSON.stringify(normalizedLayout));
+    kvSet(ICON_LAYOUT_STORAGE_KEY, JSON.stringify(sane.layout));
   }
 
   function handleWidgetConfigChange(widgetId: string, config: Record<string, unknown>): void {
@@ -3912,9 +4444,44 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                             {/* Render icons with explicit positions for this page */}
                             {pageIcons.map((iconPos) => {
                               const iconId = iconPos.id;
-                              const icon = getDesktopIconMeta(iconId);
                               const pos = pageIconPositions.get(iconId);
-                              if (!pos || !icon) return null;
+                              if (!pos) return null;
+                              const isDragging = dragItem?.type === "icon" && dragItem.id === iconId;
+                              const isMergeTarget = mergeTargetId === iconId;
+                              const itemClass = `icon-item${isDragging ? " dragging" : ""}${isMergeTarget ? " merge-target" : ""}`;
+                              if (isFolderIconId(iconId)) {
+                                const folder = folders[iconId];
+                                if (!folder) return null;
+                                const folderBadge = folder.icons.reduce((sum, memberId) => {
+                                  const appId = customAppIdFromIconId(memberId);
+                                  if (appId) return sum + (customAppBadges[appId] ?? 0);
+                                  return sum;
+                                }, 0);
+                                return (
+                                  <button
+                                    key={iconId}
+                                    data-flip-id={`icon:${iconId}`}
+                                    className={itemClass}
+                                    style={{ gridRow: pos.row, gridColumn: pos.col }}
+                                    onClick={() => { if (!editMode) { setFolderPageIndex(0); setOpenFolderId(iconId); } }}
+                                    onPointerDown={(e) => handleItemPointerDown(e, "icon", iconId, pageKey)}
+                                  >
+                                    <span className="icon-glyph-box folder-glyph-box" aria-hidden>
+                                      <span className="folder-mini-grid">
+                                        {folder.icons.slice(0, 4).map(memberId => renderFolderMini(memberId))}
+                                      </span>
+                                      {folderBadge > 0 ? (
+                                        <span className="desktop-icon-badge" aria-label={`${folderBadge} unread`}>
+                                          {folderBadge > 99 ? "99+" : folderBadge}
+                                        </span>
+                                      ) : null}
+                                    </span>
+                                    <span className="icon-label">{folder.name}</span>
+                                  </button>
+                                );
+                              }
+                              const icon = getDesktopIconMeta(iconId);
+                              if (!icon) return null;
                               const customApp = icon.customApp;
                               const builtinIconId = customApp ? null : icon.id as IconId;
                               const iconSkinId = activeIconSkins[iconId];
@@ -3922,13 +4489,12 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                               const customIconUrl = customApp?.iconDataUrl ?? null;
                               const iconImageUrl = iconSkinUrl || customIconUrl;
                               const hasImageIcon = Boolean(iconImageUrl);
-                              const isDragging = dragItem?.type === "icon" && dragItem.id === iconId;
                               const badgeCount = customApp ? customAppBadges[customApp.id] ?? 0 : 0;
                               return (
                                 <button
                                   key={iconId}
                                   data-flip-id={`icon:${iconId}`}
-                                  className={isDragging ? "icon-item dragging" : "icon-item"}
+                                  className={itemClass}
                                   style={{ gridRow: pos.row, gridColumn: pos.col }}
                                   onClick={() => { if (!editMode) openApp(iconId); }}
                                   onPointerDown={(e) => handleItemPointerDown(e, "icon", iconId, pageKey)}
@@ -4218,6 +4784,103 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                   onClose={() => setShowDesktopCustomizer(false)}
                 />
               )}
+
+              {/* Folder panel: dims + frosts the whole screen; material follows data-icon-effect and the icon's own base color */}
+              {!activeApp && openFolderId && folders[openFolderId] && (() => {
+                const folder = folders[openFolderId];
+                const memberPages: DesktopIconId[][] = [];
+                for (let i = 0; i < folder.icons.length; i += 4) {
+                  memberPages.push(folder.icons.slice(i, i + 4));
+                }
+                if (memberPages.length === 0) memberPages.push([]);
+                const boundedFolderPage = Math.min(folderPageIndex, memberPages.length - 1);
+                return (
+                  <div className="folder-overlay" onClick={() => setOpenFolderId(null)}>
+                    <input
+                      key={openFolderId}
+                      className="folder-name-input"
+                      defaultValue={folder.name}
+                      maxLength={24}
+                      aria-label="Folder name"
+                      onClick={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onBlur={(e) => renameFolder(openFolderId, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                      }}
+                    />
+                    <div className="folder-panel" onClick={(e) => e.stopPropagation()}>
+                      <div
+                        className="folder-pages"
+                        onScroll={(e) => {
+                          const el = e.currentTarget;
+                          const idx = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
+                          if (idx !== folderPageIndex) setFolderPageIndex(idx);
+                        }}
+                      >
+                        {memberPages.map((members, pageIdx) => (
+                          <div key={pageIdx} className="folder-page">
+                            {members.map((memberId) => {
+                              const meta = getDesktopIconMeta(memberId);
+                              if (!meta) return null;
+                              const memberCustomApp = meta.customApp;
+                              const memberBuiltinId = memberCustomApp ? null : meta.id as IconId;
+                              const memberSkinId = activeIconSkins[memberId];
+                              const memberSkinUrl = memberSkinId ? themeAssets[memberSkinId] ?? null : null;
+                              const memberCustomUrl = memberCustomApp?.iconDataUrl ?? null;
+                              const memberImageUrl = memberSkinUrl || memberCustomUrl;
+                              const memberBadge = memberCustomApp ? customAppBadges[memberCustomApp.id] ?? 0 : 0;
+                              return (
+                                <button
+                                  key={memberId}
+                                  type="button"
+                                  className="folder-app"
+                                  onClick={() => { setOpenFolderId(null); openApp(memberId); }}
+                                  onPointerDown={(e) => handleFolderIconPointerDown(e, memberId)}
+                                  onPointerMove={handleFolderIconPointerMove}
+                                  onPointerUp={cancelFolderIconPress}
+                                  onPointerCancel={cancelFolderIconPress}
+                                >
+                                  <span
+                                    className={memberImageUrl ? "icon-glyph-box icon-glyph-box-skin" : "icon-glyph-box"}
+                                    style={memberImageUrl ? undefined : { "--icon-tone": meta.tone } as CSSProperties}
+                                    aria-hidden
+                                  >
+                                    {memberImageUrl ? (
+                                      <span className="icon-skin-layer" style={{ backgroundImage: `url("${memberImageUrl}")` }} />
+                                    ) : null}
+                                    {memberBuiltinId ? (
+                                      <IconGlyph
+                                        id={memberBuiltinId}
+                                        className={memberSkinUrl ? "icon-glyph icon-glyph-hidden" : "icon-glyph"}
+                                      />
+                                    ) : memberCustomUrl ? null : (
+                                      <CustomAppGlyph seed={memberCustomApp?.name || ""} className="icon-glyph" />
+                                    )}
+                                    {memberBadge > 0 ? (
+                                      <span className="desktop-icon-badge" aria-label={`${memberBadge} unread`}>
+                                        {memberBadge > 99 ? "99+" : memberBadge}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                  <span className="icon-label">{meta.label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                      {memberPages.length > 1 && (
+                        <div className="folder-dots">
+                          {memberPages.map((_, pageIdx) => (
+                            <span key={pageIdx} className={pageIdx === boundedFolderPage ? "dot active" : "dot"} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Drag ghost — absolutely positioned INSIDE .phone-shell so the
                   clone keeps theme variables + glass effect selectors

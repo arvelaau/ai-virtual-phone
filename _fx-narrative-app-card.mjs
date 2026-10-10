@@ -34,7 +34,7 @@ let pass = 0, fail = 0;
 const ok = (n, c, x) => { if (c) pass++; else { fail++; console.log(`  FAIL ${n}${x === undefined ? "" : ` -- ${JSON.stringify(x).slice(0, 300)}`}`); } };
 const eq = (n, g, w) => ok(n, Object.is(g, w), { got: g, want: w });
 
-function seedTestApp(syntax, scope) {
+function seedTestApp(syntax, scope, keywords) {
     const directive = {
         id: "boarding-pass",
         label: "Show boarding pass",
@@ -47,6 +47,7 @@ function seedTestApp(syntax, scope) {
         },
     };
     if (scope) directive.scope = scope;
+    if (keywords) directive.keywords = keywords;
     const app = {
         id: "test.travelapp",
         name: "Travel Companion",
@@ -167,8 +168,13 @@ She handed over the boarding passes.
     ok("C6 StoryMessage carries the card fields",
         fs.readFileSync(path.join(root, "lib/story-storage.ts"), "utf8").includes("appCardLayout?: Record<string, unknown>"));
     const storyApp = fs.readFileSync(path.join(root, "components/story/story-app-base.tsx"), "utf8");
-    ok("C7 both call sites pass the card fields to pushStoryMessage",
-        (storyApp.match(/appCardLayout: result\.appCardLayout/g) || []).length === 2,
+    // Three call sites as of the momo-sync Story overhaul (stage 3d): handleSend,
+    // handleStoryRetry (both pre-existing), and the auto-start effect (momo's own addition,
+    // ported in that stage) -- each must carry the card fields through its own
+    // pushStoryMessage call, or a directive-triggered card generated on that path would
+    // silently vanish.
+    ok("C7 all three generation call sites pass the card fields to pushStoryMessage",
+        (storyApp.match(/appCardLayout: result\.appCardLayout/g) || []).length === 3,
         (storyApp.match(/appCardLayout: result\.appCardLayout/g) || []).length);
 
     // The parser being ready is not enough -- the model has to be TAUGHT a directive exists,
@@ -218,6 +224,88 @@ She handed over the boarding passes.
     ok("D6 taught in story mode", formatCustomAppChatDirectivesForPrompt("story").includes("### Show boarding pass"));
     eq("D7 NOT taught in chat mode", formatCustomAppChatDirectivesForPrompt("chat"), "");
     eq("D8 NOT taught in offline mode", formatCustomAppChatDirectivesForPrompt("offline"), "");
+
+    // ── D9-D12: the placement hint -- narrative modes only, [Message]-shaped guidance ──
+    // User-reported: a directive tag reads as unnatural mid-paragraph in prose-flowing modes,
+    // since (unlike chat) there is no existing convention there for a bracket tag standing on
+    // its own line. This does NOT switch the mechanism to keyword matching (a real design
+    // tradeoff discussed with the user -- keyword matching risks false triggers on ordinary
+    // prose that merely mentions the same word, and there is no way to cleanly remove a keyword
+    // from a sentence the way a whole bracket tag can be cut out); it keeps the deterministic
+    // tag but tells the model explicitly where to put it, mirroring [Message]'s own instruction.
+    seedTestApp("[BoardingPass:destination]", ["story", "offline"]);
+    const storyTaught = formatCustomAppChatDirectivesForPrompt("story");
+    ok("D9 story mode teaches the placement hint", storyTaught.includes("own line") && storyTaught.includes("[Message]"), storyTaught);
+    const offlineTaught = formatCustomAppChatDirectivesForPrompt("offline");
+    ok("D10 offline mode teaches the placement hint too", offlineTaught.includes("own line") && offlineTaught.includes("[Message]"), offlineTaught);
+    const chatTaught2 = formatCustomAppChatDirectivesForPrompt("chat");
+    ok("D11 chat mode does NOT get the placement hint -- bracket tags are already the norm there", !chatTaught2.includes("own line"), chatTaught2);
+    // Placement hint must still be absent (not just present-but-unreachable) when nothing is
+    // taught at all, or D5/D7/D8's exact-"" checks above would have been silently broken by it.
+    clearApps();
+    eq("D12 no directives -> still exactly empty in story mode too (early return beats the hint)", formatCustomAppChatDirectivesForPrompt("story"), "");
+}
+
+// ── D13-D24: keyword triggering -- narrative modes only, opt-in per directive ─────────────
+// User decision, after the tag-vs-keyword tradeoff above was explained: for Story/Offline mode
+// specifically, prefer a natural trigger WORD over the bracket tag. Opt-in via
+// CustomAppChatDirective.keywords (unset = the directive above's tag-only behavior, unchanged):
+// when set, story/offline TEACH and DETECT the keyword instead of the tag; chat is untouched
+// either way, since bracket tags are already this app's convention everywhere else in chat.
+{
+    clearApps();
+    seedTestApp("[BoardingPass]", ["chat", "story", "offline"], "boarding pass, gate pass");
+
+    const storyTaught = formatCustomAppChatDirectivesForPrompt("story");
+    ok("D13 story teaches a trigger WORD, not the bracket tag",
+        storyTaught.includes("【Trigger word】") && !storyTaught.includes("【Format】"), storyTaught);
+    ok("D14 both comma-separated keywords are quoted and joined with \"or\"",
+        storyTaught.includes('"boarding pass" or "gate pass"'), storyTaught);
+    const offlineTaught = formatCustomAppChatDirectivesForPrompt("offline");
+    ok("D15 offline teaches the trigger word too", offlineTaught.includes("【Trigger word】"), offlineTaught);
+
+    // Chat NEVER switches to keyword teaching, even though this directive has keywords set --
+    // directiveUsesTag() is hardcoded true for chat.
+    const chatTaught3 = formatCustomAppChatDirectivesForPrompt("chat");
+    ok("D16 chat still teaches the bracket tag, keywords or not",
+        chatTaught3.includes("【Format】[BoardingPass]") && !chatTaught3.includes("【Trigger word】"), chatTaught3);
+
+    // The placement hint is about WHERE to put a TAG -- a pure-keyword prompt has no tag in it
+    // at all, so teaching "put it on its own line" would be actively confusing.
+    ok("D17 the placement hint does NOT appear when every taught directive is keyword-only",
+        !storyTaught.includes("own line"), storyTaught);
+
+    // A SECOND directive that still uses the tag (no keywords) DOES bring the placement hint
+    // back -- it's per-surface, not per-directive, and only needed when a tag is actually taught.
+    const directives = loadCustomAppChatDirectives();
+    ok("D17b sanity: exactly one directive is registered so far", directives.length === 1, directives.length);
+
+    // ── Detection: the keyword triggers WITHOUT any bracket tag, and the narration survives untouched ──
+    const prose = "She hands you the tickets at the gate. \"Here's your boarding pass,\" she says, tucking the rest into her bag.";
+    const found = extractCustomAppCard(prose, "story");
+    ok("D18 a bare keyword in ordinary prose triggers the card -- no bracket tag anywhere", Boolean(found), found);
+    eq("D19 it resolves to the real installed app, same as a tag match would", found?.appId, "test.travelapp");
+
+    // The defining property of keyword triggering: matchLength is ALWAYS 0, so splicing it out
+    // (the same formula offline-message-dispatch.ts / story-engine.ts use) recovers the ORIGINAL
+    // text byte-for-byte -- unlike a tag, a keyword living inside a real sentence can never be
+    // cut out without breaking it, so nothing is ever cut.
+    eq("D20 matchLength is always 0 for a keyword match", found?.matchLength, 0);
+    const spliced = prose.slice(0, found.matchIndex) + prose.slice(found.matchIndex + found.matchLength);
+    eq("D21 splicing the match out recovers the original prose completely unchanged", spliced, prose);
+
+    // Case-insensitive, matching WorldBookEntry's own keyword-activation convention exactly
+    // (isWorldBookEntryActivated in llm-prompt-assembler.ts) -- this was modeled on it directly.
+    const upperCase = extractCustomAppCard("She holds up the BOARDING PASS proudly.", "story");
+    ok("D22 matching is case-insensitive", Boolean(upperCase), upperCase);
+
+    // Chat mode NEVER does keyword detection, even for a directive that has keywords configured
+    // -- a bracket tag is still required there.
+    eq("D23 chat mode does NOT trigger on the bare keyword (no tag present)",
+        extractCustomAppCard("Here's your boarding pass!", "chat"), null);
+
+    // Prose that never mentions any configured keyword triggers nothing, in either narrative mode.
+    eq("D24 prose with no matching keyword triggers nothing", extractCustomAppCard("They walked to the gate in silence.", "story"), null);
 }
 
 // ── E. Studio cards merge into the same directive list, at read time only ───
@@ -357,10 +445,42 @@ She handed over the boarding passes.
     ok("F20 custom-app-chat-directives.ts exports the shared scope predicate", directives.includes("export function directiveMatchesScope"));
 }
 
+// ── G. group offline turns must not be silently excluded from app-card extraction ───────────
+// User-reported bug: a Studio/custom-app HTML card never rendered in a GROUP offline turn.
+// Root cause was two-layered -- the teaching gap covered by _fx-offline-message.mjs's R-section
+// (group_chat_offline_format never referenced the macro), and this second, independent gap:
+// chat-room.tsx gated the ENTIRE extractOfflineDispatchableMessages() call behind
+// `!session.isGroup`, so even if the model had somehow been taught the directive and used it,
+// the app-card half of the result was discarded before appendChatOfflineTurn ever saw it.
+// [Message] *dispatch* is deliberately still 1:1-only (a separate, existing decision, documented
+// in offline-message-dispatch.ts) -- this section confirms that stayed intact while extraction
+// itself no longer excludes group.
+{
+    const chatRoom = fs.readFileSync(path.join(root, "components/chat/chat-room.tsx"), "utf8");
+
+    ok("G1 chat-room.tsx no longer gates extraction on !session.isGroup",
+        !chatRoom.includes("!session.isGroup\n                    ? extractOfflineDispatchableMessages")
+        && !chatRoom.includes("!session.isGroup\n                ? extractOfflineDispatchableMessages"));
+
+    const extractionCallCount = (chatRoom.match(/const offlineDispatch = extractOfflineDispatchableMessages\(result\.rawText, result\.summaryTag\);/g) || []).length;
+    eq("G2 both offline call sites (send + retry) call extraction unconditionally", extractionCallCount, 2);
+
+    // [Message] dispatch itself must still be 1:1-only -- both call sites gate the
+    // dispatchOfflineMessages() call on !session.isGroup.
+    const dispatchGateCount = (chatRoom.match(/if \(!session\.isGroup && offlineDispatch\.dispatchable\.length\)/g) || []).length;
+    eq("G3 both call sites still gate [Message] *dispatch* to 1:1 only", dispatchGateCount, 2);
+
+    // The appCard fields written into appendChatOfflineTurn must no longer be optional-chained
+    // off a possibly-null offlineDispatch -- confirms the read side isn't still defensively
+    // coded around the old group=null shape in a way that would mask a regression.
+    const appCardFieldCount = (chatRoom.match(/appCardLayout: offlineDispatch\.appCard\?\.appCardLayout,/g) || []).length;
+    eq("G4 both call sites read appCardLayout off the now-unconditional offlineDispatch", appCardFieldCount, 2);
+}
+
 clearApps();
 clearStudioCards();
 
-const EXPECTED = 90;
+const EXPECTED = 111;
 ok(`Z1 ${EXPECTED} assertions ran before this guard`, pass + fail === EXPECTED, `ran ${pass + fail}`);
 console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail ? 1 : 0);

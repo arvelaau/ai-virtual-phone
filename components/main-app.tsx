@@ -9,7 +9,7 @@ import { MediaMaintenanceScheduler } from "@/components/media-maintenance-schedu
 import { DesktopShell } from "./desktop-shell";
 import { SplashAnimation } from "./splash-animation";
 import { MusicProvider } from "@/lib/music-context";
-import { hydrateKvDb } from "@/lib/kv-db";
+import { hydrateKvDb, isKvHydrated } from "@/lib/kv-db";
 import { getThemeAssetMap, readThemeProfile } from "@/lib/theme-storage";
 import { resolveActiveIconSkins, type ThemeProfile } from "@/lib/theme-types";
 import { hasPendingMcpOAuthCallback } from "@/lib/tool-executor";
@@ -252,6 +252,8 @@ export function MainApp() {
   const [preparedDesktopTheme, setPreparedDesktopTheme] = useState<PreparedDesktopTheme | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [splashDismissed, setSplashDismissed] = useState(false);
+  const [kvHydrateFailed, setKvHydrateFailed] = useState(false);
+  const [initAttempt, setInitAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -262,6 +264,16 @@ export function MainApp() {
       // each independently and carry on rather than block first paint forever.
       await withTimeout(hydrateKvDb(), HYDRATION_STEP_TIMEOUT_MS, "kv hydration");
       if (cancelled) return;
+      // kv hydration is the one step here that must never be waved through on
+      // failure: every setting/binding/offline record it holds would read back
+      // empty, and the first whole-record save after that would overwrite the
+      // real history in IndexedDB with that emptiness. Unlike the theme preload
+      // below, there's no "degraded but usable" state for this one.
+      if (!isKvHydrated()) {
+        setKvHydrateFailed(true);
+        return;
+      }
+      setKvHydrateFailed(false);
 
       const nextPreparedTheme = await withTimeout(
         prepareDesktopThemeForFirstPaint(),
@@ -296,7 +308,28 @@ export function MainApp() {
       cancelled = true;
       document.removeEventListener("click", tryFullscreen);
     };
-  }, []);
+  }, [initAttempt]);
+
+  if (kvHydrateFailed) {
+    return (
+      <main className="app-root" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100dvh", padding: "0 28px", background: "#0c0c12", color: "#e8e8ef" }}>
+        <div style={{ maxWidth: 340, textAlign: "center" }}>
+          <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 12 }}>Couldn't read local data</div>
+          <div style={{ fontSize: 13, lineHeight: 1.8, opacity: 0.75, marginBottom: 20 }}>
+            The browser's local database (IndexedDB) failed to open. Your data is still there -- to avoid continuing without it and overwriting your history, the app is pausing before entering.
+            <br />Try again first; if it still fails, try closing other tabs on this site, restarting the browser, or checking that you're not in private/incognito mode.
+          </div>
+          <button
+            type="button"
+            onClick={() => { setKvHydrateFailed(false); setInitAttempt((n) => n + 1); }}
+            style={{ padding: "10px 32px", borderRadius: 20, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", color: "#fff", fontSize: 14, cursor: "pointer" }}
+          >
+            Try Again
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <AccountGate>

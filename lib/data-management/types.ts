@@ -77,6 +77,8 @@ export type IndexedDbSourceBackup = {
   type: "indexeddb";
   dbName: string;
   stores: StoreBackup[];
+  /** Set when the database failed to open during export (cleared by the browser, corrupted, or locked) -- any value here means this data is incomplete. */
+  error?: string;
 };
 
 export type KvSourceBackup = {
@@ -144,6 +146,8 @@ export type BackupManifest = {
   totalRecords: number;
   /** True when images/multimedia were stripped to keep the backup small. */
   mediaExcluded?: boolean;
+  /** Dynamic chat/moments images are limited to this many recent days. */
+  dynamicImageDays?: 3 | 7;
 };
 
 export type BackupEnvelope = {

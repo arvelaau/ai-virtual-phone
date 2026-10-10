@@ -30,7 +30,20 @@ export type IconId =
   | "studio"
   | "review";
 
-export type DesktopIconId = IconId | CustomAppIconId;
+// Desktop folders: an id prefixed with folder: masquerades as an icon occupying one cell for
+// drag/paging purposes; its content (name + member icons) is stored separately in
+// DesktopFolderMap. Folders cannot go in the dock and cannot be nested.
+export type FolderIconId = `folder:${string}`;
+
+export function isFolderIconId(id: string): id is FolderIconId {
+  return id.startsWith("folder:");
+}
+
+export function createFolderIconId(): FolderIconId {
+  return `folder:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export type DesktopIconId = IconId | CustomAppIconId | FolderIconId;
 
 export type IconPosition = { id: DesktopIconId; row: number; col: number };
 

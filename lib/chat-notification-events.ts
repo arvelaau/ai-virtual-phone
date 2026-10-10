@@ -7,6 +7,8 @@ export type ChatMessageNoticeDetail = {
   senderName?: string;
   avatar?: string | null;
   isGroup?: boolean;
+  /** Sound-settings "test" popup: fires the banner even while that session is already open */
+  isTest?: boolean;
 };
 
 export function dispatchChatMessageNotice(detail: ChatMessageNoticeDetail): void {
@@ -18,7 +20,7 @@ export function dispatchChatMessageNotice(detail: ChatMessageNoticeDetail): void
   }));
 }
 
-// 打开联系人 tab 的「添加朋友」页并预载指定角色资料（名片点击添加）
+// Opens the Contacts tab's "Add Friend" page pre-loaded with a character's profile (tap-to-add from a contact card)
 export const CHAT_OPEN_ADD_CONTACT_EVENT = "ai-chat-open-add-contact";
 
 export function dispatchOpenAddContact(characterId: string): void {

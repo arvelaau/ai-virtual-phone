@@ -434,14 +434,18 @@ export function DataManagement({ onNotice }: DataManagementProps) {
   };
 
   const executeExport = (moduleIds: DataModuleId[]) => runAction("Exporting", async () => {
-    const { blob, manifest } = await createBackupBlob(moduleIds, { excludeMedia: cloudConfig.excludeMedia });
+    const { blob, manifest, warnings } = await createBackupBlob(moduleIds, { excludeMedia: cloudConfig.excludeMedia });
     const note = manifest.mediaExcluded ? " (excludes images/media)" : "";
+    // The export side must never fail silently: a database that couldn't open, or
+    // a critical module exporting 0 records, gets called out here rather than
+    // handed to the user as a backup that merely looks successful.
+    const warnNote = warnings.length > 0 ? ` ⚠️ ${warnings.join("; ")}` : "";
     if (isIOSBrowser() || isAndroidBrowser()) {
       setPendingExport({ blob, manifest });
-      return `Backup file created: ${manifest.modules.length} module(s), ${formatBytes(manifest.totalBytes)}${note}. Tap "Save Backup File".`;
+      return `Backup file created: ${manifest.modules.length} module(s), ${formatBytes(manifest.totalBytes)}${note}. Tap "Save Backup File".${warnNote}`;
     }
     await downloadBackupBlob(blob, manifest, { disableNativeShare: true });
-    return `Exported ${manifest.modules.length} module(s), ${formatBytes(manifest.totalBytes)}${note}.`;
+    return `Exported ${manifest.modules.length} module(s), ${formatBytes(manifest.totalBytes)}${note}.${warnNote}`;
   });
 
   const savePendingExport = async () => {

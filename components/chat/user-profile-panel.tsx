@@ -1,13 +1,17 @@
 "use client";
 
-import { useState, useEffect, type CSSProperties } from "react";
+import { useState, useEffect, useRef, type CSSProperties } from "react";
 import CSSSchemeBar from "@/components/ui/css-scheme-picker";
 import {
     loadFollowUpConfig,
     saveFollowUpConfig,
     getDefaultFollowUpConfig,
+    loadUserIdentities,
     resolveUserIdentity,
+    saveUserIdentities,
+    USER_IDENTITIES_UPDATED_EVENT,
 } from "@/lib/settings-storage";
+import { fileToUserAvatarDataUrl } from "@/lib/user-avatar-image";
 import { loadChatAppSettings, saveChatAppSettings } from "@/lib/chat-storage";
 import type { UserIdentity } from "@/components/settings/user-identity";
 import { getApiLogs, clearApiLogs, type DebugInfo } from "@/lib/chat-engine";
@@ -17,6 +21,7 @@ import { CHAT_APP_CSS_EXAMPLE } from "@/lib/css-examples";
 import { Toggle } from "@/components/ui/form";
 import { StickerManager } from "./sticker-manager";
 import { ChatPluginManager } from "./chat-plugin-manager";
+import { GlobalChatInfoSettings } from "./global-chat-info-settings";
 import { WalletPanel } from "./wallet-panel";
 import { loadMomentsConfig, saveMomentsConfig, DEFAULT_MOMENTS_CONFIG, type MomentsInteractionConfig, getAllPosts } from "@/lib/moments-storage";
 import { loadChatContacts } from "@/lib/chat-storage";
@@ -29,6 +34,7 @@ import { formatWalletAmount, getWalletBalance, loadWalletState, WALLET_UPDATED_E
 import { ChatFallbackAvatar } from "./chat-fallback-avatar";
 import {
     Bell,
+    Camera,
     ChevronRight,
     Clock,
     FileCode2,
@@ -46,6 +52,7 @@ import {
     ThumbsUp,
     Trash2,
     User,
+    Vibrate,
     type LucideIcon,
 } from "lucide-react";
 import { BINDING_ACCENTS, CONTENT_APP_ACCENTS } from "@/lib/ui-accent-colors";
@@ -141,11 +148,14 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
     const [showCSSEditor, setShowCSSEditor] = useState(false);
     const [showMomentsSettings, setShowMomentsSettings] = useState(false);
     const [showWalletPanel, setShowWalletPanel] = useState(false);
+    const [showGlobalChatInfo, setShowGlobalChatInfo] = useState(false);
+    const profileAvatarInputRef = useRef<HTMLInputElement>(null);
     const [identity, setIdentity] = useState<UserIdentity | null>(null);
     const [notifEnabled, setNotifEnabled] = useState(false);
     const [notifHint, setNotifHint] = useState<string | null>(null);
     const [notifChecking, setNotifChecking] = useState(false);
     const [enterToSendEnabled, setEnterToSendEnabled] = useState(false);
+    const [callVibrationEnabled, setCallVibrationEnabled] = useState(true);
     const [userStats, setUserStats] = useState({ chats: 0, moments: 0, visitors: 1234 });
     const [walletSummary, setWalletSummary] = useState(() => {
         const wallet = loadWalletState();
@@ -161,6 +171,7 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
         const browserGranted = isBrowserNotificationGranted();
         setNotifEnabled(settings.browserNotificationsEnabled === true && browserGranted);
         setEnterToSendEnabled(settings.enterToSendEnabled === true);
+        setCallVibrationEnabled(settings.callVibrationEnabled !== false);
         if (settings.browserNotificationsEnabled === true && !browserGranted) {
             setNotifHint(readBrowserNotificationPermissionHint());
         }
@@ -181,6 +192,31 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
             });
         } catch (e) { }
     }, []);
+
+    useEffect(() => {
+        const syncIdentity = () => setIdentity(resolveUserIdentity());
+        window.addEventListener(USER_IDENTITIES_UPDATED_EVENT, syncIdentity);
+        return () => window.removeEventListener(USER_IDENTITIES_UPDATED_EVENT, syncIdentity);
+    }, []);
+
+    const handleProfileAvatarChange = async (file?: File) => {
+        if (!file) return;
+        const currentIdentity = resolveUserIdentity();
+        if (!currentIdentity) {
+            window.alert("Create a user identity first, under Settings -> User Info");
+            return;
+        }
+        try {
+            const avatarUrl = await fileToUserAvatarDataUrl(file);
+            const identities = loadUserIdentities();
+            saveUserIdentities(identities.map(item => (
+                item.id === currentIdentity.id ? { ...item, avatarUrl } : item
+            )));
+        } catch (error) {
+            console.error("Failed to update the profile avatar", error);
+            window.alert("Failed to read the image -- try a different one");
+        }
+    };
 
     useEffect(() => {
         const syncWallet = () => {
@@ -228,6 +264,11 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
         saveChatAppSettings({ ...loadChatAppSettings(), enterToSendEnabled: enabled });
     };
 
+    const handleCallVibrationToggle = (enabled: boolean) => {
+        setCallVibrationEnabled(enabled);
+        saveChatAppSettings({ ...loadChatAppSettings(), callVibrationEnabled: enabled });
+    };
+
     if (showFollowUpEditor) {
         return <FollowUpSettingsEditor onBack={() => { window.dispatchEvent(new CustomEvent("chat-hide-tabbar", { detail: false })); setShowFollowUpEditor(false); }} />;
     }
@@ -248,6 +289,9 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
     }
     if (showWalletPanel) {
         return <WalletPanel onBack={() => { window.dispatchEvent(new CustomEvent("chat-hide-tabbar", { detail: false })); setShowWalletPanel(false); }} />;
+    }
+    if (showGlobalChatInfo) {
+        return <GlobalChatInfoSettings onBack={() => { window.dispatchEvent(new CustomEvent("chat-hide-tabbar", { detail: false })); setShowGlobalChatInfo(false); }} />;
     }
 
     return (
@@ -296,14 +340,34 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
                     <div className="flex items-center gap-5 px-6 pt-2 pb-4">
                         {/* Avatar */}
                         <div className="relative shrink-0">
-                            <div className="w-[84px] h-[84px] rounded-full overflow-hidden bg-[var(--c-card)] border-2 border-white/50 shadow-sm flex items-center justify-center relative"
-                                 style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.06)" }}>
+                            <button
+                                type="button"
+                                className="w-[84px] h-[84px] rounded-full overflow-hidden bg-[var(--c-card)] border-2 border-white/50 shadow-sm flex items-center justify-center relative active:scale-[0.97] transition-transform"
+                                style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.06)" }}
+                                onClick={() => profileAvatarInputRef.current?.click()}
+                                aria-label="Change your profile avatar"
+                                title="Tap to change your profile avatar"
+                            >
                                 {identity?.avatarUrl ? (
                                     <img src={identity.avatarUrl} alt="User Avatar" className="w-full h-full object-cover" />
                                 ) : (
                                     <User size={38} color="var(--c-icon)" />
                                 )}
-                            </div>
+                                <span className="absolute right-0 bottom-0 w-6 h-6 rounded-full bg-black/65 text-white flex items-center justify-center border-2 border-white/80">
+                                    <Camera size={12} />
+                                </span>
+                            </button>
+                            <input
+                                ref={profileAvatarInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={event => {
+                                    const file = event.target.files?.[0];
+                                    event.target.value = "";
+                                    void handleProfileAvatarChange(file);
+                                }}
+                            />
                         </div>
 
                         {/* Info & Stats */}
@@ -405,6 +469,15 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
                             <ChevronRight size={16} className="text-[var(--c-icon)] opacity-50" />
                         </button>
 
+                        <button className="flex items-center gap-3 py-3.5 w-full border-b border-[color-mix(in_srgb,var(--c-card-border)_20%,transparent)]" onClick={() => { window.dispatchEvent(new CustomEvent("chat-hide-tabbar", { detail: true })); setShowGlobalChatInfo(true); }}>
+                            <SlidersHorizontal size={18} className="text-[var(--c-icon)] opacity-70" strokeWidth={1.25}/>
+                            <div className="flex flex-col flex-1 text-left gap-0.5">
+                                <span className="ts-14 font-semibold text-[var(--c-text-title)]">Global Chat Info</span>
+                                <span className="ts-11 text-[var(--c-text)] opacity-70">Default direct-chat avatar, background, CSS, and recent-image count</span>
+                            </div>
+                            <ChevronRight size={16} className="text-[var(--c-icon)] opacity-50" />
+                        </button>
+
                         <div className="flex items-center gap-3 py-3 w-full border-b border-[color-mix(in_srgb,var(--c-card-border)_20%,transparent)]">
                             <Keyboard size={18} className="text-[var(--c-icon)] opacity-70" strokeWidth={1.25}/>
                             <div className="flex flex-col flex-1 text-left gap-0.5">
@@ -412,6 +485,15 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
                                 <span className="ts-11 text-[var(--c-text)] opacity-70">When on, Enter sends the message and Shift+Enter adds a new line</span>
                             </div>
                             <Toggle checked={enterToSendEnabled} onChange={handleEnterToSendToggle} />
+                        </div>
+
+                        <div className="flex items-center gap-3 py-3 w-full border-b border-[color-mix(in_srgb,var(--c-card-border)_20%,transparent)]">
+                            <Vibrate size={18} className="text-[var(--c-icon)] opacity-70" strokeWidth={1.25}/>
+                            <div className="flex flex-col flex-1 text-left gap-0.5">
+                                <span className="ts-14 font-semibold text-[var(--c-text-title)]">Voice/Video Call Vibration</span>
+                                <span className="ts-11 text-[var(--c-text)] opacity-70">Vibrate the device while an incoming call is waiting to be answered (not supported on iOS web)</span>
+                            </div>
+                            <Toggle checked={callVibrationEnabled} onChange={handleCallVibrationToggle} />
                         </div>
 
                         <div className="flex items-center gap-3 py-3 w-full">

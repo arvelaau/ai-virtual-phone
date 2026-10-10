@@ -16,10 +16,12 @@ import {
     saveChatSessions,
     getLatestCharacterStateValues,
     normalizeVisionImagePromptLimit,
+    resolveVisionImagePromptLimit,
     createResponseBatchId,
     createToolExecutionId,
 } from "./chat-storage";
 import { extractTextToolDirectiveText, stripTextToolDirectives } from "./text-tool-protocol";
+import { applyWithProtectedAvatarDecisionMarkers, findUserAvatarChangeIntent } from "./chat-avatar-intent";
 import type { ApiConfig, PresetConfig, Prompt, PromptOrderEntry, RegexConfig } from "./settings-types";
 import type { CustomAppPromptProfile } from "./custom-app-types";
 import {
@@ -461,6 +463,12 @@ function isRealUserHistoryMessage(message: ChatMessage): boolean {
     );
 }
 
+/** The history's tail is a blacklist/unblock event -- let the character react to it. */
+function isBlacklistEventHistoryMessage(message: ChatMessage): boolean {
+    return message.role === "system"
+        && (message.mediaData?.blacklistEvent === "block" || message.mediaData?.blacklistEvent === "unblock");
+}
+
 export function appendEmptyGenerateGuardMessage(
     messages: LLMMessage[],
     config: ApiConfig,
@@ -470,6 +478,12 @@ export function appendEmptyGenerateGuardMessage(
 
     const hasRealUserHistory = history.some(isRealUserHistoryMessage);
     if (!hasRealUserHistory) return;
+
+    // Blacklist-simulation exemption: when history ends on a block/unblock event, the
+    // character must react to it -- the continuation guard's own "never restate a system
+    // message" instruction would otherwise suppress that reaction entirely.
+    const lastHistoryMessage = history[history.length - 1];
+    if (lastHistoryMessage && isBlacklistEventHistoryMessage(lastHistoryMessage)) return;
 
     let lastAssistantIndex = -1;
     for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -830,7 +844,10 @@ export async function sendLLMStreamRequest(
                 appTags: options?.appTags,
                 followUpCount: options?.followUpCount,
             });
-            rawOutput = applyOutputRegex(rawOutput, regexes, { macroEngine, activeTags });
+            rawOutput = applyWithProtectedAvatarDecisionMarkers(
+                rawOutput,
+                protectedText => applyOutputRegex(protectedText, regexes, { macroEngine, activeTags }),
+            );
         }
         return { content: rawOutput, rawResponse, providerKind: request.providerKind };
     } catch (error: unknown) {
@@ -976,7 +993,10 @@ export async function sendLLMRequest(
             appTags: options?.appTags,
             followUpCount: options?.followUpCount,
         });
-        return applyOutputRegex(rawOutput, regexes, { macroEngine, activeTags });
+        return applyWithProtectedAvatarDecisionMarkers(
+            rawOutput,
+            protectedText => applyOutputRegex(protectedText, regexes, { macroEngine, activeTags }),
+        );
     } catch (error: unknown) {
         if (error instanceof DOMException && (error as DOMException).name === "AbortError") {
             throw new ChatEngineError("The AI reply timed out (500s). Please try again.");
@@ -1293,7 +1313,10 @@ export async function sendLLMToolRequest(
                 appTags: options?.appTags,
                 followUpCount: options?.followUpCount,
             });
-            rawOutput = applyOutputRegex(rawOutput, regexes, { macroEngine, activeTags });
+            rawOutput = applyWithProtectedAvatarDecisionMarkers(
+                rawOutput,
+                protectedText => applyOutputRegex(protectedText, regexes, { macroEngine, activeTags }),
+            );
         }
 
         return {
@@ -1758,6 +1781,10 @@ export async function buildChatPromptMessages(
     userIdentity: ReturnType<typeof resolveUserIdentity>;
     toolsEnabled: boolean;
 }> {
+    // The settings panel can update the session object while the chat room is still mounted.
+    // Re-read the stored state on every prompt build, so a blacklist toggle right before
+    // sending doesn't still see the stale session snapshot from when the room was opened.
+    session = loadChatSessions().find(item => item.id === session.id) ?? session;
     const chars = loadCharacters();
     const character = chars.find(c => c.id === session.contactId);
     if (!character) throw new ChatEngineError(`Character not found: ${session.contactId}`);
@@ -1833,7 +1860,7 @@ export async function buildChatPromptMessages(
     });
     const promptHistory = applyVisionImagePromptLimit(
         truncatedHistory.map(msg => ({ ...msg })),
-        session.visionImagePromptLimit,
+        resolveVisionImagePromptLimit(session),
     );
 
     if (config.enableImageRecognition) {
@@ -1916,6 +1943,39 @@ export async function buildChatPromptMessages(
         offlineSummaryTag: preset?.story_summary_tag?.trim() || "summary",
         nativeToolHistory: usesNativeActions,
     });
+    // Current status backstops a plain heads-up line; the specific block/unblock event has
+    // already been written into the character's private-chat short-term memory.
+    if (!session.isGroup && session.isBlacklisted) {
+        llmMessages.push({
+            role: "system",
+            content: `Current session status: ${character.name} has been blacklisted by ${userIdentity?.name || "the user"}; ${character.name} knows that messages they send will be rejected.`,
+        });
+    }
+    const avatarChangeIntent = !session.isGroup
+        ? findUserAvatarChangeIntent(historyForPrompt, session.id, character.id)
+        : null;
+    if (avatarChangeIntent) {
+        llmMessages.push({
+            role: "system",
+            content: [
+                "The user sent an image this turn and expressed or implied wanting you to use it as your own avatar.",
+                "Decide for yourself, based on your persona and relationship with them, whether to accept — do not accept mechanically.",
+                "If you accept, you must end your natural reply with the control marker, output exactly once: [AcceptAvatarRecommendation].",
+                "If you decline, you must end your reply with: [DeclineAvatarRecommendation].",
+                "The control marker is never shown to the user; do not explain it, and do not put it inside a code block.",
+            ].join("\n"),
+        });
+    }
+    if (!session.isGroup && !isOfflineMode && resolvedAppId === "chat") {
+        llmMessages.push({
+            role: "system",
+            content: [
+                `Private-chat remark info: the user's remark for you is "${session.alias?.trim() || character.name}"; your remark for the user is "${session.characterRemarkForUser?.trim() || "not set yet"}".`,
+                "If the user asks about your remark for them, answer naturally from the current info. If the user asks you to change your remark for them, decide a new one that fits your persona and the recent conversation, then output this control marker on its own new line at the end of your natural reply: [RemarkForUser:new remark].",
+                "The new remark must be 20 characters or fewer; the control marker is never shown to the user. Do not use this marker to change the user's own remark for you.",
+            ].join("\n"),
+        });
+    }
     if (promptProfile?.output === "plain_text") {
         llmMessages.push({
             role: "system",

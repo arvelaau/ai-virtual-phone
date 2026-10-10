@@ -1,6 +1,7 @@
 import { DEFAULT_THEME_PROFILE, normalizeThemeProfile, type ThemeAssetType, type ThemeProfile } from "@/lib/theme-types";
 import { kvGet, kvSet, kvRemove, registerKvMigration } from "./kv-db";
 import { openIndexedDbAtLeast } from "./idb-open";
+import { themePresetUsesAsset } from "./theme-preset-storage";
 
 export const THEME_PROFILE_STORAGE_KEY = "ai_phone_theme_profile_v1";
 registerKvMigration(THEME_PROFILE_STORAGE_KEY);
@@ -236,6 +237,12 @@ export async function writeThemeAssetRecords(records: ThemeAssetRecord[]): Promi
 }
 
 export async function deleteThemeAsset(id: string): Promise<void> {
+  // A local theme preset only stores a reference to the asset, not a copy. If any saved
+  // preset still points at this id, deleting it now would leave that preset's wallpaper,
+  // icon or font silently missing the next time the user switches back to it.
+  if (themePresetUsesAsset(id)) {
+    return;
+  }
   const database = await openThemeDb();
   if (!database) {
     return;

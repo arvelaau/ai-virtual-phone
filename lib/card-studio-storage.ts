@@ -28,8 +28,15 @@ export type StudioCard = {
     id: string;
     /** Becomes the directive's label (the taught "### <name>" heading) -- keep it short. */
     name: string;
-    /** e.g. "[BoardingPass]" -- what the AI must write to trigger this card. */
+    /** e.g. "[BoardingPass]" -- what the AI must write to trigger this card in Chat mode
+     *  (always), and in Story/Offline mode too when `keywords` is left blank. */
     syntax: string;
+    /** Comma-separated trigger words, e.g. "boarding pass, gate pass" -- when set, Story and
+     *  Offline mode teach and detect THIS instead of the bracket tag: the AI just mentions the
+     *  word naturally in its narration, and the narration is never edited to remove it (unlike
+     *  a tag, a keyword can't be cleanly cut out of a real sentence). Chat mode always uses
+     *  `syntax` regardless of this field -- bracket tags are already the norm there. */
+    keywords?: string;
     /** The instruction taught to the AI verbatim: when/why to use this card. */
     description: string;
     /** Raw HTML rendered inside the sandboxed card iframe. */
@@ -48,6 +55,7 @@ export type StudioCard = {
 export type StudioCardInput = {
     name: string;
     syntax?: string;
+    keywords?: string;
     description: string;
     html: string;
     tone?: string;
@@ -108,6 +116,7 @@ function normalizeCard(value: unknown): StudioCard | null {
         id: String(entry.id),
         name,
         syntax: cleanText(entry.syntax, 160) || defaultSyntaxFor(name),
+        keywords: cleanText(entry.keywords, 240) || undefined,
         description: cleanText(entry.description, 500),
         html,
         tone: cleanText(entry.tone, 40) || undefined,
@@ -158,6 +167,10 @@ export function saveStudioCard(input: StudioCardInput, id?: string): StudioCard 
             ...existing,
             name,
             syntax: cleanText(input.syntax, 160) || existing.syntax,
+            // Unlike syntax (which must always have SOME value), a blank keywords field is a
+            // real, meaningful state -- it means "go back to tag-only triggering" -- so it must
+            // NOT fall back to existing.keywords the way syntax falls back above.
+            keywords: cleanText(input.keywords, 240) || undefined,
             description: cleanText(input.description, 500),
             html,
             tone: cleanText(input.tone, 40) || undefined,
@@ -175,6 +188,7 @@ export function saveStudioCard(input: StudioCardInput, id?: string): StudioCard 
         id: createId(),
         name,
         syntax: cleanText(input.syntax, 160) || defaultSyntaxFor(name),
+        keywords: cleanText(input.keywords, 240) || undefined,
         description: cleanText(input.description, 500),
         html,
         tone: cleanText(input.tone, 40) || undefined,

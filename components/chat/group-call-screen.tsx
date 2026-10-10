@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ChatSession, ChatMessage, loadChatMessages, pushChatMessage, getLatestCharacterStateValues } from "@/lib/chat-storage";
+import { ChatSession, ChatMessage, loadChatMessages, pushChatMessage, getLatestCharacterStateValues, resolveChatUserAvatar } from "@/lib/chat-storage";
 import { buildCallCancelTag, buildCallHangupTag, buildCallInitiateGroupTag, buildCallRejectTag } from "@/lib/call-tag-patterns";
 import { generateGroupChatCompletion } from "@/lib/group-chat-engine";
 import { parseAIResponse } from "@/lib/rich-message-parser";
@@ -16,6 +16,8 @@ import type { Character } from "@/lib/character-types";
 import { useCallKeyboardOffsetStyle } from "./use-call-keyboard-offset";
 import { isAndroidBrowser } from "./voice-input-platform";
 import { CallVolumeControl } from "./call-volume-control";
+import { useCallScreenSounds } from "@/lib/chat-sound";
+import { startIncomingCallVibration } from "@/lib/call-vibration";
 
 // ── Types ───────────────────────────────────────────
 
@@ -82,6 +84,17 @@ export function GroupCallScreen({ type, session, characters, onEnd, initiator = 
     const isVideo = type === "video";
     const callTypeLabel = isVideo ? "视频通话" : "语音通话";
 
+    // Ringtone/waiting tone + hangup sound (that character's own sound beats the global "Chat
+    // Info -> Sounds" config).
+    useCallScreenSounds({ initiator, callState, session });
+    // Incoming call, waiting to be answered: loop the device vibration (toggle lives on the
+    // chat home page; a no-op on platforms without the Vibration API, e.g. iOS Safari).
+    useEffect(() => {
+        if (initiator !== "character" || callState !== "CONNECTING") return;
+        const stop = startIncomingCallVibration();
+        return stop;
+    }, [initiator, callState]);
+
     // Pause WeChat keep-alive while the call holds the mic/audio; restore on exit.
     useEffect(() => {
         suspendKeepAliveForCall();
@@ -146,7 +159,7 @@ export function GroupCallScreen({ type, session, characters, onEnd, initiator = 
         cancelFollowUp(session.id);
         const ui = resolveUserIdentity(undefined, "group_chat");
         userNameRef.current = ui?.name || "You";
-        userAvatarRef.current = ui?.avatarUrl || null;
+        userAvatarRef.current = resolveChatUserAvatar(session, ui?.avatarUrl) || null;
         messagesRef.current = loadChatMessages(session.id);
 
         const lastMsg = messagesRef.current[messagesRef.current.length - 1];

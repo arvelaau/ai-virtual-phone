@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, Fragment, memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChatSession, ChatMessage, CHAT_APP_SETTINGS_UPDATED_EVENT, CHAT_INITIAL_VISIBLE_MESSAGE_COUNT, CHAT_LOAD_MORE_MESSAGE_COUNT, CHAT_REQUEST_REPLY_EVENT, loadChatAppSettings, loadChatMessages, loadChatContacts, loadChatSessions, saveChatSessions, pushChatMessage, updateChatMessage, deleteChatMessage, deleteChatMessagesFrom, deleteChatMessagesByIds, retractChatMessage, editChatMessage, updateMessageMediaData, replaceResponseBatchWithParts, replaceGroupResponseRound, isReadingDiscussMessage, isSystemInstructionMessage, createResponseBatchId, createResponseRoundId, getLatestStateValues, getLatestCharacterStateValues, compareChatMessages } from "@/lib/chat-storage";
+import { ChatSession, ChatMessage, CHAT_APP_SETTINGS_UPDATED_EVENT, CHAT_INITIAL_VISIBLE_MESSAGE_COUNT, CHAT_LOAD_MORE_MESSAGE_COUNT, CHAT_REQUEST_REPLY_EVENT, loadChatAppSettings, loadChatMessages, loadChatContacts, loadChatSessions, saveChatSessions, pushChatMessage, updateChatMessage, deleteChatMessage, deleteChatMessagesFrom, deleteChatMessagesByIds, retractChatMessage, editChatMessage, updateMessageMediaData, replaceResponseBatchWithParts, replaceGroupResponseRound, isReadingDiscussMessage, isSystemInstructionMessage, createResponseBatchId, createResponseRoundId, getLatestStateValues, getLatestCharacterStateValues, compareChatMessages, resolveChatBackgroundImage, resolveChatUserAvatar } from "@/lib/chat-storage";
 import type { StateValue } from "@/lib/chat-storage";
 import {
     GROUP_CALL_TARGET,
@@ -38,6 +38,7 @@ import { sendBrowserNotification } from "@/lib/browser-notification";
 import { dispatchChatMessageNotice } from "@/lib/chat-notification-events";
 import { shouldSendChatInputOnEnter } from "@/lib/chat-input-keyboard";
 import { useChatBottomReserve } from "./use-chat-bottom-reserve";
+import { useKeyboardDismissAutoSend } from "./use-keyboard-dismiss-auto-send";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
@@ -91,6 +92,7 @@ import {
 } from "@/lib/generated-image-retry";
 import { scrollElementWithinContainer } from "@/lib/dom-scroll";
 import { ChatFallbackAvatar } from "./chat-fallback-avatar";
+import { StickerSearchSuggest } from "./sticker-search-suggest";
 import { ChatScreenEffectOverlay, type ActiveScreenEffect } from "./chat-screen-effect";
 import {
     formatChatDiceResultMessage,
@@ -678,6 +680,8 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
 }, ref) {
     const [inputText, setInputText] = useState("");
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+    // Sticker search suggestions: ESC/blur set this true to hide it, typing turns it back on.
+    const [suggestClosed, setSuggestClosed] = useState(false);
     // 围观群/被禁言：输入与富媒体入口全部锁定，只留线下切换和生成按钮
     const [muteNowTick, setMuteNowTick] = useState(() => Date.now());
     useEffect(() => {
@@ -726,6 +730,11 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
     };
 
     const panelOpen = showEmojiPanel || showStickerPanel || showPlusMenu;
+    const suggestCharacterIds = useMemo(
+        () => (isGroup ? (stickerCharacterIds || []) : characterId ? [characterId] : []),
+        [isGroup, stickerCharacterIds, characterId],
+    );
+    const suggestEnabled = !inputLocked && !panelOpen && !suggestClosed && inputText.trim().length > 0;
     const plusMenuItems = [
         { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>, label: "Photo Wall", onClick: () => onOpenRichModal("photo") },
         { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><line x1="7" y1="8" x2="17" y2="8" /><line x1="7" y1="12" x2="14" y2="12" /><line x1="7" y1="16" x2="11" y2="16" /></svg>, label: "Text Image", onClick: () => onOpenRichModal("text_photo") },
@@ -775,12 +784,25 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
                 </div>
             )}
 
+            {suggestEnabled && (
+                <StickerSearchSuggest
+                    query={inputText}
+                    characterIds={suggestCharacterIds}
+                    onSend={(name, url) => {
+                        onSendSticker(name, url);
+                        setInputText("");
+                        resetTextareaHeight();
+                    }}
+                    onClose={() => setSuggestClosed(true)}
+                />
+            )}
             <textarea
                 ref={textareaRef}
                 rows={1}
                 value={inputText}
                 onChange={e => {
                     setInputText(e.target.value);
+                    setSuggestClosed(false);
                     e.target.style.height = "auto";
                     e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
                 }}
@@ -1103,10 +1125,12 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     const [showStickerPanel, setShowStickerPanel] = useState(false);
     const chatTextInputRef = useRef<ChatTextInputHandle | null>(null);
     const offlineTextInputRef = useRef<OfflineTextInputHandle | null>(null);
+    const [chatAppSettingsRevision, setChatAppSettingsRevision] = useState(0);
 
     useEffect(() => {
         const syncEnterToSend = () => {
             setEnterToSendEnabled(loadChatAppSettings().enterToSendEnabled === true);
+            setChatAppSettingsRevision(v => v + 1);
         };
         window.addEventListener(CHAT_APP_SETTINGS_UPDATED_EVENT, syncEnterToSend);
         return () => window.removeEventListener(CHAT_APP_SETTINGS_UPDATED_EVENT, syncEnterToSend);
@@ -1157,8 +1181,21 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         return () => window.removeEventListener(CHAT_PLUGIN_TOAST_EVENT, handler);
     }, []);
 
+    const effectiveBackgroundImage = useMemo(
+        () => resolveChatBackgroundImage(session),
+        [session.backgroundImage, session.isGroup, chatAppSettingsRevision],
+    );
+    const effectiveUserAvatar = useMemo(
+        () => resolveChatUserAvatar(session, userIdentity?.avatarUrl),
+        [session.userAvatarOverride, session.isGroup, userIdentity?.avatarUrl, chatAppSettingsRevision],
+    );
+    // CSS priority: session > global chat info > homepage appearance CSS.
+    const globalChatCSS = useMemo(
+        () => loadChatAppSettings().globalChatCustomCSS || "",
+        [chatAppSettingsRevision],
+    );
     const [bgImageResolved, setBgImageResolved] = useState<string | null>(null);
-    const [bgLoading, setBgLoading] = useState(!!session.backgroundImage);
+    const [bgLoading, setBgLoading] = useState(!!effectiveBackgroundImage);
 
     const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -1217,30 +1254,31 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     }, [messages]);
 
     useEffect(() => {
-        if (!session.backgroundImage) {
+        if (!effectiveBackgroundImage) {
             setBgImageResolved(null);
             setBgLoading(false);
             return;
         }
-        if (session.backgroundImage.startsWith("data:") || session.backgroundImage.startsWith("http")) {
-            setBgImageResolved(session.backgroundImage);
+        if (effectiveBackgroundImage.startsWith("data:") || effectiveBackgroundImage.startsWith("http")) {
+            setBgImageResolved(effectiveBackgroundImage);
             setBgLoading(false);
             return;
         }
         // It's an ID — load from IndexedDB
         setBgLoading(true);
         import("@/lib/chat-asset-storage").then(({ getChatImageFromIndexedDB }) => {
-            getChatImageFromIndexedDB(session.backgroundImage!).then(dataUrl => {
+            getChatImageFromIndexedDB(effectiveBackgroundImage).then(dataUrl => {
                 if (dataUrl) {
                     setBgImageResolved(dataUrl);
                 }
                 setBgLoading(false);
             });
         });
-    }, [session.backgroundImage]);
+    }, [effectiveBackgroundImage]);
 
     // Message Actions state
     const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
+    const [expandedBlacklistEventIds, setExpandedBlacklistEventIds] = useState<Set<string>>(new Set());
     const [contextMenuAnchor, setContextMenuAnchor] = useState<ContextMenuAnchor | null>(null);
     const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
     const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
@@ -2748,7 +2786,30 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             ? getLatestStateValues(session.id)
             : getLatestCharacterStateValues(session.contactId);
 
-        const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue } = parseAIResponse(aiResponseText, previousState);
+        const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue, characterRemarkForUser } = parseAIResponse(aiResponseText, previousState);
+        if (!session.isGroup && characterRemarkForUser) {
+            const normalizedRemark = characterRemarkForUser.replace(/[\r\n]/g, " ").trim().slice(0, 20);
+            if (normalizedRemark) {
+                const updatedAt = new Date().toISOString();
+                const sessions = loadChatSessions();
+                const index = sessions.findIndex(item => item.id === session.id);
+                if (index >= 0) {
+                    sessions[index] = {
+                        ...sessions[index],
+                        characterRemarkForUser: normalizedRemark,
+                        characterRemarkForUserUpdatedAt: updatedAt,
+                    };
+                    saveChatSessions(sessions);
+                }
+                Object.assign(session, {
+                    characterRemarkForUser: normalizedRemark,
+                    characterRemarkForUserUpdatedAt: updatedAt,
+                });
+                window.dispatchEvent(new CustomEvent("chat-character-remark-updated", {
+                    detail: { sessionId: session.id, remark: normalizedRemark, updatedAt },
+                }));
+            }
+        }
         const parts = stripInvalidStickerParts(rawParts);
         throwIfGenerationStopped(options);
 
@@ -3730,6 +3791,19 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         if (shouldRunDeclineReply) await triggerReply();
     };
 
+    // Dismissing the keyboard (or closing the emoji/plus panel) and staying quiet for N
+    // seconds auto-triggers a reply, equivalent to tapping "Trigger Reply" on the user's
+    // behalf. All the decision logic lives inside the hook; with the config toggle off,
+    // behavior matches manual mode.
+    useKeyboardDismissAutoSend(wrapperRef, {
+        active: !offlineMode && !isMultiSelectMode,
+        pending: pendingGenerate,
+        generating: isGenerating,
+        panelOpen: showEmojiPanel || showStickerPanel || showPlusMenu,
+        sessionId: session.id,
+        onTrigger: () => { void triggerAIResponse(); },
+    });
+
     useEffect(() => {
         const handleCustomAppReplyRequest = (event: Event) => {
             const detail = (event as CustomEvent<{
@@ -4095,15 +4169,17 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     ? await generateGroupOfflineChatCompletion(session, history, { signal: offlineRun.controller.signal })
                     : await generateOfflineChatCompletion(session, history, { signal: offlineRun.controller.signal });
                 if (!isCurrentOfflineRun()) return;
-                // 1:1 only, matching story mode's [Message] -- group action dispatch already
-                // has a known gap (see CLAUDE.md), no need to compound it here. Actions must
-                // come off the raw text BEFORE using its content/summary, or a [Message] block
-                // sitting inside <content> would leak into the displayed offline turn.
-                const offlineDispatch = !session.isGroup
-                    ? extractOfflineDispatchableMessages(result.rawText, result.summaryTag)
-                    : null;
-                const parsedContent = offlineDispatch?.parsed.content ?? result.content;
-                const parsedSummary = offlineDispatch?.parsed.summary ?? result.summary;
+                // Extraction runs for both 1:1 and group -- a Studio/custom-app directive card
+                // has no group restriction (see offline-message-dispatch.ts). Actions must come
+                // off the raw text BEFORE using its content/summary, or a [Message] block or app
+                // card sitting inside <content> would leak into the displayed offline turn.
+                // [Message] *dispatch* stays 1:1-only below: group action dispatch already has a
+                // known gap (see CLAUDE.md), no need to compound it here -- and
+                // group_chat_offline_format is never taught [Message] in the first place, so
+                // `dispatchable` should already come back empty for a group turn.
+                const offlineDispatch = extractOfflineDispatchableMessages(result.rawText, result.summaryTag);
+                const parsedContent = offlineDispatch.parsed.content;
+                const parsedSummary = offlineDispatch.parsed.summary;
                 const assistantContent = parsedContent.trim() || result.rawText.trim();
                 if (!assistantContent) throw new Error("AI did not return offline content");
                 if (!parsedSummary.trim()) showChatToast(`Couldn't extract <${result.summaryTag}> summary`);
@@ -4115,13 +4191,13 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     summaryTag: result.summaryTag,
                     rawText: result.rawText,
                     reasoningText: result.reasoning,
-                    appId: offlineDispatch?.appCard?.appId,
-                    appName: offlineDispatch?.appCard?.appName,
-                    appCardLayout: offlineDispatch?.appCard?.appCardLayout,
+                    appId: offlineDispatch.appCard?.appId,
+                    appName: offlineDispatch.appCard?.appName,
+                    appCardLayout: offlineDispatch.appCard?.appCardLayout,
                     offlineSessionId: activeOfflineSessionId ?? undefined,
                 });
                 setOfflineTurns(prev => [...prev, saved]);
-                if (offlineDispatch?.dispatchable.length) {
+                if (!session.isGroup && offlineDispatch.dispatchable.length) {
                     dispatchOfflineMessages(offlineDispatch.dispatchable, {
                         characterId: session.contactId,
                         signal: offlineRun.controller.signal,
@@ -4229,11 +4305,11 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 ? await generateGroupOfflineChatCompletion(session, history, { signal: offlineRun.controller.signal })
                 : await generateOfflineChatCompletion(session, history, { signal: offlineRun.controller.signal });
             if (!isCurrentOfflineRun()) return;
-            const offlineDispatch = !session.isGroup
-                ? extractOfflineDispatchableMessages(result.rawText, result.summaryTag)
-                : null;
-            const parsedContent = offlineDispatch?.parsed.content ?? result.content;
-            const parsedSummary = offlineDispatch?.parsed.summary ?? result.summary;
+            // Extraction runs for both 1:1 and group; [Message] *dispatch* stays 1:1-only
+            // below. See the matching comment on the send path above.
+            const offlineDispatch = extractOfflineDispatchableMessages(result.rawText, result.summaryTag);
+            const parsedContent = offlineDispatch.parsed.content;
+            const parsedSummary = offlineDispatch.parsed.summary;
             const assistantContent = parsedContent.trim() || result.rawText.trim();
             if (!assistantContent) throw new Error("AI did not return offline content");
             if (!parsedSummary.trim()) showChatToast(`Couldn't extract <${result.summaryTag}> summary`);
@@ -4245,13 +4321,13 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 summaryTag: result.summaryTag,
                 rawText: result.rawText,
                 reasoningText: result.reasoning,
-                appId: offlineDispatch?.appCard?.appId,
-                appName: offlineDispatch?.appCard?.appName,
-                appCardLayout: offlineDispatch?.appCard?.appCardLayout,
+                appId: offlineDispatch.appCard?.appId,
+                appName: offlineDispatch.appCard?.appName,
+                appCardLayout: offlineDispatch.appCard?.appCardLayout,
                 offlineSessionId: targetTurn.offlineSessionId ?? activeOfflineSessionId ?? undefined,
             });
             setOfflineTurns([...baseTurns, saved]);
-            if (offlineDispatch?.dispatchable.length) {
+            if (!session.isGroup && offlineDispatch.dispatchable.length) {
                 dispatchOfflineMessages(offlineDispatch.dispatchable, {
                     characterId: session.contactId,
                     signal: offlineRun.controller.signal,
@@ -5295,6 +5371,10 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
 
     return (
         <div ref={wrapperRef} className={`session-${session.id} chat-room-wrapper page-shell inset-0 flex flex-col z-20`} style={chatRoomBackgroundStyle} {...(bgLoading ? { "data-loading": "" } : {})} {...(bgImageResolved ? { "data-has-bg-image": "" } : {})} {...(showSettings ? { "data-settings-open": "" } : {})}>
+            {/* CSS priority: session > global chat info > homepage appearance CSS. */}
+            {globalChatCSS && (
+                <style dangerouslySetInnerHTML={{ __html: scopeSessionCSS(globalChatCSS, `.session-${session.id}`) }} />
+            )}
             {/* Custom CSS Injection for this session — scoped to prevent leaking */}
             {liveCSS && (
                 <style dangerouslySetInnerHTML={{ __html: scopeSessionCSS(liveCSS, `.session-${session.id}`) }} />
@@ -5673,6 +5753,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
 
                     const renderMsg = msg;
                     const isSystemInstruction = isSystemInstructionMessage(renderMsg);
+                    const blacklistEvent = renderMsg.mediaData?.blacklistEvent;
+                    const isBlacklistEventExpanded = expandedBlacklistEventIds.has(msg.id);
                     const bubbleDisplayContent = getMessageDisplayContent(renderMsg);
                     let prevVisibleMsg: RenderChatMessage | null = null;
                     for (let prevIdx = idx - 1; prevIdx >= 0; prevIdx -= 1) {
@@ -5754,7 +5836,18 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                 {uiRole(msg) === "system" ? (
                                     <div
                                         onPointerDown={(e) => { e.stopPropagation(); handleMessagePointerDown(e, msg.id); }}
-                                        onPointerUp={(e) => handleMessagePointerUp(e)}
+                                        onPointerUp={(e) => {
+                                            const wasLongPress = longPressTriggeredRef.current;
+                                            handleMessagePointerUp(e);
+                                            if (blacklistEvent && !wasLongPress) {
+                                                setExpandedBlacklistEventIds(prev => {
+                                                    const next = new Set(prev);
+                                                    if (next.has(msg.id)) next.delete(msg.id);
+                                                    else next.add(msg.id);
+                                                    return next;
+                                                });
+                                            }
+                                        }}
                                         onPointerCancel={handleMessagePointerCancel}
                                         onPointerLeave={handleMessagePointerCancel}
                                         onPointerMove={(e) => {
@@ -5767,8 +5860,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                         onContextMenu={(e) => { e.preventDefault(); openMessageContextMenu(msg.id, { x: e.clientX, y: e.clientY }); }}
                                         className={isSystemInstruction
                                             ? "chat-system-instruction-card relative cursor-pointer"
-                                            : `chat-sys-msg break-all max-w-[90%] relative cursor-pointer${
-                                                // 骰子旁白：等骰子落定再淡入，避免剧透点数
+                                            : `chat-sys-msg break-all max-w-[90%] relative cursor-pointer${blacklistEvent ? " chat-blacklist-event" : ""}${
+                                                // Dice aside: wait for the roll to settle before fading in, so the number isn't spoiled early
                                                 msg.content.startsWith("🎲 掷出了") && Date.now() - new Date(msg.createdAt).getTime() < 6000
                                                     ? " dice-aside-reveal"
                                                     : ""
@@ -5783,6 +5876,22 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                                 onApprove={handleApproveMemoryWrite}
                                                 onIgnore={handleIgnoreMemoryWrite}
                                             />
+                                        ) : blacklistEvent ? (
+                                            <div className="chat-blacklist-event-content">
+                                                <span className="chat-blacklist-event-summary">
+                                                    {blacklistEvent === "block"
+                                                        ? `You blacklisted ${msg.mediaData?.blacklistCharacterName || character?.name || "them"}`
+                                                        : `You unblocked ${msg.mediaData?.blacklistCharacterName || character?.name || "them"}`}
+                                                </span>
+                                                {isBlacklistEventExpanded && (
+                                                    <span className="chat-blacklist-event-detail">
+                                                        <span>Time: {formatChatUiTime(msg.createdAt)}</span>
+                                                        <span>{blacklistEvent === "block"
+                                                            ? `${msg.mediaData?.blacklistUserName || userIdentity?.name || "The user"} blacklisted ${msg.mediaData?.blacklistCharacterName || character?.name || "them"} in this direct chat; messages ${msg.mediaData?.blacklistCharacterName || character?.name || "they"} send will be rejected.`
+                                                            : `${msg.mediaData?.blacklistUserName || userIdentity?.name || "The user"} unblocked ${msg.mediaData?.blacklistCharacterName || character?.name || "them"} in this direct chat; messages ${msg.mediaData?.blacklistCharacterName || character?.name || "they"} send will be received normally again.`}</span>
+                                                    </span>
+                                                )}
+                                            </div>
                                         ) : (
                                             <>
                                                 {msg.mediaType === "poke"
@@ -5942,10 +6051,25 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                                 </svg>
                                             </button>
                                         )}
+                                        {/* Blacklist simulation: WeChat-style red exclamation mark next to a character message the user rejected */}
+                                        {msg.role === "assistant" && !isSilentThought && !isEmptyBubble && msg.status === "rejected" && (
+                                            <span
+                                                className="chat-msg-rejected-mark"
+                                                role="img"
+                                                aria-label="Message sent, but rejected by the other party"
+                                                title="Message sent, but rejected by the other party"
+                                            >
+                                                <svg viewBox="0 0 20 20" width="18" height="18" style={{ display: "block" }}>
+                                                    <circle cx="10" cy="10" r="9" fill="#fa5151" />
+                                                    <rect x="9" y="4.6" width="2" height="7.4" rx="1" fill="#fff" />
+                                                    <circle cx="10" cy="14.9" r="1.15" fill="#fff" />
+                                                </svg>
+                                            </span>
+                                        )}
                                         {msg.role === "user" && !isEmptyBubble && (
                                             <div className="chat-msg-avatar w-[40px] h-[40px] rounded-[20px] bg-[var(--c-page-body-bg)] shrink-0 flex items-center justify-center overflow-hidden">
-                                                {userIdentity?.avatarUrl ? (
-                                                    <img src={userIdentity.avatarUrl} alt="Me" className="w-full h-full object-cover rounded-[20px]" />
+                                                {effectiveUserAvatar ? (
+                                                    <img src={effectiveUserAvatar} alt="Me" className="w-full h-full object-cover rounded-[20px]" />
                                                 ) : (
                                                     <User size={20} color="var(--c-text)" />
                                                 )}

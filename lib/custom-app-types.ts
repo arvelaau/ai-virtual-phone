@@ -97,6 +97,17 @@ export type CustomAppChatDirective = {
   tags?: string[];
   actions?: CustomAppChatDirectiveAction[];
   scope?: CustomAppCardScopeMode[];
+  /** Comma-separated trigger words (same shape as WorldBookEntry.key), used ONLY on the
+   *  narrative surfaces (story/offline) in place of the bracket `syntax` tag -- unset means
+   *  those surfaces fall back to teaching/matching the tag instead, same as before this field
+   *  existed. Chat mode always uses `syntax`, regardless of whether this is set: chat's
+   *  bracket-tag convention is already natural there (every rich-media action already works
+   *  this way), so there's nothing this would improve. See custom-app-chat-directives.ts and
+   *  rich-message-parser.ts's findCustomAppKeywordCandidate for why a bracket tag can't be
+   *  reused for this: a keyword lives inside a real, grammatical sentence, so unlike a tag it
+   *  can't be cleanly cut out of the narration once matched -- the narration is left untouched
+   *  and the card is simply rendered alongside it. */
+  keywords?: string;
 };
 
 export type CustomAppChatPlusAction = {

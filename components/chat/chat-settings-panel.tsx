@@ -15,6 +15,9 @@ import {
     pushChatMessage,
     removeChatContact,
     normalizeVisionImagePromptLimit,
+    resolveVisionImagePromptLimit,
+    resolveChatUserAvatar,
+    loadChatAppSettings,
     MAX_VISION_IMAGE_PROMPT_LIMIT,
     type ChatMessage,
 } from "@/lib/chat-storage";
@@ -36,7 +39,9 @@ import { clearChatOfflineTurns } from "@/lib/chat-offline-storage";
 import { triggerDeleteFriendReaction } from "@/lib/friend-request-engine";
 import { loadCharacters } from "@/lib/character-storage";
 import { resolveUserIdentity } from "@/lib/settings-storage";
-import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, MessageSquare, Search, AlertCircle, Code, Trash2, Smile, Sparkles, Cloud, Loader2, type LucideIcon } from "lucide-react";
+import { downloadFile } from "@/lib/download-utils";
+import { createChatRecordExport, importChatRecordFile } from "@/lib/chat-record-transfer";
+import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, MessageSquare, Search, AlertCircle, Code, Trash2, Smile, Sparkles, Cloud, Loader2, Ban, Download, Upload, type LucideIcon } from "lucide-react";
 import {
     isProactiveCloudSyncEnabled,
     setProactiveCloudSyncEnabled,
@@ -47,6 +52,7 @@ import CSSSchemeBar from "@/components/ui/css-scheme-picker";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { CHAT_SESSION_CSS_EXAMPLE } from "@/lib/css-examples";
 import { Toggle, Input } from "@/components/ui/form";
+import { KeyboardAutoSendDebounceItem } from "@/components/chat/keyboard-auto-send-debounce-item";
 import { PageShell } from "@/components/ui/page-shell";
 import {
     DEFAULT_CHAT_BILINGUAL_PROMPT,
@@ -55,6 +61,7 @@ import {
     DEFAULT_OFFLINE_CHAT_BILINGUAL_PROMPT,
 } from "@/lib/bilingual-prompt-defaults";
 import { ChatFallbackAvatar } from "./chat-fallback-avatar";
+import { SessionChatSoundsSection } from "./session-chat-sounds";
 import { MessageBubble, isStandaloneHtmlPreviewContent } from "./message-bubble";
 import { ScreenEffectSettingsModal } from "./screen-effect-settings-modal";
 
@@ -172,7 +179,11 @@ export function ChatSettingsPanel({
     const [videoBackground, setVideoBackground] = useState<string>(session.videoBackground || "");
     const [voiceBackground, setVoiceBackground] = useState<string>(session.voiceBackground || "");
     const [isPinned, setIsPinned] = useState(session.isPinned || false);
-    const [visionImagePromptLimit, setVisionImagePromptLimit] = useState(() => normalizeVisionImagePromptLimit(session.visionImagePromptLimit));
+    // Blacklist simulation: while blacklisted, messages the character sends are rejected by
+    // the user (a WeChat-style red exclamation mark).
+    const [isBlacklisted, setIsBlacklisted] = useState(session.isBlacklisted || false);
+    const [visionImagePromptLimit, setVisionImagePromptLimit] = useState(() => resolveVisionImagePromptLimit(session));
+    const [visionLimitUsesGlobal, setVisionLimitUsesGlobal] = useState(session.visionImagePromptLimitUsesGlobal !== false);
     const [bilingualTranslationEnabled, setBilingualTranslationEnabled] = useState(session.bilingualTranslationEnabled !== false);
     const [collapseBilingualTranslation, setCollapseBilingualTranslation] = useState(session.collapseBilingualTranslation !== false);
     const [discardInvalidStickers, setDiscardInvalidStickers] = useState(session.discardInvalidStickers === true);
@@ -207,6 +218,9 @@ export function ChatSettingsPanel({
     const [searchResults, setSearchResults] = useState<ChatMessage[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const searchRunRef = useRef(0);
+    const chatRecordImportRef = useRef<HTMLInputElement | null>(null);
+    const [chatTransferBusy, setChatTransferBusy] = useState(false);
+    const [chatTransferStatus, setChatTransferStatus] = useState<{ success: boolean; message: string } | null>(null);
 
     const loadSearchHistoryWindow = (count = CHAT_INITIAL_VISIBLE_MESSAGE_COUNT) => {
         const visibleMessages = loadChatMessages(session.id).filter(isSearchVisibleMessage);
@@ -299,11 +313,46 @@ export function ChatSettingsPanel({
         ? (groupName || session.groupName || "Group Chat")
         : (alias || character?.name || `User_${session.contactId.slice(-4)}`);
 
+    const exportChatRecords = async () => {
+        if (chatTransferBusy) return;
+        setChatTransferBusy(true);
+        setChatTransferStatus(null);
+        try {
+            const blob = await createChatRecordExport(session, characterName);
+            const safeName = characterName.replace(/[\\/:*?"<>|]+/g, "-").slice(0, 40) || "Chat";
+            await downloadFile(blob, `Float-${safeName}-chat-records.json`);
+            setChatTransferStatus({ success: true, message: `Exported ${loadChatMessages(session.id).length} messages.` });
+        } catch (error) {
+            setChatTransferStatus({ success: false, message: error instanceof Error ? error.message : "Export failed" });
+        } finally {
+            setChatTransferBusy(false);
+        }
+    };
+
+    const importChatRecords = async (file: File) => {
+        if (chatTransferBusy) return;
+        setChatTransferBusy(true);
+        setChatTransferStatus(null);
+        try {
+            const result = await importChatRecordFile(file, session);
+            setChatTransferStatus({
+                success: true,
+                message: `Imported ${result.inserted} messages, restored ${result.mediaRestored} media file(s)${result.skipped ? `, skipped ${result.skipped} duplicate or invalid record(s)` : ""}.`,
+            });
+        } catch (error) {
+            setChatTransferStatus({ success: false, message: error instanceof Error ? error.message : "Import failed" });
+        } finally {
+            setChatTransferBusy(false);
+            if (chatRecordImportRef.current) chatRecordImportRef.current.value = "";
+        }
+    };
+
     // Group members
     const groupChars = session.isGroup
         ? (session.participantIds || []).map(id => characters.find(c => c.id === id)).filter(Boolean)
         : [];
     const userIdentity = resolveUserIdentity(undefined, session.isGroup ? "group_chat" : "chat");
+    const effectiveUserAvatar = resolveChatUserAvatar(session, userIdentity?.avatarUrl);
 
     // ── Group member management ──
     const [, setRosterVersion] = useState(0); // bump to re-render after admin actions
@@ -410,6 +459,34 @@ export function ChatSettingsPanel({
         }
     };
 
+    // Blacklist simulation: write an explicit direct-chat system event straight into this
+    // character's short-term memory. This only stores a local message -- it never makes an
+    // extra AI request on its own.
+    const handleToggleBlacklist = (blocked: boolean) => {
+        setIsBlacklisted(blocked);
+        updateSession({ isBlacklisted: blocked });
+
+        const charLabel = character?.name || characterName;
+        const userLabel = userIdentity?.name || "the user";
+        const occurredAt = new Date();
+        const padTimePart = (value: number) => String(value).padStart(2, "0");
+        const occurredAtText = `${occurredAt.getFullYear()}-${padTimePart(occurredAt.getMonth() + 1)}-${padTimePart(occurredAt.getDate())} ${padTimePart(occurredAt.getHours())}:${padTimePart(occurredAt.getMinutes())}:${padTimePart(occurredAt.getSeconds())}`;
+        const eventContent = blocked
+            ? `Direct chat: time: ${occurredAtText}; ${userLabel} blacklisted ${charLabel} in this direct chat -- messages ${charLabel} sends will be rejected.`
+            : `Direct chat: time: ${occurredAtText}; ${userLabel} unblocked ${charLabel} in this direct chat -- messages ${charLabel} sends will be received normally again.`;
+
+        pushChatMessage({
+            sessionId: session.id,
+            role: "system",
+            content: eventContent,
+            mediaData: {
+                blacklistEvent: blocked ? "block" : "unblock",
+                blacklistCharacterName: charLabel,
+                blacklistUserName: userLabel,
+            },
+        });
+    };
+
     const handleClearHistory = () => {
         clearChatSessionMessages(session.id);
         setShowConfirmClear(false);
@@ -431,7 +508,8 @@ export function ChatSettingsPanel({
     const updateVisionImagePromptLimit = (value: unknown) => {
         const next = normalizeVisionImagePromptLimit(value);
         setVisionImagePromptLimit(next);
-        updateSession({ visionImagePromptLimit: next });
+        setVisionLimitUsesGlobal(false);
+        updateSession({ visionImagePromptLimit: next, visionImagePromptLimitUsesGlobal: false });
     };
 
     const openBilingualPromptEditor = () => {
@@ -581,8 +659,8 @@ export function ChatSettingsPanel({
                         </div>
                         {resultRole === "user" && (
                             <div className="chat-msg-avatar w-[40px] h-[40px] rounded-[20px] bg-[var(--c-page-body-bg)] shrink-0 flex items-center justify-center overflow-hidden">
-                                {userIdentity?.avatarUrl ? (
-                                    <img src={userIdentity.avatarUrl} alt="Me" className="w-full h-full object-cover rounded-[20px]" />
+                                {effectiveUserAvatar ? (
+                                    <img src={effectiveUserAvatar} alt="Me" className="w-full h-full object-cover rounded-[20px]" />
                                 ) : (
                                     <ChatFallbackAvatar />
                                 )}
@@ -615,6 +693,38 @@ export function ChatSettingsPanel({
                         <div className="menu-label-group"><span className="menu-label">Search Chat History</span></div>
                         <div className="menu-right"><ChevronRight size={16} /></div>
                     </button>
+                </div>
+
+                <div className="menu-group">
+                    <button className="menu-item" onClick={exportChatRecords} disabled={chatTransferBusy}>
+                        <ChatInfoIcon icon={Download} color={BINDING_ACCENTS.preset} />
+                        <div className="menu-label-group">
+                            <span className="menu-label">Export Chat Records</span>
+                            <span className="menu-desc">Export this session's messages and local media</span>
+                        </div>
+                    </button>
+                    <button className="menu-item" onClick={() => chatRecordImportRef.current?.click()} disabled={chatTransferBusy}>
+                        <ChatInfoIcon icon={Upload} color={BINDING_ACCENTS.worldBook} />
+                        <div className="menu-label-group">
+                            <span className="menu-label">Import Chat Records</span>
+                            <span className="menu-desc">Merges into this session; duplicate messages are skipped automatically</span>
+                        </div>
+                    </button>
+                    <input
+                        ref={chatRecordImportRef}
+                        type="file"
+                        accept="application/json,.json"
+                        className="hidden"
+                        onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            if (file) void importChatRecords(file);
+                        }}
+                    />
+                    {chatTransferStatus && (
+                        <div className={`px-4 py-3 text-sm ${chatTransferStatus.success ? "text-emerald-700" : "text-red-600"}`}>
+                            {chatTransferStatus.message}
+                        </div>
+                    )}
                 </div>
 
                 {/* Group member management */}
@@ -702,11 +812,24 @@ export function ChatSettingsPanel({
                             <Toggle checked={isPinned} onChange={c => { setIsPinned(c); updateSession({ isPinned: c }); }} />
                         </div>
                     </div>
+                    {/* Blacklist simulation: direct chat only */}
+                    {!session.isGroup && (
+                        <div className="menu-item">
+                            <ChatInfoIcon icon={Ban} color="#e5484d" />
+                            <div className="menu-label-group">
+                                <span className="menu-label">Blacklist Them</span>
+                                <span className="menu-desc">Once blacklisted, they'll know and react to it; messages they send will be rejected (a red exclamation mark shows next to their messages) -- your own messages aren't affected</span>
+                            </div>
+                            <div className="menu-right">
+                                <Toggle checked={isBlacklisted} onChange={handleToggleBlacklist} />
+                            </div>
+                        </div>
+                    )}
                     <div className="menu-item">
                         <ChatInfoIcon icon={ImageIcon} color={BINDING_ACCENTS.api} />
                         <div className="menu-label-group">
                             <span className="menu-label">Recent Images Sent to Model</span>
-                            <span className="menu-desc">Number of recent images sent to the model's vision context, 0 means no images are sent</span>
+                            <span className="menu-desc">Number of recent images sent to the model's vision context; currently {visionLimitUsesGlobal ? "following the global setting" : "overridden for this chat"}</span>
                         </div>
                         <div className="menu-right gap-2">
                             <button
@@ -733,6 +856,14 @@ export function ChatSettingsPanel({
                             >
                                 +
                             </button>
+                            {!visionLimitUsesGlobal && (
+                                <button type="button" className="ui-btn ui-btn-ghost h-8 px-2" onClick={() => {
+                                    const next = normalizeVisionImagePromptLimit(loadChatAppSettings().globalVisionImagePromptLimit);
+                                    setVisionImagePromptLimit(next);
+                                    setVisionLimitUsesGlobal(true);
+                                    updateSession({ visionImagePromptLimitUsesGlobal: true });
+                                }}>Global</button>
+                            )}
                         </div>
                     </div>
                     <>
@@ -855,6 +986,14 @@ export function ChatSettingsPanel({
                     </>
                 </div>
 
+                {/* Character-specific notification sounds: set on this direct chat, take priority over Global Chat Info's sounds */}
+                {!session.isGroup && (
+                    <>
+                        <div className="px-4 pt-3 pb-2 ts-12 font-medium text-[var(--c-text-title)] opacity-80">Character-Specific Sounds</div>
+                        <SessionChatSoundsSection session={session} accent={BINDING_ACCENTS.voice} onUpdate={updateSession} />
+                    </>
+                )}
+
                 {/* Backgrounds & UI */}
                 <div className="menu-group">
                     <label className="menu-item">
@@ -925,6 +1064,7 @@ export function ChatSettingsPanel({
 
                 {/* Advanced */}
                 <div className="menu-group">
+                    <KeyboardAutoSendDebounceItem sessionId={session.id} />
                     <button className="menu-item" onClick={() => setEditingCSS(true)}>
                         <ChatInfoIcon icon={Code} color={BINDING_ACCENTS.embedding} />
                         <div className="menu-label-group"><span className="menu-label">Custom CSS Style</span></div>

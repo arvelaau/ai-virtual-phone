@@ -7,6 +7,7 @@ import { kvGet, kvSet, registerKvMigration } from "./kv-db";
 export const ICON_LAYOUT_STORAGE_KEY = "ai_phone_icon_layout_v2";
 export const ICON_LAYOUT_STORAGE_KEY_V1 = "ai_phone_icon_layout_v1";
 export const DOCK_LAYOUT_STORAGE_KEY = "ai_phone_dock_layout_v1";
+export const DESKTOP_FOLDERS_STORAGE_KEY = "ai_phone_desktop_folders_v1";
 
 /** Max icons the dock can hold. Dragging a page icon in is rejected once full. */
 export const DOCK_MAX = 4;
@@ -14,6 +15,7 @@ export const DOCK_MAX = 4;
 registerKvMigration(ICON_LAYOUT_STORAGE_KEY);
 registerKvMigration(ICON_LAYOUT_STORAGE_KEY_V1);
 registerKvMigration(DOCK_LAYOUT_STORAGE_KEY);
+registerKvMigration(DESKTOP_FOLDERS_STORAGE_KEY);
 
 export type DesktopPageKey = `page${number}`;
 
@@ -115,7 +117,7 @@ export function createDefaultDesktopIconLayout(_widgets: WidgetInstance[] = []):
   } as DesktopIconLayout;
 }
 
-function normalizePage(raw: unknown): IconPosition[] {
+function normalizePage(raw: unknown, folderIds?: Set<string>): IconPosition[] {
   if (!Array.isArray(raw)) {
     return [];
   }
@@ -135,10 +137,13 @@ function normalizePage(raw: unknown): IconPosition[] {
     if (typeof id !== "string" || typeof row !== "number" || typeof col !== "number") {
       continue;
     }
-    const migratedId = migrateLegacyDesktopIconId(id, customIconIds);
+    // A folder tile: allowed explicitly by a caller that supplies the folder table (theme
+    // preset export/import); otherwise dropped as before -- a folder tile with no member
+    // table is an empty shell.
+    const migratedId = folderIds?.has(id) ? (id as DesktopIconId) : migrateLegacyDesktopIconId(id, customIconIds);
     if (
       !migratedId
-      || (!knownIcons.has(migratedId) && !customIconIds.has(migratedId))
+      || (!knownIcons.has(migratedId) && !customIconIds.has(migratedId) && !folderIds?.has(migratedId))
       || row < 1
       || row > GRID_ROWS
       || col < 1
@@ -161,7 +166,7 @@ function normalizePage(raw: unknown): IconPosition[] {
   return result;
 }
 
-export function normalizeDesktopIconLayout(raw: unknown): DesktopIconLayout {
+export function normalizeDesktopIconLayout(raw: unknown, folderIds?: Set<string>): DesktopIconLayout {
   if (!raw || typeof raw !== "object") {
     return createDefaultDesktopIconLayout();
   }
@@ -169,15 +174,115 @@ export function normalizeDesktopIconLayout(raw: unknown): DesktopIconLayout {
   const candidate = raw as Record<string, unknown>;
   const normalized = {} as DesktopIconLayout;
   for (const pageKey of getDesktopPageKeys(candidate)) {
-    normalized[pageKey] = normalizePage(candidate[pageKey]);
+    normalized[pageKey] = normalizePage(candidate[pageKey], folderIds);
   }
   return normalized;
 }
 
-export function writeDesktopIconLayout(layout: DesktopIconLayout): DesktopIconLayout {
-  const normalized = normalizeDesktopIconLayout(layout);
+export function writeDesktopIconLayout(layout: DesktopIconLayout, folderIds?: Set<string>): DesktopIconLayout {
+  const normalized = normalizeDesktopIconLayout(layout, folderIds);
   kvSet(ICON_LAYOUT_STORAGE_KEY, JSON.stringify(normalized));
   return normalized;
+}
+
+/**
+ * Places any installed custom-app icons that are missing from the layout/dock back into an
+ * empty desktop slot. "Reset to default" and theme-package import wholesale replace the icon
+ * layout, so without this an installed custom app would vanish from the desktop entirely (the
+ * app itself is still installed, it just has no icon left to tap).
+ */
+export function appendMissingCustomAppIcons(
+  layout: DesktopIconLayout,
+  widgets: WidgetInstance[] = [],
+  dock: DesktopIconId[] = []
+): DesktopIconLayout {
+  const present = new Set<string>(dock);
+  for (const icon of getDesktopIconLayoutItems(layout)) {
+    present.add(icon.id);
+  }
+  const missing = Array.from(getInstalledCustomIconIds()).filter((id) => !present.has(id)) as DesktopIconId[];
+  if (missing.length === 0) {
+    return layout;
+  }
+
+  const next = { ...layout } as DesktopIconLayout;
+  let index = 0;
+  // Overflow to the next page once one is full (including widget occupancy); the page-count
+  // ceiling is purely defensive and is never actually reached in practice.
+  for (let page = 1; index < missing.length && page <= 50; page++) {
+    const pageKey = getDesktopPageKey(page);
+    const icons = next[pageKey] ?? [];
+    const occupied = buildWidgetOccupancy(widgets, page);
+    for (const icon of icons) {
+      if (icon.row >= 1 && icon.row <= GRID_ROWS && icon.col >= 1 && icon.col <= GRID_COLS) {
+        occupied[icon.row - 1][icon.col - 1] = true;
+      }
+    }
+    const placed: IconPosition[] = [];
+    for (let row = 0; row < GRID_ROWS && index < missing.length; row++) {
+      for (let col = 0; col < GRID_COLS && index < missing.length; col++) {
+        if (occupied[row][col]) {
+          continue;
+        }
+        placed.push({ id: missing[index], row: row + 1, col: col + 1 });
+        index++;
+      }
+    }
+    if (placed.length > 0) {
+      next[pageKey] = [...icons, ...placed];
+    }
+  }
+  return next;
+}
+
+// ── Desktop folders ───────────────────────────────────
+// The folder content table: folder:xxx -> { name, icons }. The tile itself lives in the
+// paged icon layout like any ordinary icon; this table only tracks what's inside it and
+// what it's called.
+
+export type DesktopFolder = { name: string; icons: DesktopIconId[] };
+export type DesktopFolderMap = Record<string, DesktopFolder>;
+
+/** Validates and dedupes the folder table: keeps only known/installed member icons (folders cannot nest). */
+export function normalizeDesktopFolders(raw: unknown): DesktopFolderMap {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const knownIcons = new Set<string>(Object.keys(ICONS));
+  const customIconIds = getInstalledCustomIconIds();
+  const seen = new Set<string>();
+  const result: DesktopFolderMap = {};
+  for (const [folderId, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!folderId.startsWith("folder:") || !value || typeof value !== "object") continue;
+    const { name, icons } = value as { name?: unknown; icons?: unknown };
+    if (!Array.isArray(icons)) continue;
+    const members: DesktopIconId[] = [];
+    for (const item of icons) {
+      if (typeof item !== "string" || item.startsWith("folder:")) continue;
+      const migratedId = migrateLegacyDesktopIconId(item, customIconIds);
+      if (!migratedId || (!knownIcons.has(migratedId) && !customIconIds.has(migratedId))) continue;
+      if (seen.has(migratedId) || members.includes(migratedId)) continue;
+      seen.add(migratedId);
+      members.push(migratedId);
+    }
+    result[folderId] = {
+      name: typeof name === "string" && name.trim() ? name.trim().slice(0, 24) : "Folder",
+      icons: members,
+    };
+  }
+  return result;
+}
+
+export function loadDesktopFolders(): DesktopFolderMap {
+  const raw = kvGet(DESKTOP_FOLDERS_STORAGE_KEY);
+  if (raw == null) return {};
+  try {
+    return normalizeDesktopFolders(JSON.parse(raw));
+  } catch {
+    return {};
+  }
+}
+
+export function writeDesktopFolders(folders: DesktopFolderMap): void {
+  kvSet(DESKTOP_FOLDERS_STORAGE_KEY, JSON.stringify(folders));
 }
 
 // ── Dock layout ───────────────────────────────────────

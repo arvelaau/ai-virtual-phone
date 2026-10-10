@@ -4,14 +4,15 @@ import {
     initChatDb,
     dbPutMessage, dbDeleteMessage, dbDeleteMessagesBySession, dbDeleteMessagesByIds,
     dbPutMessages, dbPutSessions, dbPutContacts, dbDeleteSession,
-    dbReplaceContacts, dbReplaceSessions,
+    dbReplaceContacts, dbReplaceSessions, dbBulkPutMessages,
 } from "./chat-db";
 import { resolveUserIdentity } from "./settings-storage";
-import { loadCharacters } from "./character-storage";
+import { loadCharacters, saveCharacters } from "./character-storage";
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
 import { emitChatPluginEvent, runChatPluginTransformSync } from "./chat-plugin-hooks";
 import { parseAIResponse } from "./rich-message-parser";
 import { extractTextToolDirectiveText } from "./text-tool-protocol";
+import { AVATAR_ACCEPT_RE, AVATAR_DECLINE_RE, findUserAvatarChangeIntent, inferAvatarDecisionFromReply } from "./chat-avatar-intent";
 import {
     GROUP_CALL_TARGET,
     matchCallCancel,
@@ -57,6 +58,10 @@ export type ChatSession = {
     isBlacklisted?: boolean;
     customCSS?: string;
     isMuted?: boolean;
+    /** The character's remark for the user in this direct chat; shown in Check Phone's real direct-chat list. */
+    characterRemarkForUser?: string;
+    /** When the character last updated its remark for the user. */
+    characterRemarkForUserUpdatedAt?: string;
     bilingualTranslationEnabled?: boolean;
     collapseBilingualTranslation?: boolean;
     /** 丢弃角色输出的无效表情包（名称不在角色表情包与内置表情中时直接滤除该消息） */
@@ -65,6 +70,19 @@ export type ChatSession = {
     offlineBilingualTranslationPrompt?: string;
     nativeExpandedToolSourceIds?: string[];
     visionImagePromptLimit?: number;
+    /** false means this direct chat explicitly overrides the global recent-image count; older sessions follow whatever global value is set. */
+    visionImagePromptLimitUsesGlobal?: boolean;
+    /** The avatar shown as "me" only in this direct chat; does not change the user's identity, profile, or any other session. */
+    userAvatarOverride?: string;
+    /** Whether to notify the character after the user changes this session's avatar. Defaults to on when unset. */
+    notifyCharacterOnUserAvatarChange?: boolean;
+    /**
+     * This character's own notification sounds (set in its direct-chat info page). Overrides
+     * the global chat settings' sounds of the same kind: a field set explicitly on the session
+     * wins, everything else (audio source, sub-toggles) is inherited from global. No setup entry
+     * for group chats yet.
+     */
+    sounds?: ChatSoundsConfig;
     // Group chat fields
     isGroup?: boolean;
     groupName?: string;
@@ -78,7 +96,7 @@ export type ChatSession = {
     isSpectator?: boolean; // 围观群：用户不在群内，只能生成/线下
 };
 
-export type ChatMessageStatus = "sending" | "sent" | "read" | "failed";
+export type ChatMessageStatus = "sending" | "sent" | "read" | "failed" | "rejected";
 export type ChatMessageRole = "user" | "assistant" | "system" | "tool";
 
 export type StateValue = { name: string; value: number };
@@ -119,7 +137,7 @@ export type ChatMessage = {
         | "group_admin_notice"
         | "media_file"
         | `plugin:${string}`; // 聊天插件自定义消息类型（由注册该 kind 的插件渲染气泡）
-    origin?: "chat" | "reading_discuss" | "custom_app" | "custom_app_background";
+    origin?: "chat" | "reading_discuss" | "custom_app" | "custom_app_background" | "story_floating_phone";
     mediaUrl?: string;
     mediaData?: {
         amount?: number;          // 红包/转账金额
@@ -230,6 +248,11 @@ export type ChatMessage = {
         appTags?: string[];
         appHistoryText?: string;
         appHistoryRole?: ChatMessageRole;
+        avatarRecommendationForCharacterId?: string;
+        avatarRecommendationStatus?: "pending" | "accepted" | "declined";
+        blacklistEvent?: "block" | "unblock"; // Blacklist-simulation system event type (direct chat: user blocked/unblocked the character)
+        blacklistCharacterName?: string; // Character's display name at the time of the blacklist event (for the event detail and prompt context)
+        blacklistUserName?: string; // User's display name at the time of the blacklist event
     };
     isTyping?: boolean; // temporary flag for UI rendering
     statusPanel?: string; // AI display-only status content from [状态栏] tags
@@ -269,12 +292,99 @@ export type ChatAppSettings = {
     /** When true, a directive card renders BEFORE the message's main text instead of after
      *  (the long-standing default, unchanged unless this is explicitly turned on). */
     appCardPositionBeforeText?: boolean;
+    /** Default "my avatar" for direct chats; a per-session override takes priority over this. */
+    globalChatUserAvatar?: string;
+    /** Default direct-chat background; a per-session override takes priority over this. */
+    globalChatBackgroundImage?: string;
+    /** Default recent-image count fed into direct chats; a per-session override takes priority over this. */
+    globalVisionImagePromptLimit?: number;
+    /** Default chat-room CSS; a per-session CSS override takes priority over this, and the homepage appearance CSS has the lowest priority of all three. */
+    globalChatCustomCSS?: string;
+    /** Global notification-sound config (new message/send/incoming call/outgoing call/hangup), set in Global Chat Info. */
+    globalChatSounds?: ChatSoundsConfig;
+    /** Whether an incoming voice/video call vibrates the device while waiting to be answered (see lib/call-vibration.ts). Defaults to on. */
+    callVibrationEnabled?: boolean;
 };
+
+// ── Chat notification sounds ────────────────────────────────
+
+export type ChatSoundKind = "newMessage" | "sendMessage" | "incomingCall" | "outgoingCall" | "hangup";
+
+export type ChatSoundConfig = {
+    /** Whether this sound is enabled. */
+    enabled?: boolean;
+    /** Audio source: "file" = a user-uploaded audio file (IndexedDB asset id); "url" = an audio URL. */
+    sourceType?: "file" | "url";
+    /** The asset id when sourceType is "file"; the audio URL when sourceType is "url". */
+    value?: string;
+    /** (New-message sound only) when on, a character's new message plays no sound while that chat is the one currently open. */
+    muteActiveChat?: boolean;
+    /** (New-message sound only) when on, several messages in a row from the same character play the sound only once. */
+    notifyOncePerBurst?: boolean;
+};
+
+export type ChatSoundsConfig = {
+    newMessage?: ChatSoundConfig;
+    sendMessage?: ChatSoundConfig;
+    incomingCall?: ChatSoundConfig;
+    outgoingCall?: ChatSoundConfig;
+    hangup?: ChatSoundConfig;
+};
+
+/**
+ * Resolves a sound's config: character-specific (this session's own `sounds`) beats the global
+ * chat settings' `globalChatSounds`. A field explicitly set on the session (toggle / audio
+ * source / sub-toggles) overrides the global value for that field; every other field is
+ * inherited from global. "Character-specific is on but has no audio configured" falls back to
+ * the global audio; "character-specific is off" mutes that sound for this character entirely.
+ */
+export function resolveChatSoundConfig(
+    kind: ChatSoundKind,
+    session: Pick<ChatSession, "sounds"> | null | undefined,
+): ChatSoundConfig {
+    const merged: ChatSoundConfig = { ...(loadChatAppSettings().globalChatSounds?.[kind] ?? {}) };
+    const own = session?.sounds?.[kind];
+    if (own) {
+        // Only override fields explicitly set on the session; undefined (e.g. a leftover key
+        // after "clear audio") does not participate in the override.
+        for (const [key, value] of Object.entries(own)) {
+            if (value !== undefined) (merged as Record<string, unknown>)[key] = value;
+        }
+    }
+    return merged;
+}
+
+/** Looks up a session by id from the session cache (used by sound-effect sync reads; returns null if not found). */
+export function findChatSessionById(sessionId: string): ChatSession | null {
+    return loadChatSessions().find(s => s.id === sessionId) ?? null;
+}
 
 export const CHAT_APP_SETTINGS_UPDATED_EVENT = "chat-app-settings-updated";
 export const CHAT_MESSAGE_PUSHED_EVENT = "chat-message-pushed";
 export const CHAT_MESSAGES_DELETED_EVENT = "chat-messages-deleted";
 export const CHAT_REQUEST_REPLY_EVENT = "chat-request-reply";
+
+let _activeChatSessionId: string | null = null;
+
+/** Tells the shared message layer which chat room is actually in the foreground right now, so unread counting can tell it apart. */
+export function setActiveChatSessionId(sessionId: string | null): void {
+    _activeChatSessionId = sessionId;
+}
+
+/** The chat room currently in the foreground (null when no chat room is open). */
+export function getActiveChatSessionId(): string | null {
+    return _activeChatSessionId;
+}
+
+export function markChatSessionRead(sessionId: string): void {
+    const session = _sessionsCache.find(item => item.id === sessionId);
+    if (!session || session.unreadCount === 0) return;
+    session.unreadCount = 0;
+    dbPutSessions([session]);
+    if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("chat-messages-updated", { detail: { sessionId } }));
+    }
+}
 
 // ── Media Preview Map ─────────────────────────
 const MEDIA_PREVIEW_MAP: Record<string, string> = {
@@ -1137,6 +1247,59 @@ export function createToolExecutionId(): string {
     return `toolrun_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
+function resolvePendingAvatarRecommendation(message: ChatMessage): void {
+    if (message.role !== "assistant" || !message.rawResponseText) return;
+
+    const session = _sessionsCache.find(item => item.id === message.sessionId);
+    if (!session || session.isGroup) return;
+    const legacyRecommendation = [..._messagesCache].reverse().find(item =>
+        item.sessionId === message.sessionId
+        && item.role === "user"
+        && item.mediaType === "image"
+        && item.mediaData?.avatarRecommendationForCharacterId === session.contactId
+        && item.mediaData?.avatarRecommendationStatus === "pending"
+        && Boolean(item.mediaUrl),
+    );
+    const recommendation = legacyRecommendation
+        || findUserAvatarChangeIntent(_messagesCache, message.sessionId, session.contactId)?.image;
+    if (!recommendation) return;
+
+    const explicitAccepted = AVATAR_ACCEPT_RE.test(message.rawResponseText);
+    const explicitDeclined = AVATAR_DECLINE_RE.test(message.rawResponseText);
+    const inferredDecision = !explicitAccepted && !explicitDeclined
+        ? inferAvatarDecisionFromReply(`${message.rawResponseText}\n${message.content}`)
+        : null;
+    const accepted = explicitAccepted || inferredDecision === "accepted";
+    const declined = explicitDeclined || inferredDecision === "declined";
+    if (!accepted && !declined) return;
+
+    recommendation.mediaData = {
+        ...recommendation.mediaData,
+        avatarRecommendationForCharacterId: session.contactId,
+        avatarRecommendationStatus: accepted ? "accepted" : "declined",
+    };
+    dbPutMessage(recommendation);
+
+    if (accepted && recommendation.mediaUrl) {
+        const characters = loadCharacters();
+        const index = characters.findIndex(character => character.id === session.contactId);
+        if (index >= 0) {
+            characters[index] = {
+                ...characters[index],
+                avatar: recommendation.mediaUrl,
+                updatedAt: new Date().toISOString(),
+            };
+            saveCharacters(characters);
+        }
+    }
+
+    if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("chat-avatar-recommendation-resolved", {
+            detail: { sessionId: message.sessionId, accepted },
+        }));
+    }
+}
+
 export function pushChatMessage(msg: Omit<ChatMessage, "id" | "createdAt" | "status"> & { status?: ChatMessageStatus }): ChatMessage {
     let newMsg: ChatMessage = {
         ...msg,
@@ -1152,8 +1315,21 @@ export function pushChatMessage(msg: Omit<ChatMessage, "id" | "createdAt" | "sta
         newMsg = pluginResult.message;
     }
 
+    // Blacklist simulation (direct chat): once the user has blacklisted the character, every
+    // message the character sends afterward is marked rejected (shown as a WeChat-style red
+    // exclamation mark + rejection note); the user's own messages are delivered normally and
+    // never marked. Handled centrally here so every write path -- chat-room generation,
+    // background fallback replies, follow-ups -- is covered.
+    if (newMsg.role === "assistant") {
+        const sessionForBlock = _sessionsCache.find(s => s.id === newMsg.sessionId);
+        if (sessionForBlock && !sessionForBlock.isGroup && sessionForBlock.isBlacklisted) {
+            newMsg.status = "rejected";
+        }
+    }
+
     _messagesCache.push(newMsg);
     dbPutMessage(newMsg);
+    resolvePendingAvatarRecommendation(newMsg);
 
     // Auto update session last message only for records that can produce a list preview.
     const preview = getChatMessagePreview(newMsg);
@@ -1165,6 +1341,13 @@ export function pushChatMessage(msg: Omit<ChatMessage, "id" | "createdAt" | "sta
             sessions[sessIdx].lastMessagePreview = preview;
         }
         sessions[sessIdx].updatedAt = newMsg.createdAt;
+        if (
+            newMsg.role === "assistant"
+            && (_activeChatSessionId !== newMsg.sessionId
+                || (typeof document !== "undefined" && document.visibilityState !== "visible"))
+        ) {
+            sessions[sessIdx].unreadCount = Math.max(0, sessions[sessIdx].unreadCount || 0) + 1;
+        }
         saveChatSessions(sessions);
     }
 
@@ -1190,20 +1373,106 @@ export function upsertImportedChatMessage(msg: ChatMessage): { message: ChatMess
     _messagesCache.push(newMsg);
     dbPutMessage(newMsg);
 
-    const preview = getChatMessagePreview(newMsg);
-    const sessions = loadChatSessions();
-    const sessIdx = sessions.findIndex(s => s.id === newMsg.sessionId);
-    if (sessIdx !== -1 && isSessionPreviewCandidate(newMsg)) {
-        const currentLast = getLastVisibleSessionMessage(newMsg.sessionId);
-        if (!currentLast || currentLast.id === newMsg.id) {
-            sessions[sessIdx].lastMessageId = newMsg.id;
-            if (preview) sessions[sessIdx].lastMessagePreview = preview;
-            sessions[sessIdx].updatedAt = newMsg.createdAt;
-            saveChatSessions(sessions);
+    // Only do the full preview refresh when this message could actually become the
+    // "last visible message": loadChatSessions() walks every session and sorts the
+    // whole message cache, so importing one message at a time (a cloud-sync pull
+    // loop, etc.) degrades to O(count x sessions x messages log messages).
+    if (isSessionPreviewCandidate(newMsg)) {
+        const preview = getChatMessagePreview(newMsg);
+        const sessions = loadChatSessions();
+        const sessIdx = sessions.findIndex(s => s.id === newMsg.sessionId);
+        if (sessIdx !== -1) {
+            const currentLast = getLastVisibleSessionMessage(newMsg.sessionId);
+            if (!currentLast || currentLast.id === newMsg.id) {
+                sessions[sessIdx].lastMessageId = newMsg.id;
+                if (preview) sessions[sessIdx].lastMessagePreview = preview;
+                sessions[sessIdx].updatedAt = newMsg.createdAt;
+                saveChatSessions(sessions);
+            }
         }
     }
 
     return { message: newMsg, inserted: true };
+}
+
+// Bulk import path (for chat-record transfer). The old per-message upsert loop
+// triggered a full preview recompute from loadChatSessions() for every single
+// message (each session does a filter+sort over the whole message cache), and a
+// change to the target session's updatedAt queued a clear+bulkPut transaction on
+// the sessions table each time -- a few thousand records was enough to freeze the
+// main thread and pile up thousands of clear-then-rewrite transactions, and any
+// failure partway through (killed process, quota exhausted) could leave the
+// sessions table itself corrupted. That was the direct cause of "the phone reset
+// to its initial state" reports right after an import.
+// This instead: dedupes once, awaits one chunked write (throwing on failure), and
+// refreshes the preview of only the affected sessions, exactly once, at the end --
+// every other session is left untouched.
+export async function bulkUpsertImportedMessages(
+    messages: ChatMessage[],
+): Promise<{ insertedCount: number; skippedCount: number }> {
+    if (messages.length === 0) return { insertedCount: 0, skippedCount: 0 };
+
+    const existingIds = new Set(_messagesCache.map(item => item.id));
+    const nextOrderBySession = new Map<string, number>();
+    const inserted: ChatMessage[] = [];
+    let skippedCount = 0;
+
+    for (const source of messages) {
+        if (existingIds.has(source.id)) {
+            skippedCount += 1;
+            continue;
+        }
+        let order = getStableMessageOrder(source);
+        if (order === null) {
+            const sessionId = source.sessionId || "";
+            const next = nextOrderBySession.get(sessionId) ?? getNextMessageOrder(sessionId);
+            nextOrderBySession.set(sessionId, next + 1);
+            order = next;
+        }
+        const newMsg: ChatMessage = {
+            ...source,
+            status: source.status || "sent",
+            createdAt: source.createdAt || new Date().toISOString(),
+            order,
+        };
+        existingIds.add(newMsg.id);
+        inserted.push(newMsg);
+    }
+
+    if (inserted.length === 0) return { insertedCount: 0, skippedCount };
+
+    // concat rather than push(...arr): spreading a huge array (tens of thousands
+    // of entries) into push() can throw a RangeError.
+    _messagesCache = _messagesCache.concat(inserted);
+    // A real, awaitable, chunked write whose failure propagates -- so the caller
+    // can tell and warn the user, instead of "import succeeded" in memory while
+    // the data is gone after a restart.
+    await dbBulkPutMessages(inserted);
+
+    // Session previews / updatedAt are refreshed exactly once, after everything
+    // has been written.
+    const affectedSessionIds = new Set(inserted.map(msg => msg.sessionId));
+    const sessions = loadChatSessions();
+    let sessionsChanged = false;
+    for (const sessionId of affectedSessionIds) {
+        const sessIdx = sessions.findIndex(s => s.id === sessionId);
+        if (sessIdx === -1) continue;
+        const currentLast = getLastVisibleSessionMessage(sessionId);
+        if (!currentLast) continue;
+        const preview = getChatMessagePreview(currentLast);
+        if (
+            sessions[sessIdx].lastMessageId === currentLast.id
+            && (sessions[sessIdx].lastMessagePreview || "") === preview
+            && sessions[sessIdx].updatedAt === currentLast.createdAt
+        ) continue;
+        sessions[sessIdx].lastMessageId = currentLast.id;
+        if (preview) sessions[sessIdx].lastMessagePreview = preview;
+        sessions[sessIdx].updatedAt = currentLast.createdAt;
+        sessionsChanged = true;
+    }
+    if (sessionsChanged) saveChatSessions(sessions);
+
+    return { insertedCount: inserted.length, skippedCount };
 }
 
 function removeFirstExactResponsePart(rawResponseText: string, content: string): string {
@@ -1671,6 +1940,29 @@ export function saveChatAppSettings(settings: ChatAppSettings) {
     window.dispatchEvent(new CustomEvent(CHAT_APP_SETTINGS_UPDATED_EVENT, { detail: settings }));
 }
 
+/** Recent-image count: per-session override > global chat setting > built-in default. Same rule for direct and group chats. */
+export function resolveVisionImagePromptLimit(session: Pick<ChatSession, "visionImagePromptLimit" | "visionImagePromptLimitUsesGlobal" | "isGroup"> | null | undefined): number {
+    const globalValue = loadChatAppSettings().globalVisionImagePromptLimit;
+    if (session?.visionImagePromptLimitUsesGlobal === false) {
+        return normalizeVisionImagePromptLimit(session.visionImagePromptLimit);
+    }
+    return normalizeVisionImagePromptLimit(globalValue ?? session?.visionImagePromptLimit);
+}
+
+/** The user's avatar shown in chat: per-session override > global chat setting > the user's own profile avatar. Same rule for direct and group chats. */
+export function resolveChatUserAvatar(
+    session: Pick<ChatSession, "userAvatarOverride" | "isGroup"> | null | undefined,
+    identityAvatar?: string | null,
+): string {
+    return session?.userAvatarOverride || loadChatAppSettings().globalChatUserAvatar || identityAvatar || "";
+}
+
+/** Chat background: per-session override > global chat setting. Same rule for direct and group chats. */
+export function resolveChatBackgroundImage(session: Pick<ChatSession, "backgroundImage" | "isGroup"> | null | undefined): string {
+    if (session?.backgroundImage) return session.backgroundImage;
+    return loadChatAppSettings().globalChatBackgroundImage || "";
+}
+
 // --- Follow-up schedule persistence (supports multiple sessions) ---
 
 const FOLLOW_UP_SCHEDULES_KEY = "ai_phone_followup_schedules_v1";
@@ -1762,30 +2054,55 @@ export function updateChatMessage(
     return updated;
 }
 
-function replacePhotoDirectiveDescription(text: string | undefined, oldDescription: string, nextDescription: string): string | undefined {
+function replacePhotoDirectiveDescription(
+    text: string | undefined,
+    oldDescription: string,
+    nextDescription: string,
+    nextUseReferenceImage?: boolean,
+): string | undefined {
     const oldDesc = oldDescription.trim();
     const nextDesc = nextDescription.trim();
-    if (!text || !oldDesc || !nextDesc || oldDesc === nextDesc) return text;
+    // The description must match one specific photo tag to be rewritten: a single reply can
+    // contain several photos, and treating an empty old description as "match anything" would
+    // overwrite every other photo's description too. No longer short-circuits on
+    // oldDesc === nextDesc -- a retry can change ONLY the reference-image mode while leaving
+    // the description untouched, and that case must still reach the replace below.
+    if (!text || !oldDesc || !nextDesc) return text;
 
     // Rewrites a photo tag inside already-stored text, so it must recognise BOTH
     // the legacy Chinese tag and the English one now emitted by
     // lib/rich-tag-builders.ts — and it must rewrite it back in the SAME language
     // it found, otherwise editing an old message would silently switch its tag.
+    // The reference-mode word gets the same treatment: an English tag always gets
+    // WithRef/NoRef, a Chinese tag always gets 使用参考图/不使用参考图.
     let changed = false;
     const withExplicitMode = text.replace(
         /\[(照片|Photo)[:：]\s*(使用参考图|不使用参考图|WithRef|NoRef)\s*[:：]\s*([^\]]+?)\]/g,
         (full, tag: string, mode: string, desc: string) => {
             if (desc.trim() !== oldDesc) return full;
+            const targetMode = nextUseReferenceImage === undefined
+                ? mode
+                : tag === "Photo"
+                    ? (nextUseReferenceImage ? "WithRef" : "NoRef")
+                    : (nextUseReferenceImage ? "使用参考图" : "不使用参考图");
+            if (targetMode === mode && desc.trim() === nextDesc) return full;
             changed = true;
-            return `[${tag}:${mode}:${nextDesc}]`;
+            return `[${tag}:${targetMode}:${nextDesc}]`;
         },
     );
     if (changed) return withExplicitMode;
 
     return text.replace(/\[(照片|Photo)[:：]\s*([^\]]+?)\]/g, (full, tag: string, desc: string) => {
         if (desc.trim() !== oldDesc) return full;
+        const targetMode = nextUseReferenceImage === undefined
+            ? undefined
+            : tag === "Photo"
+                ? (nextUseReferenceImage ? "WithRef" : "NoRef")
+                : (nextUseReferenceImage ? "使用参考图" : "不使用参考图");
+        const replacement = targetMode ? `[${tag}:${targetMode}:${nextDesc}]` : `[${tag}:${nextDesc}]`;
+        if (replacement === full) return full;
         changed = true;
-        return `[${tag}:${nextDesc}]`;
+        return replacement;
     });
 }
 
@@ -1793,13 +2110,14 @@ export function syncChatGeneratedImagePromptText(
     messageId: string,
     oldDescription: string,
     nextDescription: string,
+    nextUseReferenceImage?: boolean,
 ): ChatMessage[] {
     const target = _messagesCache.find(m => m.id === messageId);
     if (!target) return [];
 
     const changed = new Map<string, ChatMessage>();
-    const targetNextRaw = replacePhotoDirectiveDescription(target.rawResponseText, oldDescription, nextDescription);
-    const targetNextEditable = replacePhotoDirectiveDescription(target.editableResponseText, oldDescription, nextDescription);
+    const targetNextRaw = replacePhotoDirectiveDescription(target.rawResponseText, oldDescription, nextDescription, nextUseReferenceImage);
+    const targetNextEditable = replacePhotoDirectiveDescription(target.editableResponseText, oldDescription, nextDescription, nextUseReferenceImage);
 
     if (target.rawResponseText && targetNextRaw && targetNextRaw !== target.rawResponseText && target.responseBatchId) {
         for (const msg of _messagesCache) {

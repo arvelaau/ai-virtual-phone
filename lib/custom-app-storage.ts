@@ -333,6 +333,7 @@ function normalizeChatDirective(value: unknown): CustomAppChatDirective | null {
     id: id || cleanId(label),
     label,
     syntax: cleanText(record.syntax, 120) || `[${label}:内容]`,
+    keywords: cleanText(record.keywords, 240) || undefined,
     description: cleanText(record.description ?? record.desc, 500) || undefined,
     card: cleanRecord(record.card ?? record.layout),
     title: cleanText(record.title, 80) || undefined,

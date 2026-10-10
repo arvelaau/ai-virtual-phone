@@ -1273,6 +1273,7 @@ export async function generateMomentPhotoUrl(
         const generated = await generateImageFromConfiguredApi({
             description,
             characterId,
+            appId: "moments",
             useReferenceImage,
             signal,
         });

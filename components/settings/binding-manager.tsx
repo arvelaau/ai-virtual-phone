@@ -9,6 +9,7 @@ import {
     Check,
     ChevronRight,
     Code2,
+    Image as ImageIcon,
     Languages,
     Layers,
     Mic,
@@ -37,6 +38,7 @@ import type {
     CharacterBinding,
     ContentAppId,
     ApiConfig,
+    ImageGenerationSettings,
     VoiceApiConfig,
     PresetConfig,
     WorldBookConfig,
@@ -50,6 +52,7 @@ import {
     getCharacterBinding,
     setCharacterBinding,
     loadApiConfigs,
+    loadImageGenerationSettings,
     loadVoiceConfigs,
     loadPresets,
     loadWorldBooks,
@@ -57,19 +60,22 @@ import {
     loadUserIdentities,
     ensureSettingsStorageHydrated,
 } from "@/lib/settings-storage";
+import { getActiveImageGenerationBindingId, getImageGenerationBindingOptions } from "@/lib/image-generation-binding";
 import { hydrateKvDb } from "@/lib/kv-db";
 import type { UserIdentity } from "@/components/settings/user-identity";
 import { loadCharacters } from "@/lib/character-storage";
 import type { Character } from "@/lib/character-types";
 
-type Level = "global" | "character" | "app";
-type SingleBindingField = "apiConfigId" | "voiceConfigId" | "presetId" | "userIdentityId";
+type Level = "global" | "app-list" | "character" | "app";
+type AppBindingScope = "global" | "character";
+type SingleBindingField = "apiConfigId" | "imageConfigId" | "voiceConfigId" | "presetId" | "userIdentityId";
 type MultiBindingField = "worldBookIds" | "regexIds";
 type BindingField = SingleBindingField | MultiBindingField;
 type AuxBindingField = "memorySummaryApiConfigId" | "embeddingApiConfigId" | "mascotApiConfigId" | "reasoningTranslateApiConfigId";
 
 const BINDING_FIELD_VISUALS: Record<BindingField, { icon: LucideIcon; color: string }> = {
     apiConfigId: { icon: Code2, color: BINDING_ACCENTS.api },
+    imageConfigId: { icon: ImageIcon, color: BINDING_ACCENTS.embedding },
     voiceConfigId: { icon: Mic, color: BINDING_ACCENTS.voice },
     presetId: { icon: Layers, color: BINDING_ACCENTS.preset },
     worldBookIds: { icon: BookOpen, color: BINDING_ACCENTS.worldBook },
@@ -107,6 +113,7 @@ export function BindingManager() {
     const [config, setConfig] = useState<BindingConfig>({ globalDefaults: {}, characterBindings: [] });
     const [characters, setCharacters] = useState<Character[]>([]);
     const [apiConfigs, setApiConfigs] = useState<ApiConfig[]>([]);
+    const [imageSettings, setImageSettings] = useState<ImageGenerationSettings | null>(null);
     const [voiceConfigs, setVoiceConfigs] = useState<VoiceApiConfig[]>([]);
     const [presets, setPresets] = useState<PresetConfig[]>([]);
     const [worldBooks, setWorldBooks] = useState<WorldBookConfig[]>([]);
@@ -115,6 +122,7 @@ export function BindingManager() {
     const [customApps, setCustomApps] = useState<InstalledCustomApp[]>([]);
 
     const [level, setLevel] = useState<Level>("global");
+    const [appBindingScope, setAppBindingScope] = useState<AppBindingScope>("global");
     const [selectedCharId, setSelectedCharId] = useState<string>("");
     const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
     const [activeGlobalSheetField, setActiveGlobalSheetField] = useState<BindingField | null>(null);
@@ -125,6 +133,7 @@ export function BindingManager() {
 
     const reloadData = () => {
         setApiConfigs(loadApiConfigs());
+        setImageSettings(loadImageGenerationSettings());
         setVoiceConfigs(loadVoiceConfigs());
         setPresets(loadPresets());
         setWorldBooks(loadWorldBooks());
@@ -169,6 +178,7 @@ export function BindingManager() {
         if (!isLoaded) return;
         const validSets = {
             api: new Set(apiConfigs.map(c => c.id)),
+            image: new Set(imageSettings ? getImageGenerationBindingOptions(imageSettings).map(option => option.id) : []),
             voice: new Set(voiceConfigs.map(c => c.id)),
             preset: new Set(presets.map(p => p.id)),
             identity: new Set(identities.map(i => i.id)),
@@ -179,6 +189,7 @@ export function BindingManager() {
             const s = { ...slot };
             let changed = false;
             if (s.apiConfigId && !validSets.api.has(s.apiConfigId)) { s.apiConfigId = undefined; changed = true; }
+            if (s.imageConfigId && !validSets.image.has(s.imageConfigId)) { s.imageConfigId = undefined; changed = true; }
             if (s.voiceConfigId && !validSets.voice.has(s.voiceConfigId)) { s.voiceConfigId = undefined; changed = true; }
             if (s.presetId && !validSets.preset.has(s.presetId)) { s.presetId = undefined; changed = true; }
             if (s.userIdentityId && !validSets.identity.has(s.userIdentityId)) { s.userIdentityId = undefined; changed = true; }
@@ -194,14 +205,27 @@ export function BindingManager() {
             }
             return [s, changed];
         };
+        const cleanAppSlot = (slot: BindingSlot): [BindingSlot, boolean] => {
+            const [s, slotChanged] = cleanSlot(slot);
+            if (!s.voiceConfigId) return [s, slotChanged];
+            s.voiceConfigId = undefined;
+            return [s, true];
+        };
         setConfig(prev => {
             let dirty = false;
             const [gd, gChanged] = cleanSlot(prev.globalDefaults);
             if (gChanged) dirty = true;
+            // The global base fields are "what you see is what you get": once a stale/empty
+            // value is cleaned up, it's immediately backfilled with the real fallback value.
+            if (apiConfigs.length > 0 && !gd.apiConfigId) { gd.apiConfigId = apiConfigs[0].id; dirty = true; }
+            const activeImageBindingId = imageSettings ? getActiveImageGenerationBindingId(imageSettings) : undefined;
+            if (activeImageBindingId && !gd.imageConfigId) { gd.imageConfigId = activeImageBindingId; dirty = true; }
+            if (presets.length > 0 && !gd.presetId) { gd.presetId = (presets.find(p => p.builtIn) ?? presets[0]).id; dirty = true; }
+            if (identities.length > 0 && !gd.userIdentityId) { gd.userIdentityId = identities[0].id; dirty = true; }
             const newAppDefaults: Record<string, BindingSlot> = {};
             for (const [appId, slot] of Object.entries(prev.appDefaults ?? {})) {
                 if (!slot) continue;
-                const [cleaned, aChanged] = cleanSlot(slot);
+                const [cleaned, aChanged] = cleanAppSlot(slot);
                 if (aChanged) dirty = true;
                 newAppDefaults[appId] = cleaned;
             }
@@ -211,7 +235,7 @@ export function BindingManager() {
                 const newOverrides: Record<string, BindingSlot> = {};
                 for (const [k, v] of Object.entries(b.appOverrides)) {
                     if (!v) continue;
-                    const [cleaned, oChanged] = cleanSlot(v);
+                    const [cleaned, oChanged] = cleanAppSlot(v);
                     if (oChanged) dirty = true;
                     newOverrides[k] = cleaned;
                 }
@@ -236,13 +260,16 @@ export function BindingManager() {
             }
             return prev;
         });
-    }, [isLoaded, apiConfigs, voiceConfigs, presets, worldBooks, regexes, identities]);
+    }, [isLoaded, apiConfigs, imageSettings, voiceConfigs, presets, worldBooks, regexes, identities]);
 
     // Navigation management
     useEffect(() => {
         if (level === "global") {
             setOverrideBack(null);
             setSubpageTitle(null);
+        } else if (level === "app-list") {
+            setSubpageTitle("Global App Bindings");
+            setOverrideBack(() => () => setLevel("global"));
         } else if (level === "character") {
             const charName = characters.find(c => c.id === selectedCharId)?.name || "Character";
             setSubpageTitle(`${charName}'s Bindings`);
@@ -251,15 +278,15 @@ export function BindingManager() {
                 setSelectedCharId("");
             });
         } else if (level === "app") {
-            const charName = characters.find(c => c.id === selectedCharId)?.name || "Character";
             const appLabel = selectedAppId ? getAppLabel(selectedAppId) : "";
-            setSubpageTitle(`${appLabel} · ${charName}`);
+            const charName = characters.find(c => c.id === selectedCharId)?.name || "Character";
+            setSubpageTitle(appBindingScope === "global" ? `${appLabel} · App Binding` : `${appLabel} · ${charName}`);
             setOverrideBack(() => () => {
-                setLevel("character");
+                setLevel(appBindingScope === "global" ? "app-list" : "character");
                 setSelectedAppId(null);
             });
         }
-    }, [level, selectedCharId, selectedAppId, characters, customApps, setSubpageTitle, setOverrideBack]);
+    }, [level, appBindingScope, selectedCharId, selectedAppId, characters, customApps, setSubpageTitle, setOverrideBack]);
 
     const persist = (newConfig: BindingConfig) => {
         setConfig(newConfig);
@@ -280,6 +307,15 @@ export function BindingManager() {
 
     const updateAppSlot = (field: keyof BindingSlot, value: string | string[] | undefined) => {
         if (!selectedAppId) return;
+        if (appBindingScope === "global") {
+            const appDefaults = { ...(config.appDefaults ?? {}) };
+            appDefaults[selectedAppId] = {
+                ...(appDefaults[selectedAppId] ?? {}),
+                [field]: value || undefined,
+            };
+            persist({ ...config, appDefaults });
+            return;
+        }
         const binding = getCharacterBinding(config, selectedCharId);
         const appSlot = binding.appOverrides[selectedAppId] || {};
         const newAppSlot = { ...appSlot, [field]: value || undefined };
@@ -290,6 +326,12 @@ export function BindingManager() {
 
     const resetAppBinding = () => {
         if (!selectedAppId) return;
+        if (appBindingScope === "global") {
+            const appDefaults = { ...(config.appDefaults ?? {}) };
+            delete appDefaults[selectedAppId];
+            persist({ ...config, appDefaults });
+            return;
+        }
         const binding = getCharacterBinding(config, selectedCharId);
         const newOverrides = { ...binding.appOverrides };
         delete newOverrides[selectedAppId];
@@ -301,13 +343,18 @@ export function BindingManager() {
         if (level === "global") return config.globalDefaults;
         const binding = getCharacterBinding(config, selectedCharId);
         if (level === "character") return binding.defaults;
-        if (level === "app" && selectedAppId) return binding.appOverrides[selectedAppId] || {};
+        if (level === "app" && selectedAppId) {
+            return appBindingScope === "global"
+                ? config.appDefaults?.[selectedAppId] || {}
+                : binding.appOverrides[selectedAppId] || {};
+        }
         return {};
     };
 
     const mergeSlotInto = (target: BindingSlot, slot?: BindingSlot): BindingSlot => {
         if (!slot) return target;
         if (slot.apiConfigId) target.apiConfigId = slot.apiConfigId;
+        if (slot.imageConfigId) target.imageConfigId = slot.imageConfigId;
         if (slot.voiceConfigId) target.voiceConfigId = slot.voiceConfigId;
         if (slot.presetId) target.presetId = slot.presetId;
         if (slot.userIdentityId) target.userIdentityId = slot.userIdentityId;
@@ -319,24 +366,21 @@ export function BindingManager() {
     const getInheritedSlot = (): BindingSlot => {
         if (level === "global") return {};
         const inherited = mergeSlotInto({}, config.globalDefaults);
+        if (level === "app" && selectedAppId && appBindingScope === "global") return inherited;
         const binding = getCharacterBinding(config, selectedCharId);
         if (level === "character") return inherited;
-        mergeSlotInto(inherited, binding.defaults);
+        // An app-level default applies before a character's own default; a character's own
+        // binding takes higher priority.
         if (level === "app" && selectedAppId) {
             mergeSlotInto(inherited, config.appDefaults?.[selectedAppId]);
         }
+        mergeSlotInto(inherited, binding.defaults);
         return inherited;
-    };
-
-    const getAppSpecificSlot = (appId: string): BindingSlot => {
-        const binding = getCharacterBinding(config, selectedCharId);
-        const slot = mergeSlotInto({}, config.appDefaults?.[appId]);
-        return mergeSlotInto(slot, binding.appOverrides[appId]);
     };
 
     const getInheritLabel = (): string => {
         if (level === "character") return "Inherit from global";
-        if (level === "app") return "Inherit from parent binding";
+        if (level === "app") return appBindingScope === "global" ? "Inherit from global" : "Inherit from app/global binding";
         return "";
     };
 
@@ -351,7 +395,7 @@ export function BindingManager() {
         if (!slot) return 0;
         let count = 0;
         if (slot.apiConfigId) count++;
-        if (slot.voiceConfigId) count++;
+        if (slot.imageConfigId) count++;
         if (slot.presetId) count++;
         if (slot.userIdentityId) count++;
         if (slot.worldBookIds && slot.worldBookIds.length > 0) count++;
@@ -364,6 +408,7 @@ export function BindingManager() {
         if (!binding) return false;
         return Boolean(
             binding.defaults.apiConfigId ||
+            binding.defaults.imageConfigId ||
             binding.defaults.voiceConfigId ||
             binding.defaults.presetId ||
             binding.defaults.userIdentityId ||
@@ -411,7 +456,8 @@ export function BindingManager() {
 
     const getBindingFieldLabel = (field: BindingField): string => {
         switch (field) {
-            case "apiConfigId": return "API Config";
+            case "apiConfigId": return "Text API";
+            case "imageConfigId": return "Image Generation API";
             case "voiceConfigId": return "Voice API";
             case "presetId": return "Preset";
             case "userIdentityId": return "User Identity";
@@ -422,12 +468,13 @@ export function BindingManager() {
 
     const getBindingFieldDescription = (field: BindingField): string => {
         switch (field) {
-            case "apiConfigId": return "Global text generation endpoint";
-            case "voiceConfigId": return "Global voice synthesis endpoint";
-            case "presetId": return "Global prompt preset";
-            case "userIdentityId": return "Global user identity";
-            case "worldBookIds": return "Globally enabled worldbooks";
-            case "regexIds": return "Globally enabled regex rules";
+            case "apiConfigId": return "Text generation endpoint";
+            case "imageConfigId": return "Image generation endpoint";
+            case "voiceConfigId": return "Voice synthesis endpoint";
+            case "presetId": return "Prompt preset";
+            case "userIdentityId": return "User identity";
+            case "worldBookIds": return "Enabled worldbooks";
+            case "regexIds": return "Enabled regex rules";
         }
     };
 
@@ -453,6 +500,8 @@ export function BindingManager() {
         switch (field) {
             case "apiConfigId":
                 return apiConfigs.map(c => ({ id: c.id, name: c.name || c.provider }));
+            case "imageConfigId":
+                return imageSettings ? getImageGenerationBindingOptions(imageSettings) : [];
             case "voiceConfigId":
                 return voiceConfigs.map(c => ({ id: c.id, name: c.name || c.provider }));
             case "presetId":
@@ -560,9 +609,11 @@ export function BindingManager() {
         slot: BindingSlot,
         emptyText: string,
         onOpenField: (field: BindingField) => void,
-        options?: { includeRegex?: boolean },
+        options?: { includeRegex?: boolean; includeVoice?: boolean },
     ) => {
-        const primaryFields: BindingField[] = ["apiConfigId", "voiceConfigId"];
+        const primaryFields: BindingField[] = options?.includeVoice === false
+            ? ["apiConfigId", "imageConfigId"]
+            : ["apiConfigId", "imageConfigId", "voiceConfigId"];
         const compactFields: BindingField[] = options?.includeRegex === false
             ? ["presetId", "worldBookIds"]
             : ["presetId", "worldBookIds", "regexIds"];
@@ -600,7 +651,7 @@ export function BindingManager() {
 
         return (
             <div className="binding-global-grid">
-                <div className="binding-global-primary-row">
+                <div className="binding-global-primary-row" data-count={primaryFields.length}>
                     {primaryFields.map(field => renderBindingCard(field, "large"))}
                 </div>
                 <div className="binding-global-compact-row" data-count={compactFields.length}>
@@ -619,12 +670,19 @@ export function BindingManager() {
         renderBindingSlotCards(currentSlot, inheritLabel, setActiveSlotSheetField)
     );
 
+    // The four global-level base fields (text/image/preset/identity) don't offer "Not set":
+    // leaving one blank only triggers a silent fallback, so we write the fallback value
+    // straight into storage and drop the "not set" option -- what you see is what you get.
+    const isRequiredGlobalField = (field: BindingField): boolean =>
+        field === "apiConfigId" || field === "imageConfigId" || field === "presetId" || field === "userIdentityId";
+
     const renderGlobalPickerSheet = () => {
         if (!activeGlobalSheetField) return null;
         const field = activeGlobalSheetField;
         const label = getBindingFieldLabel(field);
         const options = getBindingFieldOptions(field);
         const isMulti = isMultiBindingField(field);
+        const hideUnsetOption = isRequiredGlobalField(field);
         const selectedIds = isMulti ? (config.globalDefaults[field] || []).filter(id => options.some(item => item.id === id)) : [];
         const selectedValue = !isMulti ? config.globalDefaults[field] : undefined;
 
@@ -674,15 +732,17 @@ export function BindingManager() {
                     </div>
                     <div className="binding-picker-body">
                         <div className="binding-sheet-list">
-                            <button
-                                type="button"
-                                className="binding-sheet-option"
-                                data-selected={isMulti ? selectedIds.length === 0 : !selectedValue}
-                                onClick={clearSelection}
-                            >
-                                <span className="binding-sheet-check">{(isMulti ? selectedIds.length === 0 : !selectedValue) && <Check size={15} />}</span>
-                                <span className="binding-sheet-option-text">Not set</span>
-                            </button>
+                            {!hideUnsetOption && (
+                                <button
+                                    type="button"
+                                    className="binding-sheet-option"
+                                    data-selected={isMulti ? selectedIds.length === 0 : !selectedValue}
+                                    onClick={clearSelection}
+                                >
+                                    <span className="binding-sheet-check">{(isMulti ? selectedIds.length === 0 : !selectedValue) && <Check size={15} />}</span>
+                                    <span className="binding-sheet-option-text">Not set</span>
+                                </button>
+                            )}
                             {options.length === 0 ? (
                                 <div className="binding-sheet-empty">No {label} available. Please create one on the corresponding settings page first.</div>
                             ) : (
@@ -773,15 +833,18 @@ export function BindingManager() {
                     </div>
                     <div className="binding-picker-body">
                         <div className="binding-sheet-list">
-                            <button
-                                type="button"
-                                className="binding-sheet-option"
-                                data-selected={isMulti ? selectedIds.length === 0 : !selectedValue}
-                                onClick={clearSelection}
-                            >
-                                <span className="binding-sheet-check">{(isMulti ? selectedIds.length === 0 : !selectedValue) && <Check size={15} />}</span>
-                                <span className="binding-sheet-option-text">{emptyLabel}</span>
-                            </button>
+                            {/* The global level's API/preset/identity fields don't offer "not set" (character/app level keeps "inherit from parent") */}
+                            {!(level === "global" && isRequiredGlobalField(field)) && (
+                                <button
+                                    type="button"
+                                    className="binding-sheet-option"
+                                    data-selected={isMulti ? selectedIds.length === 0 : !selectedValue}
+                                    onClick={clearSelection}
+                                >
+                                    <span className="binding-sheet-check">{(isMulti ? selectedIds.length === 0 : !selectedValue) && <Check size={15} />}</span>
+                                    <span className="binding-sheet-option-text">{emptyLabel}</span>
+                                </button>
+                            )}
                             {options.length === 0 ? (
                                 <div className="binding-sheet-empty">No {label} available. Please create one on the corresponding settings page first.</div>
                             ) : (
@@ -956,6 +1019,40 @@ export function BindingManager() {
                     </section>
 
                     <section className="flex flex-col gap-3">
+                        <p className="settings-menu-section-title">Application Binding</p>
+                        <div className="binding-aux-select">
+                            <button
+                                type="button"
+                                className="binding-aux-trigger"
+                                onClick={() => {
+                                    setAppBindingScope("global");
+                                    setSelectedCharId("");
+                                    setSelectedAppId(null);
+                                    setActiveSlotSheetField(null);
+                                    setLevel("app-list");
+                                }}
+                            >
+                                <span className="binding-choice-icon binding-choice-icon-inline" style={bindingAccentStyle(BINDING_ACCENTS.api)}>
+                                    <Layers size={22} strokeWidth={1.8} />
+                                </span>
+                                <span className="binding-card-copy">
+                                    <span className="binding-choice-label">Global App Bindings</span>
+                                    <span className="binding-choice-desc">Set a text and image generation plan per app</span>
+                                </span>
+                                <span className="binding-choice-row">
+                                    <span className="binding-choice-value">
+                                        {(() => {
+                                            const count = appOverrideEntries.filter(app => countOverrides(config.appDefaults?.[app.id], app.id) > 0).length;
+                                            return count > 0 ? `${count} set` : "Not set";
+                                        })()}
+                                    </span>
+                                    <ChevronRight size={15} strokeWidth={1.7} className="binding-choice-chevron" />
+                                </span>
+                            </button>
+                        </div>
+                    </section>
+
+                    <section className="flex flex-col gap-3">
                         <p className="settings-menu-section-title">Auxiliary API</p>
                         <div className="flex flex-col gap-3">
                             {renderAuxSelect("memorySummaryApiConfigId", "Memory Summary API")}
@@ -971,6 +1068,44 @@ export function BindingManager() {
             {renderAuxPickerDialog()}
             {renderCharacterPickerDialog()}
 
+            {/* Level 2: Global APP list */}
+            {level === "app-list" && (
+                <section className="flex flex-col gap-3">
+                    <p className="binding-priority-note">Priority order: character binding &gt; app binding &gt; global binding</p>
+                    <div className="binding-app-grid">
+                        {appOverrideEntries.map(app => {
+                            const overrideCount = countOverrides(config.appDefaults?.[app.id], app.id);
+                            return (
+                                <button
+                                    key={app.id}
+                                    type="button"
+                                    onClick={() => {
+                                        setAppBindingScope("global");
+                                        setSelectedCharId("");
+                                        setSelectedAppId(app.id);
+                                        setActiveSlotSheetField(null);
+                                        setLevel("app");
+                                    }}
+                                    className="g-card binding-app-card"
+                                    style={bindingAccentStyle(app.color)}
+                                    aria-label={`${app.label} global app binding`}
+                                >
+                                    <span className="binding-app-icon">
+                                        {app.iconDataUrl ? (
+                                            <img src={app.iconDataUrl} alt="" className="binding-app-icon-image" />
+                                        ) : (
+                                            <IconGlyph id={app.iconId} className="binding-app-icon-glyph" />
+                                        )}
+                                    </span>
+                                    <span className="binding-app-label">{app.label}</span>
+                                    {overrideCount > 0 && <span className="binding-app-badge">{overrideCount}</span>}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </section>
+            )}
+
             {/* Level 2: Character binding details */}
             {level === "character" && (
                 <>
@@ -983,12 +1118,14 @@ export function BindingManager() {
                         <p className="settings-menu-section-title">App Bindings</p>
                         <div className="binding-app-grid">
                             {appOverrideEntries.map(app => {
-                                const appSlot = getAppSpecificSlot(app.id);
+                                const appSlot = getCharacterBinding(config, selectedCharId).appOverrides[app.id];
                                 const overrideCount = countOverrides(appSlot, app.id);
                                 return (
                                     <button
                                         key={app.id}
+                                        type="button"
                                         onClick={() => {
+                                            setAppBindingScope("character");
                                             setSelectedAppId(app.id);
                                             setActiveSlotSheetField(null);
                                             setLevel("app");
@@ -1024,9 +1161,13 @@ export function BindingManager() {
             {level === "app" && (
                 <>
                     <section className="flex flex-col gap-3">
-                        <p className="settings-menu-section-title">App Binding</p>
+                        <div className="flex flex-col gap-1">
+                            <p className="settings-menu-section-title">App Binding</p>
+                            <p className="binding-priority-note">Priority order: character binding &gt; app binding &gt; global binding</p>
+                        </div>
                         {renderBindingSlotCards(currentSlot, inheritLabel, setActiveSlotSheetField, {
                             includeRegex: canBindRegexInApp(selectedAppId),
+                            includeVoice: false,
                         })}
                     </section>
 
@@ -1034,7 +1175,7 @@ export function BindingManager() {
                         onClick={resetAppBinding}
                         className="ui-btn ui-btn-soft-danger flex justify-center"
                     >
-                        <RotateCcw size={16} /> Reset This App's Binding
+                        <RotateCcw size={16} /> {appBindingScope === "global" ? "Reset This App's Binding" : "Reset This Character's App Binding"}
                     </button>
                 </>
             )}

@@ -1151,3 +1151,273 @@
 .phone-shell[data-borders="on"] .icon-glyph-box {
   border: var(--desktop-outline-width, 1.5px) solid var(--desktop-outline-color, var(--user-border-color, #000)) !important;
 }
+
+/* ── Desktop Folders ─────────────────────────────────── */
+/* The tile backing plate reuses .icon-glyph-box: flat/glass, base color and shadow all
+   follow the icon material set in personalization, so a folder always feels like the icons. */
+
+/* The mini grid sits above the glass highlight layer (z1) and below the stroke (z3); 2x2, up to 4, large enough to read */
+.folder-mini-grid {
+  position: absolute;
+  inset: 15%;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 10%;
+  pointer-events: none;
+}
+
+.folder-mini {
+  position: relative;
+  border-radius: 26%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--c-desktop-icon-box, #ffffff) 46%, transparent);
+}
+
+/* Glass state: the mini cells share the same lighting recipe as the full-size icon (diagonal
+   highlight + base color showing through + inner stroke). Not a real backdrop-filter -- sampling
+   is unreliable when nested inside a box that already has one, and live-blurring 4 mini cells
+   per folder is too expensive; what's behind is already the tile's own blurred wallpaper, so
+   layering a highlight on top reads as "frost on frost". */
+.phone-shell[data-icon-effect="glass"] .folder-mini {
+  background:
+    linear-gradient(135deg,
+      rgba(255, 255, 255, 0.32),
+      color-mix(in srgb, var(--c-desktop-icon-bg, #c7b8ff) 8%, transparent) 45%,
+      rgba(255, 255, 255, 0.10)),
+    linear-gradient(0deg,
+      color-mix(in srgb, var(--c-desktop-icon-box, #ffffff) 38%, transparent),
+      color-mix(in srgb, var(--c-desktop-icon-box, #ffffff) 38%, transparent)),
+    rgba(255, 255, 255, 0.16);
+  box-shadow:
+    inset 0 0.5px 1px rgba(255, 255, 255, 0.5),
+    inset 0 -0.5px 0.5px rgba(255, 255, 255, 0.10);
+}
+
+.phone-shell[data-icon-effect="flat"] .folder-mini {
+  background: color-mix(in srgb, var(--c-desktop-icon, #2f343b) 12%, transparent);
+}
+
+.folder-mini-glyph {
+  width: 62%;
+  height: 62%;
+  color: var(--c-desktop-icon, #2f343b);
+}
+
+/* Drag hover: highlight the target that's about to merge into a group (release to group). */
+.icon-item.merge-target .icon-glyph-box {
+  transform: scale(1.16);
+  box-shadow:
+    0 0 0 2.5px color-mix(in srgb, var(--c-desktop-icon, #ffffff) 65%, transparent),
+    0 6px 22px rgba(0, 0, 0, 0.25);
+  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.18s ease;
+}
+.edit-mode .icon-item.merge-target {
+  animation: none; /* Pause the jiggle while highlighted, so the target reads more clearly. */
+}
+
+/* ── Folder expanded panel ── */
+.folder-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 700; /* Above the dock (300)/page-controls (400), below the drag-ghost (9999) */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px;
+  background: rgba(15, 18, 26, 0.28);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+  animation: folder-overlay-in 0.2s ease;
+}
+
+@keyframes folder-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.folder-name-input {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  background: transparent;
+  text-align: center;
+  width: 70%;
+  color: var(--c-home-label, #ffffff);
+  font-size: calc(17px * var(--app-text-scale, 1));
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.25);
+  outline: none;
+  border-radius: 10px;
+  padding: 4px 8px;
+}
+.folder-name-input:focus {
+  background: color-mix(in srgb, var(--c-desktop-icon-box, #ffffff) 26%, transparent);
+  text-shadow: none;
+}
+
+.folder-panel {
+  /* Equal margin on all four sides (measured against the icon "box" edge, with the label
+     counted as part of the whitespace, matching iOS): side margin = (212 - 2x58) / 3 = 32;
+     top margin = padding-top 32; bottom margin = the in-row label area 26 + padding-bottom 6
+     = 32. Change these together if the sizes change. */
+  width: min(212px, 78%);
+  border-radius: 30px;
+  padding: 0;
+  /* Flat material: the panel's base color IS the icon's own base color -- a folder is "an
+     enlarged icon box", so material and color follow the icon (not the widget card face
+     --c-home-card, that's a widget's own color); when the icon base color is translucent,
+     pair it with a backdrop blur, so the wallpaper showing through has the same haze as the
+     icon box. */
+  background: var(--c-desktop-icon-box, #ffffff);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  animation: folder-panel-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+/* The panel IS the icon box: a member's title uses the icon's own main color, so the contrast against the panel is automatic. */
+.phone-shell[data-icon-effect="flat"] .folder-app .icon-label {
+  color: var(--c-desktop-icon, #2f343b);
+}
+
+@keyframes folder-panel-in {
+  from { opacity: 0; transform: scale(0.72); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Glass material: the same recipe as .icon-glyph-box's glass effect (gradient lighting + base color showing through + highlight stroke). */
+.phone-shell[data-icon-effect="glass"] .folder-panel {
+  background:
+    linear-gradient(135deg,
+      rgba(255, 255, 255, 0.17),
+      color-mix(in srgb, var(--c-desktop-icon-bg, #c7b8ff) 6%, transparent),
+      rgba(255, 255, 255, 0.07)),
+    color-mix(in srgb, var(--c-desktop-icon-box, #ffffff) 30%, transparent);
+  backdrop-filter: blur(26px) saturate(140%);
+  -webkit-backdrop-filter: blur(26px) saturate(140%);
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.28),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.05),
+    0 18px 48px rgba(0, 0, 0, 0.22);
+}
+
+.phone-shell[data-icon-effect="glass"] .folder-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  pointer-events: none;
+  z-index: 3;
+  background:
+    linear-gradient(135deg,
+      rgba(255, 255, 255, 0.48),
+      rgba(255, 255, 255, 0.14) 40%,
+      rgba(255, 255, 255, 0.12) 62%,
+      rgba(255, 255, 255, 0.18));
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.folder-pages {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.folder-pages::-webkit-scrollbar {
+  display: none;
+}
+
+.folder-page {
+  flex: 0 0 100%;
+  scroll-snap-align: center;
+  display: grid;
+  /* Column width fixed to the icon's own width; space-evenly makes left margin = column gap = right margin, so whitespace is even on all sides. */
+  grid-template-columns: repeat(2, 58px);
+  grid-template-rows: repeat(2, minmax(84px, auto));
+  justify-content: space-evenly;
+  row-gap: 4px;
+  padding: 32px 0 6px;
+  align-items: start;
+}
+
+.folder-app {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  touch-action: pan-x;
+}
+.folder-app:active .icon-glyph-box {
+  transform: scale(0.92);
+  transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* The icon box size inside the panel is fixed and doesn't shrink to the desktop's own
+   --slot-size. Also adds a "seat" base color: on the desktop, a glass box relies on the
+   blurred wallpaper behind it to read, and a flat box's base-color token defaults to nearly
+   fully transparent -- inside the panel, what's behind is the panel's own even background, so
+   either material would otherwise become an invisible "bare icon". The seat uses the text
+   color at low opacity, which contrasts against both light and dark themes. */
+.folder-app .icon-glyph-box {
+  width: 58px;
+  height: 58px;
+  background:
+    linear-gradient(0deg, var(--c-desktop-icon-box, transparent), var(--c-desktop-icon-box, transparent)),
+    color-mix(in srgb, var(--c-home-text, #2f343b) 10%, transparent);
+}
+.phone-shell[data-icon-effect="glass"] .folder-app .icon-glyph-box {
+  background:
+    linear-gradient(135deg,
+      rgba(255, 255, 255, 0.17),
+      color-mix(in srgb, var(--c-desktop-icon-bg, #c7b8ff) 6%, transparent),
+      rgba(255, 255, 255, 0.07)),
+    linear-gradient(0deg,
+      color-mix(in srgb, var(--c-desktop-icon-box, #ffffff) 38%, transparent),
+      color-mix(in srgb, var(--c-desktop-icon-box, #ffffff) 38%, transparent)),
+    rgba(255, 255, 255, 0.28);
+}
+.folder-app .icon-label {
+  color: var(--c-home-label, #2f343b);
+}
+
+/* The dots float within the bottom margin without adding height to the panel -- the four-sided whitespace stays the same whether or not there's a second page. */
+.folder-dots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.folder-dots .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--c-home-label, #ffffff) 32%, transparent);
+}
+.folder-dots .dot.active {
+  background: color-mix(in srgb, var(--c-home-label, #ffffff) 85%, transparent);
+}

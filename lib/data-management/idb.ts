@@ -184,7 +184,14 @@ function getStoreNames(db: IDBDatabase, source: IndexedDbSource): string[] {
 
 async function exportIndexedDbSource(source: IndexedDbSource, collector?: MediaCollector): Promise<IndexedDbSourceBackup> {
   const db = await openDb(source.dbName);
-  if (!db) return { type: "indexeddb", dbName: source.dbName, stores: [] };
+  if (!db) {
+    // "Couldn't open" is not the same as "no data": a version-less open against a
+    // database that doesn't exist yet creates an empty one and succeeds. Reaching
+    // this branch means it's a real failure (cleared by the browser, corrupted, or
+    // locked by another tab) -- it has to be carried out with the backup, or this
+    // produces a ZIP that looks complete but is silently missing a whole database.
+    return { type: "indexeddb", dbName: source.dbName, stores: [], error: `Could not open database ${source.dbName} (it may have been cleared by the browser, or is corrupted)` };
+  }
 
   try {
     const storeNames = getStoreNames(db, source);
@@ -244,22 +251,36 @@ async function exportIndexedDbSource(source: IndexedDbSource, collector?: MediaC
 }
 
 async function readKvRecords(source: KvSource): Promise<{ key: string; value: string }[]> {
+  // A read that can't reach the real store has to fail outright, never fall back
+  // to the in-memory cache silently: if kv-db's own hydration failed, that cache
+  // can be empty or incomplete, and falling back to it would quietly produce an
+  // "export succeeded" backup that's actually missing data -- discovered only
+  // after restoring onto a new device and finding the history gone. A backup that
+  // errors out is better than one that looks fine and isn't.
   const byKey = new Map<string, { key: string; value: string }>();
   const db = await openDb("AiPhoneKvDB");
-  if (db && Array.from(db.objectStoreNames).includes("entries")) {
-    try {
+  if (!db) {
+    throw new Error("Could not open the local database (AiPhoneKvDB); aborted to avoid producing an incomplete backup. Please restart the browser and try again.");
+  }
+  try {
+    // The store was just created and has no "entries" table yet = this device
+    // genuinely has never written any kv data. That's not a read failure.
+    if (Array.from(db.objectStoreNames).includes("entries")) {
       const transaction = db.transaction("entries", "readonly");
       const records = await runRequest<Array<{ key: string; value: string }>>(transaction.objectStore("entries").getAll());
       for (const record of records) {
         if (matchesKey(record.key, source)) byKey.set(record.key, record);
       }
-    } catch {
-      // Fall back to cache-only below.
-    } finally {
-      db.close();
     }
+  } catch (error) {
+    throw new Error(`Failed to read local data; aborted to avoid producing an incomplete backup (${error instanceof Error ? error.message : String(error)}). Please try again.`);
+  } finally {
+    db.close();
   }
 
+  // Still merge in the in-memory cache: kvSet writes the cache first and persists
+  // to IndexedDB asynchronously afterward, so the cache can be newer than what was
+  // just read.
   for (const record of kvEntries()) {
     if (matchesKey(record.key, source)) byKey.set(record.key, record);
   }
@@ -348,7 +369,7 @@ export async function inspectSource(source: DataSource): Promise<SourceStats> {
     bytes,
     details: [{
       id: source.type === "kv" ? `kv/${source.label ?? "selected"}` : `localStorage/${source.label ?? "selected"}`,
-      label: source.label ?? (source.type === "kv" ? "键值数据" : "localStorage"),
+      label: source.label ?? (source.type === "kv" ? "Key-value data" : "localStorage"),
       records: payload.records.length,
       bytes,
     }],
@@ -488,7 +509,7 @@ export async function importSource(payload: SourceBackup, overwrite = false, res
     payload.stores.map((s) => ({ name: s.name, keyPath: s.keyPath, autoIncrement: s.autoIncrement, indexes: s.indexes })),
   );
   if (!db) {
-    result.errors.push(`无法打开 ${payload.dbName}`);
+    result.errors.push(`Could not open ${payload.dbName}`);
     return result;
   }
   try {

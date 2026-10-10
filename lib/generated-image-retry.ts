@@ -40,23 +40,49 @@ export function isPendingChatGeneratedImageMessage(message: Pick<ChatMessage, "m
 export async function generateAndApplyChatGeneratedImage(
     message: ChatMessage,
     characterId?: string,
-    options?: { signal?: AbortSignal; description?: string },
+    options?: { signal?: AbortSignal; description?: string; useReferenceImage?: boolean },
 ): Promise<ChatMessage> {
     const previousDescription = message.mediaData?.label?.trim() || "";
     const description = (options?.description ?? previousDescription).trim();
-    if (!description) throw new Error("缺少图片描述，无法重新生成");
-    if (previousDescription && previousDescription !== description) {
-        syncChatGeneratedImagePromptText(message.id, previousDescription, description);
+    if (!description) throw new Error("Missing image description, can't regenerate");
+
+    const effectiveUseReference = options?.useReferenceImage !== undefined
+        ? options.useReferenceImage
+        : (message.mediaData?.useReferenceImage === true);
+
+    if (
+        (previousDescription && previousDescription !== description) ||
+        (options?.useReferenceImage !== undefined && options.useReferenceImage !== (message.mediaData?.useReferenceImage === true))
+    ) {
+        syncChatGeneratedImagePromptText(message.id, previousDescription, description, options?.useReferenceImage);
+    }
+
+    // Retry path: mark pending and broadcast first, so the bubble flips to "generating" right
+    // away (the very first generation is already pending by construction, so no rewrite is
+    // needed there). Either success or failure writes the status again afterward, so it never
+    // gets stuck on pending.
+    if (message.mediaData?.imageGenerationStatus !== "pending") {
+        const marked = updateChatMessage(message.id, {
+            mediaData: {
+                ...message.mediaData,
+                label: description,
+                useReferenceImage: effectiveUseReference,
+                imageGenerationStatus: "pending",
+                imageGenerationError: undefined,
+            },
+        });
+        if (marked) dispatchChatMessagesUpdated(marked.sessionId, marked);
     }
 
     try {
         const generated = await generateImageFromConfiguredApi({
             description,
             characterId,
-            useReferenceImage: message.mediaData?.useReferenceImage === true,
+            appId: "chat",
+            useReferenceImage: effectiveUseReference,
             signal: options?.signal,
         });
-        if (!generated) throw new Error("生图配置未启用或不完整");
+        if (!generated) throw new Error("Image generation is not enabled or is incomplete");
 
         const fileName = generatedImageFilename(description, generated.mimeType);
         const previousData = message.mediaData ?? {};
@@ -65,6 +91,7 @@ export async function generateAndApplyChatGeneratedImage(
             label: description,
             fileType: "image",
             fileName,
+            useReferenceImage: effectiveUseReference,
             imageGenerationMediaRef: generated.mediaRef,
             imageGenerationPrompt: generated.prompt,
             imageGenerationUsedReference: generated.usedReferenceImage,
@@ -77,7 +104,7 @@ export async function generateAndApplyChatGeneratedImage(
             mediaUrl: generated.dataUrl,
             mediaData: nextData,
         });
-        if (!updated) throw new Error("原消息不存在，无法替换图片");
+        if (!updated) throw new Error("The original message no longer exists, can't replace the image");
         dispatchChatMessagesUpdated(updated.sessionId, updated);
         return updated;
     } catch (error) {
@@ -85,6 +112,7 @@ export async function generateAndApplyChatGeneratedImage(
             mediaData: {
                 ...message.mediaData,
                 label: description,
+                useReferenceImage: effectiveUseReference,
                 imageGenerationStatus: "failed",
                 imageGenerationError: errorToMessage(error),
             },
@@ -98,36 +126,61 @@ export async function retryChatGeneratedImage(
     message: ChatMessage,
     characterId?: string,
     nextDescription?: string,
+    useReferenceImage?: boolean,
 ): Promise<ChatMessage> {
-    return generateAndApplyChatGeneratedImage(message, characterId, { description: nextDescription });
+    return generateAndApplyChatGeneratedImage(message, characterId, {
+        description: nextDescription,
+        useReferenceImage,
+    });
 }
 
-export async function retryMomentGeneratedPhoto(post: MomentPost, nextDescription?: string): Promise<MomentPost> {
+export async function retryMomentGeneratedPhoto(
+    post: MomentPost,
+    nextDescription?: string,
+    useReferenceImage?: boolean,
+): Promise<MomentPost> {
     const description = (nextDescription ?? post.photoDescription)?.trim();
-    if (!description) throw new Error("缺少图片描述，无法重新生成");
+    if (!description) throw new Error("Missing image description, can't regenerate");
+
+    const effectiveUseReference = useReferenceImage !== undefined
+        ? useReferenceImage
+        : (post.photoUseReferenceImage === true);
+
+    // Same as chat: mark pending and broadcast first, so the card shows "generating image…"
+    // right away; either success or failure writes the status again afterward.
+    updateMomentPost(post.id, {
+        photoDescription: description,
+        photoUseReferenceImage: effectiveUseReference,
+        photoGenerationStatus: "pending",
+        photoGenerationError: undefined,
+    });
+    dispatchMomentsUpdated();
 
     try {
         const generated = await generateImageFromConfiguredApi({
             description,
             characterId: post.authorType === "character" ? post.authorId : undefined,
-            useReferenceImage: post.photoUseReferenceImage === true,
+            appId: "moments",
+            useReferenceImage: effectiveUseReference,
         });
-        if (!generated) throw new Error("生图配置未启用或不完整");
+        if (!generated) throw new Error("Image generation is not enabled or is incomplete");
 
         const assetId = await saveChatImageToIndexedDB(generated.blob);
         const updated = updateMomentPost(post.id, {
             photoUrl: `asset://${assetId}`,
             photoDescription: description,
+            photoUseReferenceImage: effectiveUseReference,
             photoGenerationStatus: "generated",
             photoGenerationPrompt: generated.prompt,
             photoGenerationError: undefined,
         });
-        if (!updated) throw new Error("原朋友圈不存在，无法替换图片");
+        if (!updated) throw new Error("The original Moments post no longer exists, can't replace the image");
         dispatchMomentsUpdated();
         return updated;
     } catch (error) {
         updateMomentPost(post.id, {
             photoDescription: description,
+            photoUseReferenceImage: effectiveUseReference,
             photoGenerationStatus: "failed",
             photoGenerationError: errorToMessage(error),
         });

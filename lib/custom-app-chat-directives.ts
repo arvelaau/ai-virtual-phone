@@ -132,6 +132,7 @@ function normalizeDirective(app: { id: string; name: string }, directive: Custom
     id,
     label,
     syntax,
+    keywords: cleanText(directive.keywords, 240) || undefined,
     description: cleanText(directive.description, 500) || undefined,
     card: plainRecord(directive.card ?? directive.layout),
     title: cleanText(directive.title, 80) || undefined,
@@ -199,6 +200,7 @@ function studioCardToDirective(card: StudioCard): CustomAppChatDirective {
     id: card.id,
     label: card.name,
     syntax: card.syntax,
+    keywords: card.keywords,
     description: card.description,
     card: {
       html: card.html,
@@ -274,6 +276,16 @@ export function findCustomAppChatDirective(label: string): RegisteredCustomAppCh
   return loadCustomAppChatDirectives().find(item => getCustomAppDirectiveSyntaxHead(item.syntax) === normalized) ?? null;
 }
 
+/** True when this directive still uses the bracket TAG for the given surface -- always true in
+ *  chat (bracket tags are already the norm there; `keywords` is never consulted for chat), and
+ *  in a narrative mode, true only when the author never set `keywords` (backward compatible
+ *  with every card saved before that field existed). Exported so rich-message-parser.ts's
+ *  detection side can partition directives the exact same way the teaching side does --
+ *  otherwise a directive could be taught one way and detected another. */
+export function directiveUsesTag(directive: Pick<CustomAppChatDirective, "keywords">, mode: CustomAppCardScopeMode): boolean {
+  return mode === "chat" || !directive.keywords?.trim();
+}
+
 export function formatCustomAppChatDirectivesForPrompt(mode: CustomAppCardScopeMode, options: { group?: boolean } = {}): string {
   // Scope is per-card (directiveMatchesScope, above) -- authored alongside the card itself in
   // Studio, not a global app-wide setting. That is what makes this safe to call unconditionally
@@ -281,15 +293,39 @@ export function formatCustomAppChatDirectivesForPrompt(mode: CustomAppCardScopeM
   // for the caller to gate.
   const directives = loadCustomAppChatDirectives().filter(d => directiveMatchesScope(d, mode));
   if (directives.length === 0) return "";
+  const isNarrative = mode === "story" || mode === "offline";
   const lines: string[] = [];
+  // In prose-flowing narrative modes there is no existing convention for where a bracket tag
+  // goes (unlike chat, where every message is already its own short bracket-taggable line) --
+  // without this, a model mid-paragraph has no cue that the tag should stand apart from its own
+  // sentence. Mirrors [Message]'s own placement instruction, which the same narrative surfaces
+  // already teach and which is demonstrably something models follow reliably. Only shown when
+  // at least one directive being taught here still uses a tag on this surface -- a keyword has
+  // no "placement", it just gets woven into the sentence like any other word.
+  if (isNarrative && directives.some(d => directiveUsesTag(d, mode))) {
+    lines.push("");
+    lines.push("【Placement】Write any of the tags below on their own line, after your narration is complete -- the same way you would place a [Message] block. Never fold one into the middle of a sentence.");
+  }
   for (const directive of directives) {
     lines.push("");
     lines.push(`### ${directive.label}`);
     // These markers are injected into the same prompt as lib/builtin-preset.ts's
     // rich-media section, so they must use the SAME section labels and the same
     // speaker-prefix placeholder — keep them in lockstep.
-    const syntax = directive.syntax || `[${directive.label}:content]`;
-    lines.push(`【Format】${options.group ? `[CharacterName]: ${syntax}` : syntax}`);
+    if (directiveUsesTag(directive, mode)) {
+      const syntax = directive.syntax || `[${directive.label}:content]`;
+      lines.push(`【Format】${options.group ? `[CharacterName]: ${syntax}` : syntax}`);
+    } else {
+      // Keyword triggering: a bracket tag reads as unnatural mid-paragraph in prose-flowing
+      // modes, and unlike chat there is no existing convention there for one. The narration is
+      // never edited to strip the word out afterward -- a keyword lives inside a real sentence,
+      // so (unlike a tag) it can't be cleanly cut out the way rich-message-parser.ts's
+      // findCustomAppKeywordCandidate leaves it: the card just renders alongside the untouched
+      // prose. See CustomAppChatDirective.keywords in custom-app-types.ts for the full reasoning.
+      const keywords = (directive.keywords || "").split(",").map(k => k.trim()).filter(Boolean);
+      const quoted = keywords.map(k => `"${k}"`).join(" or ");
+      lines.push(`【Trigger word】Naturally mention ${quoted} somewhere in your narration when the moment calls for it. Do not write a bracket tag, do not call attention to the word or explain that you're using it -- just use it the way it would normally come up in a sentence.`);
+    }
     const description = directive.description || `Triggers the "${directive.label}" feature provided by "${directive.appName}".`;
     lines.push(`【Rule】${description}`);
   }
