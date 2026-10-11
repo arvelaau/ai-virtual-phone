@@ -19,6 +19,7 @@ import { buildQuoteTag } from "./rich-tag-builders";
 
 export type InboundContent =
     | { kind: "text"; text: string; quote?: { id: string; preview: string } }
+    | { kind: "image"; mimeType: string; name: string; size?: number; read: () => Promise<Uint8Array> }
     | { kind: "unsupported"; type: string };
 
 type AnyContent = { type?: unknown; text?: unknown; markdown?: unknown; content?: unknown; target?: unknown };
@@ -50,7 +51,30 @@ export function readInboundContent(content: unknown): InboundContent {
         return { kind: "text", text: inner, quote: preview || id ? { id, preview } : undefined };
     }
 
+    if (c.type === "attachment") {
+        const a = c as AnyContent & { mimeType?: unknown; name?: unknown; size?: unknown; read?: unknown };
+        const mimeType = typeof a.mimeType === "string" ? a.mimeType : "";
+        if (/^image\/(png|jpe?g|gif|webp|heic|heif)$/i.test(mimeType) && typeof a.read === "function") {
+            return {
+                kind: "image",
+                mimeType: mimeType.toLowerCase(),
+                name: typeof a.name === "string" ? a.name : "",
+                size: typeof a.size === "number" ? a.size : undefined,
+                read: a.read as () => Promise<Uint8Array>,
+            };
+        }
+        return { kind: "unsupported", type: `attachment${mimeType ? ` (${mimeType})` : ""}` };
+    }
+
     return { kind: "unsupported", type: typeof c.type === "string" ? c.type : "" };
+}
+
+/** Largest photo the webhook will pull into a model request (bytes). */
+export const MAX_INBOUND_IMAGE_BYTES = 8 * 1024 * 1024;
+
+/** Providers only accept these inline; HEIC/HEIF has to be refused rather than mislabelled. */
+export function isModelReadableImage(mimeType: string): boolean {
+    return /^image\/(png|jpe?g|gif|webp)$/i.test(mimeType);
 }
 
 /** The text the model sees: a quote is rendered exactly like an in-app quote. */

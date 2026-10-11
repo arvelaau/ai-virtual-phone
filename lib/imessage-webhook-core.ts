@@ -69,9 +69,20 @@ export function buildPromptFromTemplate(
     template: IMessageCloudPromptTemplate,
     recent: IMessageCloudStoredMessage[],
     inboundText: string,
+    image?: { mimeType: string; dataBase64: string },
 ): LLMMessage[] {
     const turns: LLMMessage[] = recent.map((item) => ({ role: item.role, content: item.content }));
-    turns.push({ role: "user", content: inboundText });
+    turns.push(
+        image
+            ? {
+                  role: "user",
+                  content: [
+                      { type: "text", text: inboundText || "[Image]" },
+                      { type: "image_url", image_url: { url: `data:${image.mimeType};base64,${image.dataBase64}` } },
+                  ],
+              }
+            : { role: "user", content: inboundText },
+    );
     return [...template.beforeMessages, ...turns, ...template.afterMessages];
 }
 

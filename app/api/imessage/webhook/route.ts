@@ -51,7 +51,7 @@ import {
     type IMessageSupabaseConfig,
 } from "@/lib/server/imessage-supabase";
 import { appendTrace } from "@/lib/server/imessage-trace";
-import { readInboundContent } from "@/lib/imessage-content";
+import { isModelReadableImage, MAX_INBOUND_IMAGE_BYTES, readInboundContent } from "@/lib/imessage-content";
 import type { IMessageCloudRuntimeSnapshot, IMessageCloudStoredMessage } from "@/lib/imessage-types";
 
 export const runtime = "nodejs";
@@ -100,9 +100,10 @@ async function generateReply(
     snapshot: IMessageCloudRuntimeSnapshot,
     inboundText: string,
     recent: IMessageCloudStoredMessage[],
+    image?: { mimeType: string; dataBase64: string },
 ): Promise<{ content: string; note: string }> {
     const since = messagesAfterSnapshot(recent, snapshot.createdAt, HISTORY_LIMIT);
-    const messages = buildPromptFromTemplate(snapshot.promptTemplate, since, inboundText);
+    const messages = buildPromptFromTemplate(snapshot.promptTemplate, since, inboundText, image);
     // Streamed, like the Chat app: a thinking model behind a relay is silent for a long time,
     // and a single buffered request is what such relays cut off.
     const request = buildProviderRequest(snapshot.apiConfig, snapshot.preset, toLlmRequestMessages(messages), { stream: true });
@@ -212,12 +213,34 @@ async function processDelivery(d: Delivery): Promise<TraceEvent> {
                     },
                     now: () => Date.now(),
                 };
+                let image: { mimeType: string; dataBase64: string } | undefined;
+                let contentType = inboundContent.kind === "text" ? "text" : inboundContent.kind === "image" ? "image" : inboundContent.type;
+                if (inboundContent.kind === "image") {
+                    const limitMb = MAX_INBOUND_IMAGE_BYTES / 1048576;
+                    if (!isModelReadableImage(inboundContent.mimeType)) {
+                        contentType = `image (${inboundContent.mimeType}) - HEIC/HEIF cannot be sent to the model`;
+                    } else if ((inboundContent.size ?? 0) > MAX_INBOUND_IMAGE_BYTES) {
+                        contentType = `image too large (${Math.round((inboundContent.size ?? 0) / 1048576)} MB, limit ${limitMb} MB)`;
+                    } else {
+                        try {
+                            const bytes = await inboundContent.read();
+                            if (bytes.byteLength > MAX_INBOUND_IMAGE_BYTES) {
+                                contentType = `image too large (${Math.round(bytes.byteLength / 1048576)} MB, limit ${limitMb} MB)`;
+                            } else {
+                                image = { mimeType: inboundContent.mimeType, dataBase64: Buffer.from(bytes).toString("base64") };
+                            }
+                        } catch (err) {
+                            contentType = `image could not be downloaded: ${(err instanceof Error ? err.message : String(err)).slice(0, 120)}`;
+                        }
+                    }
+                }
                 outcome = await handleInboundMessage(deps, {
                     messageId: message.id,
                     senderId: message.sender?.id ?? "",
                     spaceId: (space as { id?: string }).id ?? "",
                     direction: message.direction,
-                    contentType: inboundContent.kind === "text" ? "text" : inboundContent.type,
+                    contentType,
+                    image,
                     text: inboundContent.kind === "text" ? inboundContent.text : "",
                     quote: inboundContent.kind === "text" ? inboundContent.quote : undefined,
                 });

@@ -90,6 +90,8 @@ export type IMessageCloudStoredMessage = {
     content: string;
     /** The platform's id for this message (outbound only; inbound already uses externalId). */
     platformMessageId?: string;
+    /** A photo that came with this message; the bytes live at `path` in the same bucket. */
+    image?: { path: string; mimeType: string };
 };
 
 export type IMessageCloudRuntimeIndexItem = {

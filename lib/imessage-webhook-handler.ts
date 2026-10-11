@@ -44,6 +44,8 @@ export type InboundInput = {
     text: string;
     /** Present when the user sent this as a quoted reply. */
     quote?: { id: string; preview: string };
+    /** A photo the user sent (already size-checked by the caller). */
+    image?: { mimeType: string; dataBase64: string };
 };
 
 export type HandlerDeps = {
@@ -54,6 +56,7 @@ export type HandlerDeps = {
         snapshot: IMessageCloudRuntimeSnapshot,
         text: string,
         recent: IMessageCloudStoredMessage[],
+        image?: { mimeType: string; dataBase64: string },
     ): Promise<string | { content: string; note?: string }>;
     /** `replyToId` asks for a native reply to that message. Resolves to the sent message id. */
     send(text: string, replyToId?: string): Promise<string | undefined | void>;
@@ -69,7 +72,7 @@ export async function handleInboundMessage(deps: HandlerDeps, input: InboundInpu
         traceEvent(result, reason, { ...base, detail, ms: deps.now() - started }, deps.now());
 
     if (isOutboundDirection(input.direction)) return done("ignored", "ignored_outbound");
-    if (input.contentType !== "text" || !input.text.trim()) {
+    if (!input.image && (input.contentType !== "text" || !input.text.trim())) {
         // (a quoted reply arrives as text with a quote; see readInboundContent)
         return done("ignored", "ignored_non_text", `content type "${input.contentType || "unknown"}"`);
     }
@@ -120,16 +123,25 @@ export async function handleInboundMessage(deps: HandlerDeps, input: InboundInpu
             externalId: input.messageId,
             createdAt: new Date(deps.now()).toISOString(),
             role: "user",
-            content: modelText,
+            content: modelText || (input.image ? "[Image]" : ""),
         };
+        if (input.image) {
+            const safe = (v: string) => v.replace(/[^a-zA-Z0-9_-]/g, "_");
+            const mediaPath = `${IMESSAGE_CLOUD_PREFIX}/media/${safe(target.lineId)}/${safe(input.messageId)}.json`;
+            await deps.putJson(mediaPath, { mimeType: input.image.mimeType, dataBase64: input.image.dataBase64 });
+            inbound.image = { path: mediaPath, mimeType: input.image.mimeType };
+        }
         await deps.putJson(inboundMessagePath(IMESSAGE_CLOUD_PREFIX, target.lineId, input.messageId), inbound);
 
         let raw: string;
         let modelNote = "";
         try {
-            const generated = await deps.generate(snapshot, modelText, recent);
+            const generated = await deps.generate(snapshot, modelText, recent, input.image);
             raw = typeof generated === "string" ? generated : generated.content;
             modelNote = typeof generated === "string" ? "" : (generated.note ?? "");
+            if (input.image && snapshot.apiConfig?.enableImageRecognition !== true) {
+                modelNote = `${modelNote ? `${modelNote}, ` : ""}photo received but image recognition is off in this API config, so the model saw only a placeholder`;
+            }
         } catch (err) {
             await deps.putJson(markerPath, { state: "failed", at: deps.now() } satisfies DeliveryMarker).catch(() => undefined);
             return done("error", "llm_error", errText(err));

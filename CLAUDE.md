@@ -4001,3 +4001,10 @@ A third-party bridge (Uranus_Imessage; `imessage.js`, `photon.js`, `实现细节
 - Outbound records now carry `platformMessageId` so a later quote can target an earlier bubble.
 - Webhook `maxDuration` 60 -> 300, model deadline 280 s (other routes on this deploy already run 120 s). A function cannot exceed the plan's limit; >300 s needs Pro + Fluid.
 - NOT done: native photo / voice-note sending (needs image-gen + TTS settings in the snapshot, `attachment()` / `voice()` builders, per-message API cost). Text fallbacks cover it meanwhile.
+
+### iMessage bridge — inbound photos (2026-10-11)
+- An `attachment` with an image mime is now read (`content.read()`), sent to the model as an `image_url` part, stored at `imessage-cloud/media/<lineId>/<id>.json` ({mimeType,dataBase64}) and referenced from the inbound record (`image`). The browser pull fetches it and imports a `media_file` image message.
+- Limits: 8 MB, png/jpeg/gif/webp only. HEIC/HEIF is refused with a trace reason (no re-encoding yet). Anything refused shows up in "Webhook activity" instead of silently dropping.
+- The model only SEES the photo when the API config has `enableImageRecognition` on; otherwise the adapter degrades it to `[图片]` and the trace says so.
+- History turns keep only text/`[Image]`; old photos are not re-sent to the model (cost).
+- `_fx-imessage-image.mjs` 26/26. Not live-tested against a real Photon attachment (assumes `read()` returns the bytes).

@@ -356,15 +356,31 @@ function isCloudStoredMessage(value: unknown): value is IMessageCloudStoredMessa
     return Boolean(value) && typeof value === "object" && (value as { format?: unknown }).format === "ai-phone-imessage-cloud-message";
 }
 
-function makeImportedMessage(stored: IMessageCloudStoredMessage): ChatMessage {
+function makeImportedMessage(stored: IMessageCloudStoredMessage, imageDataUrl?: string): ChatMessage {
     return {
         id: `imsg_cloud_${stored.externalId}`,
         sessionId: stored.sessionId,
         role: stored.role,
-        content: stored.content,
+        content: imageDataUrl && stored.content === "[Image]" ? "" : stored.content,
         status: "sent",
         createdAt: stored.createdAt,
+        ...(imageDataUrl
+            ? { mediaType: "media_file" as const, mediaUrl: imageDataUrl, mediaData: { fileType: "image", fileName: "iMessage photo" } }
+            : {}),
     };
+}
+
+/** Reads a photo the webhook stored next to a message and returns it as a data URL. */
+async function loadStoredImageDataUrl(config: CloudBackupConfig, image: { path: string; mimeType: string }): Promise<string | undefined> {
+    const blob = await getObject(config, image.path);
+    if (!blob) return undefined;
+    try {
+        const parsed = JSON.parse(await blob.text()) as { mimeType?: string; dataBase64?: string };
+        if (!parsed.dataBase64) return undefined;
+        return `data:${parsed.mimeType || image.mimeType};base64,${parsed.dataBase64}`;
+    } catch {
+        return undefined;
+    }
 }
 
 /** Pulls completed inbound/outbound records the server-side webhook wrote to
@@ -417,12 +433,19 @@ export async function pullIMessageCloudMessages(
             }
         }
 
-        storedMessages
-            .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-            .forEach((stored) => {
-                const { inserted } = upsertImportedChatMessage(makeImportedMessage(stored));
-                if (inserted) { result.added += 1; touchedSessionIds.add(stored.sessionId); } else { result.skipped += 1; }
-            });
+        const sortedStored = storedMessages.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+        for (const stored of sortedStored) {
+            let imageDataUrl: string | undefined;
+            if (stored.image) {
+                try {
+                    imageDataUrl = await loadStoredImageDataUrl(cloudConfig, stored.image);
+                } catch (err) {
+                    result.errors.push(`${stored.externalId}: photo could not be loaded (${err instanceof Error ? err.message : String(err)})`);
+                }
+            }
+            const { inserted } = upsertImportedChatMessage(makeImportedMessage(stored, imageDataUrl));
+            if (inserted) { result.added += 1; touchedSessionIds.add(stored.sessionId); } else { result.skipped += 1; }
+        }
     }
 
     for (const sessionId of touchedSessionIds) reindexSessionMessageOrdersByTime(sessionId);
