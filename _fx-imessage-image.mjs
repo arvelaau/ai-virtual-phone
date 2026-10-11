@@ -31,13 +31,13 @@ eq("A8 an image with no read() is not an image", C.readInboundContent({ type: "a
 
 // ---- B: prompt ---------------------------------------------------------------------------
 const tpl = { version: 1, slotToken: "T", beforeMessages: [{ role: "system", content: "SYS" }], afterMessages: [], baseHistoryLength: 0, createdAt: "" };
-let msgs = W.buildPromptFromTemplate(tpl, [], "look at this", { mimeType: "image/png", dataBase64: "QUJD" });
+let msgs = W.buildPromptFromTemplate(tpl, [], "look at this", [{ mimeType: "image/png", dataBase64: "QUJD" }]);
 const last = msgs[msgs.length - 1];
 eq("B1 user turn carries text + image part", last.content, [
   { type: "text", text: "look at this" },
   { type: "image_url", image_url: { url: "data:image/png;base64,QUJD" } },
 ]);
-msgs = W.buildPromptFromTemplate(tpl, [], "", { mimeType: "image/png", dataBase64: "QUJD" });
+msgs = W.buildPromptFromTemplate(tpl, [], "", [{ mimeType: "image/png", dataBase64: "QUJD" }]);
 eq("B2 a captionless photo still gets a text part", msgs[msgs.length - 1].content[0], { type: "text", text: "[Image]" });
 msgs = W.buildPromptFromTemplate(tpl, [], "plain");
 eq("B3 text-only turn is unchanged", msgs[msgs.length - 1], { role: "user", content: "plain" });
@@ -47,15 +47,16 @@ const PHONE = "+15551234567";
 function world(recognition) {
   const store = new Map();
   store.set("imessage-cloud/index.json", { format: "x", version: 1, updatedAt: "", lines: [{ lineId: "line1", phone: PHONE, characterId: "c1", characterName: "Mira", sessionId: "s1", path: "imessage-cloud/runtime/line1.json", updatedAt: "" }] });
-  store.set("imessage-cloud/runtime/line1.json", { format: "x", version: 1, createdAt: "", line: { id: "line1", phone: PHONE, characterId: "c1", enabled: true }, apiConfig: { enableImageRecognition: recognition }, promptTemplate: tpl });
+  store.set("imessage-cloud/runtime/line1.json", { format: "x", version: 1, createdAt: "", line: { id: "line1", phone: PHONE, characterId: "c1", enabled: true, replyDelaySeconds: 0 }, apiConfig: { enableImageRecognition: recognition }, promptTemplate: tpl });
   const w = { store, sent: [], gen: [] };
   w.deps = {
     readJson: async (k) => (store.has(k) ? JSON.parse(JSON.stringify(store.get(k))) : null),
     putJson: async (k, v) => { store.set(k, JSON.parse(JSON.stringify(v))); },
     listRecentStored: async () => [],
-    generate: async (_s, text, _r, image) => { w.gen.push({ text, image }); return "Nice photo!"; },
+    generate: async (_s, text, _r, images) => { w.gen.push({ text, image: images?.[0] }); return "Nice photo!"; },
     send: async (t) => { w.sent.push(t); return "p" + w.sent.length; },
     now: () => 1_000_000,
+    sleep: async () => {},
   };
   return w;
 }

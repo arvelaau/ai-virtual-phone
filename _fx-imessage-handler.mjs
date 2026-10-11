@@ -57,7 +57,7 @@ const indexFor = (phone = PHONE) => ({
 });
 const snapshotFor = (over = {}) => ({
   format: "ai-phone-imessage-runtime", version: 1, createdAt: "2026-01-01T00:00:00Z",
-  line: { id: "line1", phone: PHONE, characterId: "c1", enabled: true, addedAt: "" },
+  line: { id: "line1", phone: PHONE, characterId: "c1", enabled: true, addedAt: "", replyDelaySeconds: 0 },
   apiConfig: { apiKey: SECRET_KEY },
   promptTemplate: { version: 1, slotToken: "T", beforeMessages: [{ role: "system", content: "SYS" }], afterMessages: [], baseHistoryLength: 0, createdAt: "" },
   ...over,
@@ -78,6 +78,7 @@ function world(opts = {}) {
     generate: async () => { w.llmCalls += 1; if (w.llmError) throw new Error(w.llmError); return w.reply; },
     send: async (text) => { if (w.sent.length === w.failSendAt) throw new Error("gRPC unavailable"); w.sent.push(text); },
     now: () => w.clock,
+    sleep: async (ms) => { w.clock += ms; },
   };
   return w;
 }

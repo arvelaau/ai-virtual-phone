@@ -249,6 +249,20 @@ export function IMessageSettings() {
                             />
                         </div>
                         <div className="flex flex-col gap-1">
+                            <span className="menu-desc">Wait for a pause before answering, so several bubbles get one reply. Sync to cloud after changing it.</span>
+                            <Select
+                                value={String(line.replyDelaySeconds ?? 60)}
+                                onChange={(event) => { updateIMessageLine(line.id, { replyDelaySeconds: Number(event.target.value) }); refresh(); }}
+                            >
+                                <option value="0">Answer every message right away</option>
+                                <option value="15">Wait 15 seconds of quiet</option>
+                                <option value="30">Wait 30 seconds of quiet</option>
+                                <option value="60">Wait 1 minute of quiet</option>
+                                <option value="90">Wait 90 seconds of quiet</option>
+                                <option value="120">Wait 2 minutes of quiet</option>
+                            </Select>
+                        </div>
+                        <div className="flex flex-col gap-1">
                             {(() => {
                                 const view = enroll[line.id];
                                 const lineNumber = view?.line || line.linePhone;

@@ -25,6 +25,11 @@ export type IMessageLineBinding = {
     nickname?: string;
     /** The shared Photon line this number must text. Filled by the enroll route; informational. */
     linePhone?: string;
+    /**
+     * Seconds of silence to wait after the user's last message before answering, so a burst
+     * of bubbles gets ONE reply. Unset means the default (60); 0 answers every message at once.
+     */
+    replyDelaySeconds?: number;
     addedAt: string;
 };
 

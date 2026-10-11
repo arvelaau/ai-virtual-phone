@@ -100,10 +100,11 @@ async function generateReply(
     snapshot: IMessageCloudRuntimeSnapshot,
     inboundText: string,
     recent: IMessageCloudStoredMessage[],
-    image?: { mimeType: string; dataBase64: string },
+    images: Array<{ mimeType: string; dataBase64: string }> | undefined,
+    deadlineMs: number,
 ): Promise<{ content: string; note: string }> {
     const since = messagesAfterSnapshot(recent, snapshot.createdAt, HISTORY_LIMIT);
-    const messages = buildPromptFromTemplate(snapshot.promptTemplate, since, inboundText, image);
+    const messages = buildPromptFromTemplate(snapshot.promptTemplate, since, inboundText, images);
     // Streamed, like the Chat app: a thinking model behind a relay is silent for a long time,
     // and a single buffered request is what such relays cut off.
     const request = buildProviderRequest(snapshot.apiConfig, snapshot.preset, toLlmRequestMessages(messages), { stream: true });
@@ -113,10 +114,10 @@ async function generateReply(
     const progress = newStreamProgress();
     const controller = new AbortController();
     const startedAt = Date.now();
-    const timer = setTimeout(() => controller.abort(), LLM_DEADLINE_MS);
+    const timer = setTimeout(() => controller.abort(), deadlineMs);
 
     const timeoutError = () => new Error(
-        describeModelTimeout({ host, model, deadlineMs: LLM_DEADLINE_MS, progress, promptChars }),
+        describeModelTimeout({ host, model, deadlineMs, progress, promptChars }),
     );
 
     try {
@@ -192,7 +193,9 @@ async function processDelivery(d: Delivery): Promise<TraceEvent> {
                     readJson: (path) => readJson(d.supabase, path),
                     putJson: (path, value) => putObjectText(d.supabase, path, JSON.stringify(value)),
                     listRecentStored: (lineId) => loadRecentStored(d.supabase, lineId),
-                    generate: generateReply,
+                    generate: (snap, text, recent, images) =>
+                        generateReply(snap, text, recent, images, Math.max(30_000, LLM_DEADLINE_MS - (Date.now() - startedAt))),
+                    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
                     send: async (text, replyToId) => {
                         const idOf = (sent: unknown): string | undefined => {
                             const first = Array.isArray(sent) ? sent[0] : sent;

@@ -56,12 +56,26 @@ export type HandlerDeps = {
         snapshot: IMessageCloudRuntimeSnapshot,
         text: string,
         recent: IMessageCloudStoredMessage[],
-        image?: { mimeType: string; dataBase64: string },
+        images?: Array<{ mimeType: string; dataBase64: string }>,
     ): Promise<string | { content: string; note?: string }>;
     /** `replyToId` asks for a native reply to that message. Resolves to the sent message id. */
     send(text: string, replyToId?: string): Promise<string | undefined | void>;
     now(): number;
+    /** Waits without burning the CPU. Fixtures replace it with a fake clock. */
+    sleep(ms: number): Promise<void>;
 };
+
+/** Default quiet window, and the hard ceiling (the function has to fit wait + model + send). */
+export const DEFAULT_REPLY_DELAY_SECONDS = 60;
+export const MAX_REPLY_DELAY_SECONDS = 120;
+const POLL_MS = 5_000;
+const MAX_BATCH_IMAGES = 4;
+
+export function replyDelayMs(line: { replyDelaySeconds?: number } | undefined): number {
+    const raw = line?.replyDelaySeconds;
+    const seconds = typeof raw === "number" && Number.isFinite(raw) ? raw : DEFAULT_REPLY_DELAY_SECONDS;
+    return Math.round(Math.max(0, Math.min(MAX_REPLY_DELAY_SECONDS, seconds)) * 1000);
+}
 
 export async function handleInboundMessage(deps: HandlerDeps, input: InboundInput): Promise<TraceEvent> {
     const started = deps.now();
@@ -111,7 +125,7 @@ export async function handleInboundMessage(deps: HandlerDeps, input: InboundInpu
     try {
         await deps.putJson(markerPath, { state: "processing", at: deps.now() } satisfies DeliveryMarker);
 
-        const recent = await deps.listRecentStored(target.lineId);
+        let recent = await deps.listRecentStored(target.lineId);
         const modelText = composeModelText(input.text, input.quote);
         const inbound: IMessageCloudStoredMessage = {
             format: "ai-phone-imessage-cloud-message",
@@ -133,13 +147,57 @@ export async function handleInboundMessage(deps: HandlerDeps, input: InboundInpu
         }
         await deps.putJson(inboundMessagePath(IMESSAGE_CLOUD_PREFIX, target.lineId, input.messageId), inbound);
 
+        // Wait for a pause so a burst of bubbles is answered once. Every message writes the
+        // pointer; whoever is still the latest after the quiet window is the one that answers,
+        // and the older invocations step aside.
+        let historyForModel = recent;
+        let textForModel = modelText;
+        let imagesForModel = input.image ? [input.image] : [];
+        let batchedCount = 1;
+        const waitMs = replyDelayMs(snapshot.line);
+        if (waitMs > 0) {
+            const safeLine = target.lineId.replace(/[^a-zA-Z0-9_-]/g, "_");
+            const pointerPath = `${IMESSAGE_CLOUD_PREFIX}/pending/${safeLine}.json`;
+            await deps.putJson(pointerPath, { latestId: input.messageId, at: deps.now() });
+            const until = deps.now() + waitMs;
+            while (deps.now() < until) {
+                await deps.sleep(Math.min(POLL_MS, until - deps.now()));
+                const pointer = await deps.readJson<{ latestId?: string }>(pointerPath).catch(() => null);
+                if (pointer?.latestId && pointer.latestId !== input.messageId) {
+                    await deps.putJson(markerPath, { state: "done", at: deps.now() } satisfies DeliveryMarker).catch(() => undefined);
+                    return done("ignored", "batched", `waiting ${Math.round(waitMs / 1000)}s of quiet; a newer message will answer this one too`);
+                }
+            }
+
+            // Everything the user said since the character last spoke is one turn.
+            const all = await deps.listRecentStored(target.lineId);
+            if (!all.some((m) => m.direction === "inbound" && m.externalId === input.messageId)) all.push(inbound);
+            const lastOutbound = all.filter((m) => m.direction === "outbound").map((m) => m.createdAt).sort().pop() ?? "";
+            const pending = all
+                .filter((m) => m.direction === "inbound" && m.createdAt > lastOutbound)
+                .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+            const pendingIds = new Set(pending.map((m) => m.externalId));
+            recent = all;
+            historyForModel = all.filter((m) => !pendingIds.has(m.externalId));
+            textForModel = pending.map((m) => m.content).filter(Boolean).join("\n");
+            batchedCount = Math.max(1, pending.length);
+            const found: Array<{ mimeType: string; dataBase64: string }> = [];
+            for (const m of pending.slice(-MAX_BATCH_IMAGES * 2)) {
+                if (!m.image) continue;
+                if (m.externalId === input.messageId && input.image) { found.push(input.image); continue; }
+                const media = await deps.readJson<{ mimeType?: string; dataBase64?: string }>(m.image.path).catch(() => null);
+                if (media?.dataBase64) found.push({ mimeType: media.mimeType || m.image.mimeType, dataBase64: media.dataBase64 });
+            }
+            imagesForModel = found.slice(-MAX_BATCH_IMAGES);
+        }
+
         let raw: string;
         let modelNote = "";
         try {
-            const generated = await deps.generate(snapshot, modelText, recent, input.image);
+            const generated = await deps.generate(snapshot, textForModel, historyForModel, imagesForModel.length ? imagesForModel : undefined);
             raw = typeof generated === "string" ? generated : generated.content;
             modelNote = typeof generated === "string" ? "" : (generated.note ?? "");
-            if (input.image && snapshot.apiConfig?.enableImageRecognition !== true) {
+            if (imagesForModel.length > 0 && snapshot.apiConfig?.enableImageRecognition !== true) {
                 modelNote = `${modelNote ? `${modelNote}, ` : ""}photo received but image recognition is off in this API config, so the model saw only a placeholder`;
             }
         } catch (err) {
@@ -153,6 +211,7 @@ export async function handleInboundMessage(deps: HandlerDeps, input: InboundInpu
         // the message the user just quoted is a valid thing for the character to quote back
         if (input.quote?.id && input.quote.preview) known.push({ id: input.quote.id, text: input.quote.preview });
         const plan = planOutbound(raw, { currentId: input.messageId, currentText: input.text, known });
+        if (batchedCount > 1) plan.notes.unshift(`answered ${batchedCount} messages together`);
         const bubbles = plan.bubbles;
         if (bubbles.length === 0) {
             await deps.putJson(markerPath, { state: "failed", at: deps.now() } satisfies DeliveryMarker).catch(() => undefined);
@@ -168,8 +227,10 @@ export async function handleInboundMessage(deps: HandlerDeps, input: InboundInpu
                 await deps.putJson(markerPath, { state: "failed", at: deps.now() } satisfies DeliveryMarker).catch(() => undefined);
                 return done("error", "send_error", `bubble ${i + 1}/${bubbles.length}: ${errText(err)}`);
             }
+            const { image: _inboundImage, ...inboundBase } = inbound;
+            void _inboundImage;
             const outbound: IMessageCloudStoredMessage = {
-                ...inbound,
+                ...inboundBase,
                 direction: "outbound",
                 externalId: `${input.messageId}_reply_${i}`,
                 createdAt: new Date(deps.now() + i).toISOString(),

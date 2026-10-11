@@ -4008,3 +4008,11 @@ A third-party bridge (Uranus_Imessage; `imessage.js`, `photon.js`, `实现细节
 - The model only SEES the photo when the API config has `enableImageRecognition` on; otherwise the adapter degrades it to `[图片]` and the trace says so.
 - History turns keep only text/`[Image]`; old photos are not re-sent to the model (cost).
 - `_fx-imessage-image.mjs` 26/26. Not live-tested against a real Photon attachment (assumes `read()` returns the bytes).
+
+### iMessage bridge — quiet window / batching (2026-10-11)
+- Per line setting `replyDelaySeconds` (unset = 60, 0 = answer every bubble at once, max 120), chosen in Settings -> iMessage Integration and carried in the snapshot (`line`), so it only takes effect after "Sync to cloud".
+- Each inbound message writes its record, then a pointer `imessage-cloud/pending/<lineId>.json` {latestId}. It polls every 5 s; if the pointer names a newer message it steps aside (`batched`, marker `done`). The invocation that is still latest after the quiet window answers ONCE: every inbound record newer than the last outbound is joined with newlines into one user turn; up to 4 of their photos are attached.
+- The model deadline shrinks by the time already spent waiting (`LLM_DEADLINE_MS - elapsed`, floor 30 s), so wait + model + send stay inside `maxDuration` 300.
+- Cost: each bubble's function sleeps (cheaply, polling) until superseded; the last one runs the whole window. Photon only retries on a non-2xx, and this runs after the 200, so a killed last invocation means the burst goes unanswered (older ones are already marked done). Acceptable at this scale; visible in the trace.
+- Fixed on the way: outbound records no longer inherit the inbound photo reference.
+- `_fx-imessage-batch.mjs` 30/30 (concurrent invocations on a fake clock). Not live-tested.

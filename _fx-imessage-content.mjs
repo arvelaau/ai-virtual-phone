@@ -69,7 +69,7 @@ eq("B17 unknown brackets are left alone", p.bubbles, [{ text: "[Stuff:keep me] a
 const PHONE = "+15551234567";
 const store = new Map();
 store.set("imessage-cloud/index.json", { format: "x", version: 1, updatedAt: "", lines: [{ lineId: "line1", phone: PHONE, characterId: "c1", characterName: "Mira", sessionId: "s1", path: "imessage-cloud/runtime/line1.json", updatedAt: "" }] });
-store.set("imessage-cloud/runtime/line1.json", { format: "x", version: 1, createdAt: "", line: { id: "line1", phone: PHONE, characterId: "c1", enabled: true }, apiConfig: {}, promptTemplate: { version: 1, slotToken: "T", beforeMessages: [], afterMessages: [], baseHistoryLength: 0, createdAt: "" } });
+store.set("imessage-cloud/runtime/line1.json", { format: "x", version: 1, createdAt: "", line: { id: "line1", phone: PHONE, characterId: "c1", enabled: true, replyDelaySeconds: 0 }, apiConfig: {}, promptTemplate: { version: 1, slotToken: "T", beforeMessages: [], afterMessages: [], baseHistoryLength: 0, createdAt: "" } });
 const sends = [];
 let seenByModel = "";
 let n = 0;
@@ -80,6 +80,7 @@ const deps = {
   generate: async (_s, text) => { seenByModel = text; return "[Quote:Want coffee?]Sure!\n\nSee you there"; },
   send: async (text, replyToId) => { sends.push({ text, replyToId }); return "plat-" + (n += 1); },
   now: () => 1_000_000,
+  sleep: async () => {},
 };
 const r = await H.handleInboundMessage(deps, {
   messageId: "m1", senderId: PHONE, spaceId: "iMessage;-;" + PHONE, direction: "inbound",
@@ -95,7 +96,7 @@ yes("C5 outbound records keep the platform id", outs.filter((m) => m.direction =
 // native reply path: the model quotes the current message
 store.clear();
 store.set("imessage-cloud/index.json", { format: "x", version: 1, updatedAt: "", lines: [{ lineId: "line1", phone: PHONE, characterId: "c1", characterName: "Mira", sessionId: "s1", path: "imessage-cloud/runtime/line1.json", updatedAt: "" }] });
-store.set("imessage-cloud/runtime/line1.json", { format: "x", version: 1, createdAt: "", line: { id: "line1", phone: PHONE, characterId: "c1", enabled: true }, apiConfig: {}, promptTemplate: { version: 1, slotToken: "T", beforeMessages: [], afterMessages: [], baseHistoryLength: 0, createdAt: "" } });
+store.set("imessage-cloud/runtime/line1.json", { format: "x", version: 1, createdAt: "", line: { id: "line1", phone: PHONE, characterId: "c1", enabled: true, replyDelaySeconds: 0 }, apiConfig: {}, promptTemplate: { version: 1, slotToken: "T", beforeMessages: [], afterMessages: [], baseHistoryLength: 0, createdAt: "" } });
 sends.length = 0;
 deps.generate = async () => "[Reply to: ]On it";
 const r2 = await H.handleInboundMessage(deps, { messageId: "m2", senderId: PHONE, spaceId: "iMessage;-;" + PHONE, direction: "inbound", contentType: "text", text: "can you check?" });

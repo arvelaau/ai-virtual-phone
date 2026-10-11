@@ -37,6 +37,7 @@ export const REASON_TEXT: Record<string, string> = {
     no_snapshot: "The runtime package for this line is missing in Supabase. Press 'Sync to cloud' again.",
     already_handled: "A retry of a message that was already answered.",
     still_processing: "A retry arrived while the first attempt was still working.",
+    batched: "Waiting for a pause in the conversation: a newer message arrived, so that one answers both.",
     empty_reply: "The model returned nothing that could be sent.",
     llm_error: "The model call failed.",
     send_error: "Sending the reply over iMessage failed.",
