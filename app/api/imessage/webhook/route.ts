@@ -51,17 +51,19 @@ import {
     type IMessageSupabaseConfig,
 } from "@/lib/server/imessage-supabase";
 import { appendTrace } from "@/lib/server/imessage-trace";
+import { readInboundContent } from "@/lib/imessage-content";
 import type { IMessageCloudRuntimeSnapshot, IMessageCloudStoredMessage } from "@/lib/imessage-types";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const HISTORY_LIMIT = 20;
 /**
- * The whole delivery has to fit in maxDuration (60 s). Spectrum start-up, Supabase reads and the
- * iMessage send need a few seconds, so the model gets the rest.
+ * The whole delivery has to fit in maxDuration (300 s, the longest the platform's plans share).
+ * Spectrum start-up, Supabase reads and the iMessage send need a few seconds, so the model gets
+ * the rest.
  */
-const LLM_DEADLINE_MS = 50_000;
+const LLM_DEADLINE_MS = 280_000;
 /** How long to wait for the SDK to hand over a message before calling it "never delivered". */
 const SDK_DELIVERY_WAIT_MS = 10_000;
 
@@ -184,13 +186,30 @@ async function processDelivery(d: Delivery): Promise<TraceEvent> {
         const response = await spectrum.webhook(replay, async (space, message) => {
             signalStarted();
             try {
-                const content = message.content as { type?: string; text?: string };
+                const inboundContent = readInboundContent(message.content);
                 const deps: HandlerDeps = {
                     readJson: (path) => readJson(d.supabase, path),
                     putJson: (path, value) => putObjectText(d.supabase, path, JSON.stringify(value)),
                     listRecentStored: (lineId) => loadRecentStored(d.supabase, lineId),
                     generate: generateReply,
-                    send: async (text) => { await space.send(text); },
+                    send: async (text, replyToId) => {
+                        const idOf = (sent: unknown): string | undefined => {
+                            const first = Array.isArray(sent) ? sent[0] : sent;
+                            const id = (first as { id?: unknown } | undefined)?.id;
+                            return typeof id === "string" ? id : undefined;
+                        };
+                        if (replyToId) {
+                            try {
+                                const target = replyToId === message.id
+                                    ? message
+                                    : await (space as unknown as { getMessage(id: string): Promise<typeof message | undefined> }).getMessage(replyToId);
+                                if (target) return idOf(await target.reply(text));
+                            } catch {
+                                // fall through to a plain message rather than lose the bubble
+                            }
+                        }
+                        return idOf(await space.send(text));
+                    },
                     now: () => Date.now(),
                 };
                 outcome = await handleInboundMessage(deps, {
@@ -198,8 +217,9 @@ async function processDelivery(d: Delivery): Promise<TraceEvent> {
                     senderId: message.sender?.id ?? "",
                     spaceId: (space as { id?: string }).id ?? "",
                     direction: message.direction,
-                    contentType: content.type ?? "",
-                    text: content.text ?? "",
+                    contentType: inboundContent.kind === "text" ? "text" : inboundContent.type,
+                    text: inboundContent.kind === "text" ? inboundContent.text : "",
+                    quote: inboundContent.kind === "text" ? inboundContent.quote : undefined,
                 });
             } catch (err) {
                 outcome = traceEvent("error", "handler_error", {

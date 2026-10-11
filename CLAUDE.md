@@ -3994,3 +3994,10 @@ A third-party bridge (Uranus_Imessage; `imessage.js`, `photon.js`, `实现细节
 **Fixtures:** `_fx-imessage-enroll.mjs` (45/45) drives the real route with Photon's fetch replaced. Controls run: no idempotency -> 42/45, no access gate -> 41/45, forwarding Photon's 401 -> 44/45.
 
 **Still unproven (needs a live Photon project):** that Photon actually delivers inbound iMessages to the registered webhook URL; that `Spectrum()` per request closes cleanly on `stop()`; and that the Vercel function limit (`maxDuration` in the webhook route is 60) is enough for a slow LLM call. Photon retries on timeout and the inbound record is written before generating, so a retry is deduped rather than answered twice.
+
+### iMessage bridge — quotes, rich tags and time budget (2026-10-11)
+- `lib/imessage-content.ts` (pure, `_fx-imessage-content.mjs` 37/37): inbound `reply` content is read and shown to the model as `[Quote:preview]text`; outbound `[Quote:…]` / `[Reply to: …]` / `[引用:…]` (even with an empty preview = the message just received) become a NATIVE iMessage reply (`message.reply`, or `space.getMessage(id).reply`), falling back to a plain bubble. Unresolvable quote = plain bubble + trace note.
+- Rich tags with no iMessage equivalent are turned into readable text instead of leaking (voice note -> its text, photo -> `📷 description`, sticker dropped, red packet/transfer/gift/location/music -> emoji line); paired action blocks (`[Moments]…[/Moments]`) are dropped. Each downgrade adds a note to the trace detail.
+- Outbound records now carry `platformMessageId` so a later quote can target an earlier bubble.
+- Webhook `maxDuration` 60 -> 300, model deadline 280 s (other routes on this deploy already run 120 s). A function cannot exceed the plan's limit; >300 s needs Pro + Fluid.
+- NOT done: native photo / voice-note sending (needs image-gen + TTS settings in the snapshot, `attachment()` / `voice()` builders, per-message API cost). Text fallbacks cover it meanwhile.

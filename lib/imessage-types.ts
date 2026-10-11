@@ -88,6 +88,8 @@ export type IMessageCloudStoredMessage = {
     createdAt: string;
     role: "user" | "assistant";
     content: string;
+    /** The platform's id for this message (outbound only; inbound already uses externalId). */
+    platformMessageId?: string;
 };
 
 export type IMessageCloudRuntimeIndexItem = {

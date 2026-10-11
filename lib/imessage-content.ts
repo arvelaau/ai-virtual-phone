@@ -1,0 +1,199 @@
+// lib/imessage-content.ts
+// What crosses the iMessage boundary, in both directions. Pure, so every shape can be driven
+// from a fixture.
+//
+//   inbound  — Spectrum hands the webhook handler a `content` object. Plain text is easy; a
+//              message the user sent as a QUOTED reply arrives as { type: "reply", content,
+//              target } and used to be dropped as "not text". It is now read, and rendered to
+//              the model the same way the Chat app renders a user's quote: [Quote:preview]text.
+//
+//   outbound — the model writes the app's own rich tags ([Quote:…], [Photo:…], [VoiceNote:…],
+//              [Sticker:…] …). iMessage is plain text plus native features, so a quote becomes
+//              a native reply to the right message, and the tags that have no iMessage
+//              equivalent yet are turned into readable text instead of leaking as raw brackets.
+
+import { modelOutputToBubbles } from "./imessage-webhook-core";
+import { buildQuoteTag } from "./rich-tag-builders";
+
+// ---- inbound ---------------------------------------------------------------------------------
+
+export type InboundContent =
+    | { kind: "text"; text: string; quote?: { id: string; preview: string } }
+    | { kind: "unsupported"; type: string };
+
+type AnyContent = { type?: unknown; text?: unknown; markdown?: unknown; content?: unknown; target?: unknown };
+
+function readPlain(content: AnyContent): string | null {
+    if (content.type === "text" && typeof content.text === "string") return content.text;
+    if (content.type === "markdown" && typeof content.markdown === "string") return content.markdown;
+    return null;
+}
+
+export function readInboundContent(content: unknown): InboundContent {
+    if (!content || typeof content !== "object") return { kind: "unsupported", type: "" };
+    const c = content as AnyContent;
+    const plain = readPlain(c);
+    if (plain !== null) return { kind: "text", text: plain };
+
+    if (c.type === "reply" && c.content && typeof c.content === "object") {
+        const inner = readPlain(c.content as AnyContent);
+        if (inner === null) {
+            const innerType = typeof (c.content as AnyContent).type === "string" ? String((c.content as AnyContent).type) : "";
+            return { kind: "unsupported", type: `reply to ${innerType || "unknown"}` };
+        }
+        const target = (c.target && typeof c.target === "object" ? c.target : {}) as {
+            id?: unknown;
+            content?: { text?: unknown };
+        };
+        const preview = typeof target.content?.text === "string" ? target.content.text.trim() : "";
+        const id = typeof target.id === "string" ? target.id : "";
+        return { kind: "text", text: inner, quote: preview || id ? { id, preview } : undefined };
+    }
+
+    return { kind: "unsupported", type: typeof c.type === "string" ? c.type : "" };
+}
+
+/** The text the model sees: a quote is rendered exactly like an in-app quote. */
+export function composeModelText(text: string, quote?: { preview: string }): string {
+    const preview = quote?.preview?.replace(/\s+/g, " ").trim();
+    return preview ? `${buildQuoteTag(preview)}${text}` : text;
+}
+
+// ---- outbound --------------------------------------------------------------------------------
+
+export type QuoteCandidate = { id: string; text: string };
+
+export type OutboundBubble = {
+    text: string;
+    /** Platform message id to answer natively; absent = a normal message. */
+    replyToId?: string;
+};
+
+export type OutboundPlan = { bubbles: OutboundBubble[]; notes: string[] };
+
+/**
+ * [Quote:text] and the variants models actually produce for it ("[Reply to: text]",
+ * "[Replying to text]", "[回复：text]"). The preview may be empty, which means "the message
+ * you were just sent".
+ */
+const QUOTE_RE = /^\s*\[(?:(?:Quote|引用)\s*[:：]|(?:Reply(?:ing)?\s+to|回复)\s*[:：]?)\s*([^\]]*)\]\s*/i;
+
+// Paired action blocks the browser would dispatch ([Moments]…[/Moments] etc.). There is nothing
+// to dispatch them to over iMessage, and they must not be sent as text.
+const ACTION_BLOCK_RE =
+    /\[(Moments|朋友圈|Comment|评论|Reply|回复|Message|消息|GroupMessage|群消息|DirectMessage|私信|AddFriend)\b[^\]]*\][\s\S]*?\[\/\1\]/gi;
+
+type Fallback = { emoji: string; mode: "text" | "emoji" | "drop"; note: string };
+
+const FALLBACKS: Array<{ names: string[]; fb: Fallback }> = [
+    { names: ["VoiceNote", "语音条"], fb: { emoji: "", mode: "text", note: "voice note sent as text" } },
+    { names: ["Photo", "照片"], fb: { emoji: "📷", mode: "emoji", note: "photo sent as a description" } },
+    { names: ["Sticker", "表情包"], fb: { emoji: "", mode: "drop", note: "sticker dropped" } },
+    { names: ["Location", "位置"], fb: { emoji: "📍", mode: "emoji", note: "location sent as text" } },
+    { names: ["Music", "MusicShare", "音乐", "音乐分享"], fb: { emoji: "🎵", mode: "emoji", note: "music sent as text" } },
+    { names: ["Gift", "礼物"], fb: { emoji: "🎁", mode: "emoji", note: "gift sent as text" } },
+    { names: ["RedPacket", "红包"], fb: { emoji: "🧧", mode: "emoji", note: "red packet sent as text" } },
+    { names: ["Transfer", "转账"], fb: { emoji: "💸", mode: "emoji", note: "transfer sent as text" } },
+    { names: ["PaymentRequest", "代付请求"], fb: { emoji: "💳", mode: "emoji", note: "payment request sent as text" } },
+    { names: ["ContactCard", "名片"], fb: { emoji: "👤", mode: "emoji", note: "contact card sent as text" } },
+];
+
+const FALLBACK_BY_NAME = new Map<string, Fallback>();
+for (const entry of FALLBACKS) for (const name of entry.names) FALLBACK_BY_NAME.set(name.toLowerCase(), entry.fb);
+
+/** Every tag name the fallback layer knows, for the drift guard in the fixture. */
+export const KNOWN_RICH_TAG_NAMES = Array.from(FALLBACK_BY_NAME.keys());
+
+const RICH_TAG_RE = new RegExp(
+    `\\[(${KNOWN_RICH_TAG_NAMES.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\s*[:：]\\s*([^\\]]*)\\]`,
+    "gi",
+);
+
+function norm(value: string): string {
+    return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function resolveQuoteTarget(
+    preview: string,
+    ctx: { currentId: string; currentText: string; known: QuoteCandidate[] },
+): string | undefined {
+    const wanted = norm(preview);
+    if (!wanted) return ctx.currentId || undefined;
+
+    const pool: QuoteCandidate[] = [{ id: ctx.currentId, text: ctx.currentText }, ...ctx.known];
+    // exact, then prefix, then containment either way (long enough to be meaningful)
+    for (const rule of [
+        (c: string) => c === wanted,
+        (c: string) => c.startsWith(wanted) || wanted.startsWith(c),
+        (c: string) => c.includes(wanted) || (c.length >= 6 && wanted.includes(c)),
+    ]) {
+        for (const cand of pool) {
+            const c = norm(cand.text);
+            if (c && cand.id && rule(c)) return cand.id;
+        }
+    }
+    return undefined;
+}
+
+function textualize(text: string, notes: string[]): string {
+    return text.replace(RICH_TAG_RE, (_whole, rawName: string, rawPayload: string) => {
+        const fb = FALLBACK_BY_NAME.get(rawName.toLowerCase());
+        if (!fb) return _whole;
+        if (!notes.includes(fb.note)) notes.push(fb.note);
+        if (fb.mode === "drop") return "";
+        // a photo's reference-image flag is protocol, not content
+        const payload = rawPayload
+            .replace(/^(?:WithRef|NoRef|使用参考图|不使用参考图)\s*[:：]\s*/i, "")
+            .split(/[:：]/)
+            .map((part) => part.trim())
+            .filter(Boolean)
+            .join(" · ");
+        if (fb.mode === "text") return payload;
+        return payload ? `${fb.emoji} ${payload}` : fb.emoji;
+    });
+}
+
+export function planOutbound(
+    raw: string,
+    ctx: { currentId: string; currentText: string; known: QuoteCandidate[] },
+): OutboundPlan {
+    const notes: string[] = [];
+    const withoutActions = raw.replace(ACTION_BLOCK_RE, () => {
+        if (!notes.includes("action blocks dropped")) notes.push("action blocks dropped");
+        return "";
+    });
+
+    const paragraphs = modelOutputToBubbles(withoutActions);
+    const bubbles: OutboundBubble[] = [];
+    let pending: { preview: string } | null = null;
+
+    for (const paragraph of paragraphs) {
+        let body = paragraph;
+        let quote: { preview: string } | null = pending;
+        pending = null;
+
+        const match = QUOTE_RE.exec(body);
+        if (match) {
+            quote = { preview: match[1] ?? "" };
+            body = body.slice(match[0].length);
+        }
+
+        body = textualize(body, notes).replace(/[ \t]+\n/g, "\n").trim();
+
+        if (!body) {
+            // a quote tag on its own line belongs to the bubble that follows it
+            if (match) pending = quote;
+            continue;
+        }
+
+        let replyToId: string | undefined;
+        if (quote) {
+            replyToId = resolveQuoteTarget(quote.preview, ctx);
+            const note = replyToId ? "quote sent as a native reply" : "quote target not found, sent as a normal message";
+            if (!notes.includes(note)) notes.push(note);
+        }
+        bubbles.push(replyToId ? { text: body, replyToId } : { text: body });
+    }
+
+    return { bubbles, notes };
+}
