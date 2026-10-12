@@ -20,6 +20,7 @@ import {
 } from "@/lib/image-generation-service";
 import { Alert } from "@/components/ui/feedback";
 import { Input, Select, Textarea, Toggle } from "@/components/ui/form";
+import { DEFAULT_NATURAL_PHOTO_STYLE } from "@/lib/photo-style";
 import { ConfirmDialog, ContentDialog } from "@/components/ui/modal";
 import {
     NOVELAI_COMMON_MODELS,
@@ -892,6 +893,32 @@ export function ImageGenerationSettings() {
                             <p className="menu-desc ml-1 opacity-70">
                                 After choosing a size, a composition hint like "{RATIO_HINT_MARKER}..." is automatically appended at the end, to correct APIs that ignore the size parameter (e.g. gpt-image-2). You can edit or remove it manually.
                             </p>
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between gap-3">
+                                <span className="flex flex-col">
+                                    <span className="menu-label">Natural phone-camera look</span>
+                                    <span className="menu-desc">Adds a style block so chat and Moments photos look like an unedited iPhone snapshot instead of AI art. Does not apply to NovelAI or to room and asset images.</span>
+                                </span>
+                                <Toggle
+                                    checked={settings.naturalPhotoLook !== false}
+                                    onChange={(naturalPhotoLook) => updateSettings({ naturalPhotoLook })}
+                                    className="settings-toggle-control"
+                                />
+                            </div>
+                            {settings.naturalPhotoLook !== false && (
+                                <>
+                                    <label className="menu-desc ml-1">Photo style prompt</label>
+                                    <Textarea
+                                        value={settings.photoStylePrompt || ""}
+                                        onChange={(event) => updateSettings({ photoStylePrompt: event.target.value })}
+                                        placeholder={DEFAULT_NATURAL_PHOTO_STYLE}
+                                        rows={5}
+                                    />
+                                    <p className="menu-desc ml-1 opacity-70">Leave empty to use the built-in default shown above. It is appended before the Extra prompt.</p>
+                                </>
+                            )}
                         </div>
                     </>
                 )}

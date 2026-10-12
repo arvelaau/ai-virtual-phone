@@ -5,6 +5,7 @@ import JSZip from "jszip";
 import { getChatImageFromIndexedDB } from "./chat-asset-storage";
 import { storeMediaBlob } from "./media-cache-storage";
 import { throwIfAborted } from "./abort-utils";
+import { resolvePhotoStylePrompt } from "./photo-style";
 import {
   NOVELAI_COMMON_MODELS,
   getNovelAiResolution,
@@ -758,6 +759,12 @@ export async function generateImageFromConfiguredApi(params: {
   /** The APP the content belongs to; used to resolve the image-generation preset via "character > APP > global". */
   appId?: string;
   useReferenceImage?: boolean;
+  /**
+   * This image is a photo someone "took" (a chat or Moments photo): append the natural
+   * phone-camera style block so it does not come out looking like AI art. Off for room
+   * backdrops, CSS assets and anything else that is not meant to be a photograph.
+   */
+  photoStyle?: boolean;
   settings?: ImageGenerationSettings;
   signal?: AbortSignal;
 }): Promise<ImageGenerationResult | null> {
@@ -842,9 +849,10 @@ export async function generateImageFromConfiguredApi(params: {
     : null;
   throwIfAborted(params.signal);
   const characterPrompt = reference?.featurePrompt?.trim() || "";
+  const photoStyle = params.photoStyle ? resolvePhotoStylePrompt(settings) : "";
   const prompt = mergePrompt(
     characterPrompt ? `${description}\n\n[Character's fixed appearance] ${characterPrompt}` : description,
-    openaiSettings.extraPrompt,
+    [photoStyle, openaiSettings.extraPrompt].map((part) => (part || "").trim()).filter(Boolean).join("\n\n"),
   );
 
   const data = openaiSettings.requestMode === "direct"

@@ -90,7 +90,7 @@ export const BUILTIN_PRESET_ID = "builtin_default_v1";
 //      an explicit exceptions section with the macro, mirroring story_output_format's existing
 //      pattern. [Message] itself stays 1:1-only, per the deliberate scope decision documented
 //      in offline-message-dispatch.ts -- group_chat_offline_format is NOT taught [Message].
-export const BUILTIN_PRESET_VERSION = 288;
+export const BUILTIN_PRESET_VERSION = 289;
 
 export function createBuiltinPreset(): PresetConfig {
     const now = Date.now();
@@ -585,8 +585,10 @@ export function createBuiltinPreset(): PresetConfig {
                     "",
                     "### Send a photo",
                     "【Format】[Photo:WithRef:description] or [Photo:NoRef:description] (generating a photo of {{char}} must use the reference image; scenes may go without it.)",
-                    "【Important】The description is handed to an image model to generate a real picture, so write it like an image prompt: describe only what is visible (subject, action, setting, lighting, composition) and be specific; no inner thoughts, no sounds, no plot, no pronouns standing in for things.",
-                    "【Example】[Photo:WithRef:back seat of a taxi on a rainy night, {{char}}'s profile pressed against the window, neon light blooming red and blue across the glass, close-up, dim atmosphere]",
+                    "【Important】The description is handed to an image model to generate a real picture, so write it like an image prompt: describe only what is visible (subject, action, setting, light, framing) and be specific; no inner thoughts, no sounds, no plot, no pronouns standing in for things.",
+                    "【Look】It must read like a casual photo someone took with their own phone (an iPhone), not like artwork: an ordinary everyday scene, natural available light, a normal handheld angle, a slightly imperfect frame, a little real-world clutter. Do not use cinematic or poster language (neon bloom, dramatic rim light, volumetric haze, bokeh, golden-hour glow, masterpiece, ultra-detailed, studio lighting, perfect symmetry). For a selfie say it is taken at arm's length with the front camera, unposed.",
+                    "【Example】[Photo:WithRef:casual selfie at arm's length on a train seat, {{char}} squinting a little in the daylight from the window, hair slightly messy, a bag strap at the edge of the frame, ordinary phone-camera look]",
+                    "【Example】[Photo:NoRef:half-eaten bowl of ramen on a wooden counter, shot from above at a slight angle, warm kitchen light, keys and a phone at the edge of the frame]",
                     "",
                     "### Send a location",
                     "【Format】[Location:placeName]",
@@ -1240,8 +1242,10 @@ export function createBuiltinPreset(): PresetConfig {
                     "",
                     "### Send a photo",
                     "【Format】[CharacterName]: [Photo:WithRef:description] or [CharacterName]: [Photo:NoRef:description] (generating a photo of the character themselves must use the reference image; scenes may go without it.)",
-                    "【Important】The description is handed to an image model to generate a real picture, so write it like an image prompt: describe only what is visible (subject, action, setting, lighting, composition) and be specific; no inner thoughts, no sounds, no plot, no pronouns standing in for things.",
-                    "【Example】[Xiao Qi]: [Photo:WithRef:back seat of a taxi on a rainy night, Xiao Qi's profile pressed against the window, neon light blooming red and blue across the glass, close-up, dim atmosphere]",
+                    "【Important】The description is handed to an image model to generate a real picture, so write it like an image prompt: describe only what is visible (subject, action, setting, light, framing) and be specific; no inner thoughts, no sounds, no plot, no pronouns standing in for things.",
+                    "【Look】It must read like a casual photo someone took with their own phone (an iPhone), not like artwork: an ordinary everyday scene, natural available light, a normal handheld angle, a slightly imperfect frame, a little real-world clutter. Do not use cinematic or poster language (neon bloom, dramatic rim light, volumetric haze, bokeh, golden-hour glow, masterpiece, ultra-detailed, studio lighting, perfect symmetry). For a selfie say it is taken at arm's length with the front camera, unposed.",
+                    "【Example】[Xiao Qi]: [Photo:WithRef:casual selfie at arm's length on a train seat, Xiao Qi squinting a little in the daylight from the window, hair slightly messy, a bag strap at the edge of the frame, ordinary phone-camera look]",
+                    "【Example】[Xiao Qi]: [Photo:NoRef:half-eaten bowl of ramen on a wooden counter, shot from above at a slight angle, warm kitchen light, keys and a phone at the edge of the frame]",
                     "",
                     "### Location",
                     "【Format】[CharacterName]: [Location:placeName]",

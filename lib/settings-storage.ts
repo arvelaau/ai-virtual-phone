@@ -804,6 +804,8 @@ function normalizeImageGenerationSettings(settings: Partial<ImageGenerationSetti
         size: activeOpenAiPreset.size,
         quality: activeOpenAiPreset.quality,
         extraPrompt: activeOpenAiPreset.extraPrompt,
+        naturalPhotoLook: settings?.naturalPhotoLook !== false,
+        photoStylePrompt: typeof settings?.photoStylePrompt === "string" ? settings.photoStylePrompt : "",
         openaiPresets,
         activeOpenAiPresetId,
         novelai,

@@ -80,6 +80,7 @@ export async function generateAndApplyChatGeneratedImage(
             characterId,
             appId: "chat",
             useReferenceImage: effectiveUseReference,
+            photoStyle: true,
             signal: options?.signal,
         });
         if (!generated) throw new Error("Image generation is not enabled or is incomplete");
@@ -162,6 +163,7 @@ export async function retryMomentGeneratedPhoto(
             characterId: post.authorType === "character" ? post.authorId : undefined,
             appId: "moments",
             useReferenceImage: effectiveUseReference,
+            photoStyle: true,
         });
         if (!generated) throw new Error("Image generation is not enabled or is incomplete");
 

@@ -207,6 +207,10 @@ export type ImageGenerationSettings = {
     size: string;
     quality: string;
     extraPrompt: string;
+    /** Append the natural phone-camera style to chat / Moments photos. Unset means on. */
+    naturalPhotoLook?: boolean;
+    /** Custom replacement for the built-in style block. Empty means the built-in default. */
+    photoStylePrompt?: string;
     openaiPresets?: OpenAiImagePreset[];
     activeOpenAiPresetId?: string;
     // NovelAI-mode config

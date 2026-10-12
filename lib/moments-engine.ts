@@ -1275,6 +1275,7 @@ export async function generateMomentPhotoUrl(
             characterId,
             appId: "moments",
             useReferenceImage,
+            photoStyle: true,
             signal,
         });
         throwIfAborted(signal);

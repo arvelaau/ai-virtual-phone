@@ -14,7 +14,7 @@ export type GroupTimeMember = {
   timeZone?: string | null;
 };
 
-const WEEKDAYS = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 type DateParts = {
   year: string;
@@ -88,18 +88,50 @@ export function formatZonedPromptTimestamp(date: Date, timeZone: string, include
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}${includeTimeZone ? ` ${timeZone}` : ""}`;
 }
 
-export function formatZonedChineseDateTime(date: Date, timeZone: string): string {
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "12 Oct 2026, 21:05" -- an unambiguous date-time for prompt text (was a Chinese 年月日 string). */
+export function formatZonedLongDateTime(date: Date, timeZone: string): string {
   const parts = getDateParts(date, timeZone);
-  return `${Number(parts.year)}年${Number(parts.month)}月${Number(parts.day)}日${parts.hour}:${parts.minute}`;
+  return `${Number(parts.day)} ${MONTHS[Math.max(0, Math.min(11, Number(parts.month) - 1))]} ${Number(parts.year)}, ${parts.hour}:${parts.minute}`;
 }
 
 export function getZonedWeekday(date: Date, timeZone: string): string {
   try {
-    const label = new Intl.DateTimeFormat("zh-CN", { timeZone, weekday: "long" }).format(date);
+    const label = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "long" }).format(date);
     return label || WEEKDAYS[0];
   } catch {
     return WEEKDAYS[date.getDay()];
   }
+}
+
+/** Part of the day for an hour 0-23. Deliberately coarse: it is a hint, not a schedule. */
+export function describeDayPart(hour: number): string {
+  if (hour < 5) return "deep night";
+  if (hour < 7) return "early morning";
+  if (hour < 12) return "morning";
+  if (hour < 14) return "midday";
+  if (hour < 18) return "afternoon";
+  if (hour < 22) return "evening";
+  return "night";
+}
+
+function hourOf(date: Date, timeZone: string): number {
+  return Number(getDateParts(date, timeZone).hour) % 24;
+}
+
+/** How far `characterTimeZone`'s wall clock is ahead of (+) or behind (-) `systemTimeZone`'s, in hours. */
+export function timeZoneOffsetHours(date: Date, characterTimeZone: string, systemTimeZone = getSystemTimeZone()): number {
+  const wall = (zone: string) => {
+    const p = getDateParts(date, zone);
+    return Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), Number(p.hour) % 24, Number(p.minute));
+  };
+  return (wall(characterTimeZone) - wall(systemTimeZone)) / 3600000;
+}
+
+function describeHours(hours: number): string {
+  const a = Math.round(Math.abs(hours) * 10) / 10;
+  return `${a} ${a === 1 ? "hour" : "hours"}`;
 }
 
 export function hasTimeZoneDifference(date: Date, characterTimeZone: string, systemTimeZone = getSystemTimeZone()): boolean {
@@ -114,7 +146,7 @@ export function hasTimeZoneDifference(date: Date, characterTimeZone: string, sys
 
 export function buildCharacterTimeContext(timeZone?: string | null, now = new Date()): CharacterTimeContext {
   const systemTimeZone = getSystemTimeZone();
-  const systemTime = formatZonedChineseDateTime(now, systemTimeZone);
+  const systemTime = formatZonedLongDateTime(now, systemTimeZone);
   const systemWeekday = getZonedWeekday(now, systemTimeZone);
   const normalizedTimeZone = normalizeTimeZone(timeZone);
   const hasDifference = normalizedTimeZone ? hasTimeZoneDifference(now, normalizedTimeZone, systemTimeZone) : false;
@@ -127,13 +159,17 @@ export function buildCharacterTimeContext(timeZone?: string | null, now = new Da
       characterTime: "",
       characterWeekday: "",
       characterTimeZone: "",
-      timeContext: `当前系统时间：${systemTime}，${systemWeekday}`,
+      timeContext: `Current time: ${systemTime}, ${systemWeekday}`,
       hasDifference: false,
     };
   }
 
-  const characterTime = formatZonedChineseDateTime(now, normalizedTimeZone);
+  const characterTime = formatZonedLongDateTime(now, normalizedTimeZone);
   const characterWeekday = getZonedWeekday(now, normalizedTimeZone);
+  const diff = timeZoneOffsetHours(now, normalizedTimeZone, systemTimeZone);
+  const relation = `Your clock is ${describeHours(diff)} ${diff > 0 ? "ahead of" : "behind"} theirs.`;
+  const userPart = describeDayPart(hourOf(now, systemTimeZone));
+  const charPart = describeDayPart(hourOf(now, normalizedTimeZone));
   return {
     systemTime,
     systemWeekday,
@@ -142,9 +178,11 @@ export function buildCharacterTimeContext(timeZone?: string | null, now = new Da
     characterWeekday,
     characterTimeZone: normalizedTimeZone,
     timeContext: [
-      `当前系统时间：${systemTime} ${systemTimeZone}，${systemWeekday}`,
-      `角色本地时间：${characterTime} ${normalizedTimeZone}，${characterWeekday}`,
-      "判断角色作息、问候、深夜/清晨/工作时间时，优先使用角色本地时间。",
+      "TIME ZONES: you and the user are in different time zones. This is real; keep it in mind in every reply.",
+      `Right now for the USER: ${systemWeekday}, ${systemTime} (${userPart}), ${systemTimeZone}.`,
+      `Right now for YOU: ${characterWeekday}, ${characterTime} (${charPart}), ${normalizedTimeZone}.`,
+      relation,
+      "Rules: (1) every timestamp in the conversation history is on the USER's clock; your own local time is what governs your day, your sleep, your meals, your work and your greetings. (2) Anything the user says about the time of day (good morning, going to bed, tonight, at 8) is on THEIR clock: convert it before you react. (3) Never assume it is the same part of the day for both of you.",
     ].join("\n"),
     hasDifference: true,
   };
@@ -152,13 +190,15 @@ export function buildCharacterTimeContext(timeZone?: string | null, now = new Da
 
 export function buildGroupTimeContext(members: GroupTimeMember[], now = new Date()): CharacterTimeContext {
   const systemTimeZone = getSystemTimeZone();
-  const systemTime = formatZonedChineseDateTime(now, systemTimeZone);
+  const systemTime = formatZonedLongDateTime(now, systemTimeZone);
   const systemWeekday = getZonedWeekday(now, systemTimeZone);
   const rows = members
     .map(member => {
       const timeZone = normalizeTimeZone(member.timeZone);
       if (!timeZone || !hasTimeZoneDifference(now, timeZone, systemTimeZone)) return null;
-      return `${member.name}：${formatZonedChineseDateTime(now, timeZone)} ${timeZone}，${getZonedWeekday(now, timeZone)}`;
+      const diff = timeZoneOffsetHours(now, timeZone, systemTimeZone);
+      const part = describeDayPart(hourOf(now, timeZone));
+      return `${member.name}: ${getZonedWeekday(now, timeZone)}, ${formatZonedLongDateTime(now, timeZone)} (${part}), ${timeZone}, ${describeHours(diff)} ${diff > 0 ? "ahead of" : "behind"} the user`;
     })
     .filter((row): row is string => Boolean(row));
 
@@ -170,11 +210,12 @@ export function buildGroupTimeContext(members: GroupTimeMember[], now = new Date
       characterTime: "",
       characterWeekday: "",
       characterTimeZone: "",
-      timeContext: `当前系统时间：${systemTime}，${systemWeekday}`,
+      timeContext: `Current time: ${systemTime}, ${systemWeekday}`,
       hasDifference: false,
     };
   }
 
+  const userPart = describeDayPart(hourOf(now, systemTimeZone));
   return {
     systemTime,
     systemWeekday,
@@ -183,10 +224,11 @@ export function buildGroupTimeContext(members: GroupTimeMember[], now = new Date
     characterWeekday: "",
     characterTimeZone: "",
     timeContext: [
-      `当前系统时间：${systemTime} ${systemTimeZone}，${systemWeekday}`,
-      "群成员本地时间：",
+      "TIME ZONES: some members of this group are in a different time zone from the user. This is real; keep it in mind in every reply.",
+      `Right now for the USER: ${systemWeekday}, ${systemTime} (${userPart}), ${systemTimeZone}.`,
+      "Local time of the members who differ:",
       ...rows,
-      "判断每个角色作息、问候、深夜/清晨/工作时间时，优先使用该角色自己的本地时间。",
+      "Rules: every timestamp in the conversation history is on the USER's clock. Each character's own local time governs that character's day, sleep, meals, work and greetings. Anything the user says about the time of day is on THEIR clock: convert it before reacting.",
     ].join("\n"),
     hasDifference: true,
   };
