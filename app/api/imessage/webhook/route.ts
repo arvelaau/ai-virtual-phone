@@ -215,6 +215,7 @@ async function processDelivery(d: Delivery): Promise<TraceEvent> {
                         return idOf(await space.send(text));
                     },
                     now: () => Date.now(),
+                    newId: () => globalThis.crypto.randomUUID().replace(/-/g, ""),
                 };
                 let image: { mimeType: string; dataBase64: string } | undefined;
                 let contentType = inboundContent.kind === "text" ? "text" : inboundContent.kind === "image" ? "image" : inboundContent.type;

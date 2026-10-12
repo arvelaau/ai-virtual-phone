@@ -34,4 +34,6 @@ async function Spectrum() {
 
 const imessage = { config: () => ({}) };
 
-module.exports = { verifySpectrumSignature, Spectrum, imessage };
+function attachment(input, options) { return { type: "attachment", size: input && input.length, ...(options || {}) }; }
+
+module.exports = { verifySpectrumSignature, Spectrum, imessage, attachment };

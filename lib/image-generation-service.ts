@@ -876,6 +876,29 @@ export async function generateImageFromConfiguredApi(params: {
   };
 }
 
+/**
+ * Can an image be generated right now for this character in the chat app? The same binding
+ * and provider checks `generateImageFromConfiguredApi` makes, without making a request. Used
+ * to decide up front whether a photo can be delivered as a real picture or has to go out as
+ * a text description.
+ */
+export function isImageGenerationAvailableFor(characterId?: string, appId = "chat"): boolean {
+  try {
+    const stored = loadImageGenerationSettings();
+    const settings = applyImageGenerationBinding(
+      stored,
+      resolveBinding(loadBindingConfig(), characterId, appId).imageConfigId,
+    );
+    if (!settings.enabled) return false;
+    if (settings.provider === "novelai") return Boolean(settings.novelai?.apiKey?.trim());
+    const preset = settings.openaiPresets?.find(p => p.id === settings.activeOpenAiPresetId) || settings.openaiPresets?.[0];
+    const merged = preset ? { ...settings, ...preset } : settings;
+    return Boolean(merged.apiKey?.trim() && merged.baseUrl?.trim() && merged.model?.trim());
+  } catch {
+    return false;
+  }
+}
+
 export function generatedImageFilename(description: string, mimeType = "image/png"): string {
   const safe = description
     .replace(/\s+/g, "-")

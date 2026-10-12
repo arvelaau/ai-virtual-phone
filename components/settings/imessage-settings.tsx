@@ -248,6 +248,16 @@ export function IMessageSettings() {
                                 onChange={(next) => { updateIMessageLine(line.id, { enabled: next }); refresh(); }}
                             />
                         </div>
+                        <div className="flex items-center justify-between gap-3">
+                            <span className="flex flex-col">
+                                <span className="menu-label">Send photos as real pictures</span>
+                                <span className="menu-desc">When the character sends a photo, this app generates it and delivers it over iMessage. Needs image generation set up, and only happens while this app is open; otherwise the photo goes out as a text description. Sync to cloud after changing it.</span>
+                            </span>
+                            <Toggle
+                                checked={line.sendPhotos !== false}
+                                onChange={(next) => { updateIMessageLine(line.id, { sendPhotos: next }); refresh(); }}
+                            />
+                        </div>
                         <div className="flex flex-col gap-1">
                             <span className="menu-desc">Wait for a pause before answering, so several bubbles get one reply. Sync to cloud after changing it.</span>
                             <Select

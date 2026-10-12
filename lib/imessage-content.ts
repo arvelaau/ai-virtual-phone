@@ -14,6 +14,7 @@
 
 import { modelOutputToBubbles } from "./imessage-webhook-core";
 import { buildQuoteTag } from "./rich-tag-builders";
+import { MAX_PHOTOS_PER_REPLY } from "./imessage-media-jobs";
 
 // ---- inbound ---------------------------------------------------------------------------------
 
@@ -93,7 +94,10 @@ export type OutboundBubble = {
     replyToId?: string;
 };
 
-export type OutboundPlan = { bubbles: OutboundBubble[]; notes: string[] };
+/** A [Photo:...] the character wants to send as a real picture, delivered later by the browser. */
+export type OutboundPhoto = { description: string; withRef: boolean };
+
+export type OutboundPlan = { bubbles: OutboundBubble[]; photos: OutboundPhoto[]; notes: string[] };
 
 /**
  * [Quote:text] and the variants models actually produce for it ("[Reply to: text]",
@@ -159,10 +163,23 @@ function resolveQuoteTarget(
     return undefined;
 }
 
-function textualize(text: string, notes: string[]): string {
+const PHOTO_FLAG_RE = /^(WithRef|NoRef|使用参考图|不使用参考图)\s*[:：]\s*/i;
+
+function textualize(text: string, notes: string[], photos: OutboundPhoto[] | null): string {
     return text.replace(RICH_TAG_RE, (_whole, rawName: string, rawPayload: string) => {
         const fb = FALLBACK_BY_NAME.get(rawName.toLowerCase());
         if (!fb) return _whole;
+        // A photo on a line that can deliver real pictures: queue it, say nothing in the text.
+        if (photos && /^(photo|照片)$/i.test(rawName) && photos.length < MAX_PHOTOS_PER_REPLY) {
+            const flag = PHOTO_FLAG_RE.exec(rawPayload);
+            const description = rawPayload.replace(PHOTO_FLAG_RE, "").replace(/\s+/g, " ").trim();
+            if (description) {
+                photos.push({ description, withRef: !flag || /^(WithRef|使用参考图)$/i.test(flag[1]) });
+                const note = "photo queued for delivery as a real picture";
+                if (!notes.includes(note)) notes.push(note);
+                return "";
+            }
+        }
         if (!notes.includes(fb.note)) notes.push(fb.note);
         if (fb.mode === "drop") return "";
         // a photo's reference-image flag is protocol, not content
@@ -179,9 +196,17 @@ function textualize(text: string, notes: string[]): string {
 
 export function planOutbound(
     raw: string,
-    ctx: { currentId: string; currentText: string; known: QuoteCandidate[] },
+    ctx: {
+        currentId: string;
+        currentText: string;
+        known: QuoteCandidate[];
+        /** "queue": photo tags become delivery jobs. "text" (default): they become a description line. */
+        photos?: "queue" | "text";
+    },
 ): OutboundPlan {
     const notes: string[] = [];
+    const photos: OutboundPhoto[] = [];
+    const photoSink = ctx.photos === "queue" ? photos : null;
     const withoutActions = raw.replace(ACTION_BLOCK_RE, () => {
         if (!notes.includes("action blocks dropped")) notes.push("action blocks dropped");
         return "";
@@ -202,7 +227,7 @@ export function planOutbound(
             body = body.slice(match[0].length);
         }
 
-        body = textualize(body, notes).replace(/[ \t]+\n/g, "\n").trim();
+        body = textualize(body, notes, photoSink).replace(/[ \t]+\n/g, "\n").trim();
 
         if (!body) {
             // a quote tag on its own line belongs to the bubble that follows it
@@ -219,5 +244,5 @@ export function planOutbound(
         bubbles.push(replyToId ? { text: body, replyToId } : { text: body });
     }
 
-    return { bubbles, notes };
+    return { bubbles, photos, notes };
 }

@@ -10,6 +10,7 @@ import {
     modelOutputToBubbles,
 } from "./imessage-webhook-core";
 import { composeModelText, planOutbound, type QuoteCandidate } from "./imessage-content";
+import { buildPhotoJob, mediaJobPath } from "./imessage-media-jobs";
 import {
     candidateAddresses,
     findLineForCandidates,
@@ -63,6 +64,8 @@ export type HandlerDeps = {
     now(): number;
     /** Waits without burning the CPU. Fixtures replace it with a fake clock. */
     sleep(ms: number): Promise<void>;
+    /** A fresh unguessable id (job ids and job tokens). Optional so older fixtures keep working. */
+    newId?(): string;
 };
 
 /** Default quiet window, and the hard ceiling (the function has to fit wait + model + send). */
@@ -210,10 +213,15 @@ export async function handleInboundMessage(deps: HandlerDeps, input: InboundInpu
             .filter((c) => c.id);
         // the message the user just quoted is a valid thing for the character to quote back
         if (input.quote?.id && input.quote.preview) known.push({ id: input.quote.id, text: input.quote.preview });
-        const plan = planOutbound(raw, { currentId: input.messageId, currentText: input.text, known });
+        const plan = planOutbound(raw, {
+            currentId: input.messageId,
+            currentText: input.text,
+            known,
+            photos: snapshot.capabilities?.photos === true && deps.newId ? "queue" : "text",
+        });
         if (batchedCount > 1) plan.notes.unshift(`answered ${batchedCount} messages together`);
         const bubbles = plan.bubbles;
-        if (bubbles.length === 0) {
+        if (bubbles.length === 0 && plan.photos.length === 0) {
             await deps.putJson(markerPath, { state: "failed", at: deps.now() } satisfies DeliveryMarker).catch(() => undefined);
             return done("error", "empty_reply");
         }
@@ -244,9 +252,26 @@ export async function handleInboundMessage(deps: HandlerDeps, input: InboundInpu
             );
         }
 
+        // Photos are delivered later by the browser; the job is what carries them there.
+        for (const photo of plan.photos) {
+            const jobId = `${input.messageId}_photo_${deps.newId!()}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+            const job = buildPhotoJob({
+                id: jobId,
+                token: deps.newId!() + deps.newId!(),
+                lineId: target.lineId,
+                characterId: target.characterId,
+                sessionId: target.sessionId,
+                description: photo.description,
+                withRef: photo.withRef,
+                now: deps.now(),
+            });
+            await deps.putJson(mediaJobPath(IMESSAGE_CLOUD_PREFIX, target.lineId, jobId), job);
+        }
+
         await deps.putJson(markerPath, { state: "done", at: deps.now() } satisfies DeliveryMarker);
         const noteText = plan.notes.length ? `; ${plan.notes.join(", ")}` : "";
-        return done("replied", "replied", `${bubbles.length} bubble(s)${modelNote ? `, ${modelNote}` : ""}${noteText}`);
+        const photoText = plan.photos.length ? ` + ${plan.photos.length} photo(s) queued` : "";
+        return done("replied", "replied", `${bubbles.length} bubble(s)${photoText}${modelNote ? `, ${modelNote}` : ""}${noteText}`);
     } catch (err) {
         return done("error", "handler_error", errText(err));
     }

@@ -45,6 +45,17 @@ import {
 } from "./cloud-backup/config";
 import { ensureBucket, getObject, listObjects, putObject } from "./cloud-backup/storage-client";
 import { loadIMessageLines } from "./imessage-storage";
+import { generateImageFromConfiguredApi, isImageGenerationAvailableFor } from "./image-generation-service";
+import {
+    isMediaJob,
+    JOB_LEASE_MS,
+    MAX_JOB_ATTEMPTS,
+    mediaJobImagePath,
+    mediaJobPath,
+    mediaJobPrefix,
+    selectRunnableJobs,
+    type IMessageMediaJob,
+} from "./imessage-media-jobs";
 import type {
     IMessageCloudMessagePullResult,
     IMessageCloudPromptTemplate,
@@ -296,6 +307,9 @@ export async function buildIMessageCloudRuntimeSnapshot(
         coreMemories,
         scheduleSummary,
         currentSchedule,
+        // Real pictures need image generation, which only the browser can run, so whether a line
+        // may promise them is decided here, at sync time.
+        capabilities: { photos: line.sendPhotos !== false && isImageGenerationAvailableFor(character.id) },
         stats: { messageCount: rawMessages.length, memoryCount: memories.length },
     };
 }
@@ -453,6 +467,196 @@ export async function pullIMessageCloudMessages(
     return result;
 }
 
+// ── Photos the character wants to send over real iMessage ─────────────────────────
+// The webhook only records what the character wanted to send (a job, see
+// lib/imessage-media-jobs.ts). Generating the picture needs this app's image settings and
+// reference images, so it happens here, in the browser, and the finished picture is handed to
+// /api/imessage/send-media for delivery. Jobs are therefore delivered only while the app is open.
+
+export type IMessageMediaJobRunResult = { checked: number; delivered: number; fallbacks: number; errors: string[] };
+
+let mediaJobsRunning = false;
+
+function blobToBase64(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(reader.error ?? new Error("Could not read the image"));
+        reader.onload = () => {
+            const text = String(reader.result || "");
+            const comma = text.indexOf(",");
+            resolve(comma >= 0 ? text.slice(comma + 1) : text);
+        };
+        reader.readAsDataURL(blob);
+    });
+}
+
+/** A generated picture can be several MB as PNG; an iMessage photo does not need to be. */
+async function pictureForUpload(blob: Blob): Promise<{ mimeType: string; dataBase64: string }> {
+    try {
+        const bitmap = await createImageBitmap(blob);
+        const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("no canvas");
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close?.();
+        const jpeg = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+        if (jpeg && jpeg.size > 0) return { mimeType: "image/jpeg", dataBase64: await blobToBase64(jpeg) };
+    } catch {
+        // fall through to the original bytes
+    }
+    return { mimeType: blob.type || "image/png", dataBase64: await blobToBase64(blob) };
+}
+
+async function readMediaJob(config: CloudBackupConfig, path: string): Promise<IMessageMediaJob | null> {
+    try {
+        const blob = await getObject(config, path);
+        if (!blob) return null;
+        const parsed = JSON.parse(await blob.text());
+        return isMediaJob(parsed) ? parsed : null;
+    } catch {
+        return null;
+    }
+}
+
+async function writeMediaJob(config: CloudBackupConfig, job: IMessageMediaJob): Promise<void> {
+    await putObject(config, mediaJobPath(IMESSAGE_CLOUD_PREFIX, job.lineId, job.id), JSON.stringify(job), "application/json");
+}
+
+async function requestDelivery(
+    job: IMessageMediaJob,
+    fallback?: { reason: string },
+): Promise<{ ok: boolean; code: string; detail?: string }> {
+    const response = await fetch("/api/imessage/send-media", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            lineId: job.lineId,
+            jobId: job.id,
+            token: job.token,
+            ...(fallback ? { fallback: true, reason: fallback.reason } : {}),
+        }),
+    });
+    const data = await response.json().catch(() => ({} as Record<string, unknown>));
+    return {
+        ok: response.ok && data.ok !== false,
+        code: typeof data.code === "string" ? data.code : `http_${response.status}`,
+        detail: typeof data.detail === "string" ? data.detail : undefined,
+    };
+}
+
+async function runMediaJob(config: CloudBackupConfig, job: IMessageMediaJob, result: IMessageMediaJobRunResult): Promise<void> {
+    // The picture already exists; only delivery is missing.
+    if (job.status === "ready") {
+        const delivery = await requestDelivery(job);
+        if (delivery.ok) result.delivered += 1;
+        else if (delivery.code === "image_not_ready") await writeMediaJob(config, { ...job, status: "pending", updatedAt: new Date().toISOString() });
+        else result.errors.push(`photo ${job.id}: ${delivery.code}${delivery.detail ? ` (${delivery.detail})` : ""}`);
+        return;
+    }
+
+    const leased: IMessageMediaJob = {
+        ...job,
+        status: "generating",
+        attempts: job.attempts + 1,
+        leaseUntil: Date.now() + JOB_LEASE_MS,
+        updatedAt: new Date().toISOString(),
+    };
+    await writeMediaJob(config, leased);
+
+    let generated: Awaited<ReturnType<typeof generateImageFromConfiguredApi>> = null;
+    let failure = "";
+    try {
+        if (!isImageGenerationAvailableFor(job.characterId)) throw new Error("image generation is not set up in this app");
+        generated = await generateImageFromConfiguredApi({
+            description: job.description,
+            characterId: job.characterId,
+            appId: "chat",
+            useReferenceImage: job.withRef,
+            photoStyle: true,
+        });
+        if (!generated) throw new Error("image generation returned nothing");
+    } catch (err) {
+        failure = err instanceof Error ? err.message : String(err);
+    }
+
+    if (!generated) {
+        const notSetUp = !isImageGenerationAvailableFor(job.characterId);
+        if (notSetUp || leased.attempts >= MAX_JOB_ATTEMPTS) {
+            // Out of road: say what the picture was instead of leaving the user hanging.
+            const delivery = await requestDelivery(leased, { reason: failure });
+            if (delivery.ok) result.fallbacks += 1;
+            else result.errors.push(`photo ${job.id}: ${delivery.code}${delivery.detail ? ` (${delivery.detail})` : ""}`);
+        } else {
+            await writeMediaJob(config, { ...leased, status: "pending", leaseUntil: undefined, error: failure.slice(0, 200), updatedAt: new Date().toISOString() });
+            result.errors.push(`photo ${job.id}: generation failed, will retry (${failure.slice(0, 120)})`);
+        }
+        return;
+    }
+
+    const picture = await pictureForUpload(generated.blob);
+    await putObject(
+        config,
+        mediaJobImagePath(IMESSAGE_CLOUD_PREFIX, job.lineId, job.id),
+        JSON.stringify(picture),
+        "application/json",
+    );
+    const ready: IMessageMediaJob = { ...leased, status: "ready", leaseUntil: undefined, error: undefined, updatedAt: new Date().toISOString() };
+    await writeMediaJob(config, ready);
+
+    const delivery = await requestDelivery(ready);
+    if (delivery.ok) result.delivered += 1;
+    else result.errors.push(`photo ${job.id}: ${delivery.code}${delivery.detail ? ` (${delivery.detail})` : ""}`);
+}
+
+/**
+ * Generates and delivers the photos queued by the webhook. One job per call by default (an
+ * image can take minutes); the periodic sync calls this again. Safe to call concurrently:
+ * a second call while one is running returns immediately.
+ */
+export async function processIMessageMediaJobs(
+    options?: { cloudConfig?: CloudBackupConfig; maxJobs?: number },
+): Promise<IMessageMediaJobRunResult> {
+    const result: IMessageMediaJobRunResult = { checked: 0, delivered: 0, fallbacks: 0, errors: [] };
+    if (mediaJobsRunning) return result;
+    const config = options?.cloudConfig ?? loadCloudBackupConfig();
+    if (!isCloudBackupConfigured(config)) return result;
+    mediaJobsRunning = true;
+    try {
+        await hydrateChatStorage();
+        const now = Date.now();
+        for (const line of loadIMessageLines().filter((item) => item.enabled)) {
+            let objects;
+            try {
+                objects = await listObjects(config, mediaJobPrefix(IMESSAGE_CLOUD_PREFIX, line.id), 50);
+            } catch (err) {
+                result.errors.push(`${line.phone}: ${err instanceof Error ? err.message : String(err)}`);
+                continue;
+            }
+            const jobs: IMessageMediaJob[] = [];
+            for (const object of objects) {
+                if (!object.name || object.name.endsWith("/")) continue;
+                const job = await readMediaJob(config, `${mediaJobPrefix(IMESSAGE_CLOUD_PREFIX, line.id)}${object.name}`);
+                if (job && job.lineId === line.id) jobs.push(job);
+            }
+            for (const job of selectRunnableJobs(jobs, now, options?.maxJobs ?? 1)) {
+                result.checked += 1;
+                try {
+                    await runMediaJob(config, job, result);
+                } catch (err) {
+                    result.errors.push(`photo ${job.id}: ${err instanceof Error ? err.message : String(err)}`);
+                }
+            }
+        }
+    } finally {
+        mediaJobsRunning = false;
+    }
+    return result;
+}
 export { IMESSAGE_CLOUD_PREFIX, messagePath as imessageCloudMessagePath, runtimeSnapshotPath as imessageCloudRuntimeSnapshotPath };
 export type { IMessageLineBinding };
 
@@ -487,6 +691,18 @@ export function startIMessageCloudSync(): () => void {
         } finally {
             inFlight = false;
         }
+        // Photos the character queued are generated here and delivered, then pulled in so
+        // they show up in Chat too. Not awaited: an image can take minutes.
+        void processIMessageMediaJobs()
+            .then(async (run) => {
+                if (run.errors.length > 0) console.warn("[IMessageCloudSync] photo jobs:", run.errors);
+                if (stopped || run.delivered + run.fallbacks === 0) return;
+                const pulled = await pullIMessageCloudMessages();
+                for (const sessionId of pulled.sessionIds) {
+                    window.dispatchEvent(new CustomEvent("chat-messages-updated", { detail: { sessionId } }));
+                }
+            })
+            .catch((err) => console.warn("[IMessageCloudSync] photo job run failed:", err));
     };
 
     const onVisibility = () => { void pullNow(); };
