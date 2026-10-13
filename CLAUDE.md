@@ -4053,3 +4053,10 @@ A third-party bridge (Uranus_Imessage; `imessage.js`, `photon.js`, `实现细节
 - `lib/tiktok-link.ts` (pure), `lib/server/tiktok-lookup.ts` (fetch is injectable), `app/api/media-lookup/tiktok` (GET ?url=&thumb=1). Not an open proxy: TikTok hosts only, short links (vm./vt./`/t/`) followed by hand with every hop re-checked, covers only from TikTok CDN hosts, https only, 1.5 MB cap, content-type checked.
 - Browser side is a chat plugin (`App\translated\tiktok-link-viewer.js`, outside the repo): it reads links at `user.beforeSend` (never alters or cancels the message), caches 24 h (failures 5 min, 30 entries, covers only on the newest 8), and at `llm.request` appends the context to the link's message for the model only; the chat bubbles are unchanged. A link that never passed beforeSend (imported from iMessage) is read at request time for the latest message only.
 - **The iMessage webhook does not run chat plugins**, so a TikTok link sent over iMessage is only understood once that conversation is open in the app. Native webhook support would reuse `lookupTikTok` directly.
+
+### TikTok links in the iMessage webhook (2026-10-13)
+`_fx-imessage-tiktok.mjs` 21/21 (control: reading disabled -> 5 fail). The webhook cannot run chat plugins, so `handleInboundMessage` reads links itself via an injected `deps.readTikTok` (the route wires `lookupTikTok`, 8 s limit).
+- Runs on the BATCHED turn text, so a link in an earlier bubble of a burst is still read; max 2 links per turn, looked up in parallel inside the existing time budget.
+- The context block is appended to **this turn's model input only**; the stored inbound record keeps the user's exact words (so the Chat app import is unchanged). Earlier turns' links are not re-read: the character's own reply already carries the reaction.
+- The cover is only requested when `apiConfig.enableImageRecognition` is on (no wasted fetch), and joins the turn's images (max 2 covers).
+- A failed or throwing reader never blocks the reply; the model is told the link could not be read and not to guess. Trace shows `read N/M TikTok link(s)[ with cover]`.

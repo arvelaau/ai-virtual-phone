@@ -52,6 +52,7 @@ import {
 } from "@/lib/server/imessage-supabase";
 import { appendTrace } from "@/lib/server/imessage-trace";
 import { isModelReadableImage, MAX_INBOUND_IMAGE_BYTES, readInboundContent } from "@/lib/imessage-content";
+import { lookupTikTok } from "@/lib/server/tiktok-lookup";
 import type { IMessageCloudRuntimeSnapshot, IMessageCloudStoredMessage } from "@/lib/imessage-types";
 
 export const runtime = "nodejs";
@@ -216,6 +217,7 @@ async function processDelivery(d: Delivery): Promise<TraceEvent> {
                     },
                     now: () => Date.now(),
                     newId: () => globalThis.crypto.randomUUID().replace(/-/g, ""),
+                    readTikTok: (url, options) => lookupTikTok(url, { wantThumbnail: options.wantThumbnail, timeoutMs: 8000 }),
                 };
                 let image: { mimeType: string; dataBase64: string } | undefined;
                 let contentType = inboundContent.kind === "text" ? "text" : inboundContent.kind === "image" ? "image" : inboundContent.type;

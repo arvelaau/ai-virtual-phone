@@ -11,6 +11,8 @@ import {
 } from "./imessage-webhook-core";
 import { composeModelText, planOutbound, type QuoteCandidate } from "./imessage-content";
 import { buildPhotoJob, mediaJobPath } from "./imessage-media-jobs";
+import { extractTikTokUrls, formatTikTokContext } from "./tiktok-link";
+import type { TikTokLookupResult } from "./server/tiktok-lookup";
 import {
     candidateAddresses,
     findLineForCandidates,
@@ -66,7 +68,17 @@ export type HandlerDeps = {
     sleep(ms: number): Promise<void>;
     /** A fresh unguessable id (job ids and job tokens). Optional so older fixtures keep working. */
     newId?(): string;
+    /**
+     * Reads a TikTok link (creator, caption, cover frame). Optional: without it links are left
+     * exactly as the user wrote them. The webhook cannot run the chat plugin that does this in
+     * the app, so it does it itself.
+     */
+    readTikTok?(url: string, options: { wantThumbnail: boolean }): Promise<TikTokLookupResult>;
 };
+
+/** Links read per turn. Each is a network round trip inside the webhook's time budget. */
+const MAX_TIKTOK_LINKS_PER_TURN = 2;
+const MAX_TIKTOK_COVERS = 2;
 
 /** Default quiet window, and the hard ceiling (the function has to fit wait + model + send). */
 export const DEFAULT_REPLY_DELAY_SECONDS = 60;
@@ -194,6 +206,35 @@ export async function handleInboundMessage(deps: HandlerDeps, input: InboundInpu
             imagesForModel = found.slice(-MAX_BATCH_IMAGES);
         }
 
+        // A TikTok link in what the user said: read it so the character knows what it is. The
+        // stored record keeps the user's words untouched; only this turn's model input grows.
+        let linkNote = "";
+        if (deps.readTikTok) {
+            const links = extractTikTokUrls(textForModel, MAX_TIKTOK_LINKS_PER_TURN);
+            if (links.length > 0) {
+                const wantCover = snapshot.apiConfig?.enableImageRecognition === true;
+                const results = await Promise.all(links.map((url) =>
+                    deps.readTikTok!(url, { wantThumbnail: wantCover }).catch((): null => null),
+                ));
+                const blocks: string[] = [];
+                const covers: Array<{ mimeType: string; dataBase64: string }> = [];
+                let readable = 0;
+                for (const result of results) {
+                    if (result && result.ok) {
+                        readable += 1;
+                        blocks.push(formatTikTokContext(result.info));
+                        const parsed = result.thumbnailDataUrl ? /^data:(image\/[a-z+.-]+);base64,(.+)$/i.exec(result.thumbnailDataUrl) : null;
+                        if (parsed && covers.length < MAX_TIKTOK_COVERS) covers.push({ mimeType: parsed[1].toLowerCase(), dataBase64: parsed[2] });
+                    } else {
+                        blocks.push(formatTikTokContext(null, result && !result.ok ? result.error : "lookup failed"));
+                    }
+                }
+                textForModel = `${textForModel}\n\n${blocks.join("\n")}`;
+                imagesForModel = [...imagesForModel, ...covers];
+                linkNote = `read ${readable}/${links.length} TikTok link(s)${covers.length ? " with cover" : ""}`;
+            }
+        }
+
         let raw: string;
         let modelNote = "";
         try {
@@ -220,6 +261,7 @@ export async function handleInboundMessage(deps: HandlerDeps, input: InboundInpu
             photos: snapshot.capabilities?.photos === true && deps.newId ? "queue" : "text",
         });
         if (batchedCount > 1) plan.notes.unshift(`answered ${batchedCount} messages together`);
+        if (linkNote) plan.notes.unshift(linkNote);
         const bubbles = plan.bubbles;
         if (bubbles.length === 0 && plan.photos.length === 0) {
             await deps.putJson(markerPath, { state: "failed", at: deps.now() } satisfies DeliveryMarker).catch(() => undefined);
