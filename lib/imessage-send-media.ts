@@ -122,6 +122,35 @@ export async function sendMediaJob(deps: SendMediaDeps, input: SendMediaInput): 
     };
     const recordPath = inboundMessagePath(IMESSAGE_CLOUD_PREFIX, lineId, outboundBase.externalId);
 
+    // -- a message the character wrote in the app, mirrored onto iMessage --------------------
+    if (job.kind === "text") {
+        const text = typeof job.text === "string" ? job.text.trim() : "";
+        if (!text) {
+            await deps.putJson(jobPath, { ...job, status: "failed", error: "empty text", updatedAt: stamp }).catch(() => undefined);
+            return reply(422, "empty_text", "failed");
+        }
+        let platformId: string | undefined;
+        try {
+            platformId = await deps.sendText(phone, text);
+        } catch (err) {
+            const attempts = job.attempts + 1;
+            const detail = err instanceof Error ? err.message.slice(0, 200) : "send failed";
+            const gaveUp = attempts >= MAX_JOB_ATTEMPTS;
+            await deps.putJson(jobPath, { ...job, attempts, status: gaveUp ? "failed" : "pending", error: detail, updatedAt: stamp }).catch(() => undefined);
+            return reply(502, "send_error", gaveUp ? "failed" : "pending", detail);
+        }
+        const textRecord: IMessageCloudStoredMessage = {
+            ...outboundBase,
+            externalId: `${job.id}_text`,
+            content: text,
+            ...(job.localMessageId ? { localMessageId: job.localMessageId } : {}),
+            ...(platformId ? { platformMessageId: platformId } : {}),
+        };
+        await deps.putJson(inboundMessagePath(IMESSAGE_CLOUD_PREFIX, lineId, textRecord.externalId), textRecord);
+        await deps.putJson(jobPath, { ...job, status: "sent", leaseUntil: undefined, error: undefined, updatedAt: stamp });
+        return reply(200, "sent", "sent");
+    }
+
     // -- the picture could not be made: say what it was instead --------------------------
     if (input.fallback === true) {
         const text = photoFallbackText(job.description);

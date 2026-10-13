@@ -27,14 +27,18 @@ export type IMessageMediaJob = {
     format: typeof IMESSAGE_MEDIA_JOB_FORMAT;
     version: 1;
     id: string;
-    kind: "photo";
+    kind: "photo" | "text";
     lineId: string;
     characterId: string;
     sessionId: string;
-    /** What to draw. The same wording the character used in [Photo:...]. */
+    /** photo: what to draw (the wording the character used in [Photo:...]). text: unused. */
     description: string;
-    /** Use the character's reference image (a selfie) or not (a scene). */
+    /** photo: use the character's reference image (a selfie) or not (a scene). */
     withRef: boolean;
+    /** text: the message to deliver, exactly as it appears in the local chat. */
+    text?: string;
+    /** text: id of the local chat message this mirrors (so the pull never imports it twice). */
+    localMessageId?: string;
     /**
      * Capability token. Only someone who can READ the owner's storage bucket can learn it, so
      * possessing it proves the caller of send-media is the owner's own app, not a stranger who
@@ -55,6 +59,15 @@ export const MAX_JOB_ATTEMPTS = 3;
 export const JOB_LEASE_MS = 10 * 60_000;
 /** A job older than this is not worth delivering any more ("here's the photo" two days late). */
 export const JOB_MAX_AGE_MS = 48 * 3600_000;
+/**
+ * A mirrored text is a moment-in-time remark ("you still up?"); delivered hours late it is
+ * wrong, so it expires much sooner than a photo.
+ */
+export const TEXT_JOB_MAX_AGE_MS = 30 * 60_000;
+
+export function maxAgeFor(job: Pick<IMessageMediaJob, "kind">): number {
+    return job.kind === "text" ? TEXT_JOB_MAX_AGE_MS : JOB_MAX_AGE_MS;
+}
 export const MAX_PHOTOS_PER_REPLY = 2;
 
 const safe = (v: string) => v.replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -101,12 +114,45 @@ export function buildPhotoJob(input: {
     };
 }
 
+/** A text message the character sent in the app, to be mirrored onto iMessage. */
+export function buildTextJob(input: {
+    id: string;
+    token: string;
+    lineId: string;
+    characterId: string;
+    sessionId: string;
+    text: string;
+    localMessageId: string;
+    now: number;
+}): IMessageMediaJob {
+    const at = new Date(input.now).toISOString();
+    return {
+        format: IMESSAGE_MEDIA_JOB_FORMAT,
+        version: 1,
+        id: input.id,
+        kind: "text",
+        lineId: input.lineId,
+        characterId: input.characterId,
+        sessionId: input.sessionId,
+        description: "",
+        withRef: false,
+        text: input.text,
+        localMessageId: input.localMessageId,
+        token: input.token,
+        status: "pending",
+        attempts: 0,
+        createdAt: at,
+        updatedAt: at,
+    };
+}
+
 export function isMediaJob(value: unknown): value is IMessageMediaJob {
     if (!value || typeof value !== "object") return false;
     const v = value as Partial<IMessageMediaJob>;
     return v.format === IMESSAGE_MEDIA_JOB_FORMAT
         && typeof v.id === "string" && typeof v.lineId === "string"
         && typeof v.token === "string" && typeof v.status === "string"
+        && (v.kind === "photo" || v.kind === "text")
         && typeof v.description === "string";
 }
 
@@ -129,8 +175,8 @@ export function jobAgeMs(job: IMessageMediaJob, now: number): number {
 export function selectRunnableJobs(jobs: IMessageMediaJob[], now: number, max = 1): IMessageMediaJob[] {
     return jobs
         .filter((job) => {
-            if (job.kind !== "photo" || isTerminalStatus(job.status)) return false;
-            if (jobAgeMs(job, now) > JOB_MAX_AGE_MS) return false;
+            if (isTerminalStatus(job.status)) return false;
+            if (jobAgeMs(job, now) > maxAgeFor(job)) return false;
             if (job.status === "ready") return true;
             if (job.attempts >= MAX_JOB_ATTEMPTS) return false;
             if (job.status === "pending") return true;
@@ -143,7 +189,7 @@ export function selectRunnableJobs(jobs: IMessageMediaJob[], now: number, max = 
 
 /** Jobs that are stale enough that nobody should ever deliver them (and no longer runnable). */
 export function isExpired(job: IMessageMediaJob, now: number): boolean {
-    return !isTerminalStatus(job.status) && jobAgeMs(job, now) > JOB_MAX_AGE_MS;
+    return !isTerminalStatus(job.status) && jobAgeMs(job, now) > maxAgeFor(job);
 }
 
 /**

@@ -248,6 +248,18 @@ export function IMessageSettings() {
                                 onChange={(next) => { updateIMessageLine(line.id, { enabled: next }); refresh(); }}
                             />
                         </div>
+                        <div className="flex flex-col gap-1">
+                            <span className="menu-label">Messages the character starts in the app</span>
+                            <span className="menu-desc">Follow-ups, timed wake-ups and chat plugins that make the character write first. They can also be sent to this iMessage number. Only happens while this app is open.</span>
+                            <Select
+                                value={line.mirrorMode ?? "proactive"}
+                                onChange={(event) => { updateIMessageLine(line.id, { mirrorMode: event.target.value as "off" | "proactive" | "all" }); refresh(); }}
+                            >
+                                <option value="proactive">Send the ones the character starts</option>
+                                <option value="all">Send everything the character writes in the app</option>
+                                <option value="off">Keep them in the app only</option>
+                            </Select>
+                        </div>
                         <div className="flex items-center justify-between gap-3">
                             <span className="flex flex-col">
                                 <span className="menu-label">Send photos as real pictures</span>

@@ -12,6 +12,7 @@
 // up in the phone's own Chat app.
 
 import {
+    CHAT_MESSAGE_PUSHED_EVENT,
     createOrGetSession,
     getLatestCharacterStateValues,
     hydrateChatStorage,
@@ -46,7 +47,9 @@ import {
 import { ensureBucket, getObject, listObjects, putObject } from "./cloud-backup/storage-client";
 import { loadIMessageLines } from "./imessage-storage";
 import { generateImageFromConfiguredApi, isImageGenerationAvailableFor } from "./image-generation-service";
+import { decideMirror, lastLocalUserMessageAt, mirrorJobId, normalizeMirrorMode } from "./imessage-mirror";
 import {
+    buildTextJob,
     isMediaJob,
     JOB_LEASE_MS,
     MAX_JOB_ATTEMPTS,
@@ -449,6 +452,9 @@ export async function pullIMessageCloudMessages(
 
         const sortedStored = storedMessages.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
         for (const stored of sortedStored) {
+            // A mirror of a message the character already sent in this app: it is in the
+            // local chat, and importing it again would show every proactive message twice.
+            if (stored.localMessageId) { result.skipped += 1; continue; }
             let imageDataUrl: string | undefined;
             if (stored.image) {
                 try {
@@ -550,6 +556,14 @@ async function requestDelivery(
 }
 
 async function runMediaJob(config: CloudBackupConfig, job: IMessageMediaJob, result: IMessageMediaJobRunResult): Promise<void> {
+    // A mirrored text: nothing to generate, only delivery to retry.
+    if (job.kind === "text") {
+        const delivery = await requestDelivery(job);
+        if (delivery.ok) result.delivered += 1;
+        else result.errors.push(`text ${job.id}: ${delivery.code}${delivery.detail ? ` (${delivery.detail})` : ""}`);
+        return;
+    }
+
     // The picture already exists; only delivery is missing.
     if (job.status === "ready") {
         const delivery = await requestDelivery(job);
@@ -657,6 +671,79 @@ export async function processIMessageMediaJobs(
     }
     return result;
 }
+// ── Messages the character writes first, in the app, mirrored onto iMessage ─────────
+// Follow-ups, timed wake-ups and chat plugins that make the character write first all end up
+// in the local chat through pushChatMessage and fire CHAT_MESSAGE_PUSHED_EVENT. The decision
+// is lib/imessage-mirror.ts; this turns an approved message into a "text" job and asks the
+// delivery route to send it. Only while the app is open, which is also the only time those
+// messages can be created.
+
+const mirroredLocalIds = new Set<string>();
+const mirrorSendTimes = new Map<string, number[]>();
+
+function newSecret(): string {
+    const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+    if (c?.randomUUID) return `${c.randomUUID()}${c.randomUUID()}`.replace(/-/g, "");
+    return `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+}
+
+export async function mirrorLocalMessageToIMessage(
+    message: ChatMessage,
+    options?: { cloudConfig?: CloudBackupConfig },
+): Promise<{ sent: boolean; reason: string }> {
+    if (mirroredLocalIds.has(message.id)) return { sent: false, reason: "already_mirrored" };
+    const config = options?.cloudConfig ?? loadCloudBackupConfig();
+    if (!isCloudBackupConfigured(config)) return { sent: false, reason: "no_cloud_backup" };
+
+    await hydrateChatStorage();
+    for (const line of loadIMessageLines().filter((item) => item.enabled)) {
+        const session = createOrGetSession(line.characterId);
+        if (session.id !== message.sessionId) continue;
+
+        const now = Date.now();
+        const createdAt = Date.parse(message.createdAt);
+        const decision = decideMirror({
+            mode: normalizeMirrorMode(line.mirrorMode),
+            message,
+            isGroup: Boolean(session.isGroup),
+            lastLocalUserAt: lastLocalUserMessageAt(loadChatMessages(session.id), Number.isFinite(createdAt) ? createdAt : now),
+            recentMirrorTimes: mirrorSendTimes.get(line.id),
+            now,
+        });
+        if (!decision.send) return { sent: false, reason: decision.reason };
+
+        mirroredLocalIds.add(message.id);
+        const jobId = mirrorJobId(message.id);
+        // A job that already exists means this message was handled (possibly by another tab).
+        if (await getObject(config, mediaJobPath(IMESSAGE_CLOUD_PREFIX, line.id, jobId))) {
+            return { sent: false, reason: "already_mirrored" };
+        }
+        // Claimed up front with a short lease: the periodic runner will not pick this job up
+        // while this call is still in flight, but will retry it if the call fails.
+        const job: IMessageMediaJob = {
+            ...buildTextJob({
+                id: jobId,
+                token: newSecret(),
+                lineId: line.id,
+                characterId: line.characterId,
+                sessionId: session.id,
+                text: message.content.trim(),
+                localMessageId: message.id,
+                now,
+            }),
+            status: "generating",
+            attempts: 1,
+            leaseUntil: now + 60_000,
+        };
+        await writeMediaJob(config, job);
+        const delivery = await requestDelivery(job);
+        if (delivery.ok) {
+            mirrorSendTimes.set(line.id, [...(mirrorSendTimes.get(line.id) ?? []).filter((t) => t > now - 3600_000), now]);
+        }
+        return { sent: delivery.ok, reason: delivery.ok ? decision.reason : delivery.code };
+    }
+    return { sent: false, reason: "no_bound_line" };
+}
 export { IMESSAGE_CLOUD_PREFIX, messagePath as imessageCloudMessagePath, runtimeSnapshotPath as imessageCloudRuntimeSnapshotPath };
 export type { IMessageLineBinding };
 
@@ -705,6 +792,14 @@ export function startIMessageCloudSync(): () => void {
             .catch((err) => console.warn("[IMessageCloudSync] photo job run failed:", err));
     };
 
+    // Anything the character starts in the app goes out over iMessage too (per-line mode).
+    const onPushed = (event: Event) => {
+        const message = (event as CustomEvent<{ message?: ChatMessage }>).detail?.message;
+        if (!message || stopped || !shouldRun()) return;
+        void mirrorLocalMessageToIMessage(message).catch((err) => console.warn("[IMessageCloudSync] mirror failed:", err));
+    };
+    window.addEventListener(CHAT_MESSAGE_PUSHED_EVENT, onPushed);
+
     const onVisibility = () => { void pullNow(); };
     document.addEventListener("visibilitychange", onVisibility);
     const timer = window.setInterval(() => { void pullNow(); }, AUTO_PULL_INTERVAL_MS);
@@ -713,6 +808,7 @@ export function startIMessageCloudSync(): () => void {
     return () => {
         stopped = true;
         window.clearInterval(timer);
+        window.removeEventListener(CHAT_MESSAGE_PUSHED_EVENT, onPushed);
         document.removeEventListener("visibilitychange", onVisibility);
     };
 }

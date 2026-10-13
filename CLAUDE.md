@@ -4037,3 +4037,12 @@ A third-party bridge (Uranus_Imessage; `imessage.js`, `photon.js`, `实现细节
 - At most 2 photos per reply (`MAX_PHOTOS_PER_REPLY`); extra tags become text.
 - **Voice notes are NOT done** (same queue would work; needs TTS in the snapshot and an m4a/caf conversion decision).
 - `lib/imessage-media-jobs.ts` is browser-safe on purpose (no `node:` imports); `tokensMatch` is hand-written constant-time.
+
+### iMessage bridge — messages the character starts in the app are mirrored (2026-10-13)
+`_fx-imessage-mirror.mjs` 50/50 (controls: replies mirrored -> A11/A13, pull imports mirrors -> F1, text never expires -> C3-C5). Not live-tested.
+- **Where it hooks:** every message the character writes in the app (built-in follow-ups, timed wake-ups, chat plugins calling `ctx.data.messages.push`) goes through `pushChatMessage` and fires `CHAT_MESSAGE_PUSHED_EVENT`. `startIMessageCloudSync` listens, `lib/imessage-mirror.ts#decideMirror` decides, and approved text becomes a `kind:"text"` job delivered by the same `/api/imessage/send-media` route (token-gated).
+- **"Proactive" is a heuristic, stated as such:** a follow-up (`followUpIndex` set) or any message with no local user message in the previous 5 minutes. A plugin that pushes within 5 minutes of the user typing in the app is therefore treated as a reply and not mirrored; per-line mode `all` sends everything. Never mirrored: group chats, imported messages (iMessage/weixin/worker), media messages, rejected/blacklisted, more than 20 per hour per line.
+- **No duplicates:** deterministic job id `mirror_<localId>`; an existing job means "handled". The record the route writes carries `localMessageId`, which the pull skips (the message is already in the local chat) but the webhook's history keeps, so the user's iMessage answer to "you still up?" is understood.
+- **Text jobs expire after 30 minutes** (photos 48 h): a stale "you still up?" is worse than none. A mirroring tab claims the job with a 60 s lease so the periodic runner cannot double-send while the first request is in flight.
+- **Only works while the app is open**, which is also the only time those messages are created (the plugin runs in the browser).
+- Mirrored media (photos/voice a plugin pushes locally) is NOT sent yet; text only.

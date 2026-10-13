@@ -35,6 +35,12 @@ export type IMessageLineBinding = {
      * while it is open). Unset means on; it only has an effect when image generation is set up.
      */
     sendPhotos?: boolean;
+    /**
+     * Which messages the character sends in THIS app also go out over iMessage.
+     * "proactive" (default): only the ones it starts on its own (follow-ups, timed wake-ups,
+     * plugins that make it write first), not replies to something typed in the app.
+     */
+    mirrorMode?: "off" | "proactive" | "all";
     addedAt: string;
 };
 
@@ -104,6 +110,12 @@ export type IMessageCloudStoredMessage = {
     platformMessageId?: string;
     /** A photo that came with this message; the bytes live at `path` in the same bucket. */
     image?: { path: string; mimeType: string };
+    /**
+     * Set on a record that MIRRORS a message which already exists in the local chat (the
+     * character started it in the app). It exists so the webhook's history includes it; the
+     * pull must not import it a second time.
+     */
+    localMessageId?: string;
 };
 
 export type IMessageCloudRuntimeIndexItem = {
