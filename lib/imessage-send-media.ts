@@ -12,6 +12,7 @@ import {
     isExpired,
     isMediaJob,
     isTerminalStatus,
+    mediaJobAudioPath,
     mediaJobImagePath,
     mediaJobPath,
     MAX_JOB_ATTEMPTS,
@@ -24,6 +25,50 @@ import type { IMessageCloudStoredMessage } from "./imessage-types";
 
 /** Largest picture the route will hand to the SDK (decoded bytes). */
 export const MAX_SEND_IMAGE_BYTES = 12 * 1024 * 1024;
+/** Largest clip the route will hand to the SDK. A spoken sentence or two is far below this. */
+export const MAX_SEND_AUDIO_BYTES = 8 * 1024 * 1024;
+
+const AUDIO_MIME_RE = /^audio\/(mpeg|mp3|mp4|x-m4a|m4a|aac|wav|x-wav|wave|ogg|opus|webm|flac|x-flac)$/i;
+
+function audioExtensionFor(mimeType: string): string {
+    if (/mp4|m4a|aac/i.test(mimeType)) return "m4a";
+    if (/wav|wave/i.test(mimeType)) return "wav";
+    if (/ogg|opus/i.test(mimeType)) return "ogg";
+    if (/webm/i.test(mimeType)) return "webm";
+    if (/flac/i.test(mimeType)) return "flac";
+    return "mp3";
+}
+
+/**
+ * The SDK turns a "voice" into a real iMessage voice message only after converting it to m4a,
+ * which needs ffmpeg on the server. When that binary is missing the error says so; that is the
+ * one failure where sending the same clip as an ordinary audio attachment is the right retry.
+ */
+export function isFfmpegUnavailableError(err: unknown): boolean {
+    const text = err instanceof Error ? err.message : String(err ?? "");
+    return /ffmpeg/i.test(text) && /(unavailable|not found|ENOENT|install|PATH)/i.test(text);
+}
+
+export type VoiceDelivery = { id: string | undefined; mode: "voice_message" | "audio_file" };
+
+/** Sends a clip as a real voice message when the server can convert it, else as an audio file. */
+export async function deliverVoice(
+    deps: Pick<SendMediaDeps, "sendVoice" | "sendAudioFile">,
+    phone: string,
+    bytes: Uint8Array,
+    mimeType: string,
+    fileName: string,
+): Promise<VoiceDelivery> {
+    if (deps.sendVoice) {
+        try {
+            return { id: await deps.sendVoice(phone, bytes, mimeType, fileName), mode: "voice_message" };
+        } catch (err) {
+            if (!isFfmpegUnavailableError(err) || !deps.sendAudioFile) throw err;
+        }
+    }
+    if (!deps.sendAudioFile) throw new Error("audio delivery is not available");
+    return { id: await deps.sendAudioFile(phone, bytes, mimeType, fileName), mode: "audio_file" };
+}
 
 export type SendMediaDeps = {
     readJson<T>(path: string): Promise<T | null>;
@@ -32,6 +77,10 @@ export type SendMediaDeps = {
     phoneForLine(lineId: string): Promise<string | null>;
     sendText(phone: string, text: string): Promise<string | undefined>;
     sendPhoto(phone: string, bytes: Uint8Array, mimeType: string, fileName: string): Promise<string | undefined>;
+    /** A real iMessage voice message (needs ffmpeg unless the clip is already m4a/aac). */
+    sendVoice?(phone: string, bytes: Uint8Array, mimeType: string, fileName: string): Promise<string | undefined>;
+    /** The same clip as an ordinary audio attachment; the fallback when sendVoice cannot convert it. */
+    sendAudioFile?(phone: string, bytes: Uint8Array, mimeType: string, fileName: string): Promise<string | undefined>;
     now(): number;
 };
 
@@ -149,6 +198,68 @@ export async function sendMediaJob(deps: SendMediaDeps, input: SendMediaInput): 
         await deps.putJson(inboundMessagePath(IMESSAGE_CLOUD_PREFIX, lineId, textRecord.externalId), textRecord);
         await deps.putJson(jobPath, { ...job, status: "sent", leaseUntil: undefined, error: undefined, updatedAt: stamp });
         return reply(200, "sent", "sent");
+    }
+
+    // -- a spoken note --------------------------------------------------------------------
+    if (job.kind === "voice") {
+        const spoken = typeof job.text === "string" ? job.text.trim() : "";
+        if (!spoken) {
+            await deps.putJson(jobPath, { ...job, status: "failed", error: "empty text", updatedAt: stamp }).catch(() => undefined);
+            return reply(422, "empty_text", "failed");
+        }
+        const voiceRecordPath = inboundMessagePath(IMESSAGE_CLOUD_PREFIX, lineId, `${job.id}_voice`);
+        const voiceRecord = (platformId: string | undefined): IMessageCloudStoredMessage => ({
+            ...outboundBase,
+            externalId: `${job.id}_voice`,
+            content: spoken,
+            ...(platformId ? { platformMessageId: platformId } : {}),
+        });
+
+        // The clip could not be made: the words go out as an ordinary message instead.
+        if (input.fallback === true) {
+            let platformId: string | undefined;
+            try {
+                platformId = await deps.sendText(phone, spoken);
+            } catch (err) {
+                return reply(502, "send_error", job.status, err instanceof Error ? err.message.slice(0, 200) : "send failed");
+            }
+            await deps.putJson(voiceRecordPath, voiceRecord(platformId));
+            const reason = typeof input.reason === "string" ? input.reason.slice(0, 200) : undefined;
+            await deps.putJson(jobPath, { ...job, status: "fallback_sent", leaseUntil: undefined, ...(reason ? { error: reason } : {}), updatedAt: stamp });
+            return reply(200, "fallback_sent", "fallback_sent");
+        }
+
+        let clip: { mimeType?: string; dataBase64?: string } | null = null;
+        try {
+            clip = await deps.readJson<{ mimeType?: string; dataBase64?: string }>(mediaJobAudioPath(IMESSAGE_CLOUD_PREFIX, lineId, jobId));
+        } catch (err) {
+            return reply(502, "storage_error", job.status, err instanceof Error ? err.message.slice(0, 200) : "audio read failed");
+        }
+        if (!clip || typeof clip.dataBase64 !== "string" || !clip.dataBase64) return reply(409, "audio_not_ready", job.status);
+        const audioMime = typeof clip.mimeType === "string" && AUDIO_MIME_RE.test(clip.mimeType.split(";")[0].trim()) ? clip.mimeType.split(";")[0].trim().toLowerCase() : "";
+        if (!audioMime) return reply(415, "unsupported_audio", job.status);
+        let audioBytes: Uint8Array;
+        try {
+            audioBytes = decodeBase64(clip.dataBase64);
+        } catch {
+            return reply(422, "bad_audio_data", job.status);
+        }
+        if (audioBytes.byteLength === 0) return reply(422, "bad_audio_data", job.status);
+        if (audioBytes.byteLength > MAX_SEND_AUDIO_BYTES) return reply(413, "audio_too_large", job.status);
+
+        let delivered: VoiceDelivery;
+        try {
+            delivered = await deliverVoice(deps, phone, audioBytes, audioMime, `voice.${audioExtensionFor(audioMime)}`);
+        } catch (err) {
+            const attempts = job.attempts + 1;
+            const detail = err instanceof Error ? err.message.slice(0, 200) : "send failed";
+            const gaveUp = attempts >= MAX_JOB_ATTEMPTS;
+            await deps.putJson(jobPath, { ...job, attempts, status: gaveUp ? "failed" : "ready", error: detail, updatedAt: stamp }).catch(() => undefined);
+            return reply(502, "send_error", gaveUp ? "failed" : "ready", detail);
+        }
+        await deps.putJson(voiceRecordPath, voiceRecord(delivered.id));
+        await deps.putJson(jobPath, { ...job, status: "sent", leaseUntil: undefined, error: undefined, updatedAt: stamp });
+        return reply(200, "sent", "sent", delivered.mode);
     }
 
     // -- the picture could not be made: say what it was instead --------------------------

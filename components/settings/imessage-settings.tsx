@@ -270,6 +270,16 @@ export function IMessageSettings() {
                                 onChange={(next) => { updateIMessageLine(line.id, { sendPhotos: next }); refresh(); }}
                             />
                         </div>
+                        <div className="flex items-center justify-between gap-3">
+                            <span className="flex flex-col">
+                                <span className="menu-label">Send voice notes as real voice messages</span>
+                                <span className="menu-desc">When the character sends a voice note, this app speaks it with the voice bound to that character and delivers it over iMessage. Needs a voice set up, and only happens while this app is open; otherwise the words go out as text. Sync to cloud after changing it.</span>
+                            </span>
+                            <Toggle
+                                checked={line.sendVoice !== false}
+                                onChange={(next) => { updateIMessageLine(line.id, { sendVoice: next }); refresh(); }}
+                            />
+                        </div>
                         <div className="flex flex-col gap-1">
                             <span className="menu-desc">Wait for a pause before answering, so several bubbles get one reply. Sync to cloud after changing it.</span>
                             <Select

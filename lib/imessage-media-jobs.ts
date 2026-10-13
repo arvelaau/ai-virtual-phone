@@ -27,7 +27,7 @@ export type IMessageMediaJob = {
     format: typeof IMESSAGE_MEDIA_JOB_FORMAT;
     version: 1;
     id: string;
-    kind: "photo" | "text";
+    kind: "photo" | "text" | "voice";
     lineId: string;
     characterId: string;
     sessionId: string;
@@ -35,7 +35,10 @@ export type IMessageMediaJob = {
     description: string;
     /** photo: use the character's reference image (a selfie) or not (a scene). */
     withRef: boolean;
-    /** text: the message to deliver, exactly as it appears in the local chat. */
+    /**
+     * text: the message to deliver, exactly as it appears in the local chat.
+     * voice: the words to speak (also what goes out as plain text if speech cannot be made).
+     */
     text?: string;
     /** text: id of the local chat message this mirrors (so the pull never imports it twice). */
     localMessageId?: string;
@@ -64,11 +67,19 @@ export const JOB_MAX_AGE_MS = 48 * 3600_000;
  * wrong, so it expires much sooner than a photo.
  */
 export const TEXT_JOB_MAX_AGE_MS = 30 * 60_000;
+/** A voice note is a reply to something said just now; hours later it is out of place. */
+export const VOICE_JOB_MAX_AGE_MS = 2 * 3600_000;
 
 export function maxAgeFor(job: Pick<IMessageMediaJob, "kind">): number {
-    return job.kind === "text" ? TEXT_JOB_MAX_AGE_MS : JOB_MAX_AGE_MS;
+    if (job.kind === "text") return TEXT_JOB_MAX_AGE_MS;
+    if (job.kind === "voice") return VOICE_JOB_MAX_AGE_MS;
+    return JOB_MAX_AGE_MS;
 }
 export const MAX_PHOTOS_PER_REPLY = 2;
+/** One spoken clip per reply: a second one is almost always the model repeating itself. */
+export const MAX_VOICES_PER_REPLY = 1;
+/** Longest text that is synthesized; a voice note is a sentence or two, not an essay. */
+export const MAX_VOICE_TEXT_CHARS = 600;
 
 const safe = (v: string) => v.replace(/[^a-zA-Z0-9_-]/g, "_");
 
@@ -83,6 +94,11 @@ export function mediaJobPrefix(prefix: string, lineId: string): string {
 /** Where the generated picture is stored: same JSON shape the inbound-photo import already reads. */
 export function mediaJobImagePath(prefix: string, lineId: string, jobId: string): string {
     return `${prefix}/media/${safe(lineId)}/job_${safe(jobId)}.json`;
+}
+
+/** Where the synthesized clip is stored: { mimeType, dataBase64 }, like the picture. */
+export function mediaJobAudioPath(prefix: string, lineId: string, jobId: string): string {
+    return `${prefix}/media/${safe(lineId)}/audio_${safe(jobId)}.json`;
 }
 
 export function buildPhotoJob(input: {
@@ -146,13 +162,43 @@ export function buildTextJob(input: {
     };
 }
 
+/** A spoken note the character wants to send; the browser synthesizes it (its voice settings live there). */
+export function buildVoiceJob(input: {
+    id: string;
+    token: string;
+    lineId: string;
+    characterId: string;
+    sessionId: string;
+    text: string;
+    now: number;
+}): IMessageMediaJob {
+    const at = new Date(input.now).toISOString();
+    return {
+        format: IMESSAGE_MEDIA_JOB_FORMAT,
+        version: 1,
+        id: input.id,
+        kind: "voice",
+        lineId: input.lineId,
+        characterId: input.characterId,
+        sessionId: input.sessionId,
+        description: "",
+        withRef: false,
+        text: input.text.replace(/\s+/g, " ").trim().slice(0, MAX_VOICE_TEXT_CHARS),
+        token: input.token,
+        status: "pending",
+        attempts: 0,
+        createdAt: at,
+        updatedAt: at,
+    };
+}
+
 export function isMediaJob(value: unknown): value is IMessageMediaJob {
     if (!value || typeof value !== "object") return false;
     const v = value as Partial<IMessageMediaJob>;
     return v.format === IMESSAGE_MEDIA_JOB_FORMAT
         && typeof v.id === "string" && typeof v.lineId === "string"
         && typeof v.token === "string" && typeof v.status === "string"
-        && (v.kind === "photo" || v.kind === "text")
+        && (v.kind === "photo" || v.kind === "text" || v.kind === "voice")
         && typeof v.description === "string";
 }
 

@@ -12,7 +12,7 @@
 // IMESSAGE_SUPABASE_SERVICE_ROLE_KEY (the same ones the webhook uses).
 
 import { NextResponse } from "next/server";
-import { Spectrum, attachment } from "@spectrum-ts/core";
+import { Spectrum, attachment, voice } from "@spectrum-ts/core";
 import { imessage } from "@spectrum-ts/imessage";
 import {
     IMESSAGE_CLOUD_INDEX_PATH,
@@ -96,6 +96,10 @@ export async function POST(request: Request) {
         },
         sendText: async (phone, message) => idOf(await (await spaceFor(phone)).send(message)),
         sendPhoto: async (phone, bytes, mimeType, fileName) =>
+            idOf(await (await spaceFor(phone)).send(attachment(Buffer.from(bytes), { mimeType, name: fileName }))),
+        sendVoice: async (phone, bytes, mimeType, fileName) =>
+            idOf(await (await spaceFor(phone)).send(voice(Buffer.from(bytes), { mimeType, name: fileName }))),
+        sendAudioFile: async (phone, bytes, mimeType, fileName) =>
             idOf(await (await spaceFor(phone)).send(attachment(Buffer.from(bytes), { mimeType, name: fileName }))),
         now: () => Date.now(),
     };

@@ -266,7 +266,7 @@ eq("E7 missing Photon config -> 503", [res.status, (await res.json()).code], [50
 // ---- F: wiring ----------------------------------------------------------------------------------
 const read = (p) => fs.readFileSync(p, "utf8").replace(/\r\n/g, "\n");
 const sync = read("lib/imessage-cloud-sync.ts");
-yes("F1 the snapshot only promises photos when generation is available", /capabilities: \{ photos: line\.sendPhotos !== false && isImageGenerationAvailableFor\(character\.id\) \}/.test(sync));
+yes("F1 the snapshot only promises photos when generation is available", /capabilities: \{\s*photos: line\.sendPhotos !== false && isImageGenerationAvailableFor\(character\.id\)/.test(sync));
 yes("F2 the sync loop runs the photo jobs and re-pulls after a delivery", /void processIMessageMediaJobs\(\)/.test(sync) && /run\.delivered \+ run\.fallbacks === 0/.test(sync));
 yes("F3 the runner generates with the photo style and the reference flag", /useReferenceImage: job\.withRef,\n\s+photoStyle: true/.test(sync));
 yes("F4 the runner asks for a text fallback when generation is not set up", /requestDelivery\(leased, \{ reason: failure \}\)/.test(sync));

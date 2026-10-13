@@ -36,6 +36,11 @@ export type IMessageLineBinding = {
      */
     sendPhotos?: boolean;
     /**
+     * Deliver the character's [VoiceNote:...] as a real voice message (synthesized by this app
+     * while it is open). Unset means on; it only has an effect when a voice is set up.
+     */
+    sendVoice?: boolean;
+    /**
      * Which messages the character sends in THIS app also go out over iMessage.
      * "proactive" (default): only the ones it starts on its own (follow-ups, timed wake-ups,
      * plugins that make it write first), not replies to something typed in the app.
@@ -91,7 +96,7 @@ export type IMessageCloudRuntimeSnapshot = {
     scheduleSummary: string;
     currentSchedule: string;
     /** What this line can deliver beyond text, decided when the snapshot was built. */
-    capabilities?: { photos: boolean };
+    capabilities?: { photos: boolean; voice?: boolean };
     stats: { messageCount: number; memoryCount: number };
 };
 

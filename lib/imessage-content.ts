@@ -14,7 +14,7 @@
 
 import { modelOutputToBubbles } from "./imessage-webhook-core";
 import { buildQuoteTag } from "./rich-tag-builders";
-import { MAX_PHOTOS_PER_REPLY } from "./imessage-media-jobs";
+import { MAX_PHOTOS_PER_REPLY, MAX_VOICES_PER_REPLY, MAX_VOICE_TEXT_CHARS } from "./imessage-media-jobs";
 
 // ---- inbound ---------------------------------------------------------------------------------
 
@@ -100,7 +100,18 @@ export type OutboundPhoto = { description: string; withRef: boolean };
 /** A [MusicShare:...] the character sent; the webhook may turn it into a real link bubble after `bubbleIndex`. */
 export type OutboundMusicShare = { query: string; bubbleIndex: number };
 
-export type OutboundPlan = { bubbles: OutboundBubble[]; photos: OutboundPhoto[]; notes: string[]; musicShares: OutboundMusicShare[] };
+/** A [VoiceNote:...] the character wants to send as a real voice message, synthesized later by the browser. */
+export type OutboundVoice = { text: string };
+
+export type OutboundPlan = {
+    bubbles: OutboundBubble[];
+    photos: OutboundPhoto[];
+    voices: OutboundVoice[];
+    notes: string[];
+    musicShares: OutboundMusicShare[];
+};
+
+const VOICE_TAG_NAMES = new Set(["voicenote", "语音条"]);
 
 const MUSIC_TAG_NAMES = new Set(["music", "musicshare", "音乐", "音乐分享"]);
 
@@ -170,7 +181,13 @@ function resolveQuoteTarget(
 
 const PHOTO_FLAG_RE = /^(WithRef|NoRef|使用参考图|不使用参考图)\s*[:：]\s*/i;
 
-function textualize(text: string, notes: string[], photos: OutboundPhoto[] | null, shares: string[] | null = null): string {
+function textualize(
+    text: string,
+    notes: string[],
+    photos: OutboundPhoto[] | null,
+    shares: string[] | null = null,
+    voices: OutboundVoice[] | null = null,
+): string {
     return text.replace(RICH_TAG_RE, (_whole, rawName: string, rawPayload: string) => {
         const fb = FALLBACK_BY_NAME.get(rawName.toLowerCase());
         if (!fb) return _whole;
@@ -181,6 +198,16 @@ function textualize(text: string, notes: string[], photos: OutboundPhoto[] | nul
             if (description) {
                 photos.push({ description, withRef: !flag || /^(WithRef|使用参考图)$/i.test(flag[1]) });
                 const note = "photo queued for delivery as a real picture";
+                if (!notes.includes(note)) notes.push(note);
+                return "";
+            }
+        }
+        // A voice note on a line that can deliver real ones: queue it, the words are not also sent as text.
+        if (voices && VOICE_TAG_NAMES.has(rawName.toLowerCase()) && voices.length < MAX_VOICES_PER_REPLY) {
+            const spoken = rawPayload.replace(/\s+/g, " ").trim();
+            if (spoken) {
+                voices.push({ text: spoken.slice(0, MAX_VOICE_TEXT_CHARS) });
+                const note = "voice note queued for delivery as a real voice message";
                 if (!notes.includes(note)) notes.push(note);
                 return "";
             }
@@ -211,11 +238,15 @@ export function planOutbound(
         known: QuoteCandidate[];
         /** "queue": photo tags become delivery jobs. "text" (default): they become a description line. */
         photos?: "queue" | "text";
+        /** "queue": voice-note tags become delivery jobs. "text" (default): they become plain text. */
+        voices?: "queue" | "text";
     },
 ): OutboundPlan {
     const notes: string[] = [];
     const photos: OutboundPhoto[] = [];
     const photoSink = ctx.photos === "queue" ? photos : null;
+    const voices: OutboundVoice[] = [];
+    const voiceSink = ctx.voices === "queue" ? voices : null;
     const withoutActions = raw.replace(ACTION_BLOCK_RE, () => {
         if (!notes.includes("action blocks dropped")) notes.push("action blocks dropped");
         return "";
@@ -238,7 +269,10 @@ export function planOutbound(
         }
 
         const shares: string[] = [];
-        body = textualize(body, notes, photoSink, shares).replace(/[ \t]+\n/g, "\n").trim();
+        const queuedBefore = photos.length + voices.length;
+        body = textualize(body, notes, photoSink, shares, voiceSink).replace(/[ \t]+\n/g, "\n").trim();
+        // a tag that was lifted out of the middle of a sentence leaves a double space behind
+        if (photos.length + voices.length > queuedBefore) body = body.replace(/(\S)[ \t]{2,}(\S)/g, "$1 $2");
 
         if (!body) {
             // a quote tag on its own line belongs to the bubble that follows it
@@ -256,5 +290,5 @@ export function planOutbound(
         bubbles.push(replyToId ? { text: body, replyToId } : { text: body });
     }
 
-    return { bubbles, photos, notes, musicShares };
+    return { bubbles, photos, voices, notes, musicShares };
 }

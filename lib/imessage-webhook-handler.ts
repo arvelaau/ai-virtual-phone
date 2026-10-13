@@ -11,7 +11,7 @@ import {
 } from "./imessage-webhook-core";
 import { composeModelText, planOutbound, type OutboundBubble, type QuoteCandidate } from "./imessage-content";
 import { extractMusicUrls } from "./music-link";
-import { buildPhotoJob, mediaJobPath } from "./imessage-media-jobs";
+import { buildPhotoJob, buildVoiceJob, mediaJobPath } from "./imessage-media-jobs";
 import type { LinksInTextResult } from "./server/link-readers";
 import {
     candidateAddresses,
@@ -302,13 +302,14 @@ export async function handleInboundMessage(deps: HandlerDeps, input: InboundInpu
             currentText: input.text,
             known,
             photos: snapshot.capabilities?.photos === true && deps.newId ? "queue" : "text",
+            voices: snapshot.capabilities?.voice === true && deps.newId ? "queue" : "text",
         });
         if (batchedCount > 1) plan.notes.unshift(`answered ${batchedCount} messages together`);
         if (linkNote) plan.notes.unshift(linkNote);
         const bubbles = (deps.resolveMusicShare || deps.verifyMusicLink)
             ? await finalizeMusicBubbles(deps, plan.bubbles, plan.musicShares, plan.notes)
             : plan.bubbles;
-        if (bubbles.length === 0 && plan.photos.length === 0) {
+        if (bubbles.length === 0 && plan.photos.length === 0 && plan.voices.length === 0) {
             await deps.putJson(markerPath, { state: "failed", at: deps.now() } satisfies DeliveryMarker).catch(() => undefined);
             return done("error", "empty_reply");
         }
@@ -355,9 +356,25 @@ export async function handleInboundMessage(deps: HandlerDeps, input: InboundInpu
             await deps.putJson(mediaJobPath(IMESSAGE_CLOUD_PREFIX, target.lineId, jobId), job);
         }
 
+        // Voice notes are synthesized later by the browser, which owns the voice settings.
+        for (const voice of plan.voices) {
+            const jobId = `${input.messageId}_voice_${deps.newId!()}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+            const job = buildVoiceJob({
+                id: jobId,
+                token: deps.newId!() + deps.newId!(),
+                lineId: target.lineId,
+                characterId: target.characterId,
+                sessionId: target.sessionId,
+                text: voice.text,
+                now: deps.now(),
+            });
+            await deps.putJson(mediaJobPath(IMESSAGE_CLOUD_PREFIX, target.lineId, jobId), job);
+        }
+
         await deps.putJson(markerPath, { state: "done", at: deps.now() } satisfies DeliveryMarker);
         const noteText = plan.notes.length ? `; ${plan.notes.join(", ")}` : "";
-        const photoText = plan.photos.length ? ` + ${plan.photos.length} photo(s) queued` : "";
+        const photoText = (plan.photos.length ? ` + ${plan.photos.length} photo(s) queued` : "")
+            + (plan.voices.length ? ` + ${plan.voices.length} voice note(s) queued` : "");
         return done("replied", "replied", `${bubbles.length} bubble(s)${photoText}${modelNote ? `, ${modelNote}` : ""}${noteText}`);
     } catch (err) {
         return done("error", "handler_error", errText(err));

@@ -47,12 +47,14 @@ import {
 import { ensureBucket, getObject, listObjects, putObject } from "./cloud-backup/storage-client";
 import { loadIMessageLines } from "./imessage-storage";
 import { generateImageFromConfiguredApi, isImageGenerationAvailableFor } from "./image-generation-service";
+import { resolveVoiceConfig, synthesizeSpeech } from "./tts-service";
 import { decideMirror, lastLocalUserMessageAt, mirrorJobId, normalizeMirrorMode } from "./imessage-mirror";
 import {
     buildTextJob,
     isMediaJob,
     JOB_LEASE_MS,
     MAX_JOB_ATTEMPTS,
+    mediaJobAudioPath,
     mediaJobImagePath,
     mediaJobPath,
     mediaJobPrefix,
@@ -312,7 +314,11 @@ export async function buildIMessageCloudRuntimeSnapshot(
         currentSchedule,
         // Real pictures need image generation, which only the browser can run, so whether a line
         // may promise them is decided here, at sync time.
-        capabilities: { photos: line.sendPhotos !== false && isImageGenerationAvailableFor(character.id) },
+        capabilities: {
+            photos: line.sendPhotos !== false && isImageGenerationAvailableFor(character.id),
+            // a spoken note needs a voice bound to this character (settings live in this browser)
+            voice: line.sendVoice !== false && resolveVoiceConfig(character.id, "chat") !== null,
+        },
         stats: { messageCount: rawMessages.length, memoryCount: memories.length },
     };
 }
@@ -555,7 +561,71 @@ async function requestDelivery(
     };
 }
 
+/** A clip above this is not worth uploading; a spoken sentence or two is a few hundred KB. */
+const MAX_VOICE_UPLOAD_BYTES = 6 * 1024 * 1024;
+
+async function runVoiceJob(config: CloudBackupConfig, job: IMessageMediaJob, result: IMessageMediaJobRunResult): Promise<void> {
+    const report = (code: string, detail?: string) => result.errors.push(`voice ${job.id}: ${code}${detail ? ` (${detail})` : ""}`);
+
+    // The clip already exists; only delivery is missing.
+    if (job.status === "ready") {
+        const delivery = await requestDelivery(job);
+        if (delivery.ok) result.delivered += 1;
+        else if (delivery.code === "audio_not_ready") await writeMediaJob(config, { ...job, status: "pending", updatedAt: new Date().toISOString() });
+        else report(delivery.code, delivery.detail);
+        return;
+    }
+
+    const leased: IMessageMediaJob = {
+        ...job,
+        status: "generating",
+        attempts: job.attempts + 1,
+        leaseUntil: Date.now() + JOB_LEASE_MS,
+        updatedAt: new Date().toISOString(),
+    };
+    await writeMediaJob(config, leased);
+
+    let failure = "";
+    let clip: { mimeType: string; dataBase64: string } | null = null;
+    const voiceConfig = resolveVoiceConfig(job.characterId, "chat");
+    try {
+        if (!voiceConfig) throw new Error("no voice is set up for this character");
+        const blob = await synthesizeSpeech(job.text || "", voiceConfig);
+        if (!blob || blob.size === 0) throw new Error("speech synthesis returned nothing");
+        if (blob.size > MAX_VOICE_UPLOAD_BYTES) throw new Error("the spoken clip is too large");
+        clip = { mimeType: blob.type || "audio/mpeg", dataBase64: await blobToBase64(blob) };
+    } catch (err) {
+        failure = err instanceof Error ? err.message : String(err);
+    }
+
+    if (!clip) {
+        if (!voiceConfig || leased.attempts >= MAX_JOB_ATTEMPTS) {
+            // Out of road: the words go out as text instead of leaving the user hanging.
+            const delivery = await requestDelivery(leased, { reason: failure });
+            if (delivery.ok) result.fallbacks += 1;
+            else report(delivery.code, delivery.detail);
+        } else {
+            await writeMediaJob(config, { ...leased, status: "pending", leaseUntil: undefined, error: failure.slice(0, 200), updatedAt: new Date().toISOString() });
+            report("synthesis failed, will retry", failure.slice(0, 120));
+        }
+        return;
+    }
+
+    await putObject(config, mediaJobAudioPath(IMESSAGE_CLOUD_PREFIX, job.lineId, job.id), JSON.stringify(clip), "application/json");
+    const ready: IMessageMediaJob = { ...leased, status: "ready", leaseUntil: undefined, error: undefined, updatedAt: new Date().toISOString() };
+    await writeMediaJob(config, ready);
+
+    const delivery = await requestDelivery(ready);
+    if (delivery.ok) result.delivered += 1;
+    else report(delivery.code, delivery.detail);
+}
+
 async function runMediaJob(config: CloudBackupConfig, job: IMessageMediaJob, result: IMessageMediaJobRunResult): Promise<void> {
+    if (job.kind === "voice") {
+        await runVoiceJob(config, job, result);
+        return;
+    }
+
     // A mirrored text: nothing to generate, only delivery to retry.
     if (job.kind === "text") {
         const delivery = await requestDelivery(job);
