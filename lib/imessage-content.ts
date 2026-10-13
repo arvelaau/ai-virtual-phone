@@ -97,7 +97,12 @@ export type OutboundBubble = {
 /** A [Photo:...] the character wants to send as a real picture, delivered later by the browser. */
 export type OutboundPhoto = { description: string; withRef: boolean };
 
-export type OutboundPlan = { bubbles: OutboundBubble[]; photos: OutboundPhoto[]; notes: string[] };
+/** A [MusicShare:...] the character sent; the webhook may turn it into a real link bubble after `bubbleIndex`. */
+export type OutboundMusicShare = { query: string; bubbleIndex: number };
+
+export type OutboundPlan = { bubbles: OutboundBubble[]; photos: OutboundPhoto[]; notes: string[]; musicShares: OutboundMusicShare[] };
+
+const MUSIC_TAG_NAMES = new Set(["music", "musicshare", "音乐", "音乐分享"]);
 
 /**
  * [Quote:text] and the variants models actually produce for it ("[Reply to: text]",
@@ -165,7 +170,7 @@ function resolveQuoteTarget(
 
 const PHOTO_FLAG_RE = /^(WithRef|NoRef|使用参考图|不使用参考图)\s*[:：]\s*/i;
 
-function textualize(text: string, notes: string[], photos: OutboundPhoto[] | null): string {
+function textualize(text: string, notes: string[], photos: OutboundPhoto[] | null, shares: string[] | null = null): string {
     return text.replace(RICH_TAG_RE, (_whole, rawName: string, rawPayload: string) => {
         const fb = FALLBACK_BY_NAME.get(rawName.toLowerCase());
         if (!fb) return _whole;
@@ -182,6 +187,10 @@ function textualize(text: string, notes: string[], photos: OutboundPhoto[] | nul
         }
         if (!notes.includes(fb.note)) notes.push(fb.note);
         if (fb.mode === "drop") return "";
+        if (shares && MUSIC_TAG_NAMES.has(rawName.toLowerCase())) {
+            const query = rawPayload.replace(/[:：]/g, " ").replace(/\s+/g, " ").trim();
+            if (query) shares.push(query);
+        }
         // a photo's reference-image flag is protocol, not content
         const payload = rawPayload
             .replace(/^(?:WithRef|NoRef|使用参考图|不使用参考图)\s*[:：]\s*/i, "")
@@ -214,6 +223,7 @@ export function planOutbound(
 
     const paragraphs = modelOutputToBubbles(withoutActions);
     const bubbles: OutboundBubble[] = [];
+    const musicShares: OutboundMusicShare[] = [];
     let pending: { preview: string } | null = null;
 
     for (const paragraph of paragraphs) {
@@ -227,7 +237,8 @@ export function planOutbound(
             body = body.slice(match[0].length);
         }
 
-        body = textualize(body, notes, photoSink).replace(/[ \t]+\n/g, "\n").trim();
+        const shares: string[] = [];
+        body = textualize(body, notes, photoSink, shares).replace(/[ \t]+\n/g, "\n").trim();
 
         if (!body) {
             // a quote tag on its own line belongs to the bubble that follows it
@@ -241,8 +252,9 @@ export function planOutbound(
             const note = replyToId ? "quote sent as a native reply" : "quote target not found, sent as a normal message";
             if (!notes.includes(note)) notes.push(note);
         }
+        for (const query of shares) musicShares.push({ query, bubbleIndex: bubbles.length });
         bubbles.push(replyToId ? { text: body, replyToId } : { text: body });
     }
 
-    return { bubbles, photos, notes };
+    return { bubbles, photos, notes, musicShares };
 }

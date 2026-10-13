@@ -1,14 +1,16 @@
 // lib/server/link-readers.ts
 // One place that knows how to turn the links in a message into text (and a picture) the
-// character can use. Currently TikTok and X posts; adding another site means adding a reader
+// character can use. Currently TikTok, X posts, Spotify and Apple Music; adding another site means adding a reader
 // here, not touching the webhook or the plugin.
 
 import { extractTikTokUrls, formatTikTokContext } from "../tiktok-link";
 import { extractXStatusUrls, formatXContext } from "../x-link";
+import { extractMusicUrls, formatMusicContext, parseMusicUrl } from "../music-link";
+import { lookupMusicLink, type MusicLookupResult } from "./music-lookup";
 import { lookupTikTok, type TikTokLookupResult } from "./tiktok-lookup";
 import { lookupXPost, type XLookupResult } from "./x-lookup";
 
-export type LinkKind = "tiktok" | "x";
+export type LinkKind = "tiktok" | "x" | "spotify" | "apple_music";
 
 export type LinkReading = {
     url: string;
@@ -23,12 +25,15 @@ export type LinkReading = {
 export type LinkReaderLookups = {
     tiktok?: (url: string, options: { wantThumbnail: boolean; timeoutMs: number }) => Promise<TikTokLookupResult>;
     x?: (url: string, options: { wantImage: boolean; timeoutMs: number }) => Promise<XLookupResult>;
+    music?: (url: string, options: { wantImage: boolean; timeoutMs: number }) => Promise<MusicLookupResult>;
 };
 
 /** Which reader (if any) owns this link. */
 export function classifyLink(url: string): LinkKind | null {
     if (extractTikTokUrls(url, 1).length > 0) return "tiktok";
     if (extractXStatusUrls(url, 1).length > 0) return "x";
+    const music = extractMusicUrls(url, 1).length > 0 ? parseMusicUrl(extractMusicUrls(url, 1)[0]) : null;
+    if (music) return music.service;
     return null;
 }
 
@@ -47,6 +52,13 @@ export async function readLink(
                 ? { url, kind, readable: true, context: formatTikTokContext(r.info), ...(r.thumbnailDataUrl ? { imageDataUrl: r.thumbnailDataUrl } : {}) }
                 : { url, kind, readable: false, context: formatTikTokContext(null, r.error), error: r.error };
         }
+        if (kind === "spotify" || kind === "apple_music") {
+            const run = options.lookups?.music ?? ((u, o) => lookupMusicLink(u, { wantImage: o.wantImage, timeoutMs: o.timeoutMs }));
+            const r = await run(url, { wantImage: options.wantImage, timeoutMs });
+            return r.ok
+                ? { url, kind, readable: true, context: formatMusicContext(r.info), ...(r.imageDataUrl ? { imageDataUrl: r.imageDataUrl } : {}) }
+                : { url, kind, readable: false, context: formatMusicContext(null, r.error, r.ref ?? parseMusicUrl(url)), error: r.error };
+        }
         const run = options.lookups?.x ?? ((u, o) => lookupXPost(u, { wantImage: o.wantImage, timeoutMs: o.timeoutMs }));
         const r = await run(url, { wantImage: options.wantImage, timeoutMs });
         return r.ok
@@ -56,7 +68,9 @@ export async function readLink(
         const error = err instanceof Error ? err.message.slice(0, 160) : "lookup failed";
         return {
             url, kind, readable: false, error,
-            context: kind === "tiktok" ? formatTikTokContext(null, error) : formatXContext(null, error),
+            context: kind === "tiktok" ? formatTikTokContext(null, error)
+                : kind === "x" ? formatXContext(null, error)
+                : formatMusicContext(null, error, parseMusicUrl(url)),
         };
     }
 }
@@ -66,6 +80,10 @@ export function findLinks(text: string, max: number): Array<{ url: string; kind:
     const found: Array<{ url: string; kind: LinkKind; at: number }> = [];
     for (const url of extractTikTokUrls(text, max)) found.push({ url, kind: "tiktok", at: text.indexOf(url) });
     for (const url of extractXStatusUrls(text, max)) found.push({ url, kind: "x", at: text.indexOf(url) });
+    for (const url of extractMusicUrls(text, max)) {
+        const ref = parseMusicUrl(url);
+        if (ref) found.push({ url, kind: ref.service, at: text.indexOf(url) });
+    }
     return found.sort((a, b) => a.at - b.at).slice(0, max);
 }
 

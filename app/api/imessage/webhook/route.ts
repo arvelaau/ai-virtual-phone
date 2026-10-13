@@ -53,6 +53,7 @@ import {
 import { appendTrace } from "@/lib/server/imessage-trace";
 import { isModelReadableImage, MAX_INBOUND_IMAGE_BYTES, readInboundContent } from "@/lib/imessage-content";
 import { readLinksInText } from "@/lib/server/link-readers";
+import { searchMusicLink, verifyMusicLink } from "@/lib/server/music-lookup";
 import type { IMessageCloudRuntimeSnapshot, IMessageCloudStoredMessage } from "@/lib/imessage-types";
 
 export const runtime = "nodejs";
@@ -218,6 +219,12 @@ async function processDelivery(d: Delivery): Promise<TraceEvent> {
                     now: () => Date.now(),
                     newId: () => globalThis.crypto.randomUUID().replace(/-/g, ""),
                     readLinks: (text, options) => readLinksInText(text, { wantImages: options.wantImages, timeoutMs: 8000 }),
+                    resolveMusicShare: async (query) => {
+                        const prefer = process.env.IMESSAGE_MUSIC_SERVICE === "spotify" ? "spotify" : "apple_music";
+                        const hit = await searchMusicLink(query, { prefer });
+                        return hit ? { url: hit.url, label: `${hit.title} - ${hit.artist}` } : null;
+                    },
+                    verifyMusicLink: (url) => verifyMusicLink(url),
                 };
                 let image: { mimeType: string; dataBase64: string } | undefined;
                 let contentType = inboundContent.kind === "text" ? "text" : inboundContent.kind === "image" ? "image" : inboundContent.type;

@@ -9,7 +9,8 @@ import {
     messagesAfterSnapshot,
     modelOutputToBubbles,
 } from "./imessage-webhook-core";
-import { composeModelText, planOutbound, type QuoteCandidate } from "./imessage-content";
+import { composeModelText, planOutbound, type OutboundBubble, type QuoteCandidate } from "./imessage-content";
+import { extractMusicUrls } from "./music-link";
 import { buildPhotoJob, mediaJobPath } from "./imessage-media-jobs";
 import type { LinksInTextResult } from "./server/link-readers";
 import {
@@ -74,7 +75,69 @@ export type HandlerDeps = {
      * the app, so it does it itself.
      */
     readLinks?(text: string, options: { wantImages: boolean }): Promise<LinksInTextResult>;
+    /**
+     * Turns a song the character named ("Blinding Lights - The Weeknd") into a real Spotify or
+     * Apple Music link. Optional: without it a [MusicShare] stays as the text line.
+     */
+    resolveMusicShare?(query: string): Promise<{ url: string; label?: string } | null>;
+    /** true / false when the service says a link is / is not a real item, null when unknown. */
+    verifyMusicLink?(url: string): Promise<boolean | null>;
 };
+
+const MAX_MUSIC_LINKS = 2;
+
+/**
+ * Real links for the songs the character shared, and removal of music links the model invented.
+ * Never throws: a failure leaves the bubbles exactly as planned.
+ */
+export async function finalizeMusicBubbles(
+    deps: Pick<HandlerDeps, "resolveMusicShare" | "verifyMusicLink">,
+    bubbles: OutboundBubble[],
+    shares: Array<{ query: string; bubbleIndex: number }>,
+    notes: string[],
+): Promise<OutboundBubble[]> {
+    let out = bubbles.map((b) => ({ ...b }));
+    try {
+        // 1. a link the model wrote itself is checked; a dead one is removed rather than sent
+        if (deps.verifyMusicLink) {
+            let removed = 0;
+            for (const bubble of out) {
+                for (const url of extractMusicUrls(bubble.text, 3)) {
+                    const verdict = await deps.verifyMusicLink(url).catch((): null => null);
+                    if (verdict === false) {
+                        bubble.text = bubble.text.split(url).join("").replace(/[ \t]+\n/g, "\n").replace(/\s{2,}/g, " ").trim();
+                        removed += 1;
+                    }
+                }
+            }
+            if (removed) notes.push(`${removed} dead music link(s) removed`);
+            out = out.filter((b) => b.text.trim());
+        }
+        // 2. a shared song becomes a real link bubble right after the line that named it
+        if (deps.resolveMusicShare && shares.length) {
+            const picked = shares.slice(0, MAX_MUSIC_LINKS);
+            const hits = await Promise.all(picked.map((s) => deps.resolveMusicShare!(s.query).catch((): null => null)));
+            const inserts = picked
+                .map((s, i) => ({ at: Math.min(s.bubbleIndex, bubbles.length - 1), hit: hits[i] }))
+                .filter((x): x is { at: number; hit: { url: string; label?: string } } => Boolean(x.hit));
+            if (inserts.length) {
+                // positions refer to the ORIGINAL bubbles; find each anchor by its text
+                for (const ins of inserts.sort((a, b) => b.at - a.at)) {
+                    const anchor = bubbles[ins.at]?.text;
+                    let pos = anchor ? out.findIndex((o) => o.text === anchor) : -1;
+                    if (pos < 0) pos = out.length - 1;
+                    out.splice(pos + 1, 0, { text: ins.hit.url });
+                }
+                notes.push(`${inserts.length} music link(s) added`);
+            } else {
+                notes.push("music share left as text (no link found)");
+            }
+        }
+    } catch {
+        return bubbles;
+    }
+    return out.length ? out : bubbles;
+}
 
 /** Default quiet window, and the hard ceiling (the function has to fit wait + model + send). */
 export const DEFAULT_REPLY_DELAY_SECONDS = 60;
@@ -211,7 +274,7 @@ export async function handleInboundMessage(deps: HandlerDeps, input: InboundInpu
             if (reading && reading.total > 0) {
                 textForModel = `${textForModel}\n\n${reading.blocks.join("\n")}`;
                 imagesForModel = [...imagesForModel, ...reading.images];
-                const kinds = Array.from(new Set(reading.kinds)).map((k) => (k === "x" ? "X" : "TikTok")).join("/");
+                const kinds = Array.from(new Set(reading.kinds)).map((k) => (k === "x" ? "X" : k === "spotify" ? "Spotify" : k === "apple_music" ? "Apple Music" : "TikTok")).join("/");
                 linkNote = `read ${reading.readable}/${reading.total} ${kinds} link(s)${reading.images.length ? " with picture" : ""}`;
             }
         }
@@ -242,7 +305,9 @@ export async function handleInboundMessage(deps: HandlerDeps, input: InboundInpu
         });
         if (batchedCount > 1) plan.notes.unshift(`answered ${batchedCount} messages together`);
         if (linkNote) plan.notes.unshift(linkNote);
-        const bubbles = plan.bubbles;
+        const bubbles = (deps.resolveMusicShare || deps.verifyMusicLink)
+            ? await finalizeMusicBubbles(deps, plan.bubbles, plan.musicShares, plan.notes)
+            : plan.bubbles;
         if (bubbles.length === 0 && plan.photos.length === 0) {
             await deps.putJson(markerPath, { state: "failed", at: deps.now() } satisfies DeliveryMarker).catch(() => undefined);
             return done("error", "empty_reply");
