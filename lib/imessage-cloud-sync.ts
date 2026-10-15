@@ -48,6 +48,15 @@ import {
 } from "./cloud-backup/config";
 import { ensureBucket, getObject, listObjects, putObject } from "./cloud-backup/storage-client";
 import { loadIMessageLines, recordIMessageMirror } from "./imessage-storage";
+import { buildCharacterTimeContext, getSystemTimeZone } from "./character-time";
+import {
+    TIME_TOKEN_BLOCK,
+    TIME_TOKEN_CHARACTER_TIME,
+    TIME_TOKEN_CHARACTER_WEEKDAY,
+    TIME_TOKEN_NOW,
+    TIME_TOKEN_WEEKDAY,
+    type IMessageTimeSettings,
+} from "./imessage-time";
 import { generateImageFromConfiguredApi, isImageGenerationAvailableFor } from "./image-generation-service";
 import { resolveVoiceConfig, synthesizeSpeech } from "./tts-service";
 import { decideMirror, lastLocalUserMessageAt, mirrorJobId, normalizeMirrorMode } from "./imessage-mirror";
@@ -299,6 +308,25 @@ export async function buildIMessageCloudRuntimeSnapshot(
         if (pluginPrompt.hint?.trim()) pluginPromptHint = `\n\n### Plugins\n${pluginPrompt.hint.trim()}\n`;
     } catch { /* a broken plugin must not stop the sync */ }
 
+    // "Now" is not known until a message arrives, so the template carries tokens and the server
+    // fills them in per reply (lib/imessage-time.ts). Otherwise the clock, the weekday and the
+    // time-zone block would stay frozen at whenever Sync to cloud was last pressed.
+    const systemTimeZone = getSystemTimeZone();
+    const realTime = buildCharacterTimeContext(character.timeZone, new Date(), systemTimeZone);
+    const timeSettings: IMessageTimeSettings = {
+        timeAware: chatAppSettings.timeAware !== false,
+        systemTimeZone,
+        characterTimeZone: character.timeZone?.trim() || undefined,
+        includeTimeZone: realTime.hasDifference,
+    };
+    const tokenTime = {
+        ...realTime,
+        timeContext: TIME_TOKEN_BLOCK,
+        // These only exist while the two clocks differ; a token for them would print blanks otherwise
+        characterTime: realTime.hasDifference ? TIME_TOKEN_CHARACTER_TIME : "",
+        characterWeekday: realTime.hasDifference ? TIME_TOKEN_CHARACTER_WEEKDAY : "",
+    };
+
     const buildMessages = (history: ChatMessage[]) => assemblePromptPayload({
         character,
         history,
@@ -318,6 +346,9 @@ export async function buildIMessageCloudRuntimeSnapshot(
         // exist yet when this template is built, so matching keywords here would silently leave
         // those entries out of every reply. Include every enabled entry instead.
         activateAllWorldBooks: true,
+        timeContext: tokenTime,
+        promptTimestampOptions: { timeZone: systemTimeZone, includeTimeZone: realTime.hasDifference },
+        timeTokens: { now: TIME_TOKEN_NOW, weekday: TIME_TOKEN_WEEKDAY },
         customAppRichMediaDirectives: pluginPromptHint,
         recentBlocks,
         unifiedRecentItems,
@@ -380,6 +411,7 @@ export async function buildIMessageCloudRuntimeSnapshot(
             // a spoken note needs a voice bound to this character (settings live in this browser)
             voice: line.sendVoice !== false && resolveVoiceConfig(character.id, "chat") !== null,
         },
+        timeSettings,
         promptBuild: {
             allWorldBookEntries: true,
             pluginPromptHint: pluginPromptHint.length > 0,

@@ -111,6 +111,8 @@ export interface AssemblerInput {
     musicOnlineHint?: string;              // online search hint for {{musicOnlineHint}} macro
     timeContext?: CharacterTimeContext;     // precomputed system/character local time context
     promptTimestampOptions?: PromptTimestampOptions; // chat-history timestamp display options
+    /** Leave {{time}} / {{weekday}} as tokens: the prompt is sent later by something that knows the time. */
+    timeTokens?: { now: string; weekday: string };
     timeAware?: boolean;                   // when true, inject timestamps into chat history
     enableVision?: boolean;                // when true, image/sticker messages can send actual image data to LLM
     vnScenes?: string;                     // comma-separated VN scene names for {{vnScenes}} macro
@@ -707,6 +709,7 @@ export function assemblePromptPayload(input: AssemblerInput): LLMMessage[] {
 
         const engine = new MacroEngine(character.name, resolvedUserName);
         applyTimeContextToMacroEngine(engine, promptTimeContext);
+        engine.timeTokens = input.timeTokens;
         engine.lastUserMessage = history.filter(m => m.role === "user").pop()?.content ?? "";
         engine.lastCharMessage = history.filter(m => m.role === "assistant").pop()?.content ?? "";
         engine.lastMessage = history.length > 0 ? history[history.length - 1].content : "";
@@ -973,6 +976,7 @@ export function assemblePromptPayload(input: AssemblerInput): LLMMessage[] {
         if (preset && preset.prompts) {
             const engine = new MacroEngine(character.name, resolvedUserName);
             applyTimeContextToMacroEngine(engine, promptTimeContext);
+            engine.timeTokens = input.timeTokens;
             engine.lastUserMessage = history.filter(m => m.role === "user").pop()?.content ?? "";
             engine.lastCharMessage = history.filter(m => m.role === "assistant").pop()?.content ?? "";
             engine.lastMessage = history.length > 0 ? history[history.length - 1].content : "";

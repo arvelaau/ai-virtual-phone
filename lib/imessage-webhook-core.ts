@@ -5,6 +5,7 @@
 import { stripReasoningTags } from "./block-tags";
 import { stripStateAndInnerForPrompt } from "./prompt-sanitizer";
 import type { LLMMessage } from "./llm-prompt-assembler";
+import { applyFreshTime, stampTurns, type IMessageTimeSettings } from "./imessage-time";
 import type {
     IMessageCloudPromptTemplate,
     IMessageCloudRuntimeIndex,
@@ -70,20 +71,32 @@ export function buildPromptFromTemplate(
     recent: IMessageCloudStoredMessage[],
     inboundText: string,
     images?: Array<{ mimeType: string; dataBase64: string }>,
+    /** From the snapshot. Without it the template is used exactly as stored (older snapshots). */
+    time?: { settings?: IMessageTimeSettings; now: Date },
 ): LLMMessage[] {
-    const turns: LLMMessage[] = recent.map((item) => ({ role: item.role, content: item.content }));
+    // Turns carry the same "(2026-10-12 21:05)" stamp the app puts in front of each one.
+    const stamped = stampTurns(
+        [
+            ...recent.map((item) => ({ role: item.role as string, content: item.content, at: item.createdAt })),
+            { role: "user", content: inboundText || (images && images.length > 0 ? "[Image]" : ""), at: time?.now ?? new Date() },
+        ],
+        time?.settings,
+    );
+    const turns: LLMMessage[] = stamped.slice(0, -1).map((turn) => ({ role: turn.role as LLMMessage["role"], content: turn.content }));
+    const last = stamped[stamped.length - 1];
     turns.push(
         images && images.length > 0
             ? {
                   role: "user",
                   content: [
-                      { type: "text", text: inboundText || "[Image]" },
+                      { type: "text", text: last.content },
                       ...images.map((image) => ({ type: "image_url" as const, image_url: { url: `data:${image.mimeType};base64,${image.dataBase64}` } })),
                   ],
               }
-            : { role: "user", content: inboundText },
+            : { role: "user", content: last.content },
     );
-    return [...template.beforeMessages, ...turns, ...template.afterMessages];
+    const built = [...template.beforeMessages, ...turns, ...template.afterMessages];
+    return time ? applyFreshTime(built, time.settings, time.now) : built;
 }
 
 export function inboundMessagePath(prefix: string, lineId: string, externalId: string): string {

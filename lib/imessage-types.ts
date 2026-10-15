@@ -4,6 +4,7 @@
 import type { Character } from "./character-types";
 import type { ChatMessage, ChatSession } from "./chat-storage";
 import type { LLMMessage } from "./llm-prompt-assembler";
+import type { IMessageTimeSettings } from "./imessage-time";
 import type { RecentBlock, UnifiedRecentItem } from "./short-term-assembler";
 import type {
     ApiConfig,
@@ -97,6 +98,8 @@ export type IMessageCloudRuntimeSnapshot = {
     currentSchedule: string;
     /** What this line can deliver beyond text, decided when the snapshot was built. */
     capabilities?: { photos: boolean; voice?: boolean };
+    /** Lets the server put the real time into the template for every reply (see lib/imessage-time.ts). */
+    timeSettings?: IMessageTimeSettings;
     /**
      * How the prompt template was put together, so the Settings page can say what the
      * server will and will not do. Absent on snapshots built before this existed.

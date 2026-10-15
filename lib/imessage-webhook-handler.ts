@@ -246,14 +246,17 @@ export async function handleInboundMessage(deps: HandlerDeps, input: InboundInpu
             // Everything the user said since the character last spoke is one turn.
             const all = await deps.listRecentStored(target.lineId);
             if (!all.some((m) => m.direction === "inbound" && m.externalId === input.messageId)) all.push(inbound);
-            const lastOutbound = all.filter((m) => m.direction === "outbound").map((m) => m.createdAt).sort().pop() ?? "";
+            // A message the app mirrored onto iMessage (localMessageId) is the character speaking
+            // first, not an answer to anything the user just sent. Counting it as a reply made
+            // every message the user sent before it look answered, so the turn came out empty.
+            const lastOutbound = all.filter((m) => m.direction === "outbound" && !m.localMessageId).map((m) => m.createdAt).sort().pop() ?? "";
             const pending = all
                 .filter((m) => m.direction === "inbound" && m.createdAt > lastOutbound)
                 .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
             const pendingIds = new Set(pending.map((m) => m.externalId));
             recent = all;
             historyForModel = all.filter((m) => !pendingIds.has(m.externalId));
-            textForModel = pending.map((m) => m.content).filter(Boolean).join("\n");
+            textForModel = pending.map((m) => m.content).filter(Boolean).join("\n") || modelText;
             batchedCount = Math.max(1, pending.length);
             const found: Array<{ mimeType: string; dataBase64: string }> = [];
             for (const m of pending.slice(-MAX_BATCH_IMAGES * 2)) {

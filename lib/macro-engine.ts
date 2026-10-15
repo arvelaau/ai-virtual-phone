@@ -39,6 +39,12 @@ export class MacroEngine {
     characterTime: string = "";
     characterTimeZone: string = "";
     characterWeekday: string = "";
+    /**
+     * When set, {{time}} and {{weekday}} expand to these tokens instead of the clock. Used for a
+     * prompt that is built now and sent later (the iMessage template), where the sender swaps in
+     * the real time for each reply.
+     */
+    timeTokens?: { now: string; weekday: string };
     customStickerNames: string = "";
     customStickerExample: string = "";
     musicLocal: string = "";
@@ -272,12 +278,14 @@ export class MacroEngine {
         // time — shortcut for the current datetime, e.g. "2 March 2026 15:40".
         // Verified nothing parses this back: it is expanded into prompt text only.
         if (body === "time") {
+            if (this.timeTokens) return this.timeTokens.now;
             const now = new Date();
             const month = MACRO_MONTH_NAMES[now.getMonth()];
             return `${now.getDate()} ${month} ${now.getFullYear()} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
         }
 
         if (body === "weekday") {
+            if (this.timeTokens) return this.timeTokens.weekday;
             return MACRO_WEEKDAY_NAMES[new Date().getDay()];
         }
 

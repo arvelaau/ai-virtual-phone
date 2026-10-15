@@ -106,7 +106,10 @@ async function generateReply(
     deadlineMs: number,
 ): Promise<{ content: string; note: string }> {
     const since = messagesAfterSnapshot(recent, snapshot.createdAt, HISTORY_LIMIT);
-    const messages = buildPromptFromTemplate(snapshot.promptTemplate, since, inboundText, images);
+    const messages = buildPromptFromTemplate(snapshot.promptTemplate, since, inboundText, images, {
+        settings: snapshot.timeSettings,
+        now: new Date(),
+    });
     // Streamed, like the Chat app: a thinking model behind a relay is silent for a long time,
     // and a single buffered request is what such relays cut off.
     const request = buildProviderRequest(snapshot.apiConfig, snapshot.preset, toLlmRequestMessages(messages), { stream: true });

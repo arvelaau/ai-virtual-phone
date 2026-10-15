@@ -144,8 +144,13 @@ export function hasTimeZoneDifference(date: Date, characterTimeZone: string, sys
     || systemParts.minute !== characterParts.minute;
 }
 
-export function buildCharacterTimeContext(timeZone?: string | null, now = new Date()): CharacterTimeContext {
-  const systemTimeZone = getSystemTimeZone();
+export function buildCharacterTimeContext(
+  timeZone?: string | null,
+  now = new Date(),
+  /** The USER's zone. Defaults to this machine's, which is wrong on a server: pass it there. */
+  userTimeZone?: string,
+): CharacterTimeContext {
+  const systemTimeZone = normalizeTimeZone(userTimeZone) ?? getSystemTimeZone();
   const systemTime = formatZonedLongDateTime(now, systemTimeZone);
   const systemWeekday = getZonedWeekday(now, systemTimeZone);
   const normalizedTimeZone = normalizeTimeZone(timeZone);
