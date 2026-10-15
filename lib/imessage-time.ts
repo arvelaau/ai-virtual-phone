@@ -19,6 +19,14 @@ export const TIME_TOKEN_NOW = "__AIPHONE_NOW__";
 export const TIME_TOKEN_WEEKDAY = "__AIPHONE_WEEKDAY__";
 export const TIME_TOKEN_CHARACTER_TIME = "__AIPHONE_CHARACTER_TIME__";
 export const TIME_TOKEN_CHARACTER_WEEKDAY = "__AIPHONE_CHARACTER_WEEKDAY__";
+export const TIME_TOKEN_SCHEDULE = "__AIPHONE_CURRENT_SCHEDULE__";
+
+/**
+ * One entry of the character's calendar, flattened for the server: the day it is on, when it
+ * starts and ends (minutes since midnight, on the USER's clock, which is what the app's calendar
+ * uses), and the sentence the prompt shows for it.
+ */
+export type IMessageScheduleItem = { date: string; start: number; end: number; text: string };
 
 /** What the snapshot records so the server can recompute the time-dependent parts. */
 export type IMessageTimeSettings = {
@@ -30,6 +38,8 @@ export type IMessageTimeSettings = {
     characterTimeZone?: string;
     /** Whether stamps spell the zone out (true when the two clocks differ, like in the app). */
     includeTimeZone: boolean;
+    /** This week's and next week's entries, so the server can say what the character is doing RIGHT NOW. */
+    scheduleItems?: IMessageScheduleItem[];
 };
 
 const MONTHS = [
@@ -55,6 +65,37 @@ export function formatMacroNow(date: Date, timeZone: string): string {
     return `${Number(parts.day)} ${month} ${parts.year} ${String(Number(parts.hour) % 24).padStart(2, "0")}:${parts.minute}`;
 }
 
+/** The calendar date (YYYY-MM-DD) and minute of day in `timeZone`. */
+function zonedDateAndMinute(date: Date, timeZone: string): { date: string; minute: number } {
+    const parts: Record<string, string> = {};
+    for (const part of new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+    }).formatToParts(date)) {
+        parts[part.type] = part.value;
+    }
+    return {
+        date: `${parts.year}-${parts.month}-${parts.day}`,
+        minute: (Number(parts.hour) % 24) * 60 + Number(parts.minute),
+    };
+}
+
+/**
+ * What the character is doing at `now`: the entries whose time window contains it, joined the same
+ * way the app joins them, or "none". The same rule as getCurrentCalendarScheduleForPrompt.
+ */
+export function pickCurrentSchedule(items: IMessageScheduleItem[] | undefined, now: Date, timeZone: string): string {
+    if (!items || items.length === 0) return "none";
+    const at = zonedDateAndMinute(now, timeZone);
+    const active = items.filter((item) => item.date === at.date && item.start <= at.minute && at.minute < item.end);
+    return active.length > 0 ? active.map((item) => item.text).join("; ") : "none";
+}
+
 type Replacements = Array<[string, string]>;
 
 /** The tokens and what they stand for at `now`. */
@@ -66,6 +107,7 @@ export function freshTimeReplacements(settings: IMessageTimeSettings, now: Date)
         [TIME_TOKEN_WEEKDAY, getZonedWeekday(now, settings.systemTimeZone)],
         [TIME_TOKEN_CHARACTER_TIME, ctx.characterTime],
         [TIME_TOKEN_CHARACTER_WEEKDAY, ctx.characterWeekday],
+        [TIME_TOKEN_SCHEDULE, pickCurrentSchedule(settings.scheduleItems, now, settings.systemTimeZone)],
     ];
 }
 

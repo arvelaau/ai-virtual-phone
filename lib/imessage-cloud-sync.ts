@@ -39,7 +39,12 @@ import { retrieveCoreMemoriesForPrompt, retrieveMemoriesForPrompt } from "./memo
 import { formatCoreMemories, formatLongTermMemories } from "./memory-injector";
 import { prepareShortTermContext } from "./short-term-assembler";
 import { assemblePromptPayload, type LLMMessage } from "./llm-prompt-assembler";
-import { getCurrentCalendarScheduleForPrompt, buildCalendarScheduleMarker } from "./calendar-storage";
+import {
+    buildCalendarScheduleMarker,
+    formatCalendarScheduleItemForPrompt,
+    getCurrentCalendarScheduleForPrompt,
+    loadCalendarWeekPlan,
+} from "./calendar-storage";
 import { getWeekStartIso } from "./calendar-utils";
 import {
     isCloudBackupConfigured,
@@ -54,7 +59,9 @@ import {
     TIME_TOKEN_CHARACTER_TIME,
     TIME_TOKEN_CHARACTER_WEEKDAY,
     TIME_TOKEN_NOW,
+    TIME_TOKEN_SCHEDULE,
     TIME_TOKEN_WEEKDAY,
+    type IMessageScheduleItem,
     type IMessageTimeSettings,
 } from "./imessage-time";
 import { generateImageFromConfiguredApi, isImageGenerationAvailableFor } from "./image-generation-service";
@@ -165,6 +172,32 @@ export async function applyChatPluginsToTemplate(
     } catch {
         return { messages, applied: false };
     }
+}
+
+/** "HH:mm" -> minutes since midnight, or NaN. */
+function clockToMinutes(value: string): number {
+    const m = /^(\d{1,2}):(\d{2})$/.exec((value || "").trim());
+    return m ? Number(m[1]) * 60 + Number(m[2]) : Number.NaN;
+}
+
+/**
+ * The character's calendar for this week and next, flattened so the server can work out what they
+ * are doing at the moment a message arrives (the snapshot itself is built long before that).
+ * Two weeks, so a snapshot that is a few days old still covers "now".
+ */
+export function collectScheduleItems(characterId: string, now = new Date()): IMessageScheduleItem[] {
+    const items: IMessageScheduleItem[] = [];
+    for (const offsetDays of [0, 7]) {
+        const weekStart = getWeekStartIso(new Date(now.getTime() + offsetDays * 86_400_000));
+        const plan = loadCalendarWeekPlan("character", characterId, weekStart);
+        for (const item of plan?.items ?? []) {
+            const start = clockToMinutes(item.startTime);
+            const end = clockToMinutes(item.endTime);
+            if (Number.isNaN(start) || Number.isNaN(end)) continue;
+            items.push({ date: item.date, start, end, text: formatCalendarScheduleItemForPrompt(item) });
+        }
+    }
+    return items.sort((a, b) => a.date.localeCompare(b.date) || a.start - b.start);
 }
 
 export function splitPromptMessagesAtHistorySlot(messages: LLMMessage[]): {
@@ -318,6 +351,7 @@ export async function buildIMessageCloudRuntimeSnapshot(
         systemTimeZone,
         characterTimeZone: character.timeZone?.trim() || undefined,
         includeTimeZone: realTime.hasDifference,
+        scheduleItems: collectScheduleItems(character.id),
     };
     const tokenTime = {
         ...realTime,
@@ -338,7 +372,8 @@ export async function buildIMessageCloudRuntimeSnapshot(
         appTags: IMESSAGE_CLOUD_APP_TAGS,
         initialStateValues: getLatestCharacterStateValues(character.id),
         scheduleSummary,
-        currentSchedule,
+        // "What they are doing right now" changes by the minute: the server fills this in per reply.
+        currentSchedule: TIME_TOKEN_SCHEDULE,
         coreMemories,
         longTermMemories,
         worldBookActivationContext: wbActivationContext,

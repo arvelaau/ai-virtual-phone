@@ -34,6 +34,7 @@ import {
     readStreamedReply,
 } from "@/lib/imessage-llm-stream";
 import {
+    applyReplyRegexes,
     buildPromptFromTemplate,
     messagesAfterSnapshot,
 } from "@/lib/imessage-webhook-core";
@@ -145,6 +146,14 @@ async function generateReply(
         } else {
             content = await readStreamedReply(iterateBody(response.body), request.providerKind, progress);
         }
+
+        // The user's regex rules hide things in the app (state values, inner thoughts, ...);
+        // run them here too, or whatever they hide ends up on the phone.
+        content = applyReplyRegexes(content, {
+            regexes: snapshot.regexes,
+            characterName: snapshot.character?.name,
+            userName: snapshot.userIdentity?.name,
+        });
 
         const seconds = Math.round((Date.now() - startedAt) / 100) / 10;
         const first = progress.firstByteMs === null ? "" : `, first byte ${Math.round(progress.firstByteMs / 100) / 10}s`;

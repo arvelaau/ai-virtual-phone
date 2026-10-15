@@ -14,7 +14,7 @@ export type ParseStateResult = {
  * Keep in sync with the alias consts in lib/rich-message-parser.ts.
  * See PROTOCOL-MIGRATION-PLAN.md.
  */
-const RICH_MEDIA_NAMES = new Set([
+export const RICH_MEDIA_NAMES = new Set([
     // legacy Chinese
     "红包", "转账", "照片", "位置", "表情包", "引用", "语音", "音乐",
     // going-forward English

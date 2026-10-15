@@ -32,7 +32,7 @@ eq("B2 strips inner + state", core.modelOutputToBubbles("[InnerThoughts]secret[/
 eq("B3 strips think", core.modelOutputToBubbles("<think>plan</think>hey"), ["hey"]);
 eq("B4 multi-word survives", core.modelOutputToBubbles("Blue Ceramic Mug is great"), ["Blue Ceramic Mug is great"]);
 eq("B5 empty", core.modelOutputToBubbles("   "), []);
-eq("B6 capped at 5", core.modelOutputToBubbles(Array.from({ length: 9 }, (_, i) => `m${i}`).join("\n\n")).length, 5);
+eq("B6 no 5-bubble cap any more (only a runaway guard)", core.modelOutputToBubbles(Array.from({ length: 9 }, (_, i) => `m${i}`).join("\n\n")).length, 9);
 eq("B7 unclosed inner does not leak", core.modelOutputToBubbles("[InnerThoughts]oops\nreal reply")[0], "real reply");
 
 // C: prompt composition
