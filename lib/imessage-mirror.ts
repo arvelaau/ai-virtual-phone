@@ -96,6 +96,39 @@ export function decideMirror(args: {
     return { send: true, reason: mode === "all" ? "all" : "proactive" };
 }
 
+/** What the user is told when a message did or did not go out. */
+export function describeMirrorOutcome(reason: string): string {
+    switch (reason) {
+        case "proactive": return "Sent (the character started the conversation)";
+        case "all": return "Sent";
+        case "off": return "Not sent: mirroring is switched off for this line";
+        case "not_assistant": return "Not sent: only the character's own messages are mirrored";
+        case "group": return "Not sent: group chats are not mirrored";
+        case "imported": return "Not sent: it came from iMessage in the first place";
+        case "not_delivered": return "Not sent: the message was rejected in the app";
+        case "not_text": return "Not sent: only plain text is mirrored (pictures, stickers and cards stay in the app)";
+        case "empty": return "Not sent: the message was empty";
+        case "reply_to_local_user":
+            return "Not sent: it answered something you typed in the app. Your setting is \"Send the ones the character starts\"; choose \"Send everything the character writes in the app\" to send replies too";
+        case "rate_limited": return `Not sent: more than ${MAX_MIRRORED_PER_HOUR} an hour`;
+        case "already_mirrored": return "Skipped: already sent";
+        case "no_cloud_backup": return "Not sent: Cloud Backup (Supabase) is not set up";
+        case "no_bound_line": return "Not sent: no enabled iMessage line for this chat";
+        case "missing_photon_env": return "Not sent: PHOTON_PROJECT_ID / PHOTON_PROJECT_SECRET are missing on the server";
+        case "missing_supabase_env": return "Not sent: the iMessage Supabase variables are missing on the server";
+        case "line_not_found": return "Not sent: the server does not know this line. Press Sync to cloud";
+        case "bad_token": return "Not sent: the server refused the delivery token";
+        case "send_error": return "Not sent: Photon could not deliver it (it will be retried while the app is open)";
+        case "storage_error": return "Not sent: the server could not read Supabase";
+        case "expired": return "Not sent: it waited too long and was dropped";
+        case "network_error": return "Not sent: the app could not reach the server";
+        default:
+            return reason.startsWith("http_")
+                ? `Not sent: the server answered ${reason.slice(5)}`
+                : `Not sent: ${reason}`;
+    }
+}
+
 /** Deterministic job id, so the same local message can never become two jobs. */
 export function mirrorJobId(localMessageId: string): string {
     return `mirror_${localMessageId}`.replace(/[^a-zA-Z0-9_-]/g, "_");

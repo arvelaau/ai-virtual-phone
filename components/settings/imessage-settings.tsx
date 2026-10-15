@@ -8,9 +8,12 @@ import { isCloudBackupConfigured, loadCloudBackupConfig } from "@/lib/cloud-back
 import {
     addIMessageLine,
     loadIMessageLines,
+    loadIMessageMirrorLog,
     removeIMessageLine,
     updateIMessageLine,
+    type IMessageMirrorLogEntry,
 } from "@/lib/imessage-storage";
+import { describeMirrorOutcome } from "@/lib/imessage-mirror";
 import { pullIMessageCloudMessages, syncIMessageLineRuntimeToCloud } from "@/lib/imessage-cloud-sync";
 import { normalizeIMessageAddress } from "@/lib/imessage-webhook-core";
 import { isE164, normalizePhoneE164 } from "@/lib/imessage-photon-admin";
@@ -56,8 +59,12 @@ export function IMessageSettings() {
     const [needsKey, setNeedsKey] = useState(false);
     const [activity, setActivity] = useState<ActivityView | null>(null);
     const [activityError, setActivityError] = useState("");
+    const [mirrorLog, setMirrorLog] = useState<IMessageMirrorLogEntry[]>([]);
 
-    const refresh = useCallback(() => setLines(loadIMessageLines()), []);
+    const refresh = useCallback(() => {
+        setLines(loadIMessageLines());
+        setMirrorLog(loadIMessageMirrorLog());
+    }, []);
 
     useEffect(() => {
         refresh();
@@ -105,7 +112,11 @@ export function IMessageSettings() {
                 `Synced ${characterName(line.characterId)} (${Math.round(result.bytes / 1024)} KB).` +
                 (result.slotFound
                     ? ""
-                    : " Note: the chat history position was not found in this character's prompt, so replies append the new message at the end. This usually means a custom preset or regex rule is rewriting the history."),
+                    : " Note: the chat history position was not found in this character's prompt, so replies append the new message at the end. This usually means a custom preset or regex rule is rewriting the history.")
+                + ` Worldbooks: ${result.worldBookCount} bound, every enabled entry included.`
+                + (result.pluginPromptHint ? " Plugin prompt text included." : "")
+                + (result.pluginRequestHookApplied ? " Chat plugins applied to the prompt." : "")
+                + " (Plugins that react to a message you type, or rewrite the reply, only work inside the app.)",
             );
         } catch (err) {
             setMessage(err instanceof Error ? err.message : "Sync failed.");
@@ -255,7 +266,7 @@ export function IMessageSettings() {
                                 value={line.mirrorMode ?? "proactive"}
                                 onChange={(event) => { updateIMessageLine(line.id, { mirrorMode: event.target.value as "off" | "proactive" | "all" }); refresh(); }}
                             >
-                                <option value="proactive">Send the ones the character starts</option>
+                                <option value="proactive">Send only the ones the character starts (replies to what you type in the app stay in the app)</option>
                                 <option value="all">Send everything the character writes in the app</option>
                                 <option value="off">Keep them in the app only</option>
                             </Select>
@@ -419,6 +430,30 @@ export function IMessageSettings() {
                             ))}
                         </div>
                     )}
+                </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+                <p className="settings-menu-section-title">Sent from the app</p>
+                <div className="menu-group p-4 flex flex-col gap-2">
+                    <span className="menu-desc ml-1">
+                        What happened to the latest messages the character wrote in the app. If one never reached
+                        iMessage, the reason is here. This list only fills while the app is open.
+                    </span>
+                    {mirrorLog.length === 0 && <span className="menu-desc ml-1">Nothing recorded yet.</span>}
+                    {mirrorLog.map((entry, i) => (
+                        <div key={`${entry.at}-${i}`} className="flex flex-col">
+                            <span className="menu-label">
+                                {entry.sent ? "Sent" : "Not sent"}{" · "}{new Date(entry.at).toLocaleString()}
+                            </span>
+                            <span className="menu-desc">
+                                {describeMirrorOutcome(entry.reason)}
+                                {entry.detail ? ` (${entry.detail})` : ""}
+                                {entry.preview ? ` · "${entry.preview}"` : ""}
+                            </span>
+                        </div>
+                    ))}
+                    <Button variant="outline" onClick={refresh}>Refresh</Button>
                 </div>
             </div>
 

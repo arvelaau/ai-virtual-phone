@@ -22,6 +22,8 @@ import {
     type ChatMessage,
 } from "./chat-storage";
 import { loadCharacters } from "./character-storage";
+import { runChatPluginTransform } from "./chat-plugin-hooks";
+import { buildChatPluginPromptFragments } from "./chat-plugin-storage";
 import {
     loadApiConfigs,
     loadBindingConfig,
@@ -45,7 +47,7 @@ import {
     type CloudBackupConfig,
 } from "./cloud-backup/config";
 import { ensureBucket, getObject, listObjects, putObject } from "./cloud-backup/storage-client";
-import { loadIMessageLines } from "./imessage-storage";
+import { loadIMessageLines, recordIMessageMirror } from "./imessage-storage";
 import { generateImageFromConfiguredApi, isImageGenerationAvailableFor } from "./image-generation-service";
 import { resolveVoiceConfig, synthesizeSpeech } from "./tts-service";
 import { decideMirror, lastLocalUserMessageAt, mirrorJobId, normalizeMirrorMode } from "./imessage-mirror";
@@ -113,6 +115,47 @@ function stripPromptMessageForCloud(message: LLMMessage): LLMMessage {
     const next: LLMMessage = { role: message.role, content };
     if (message.name) next.name = message.name;
     return next;
+}
+
+/**
+ * Lets the user's chat plugins rewrite the template the way they rewrite a live request.
+ *
+ * Plugins run in the browser, never on the server, so this is the only moment they can act on
+ * an iMessage reply. The history slot is handed over as the final USER message (that is where
+ * a live request puts the newest message), then found again afterwards. Anything that goes
+ * wrong -> the untouched template, so a broken plugin can never stop the sync.
+ *
+ * What cannot carry over: a plugin that reacts to the content of the incoming message, and
+ * llm.response (it runs on the reply, which is generated on the server).
+ */
+export async function applyChatPluginsToTemplate(
+    messages: LLMMessage[],
+    sessionId: string,
+): Promise<{ messages: LLMMessage[]; applied: boolean }> {
+    const holdsSlot = (message: LLMMessage) => (
+        typeof message.content === "string"
+            ? message.content.includes(IMESSAGE_CLOUD_HISTORY_SLOT_TOKEN)
+            : message.content.some((part) => part.type === "text" && part.text.includes(IMESSAGE_CLOUD_HISTORY_SLOT_TOKEN))
+    );
+    try {
+        let slotIndex = -1;
+        messages.forEach((message, i) => { if (holdsSlot(message)) slotIndex = i; });
+        if (slotIndex < 0) return { messages, applied: false };
+
+        const forPlugins = messages.map((message, i) => (i === slotIndex ? { ...message, role: "user" as const } : { ...message }));
+        const before = JSON.stringify(forPlugins);
+        const payload = await runChatPluginTransform("llm.request", {
+            messages: forPlugins as unknown as Array<{ role: string; content: unknown }>,
+            purpose: "chat",
+            sessionId,
+        });
+        const next = payload.messages as unknown as LLMMessage[] | undefined;
+        if (!Array.isArray(next) || next.length === 0 || !next.some(holdsSlot)) return { messages, applied: false };
+        if (JSON.stringify(next) === before) return { messages, applied: false };
+        return { messages: next, applied: true };
+    } catch {
+        return { messages, applied: false };
+    }
 }
 
 export function splitPromptMessagesAtHistorySlot(messages: LLMMessage[]): {
@@ -244,6 +287,18 @@ export async function buildIMessageCloudRuntimeSnapshot(
         createdAt,
     };
 
+    // The same extra prompt text a live chat gets from the user's chat plugins.
+    let pluginPromptHint = "";
+    try {
+        const pluginPrompt = await runChatPluginTransform("prompt.system", {
+            sessionId: session.id,
+            isGroup: false,
+            characterId: character.id,
+            hint: buildChatPluginPromptFragments(session.id),
+        });
+        if (pluginPrompt.hint?.trim()) pluginPromptHint = `\n\n### Plugins\n${pluginPrompt.hint.trim()}\n`;
+    } catch { /* a broken plugin must not stop the sync */ }
+
     const buildMessages = (history: ChatMessage[]) => assemblePromptPayload({
         character,
         history,
@@ -259,6 +314,11 @@ export async function buildIMessageCloudRuntimeSnapshot(
         coreMemories,
         longTermMemories,
         worldBookActivationContext: wbActivationContext,
+        // A keyword entry is switched on by words in the NEWEST message. That message does not
+        // exist yet when this template is built, so matching keywords here would silently leave
+        // those entries out of every reply. Include every enabled entry instead.
+        activateAllWorldBooks: true,
+        customAppRichMediaDirectives: pluginPromptHint,
         recentBlocks,
         unifiedRecentItems,
         customStickerNames: "",
@@ -275,8 +335,9 @@ export async function buildIMessageCloudRuntimeSnapshot(
         nativeToolHistory: false,
     });
 
-    const templateMessages = buildMessages([...promptHistory, slotMessage]);
-    const split = splitPromptMessagesAtHistorySlot(templateMessages);
+    const assembledTemplate = buildMessages([...promptHistory, slotMessage]);
+    const withPlugins = await applyChatPluginsToTemplate(assembledTemplate, session.id);
+    const split = splitPromptMessagesAtHistorySlot(withPlugins.messages);
     const promptTemplate: IMessageCloudPromptTemplate = {
         version: 1,
         slotToken: IMESSAGE_CLOUD_HISTORY_SLOT_TOKEN,
@@ -319,6 +380,11 @@ export async function buildIMessageCloudRuntimeSnapshot(
             // a spoken note needs a voice bound to this character (settings live in this browser)
             voice: line.sendVoice !== false && resolveVoiceConfig(character.id, "chat") !== null,
         },
+        promptBuild: {
+            allWorldBookEntries: true,
+            pluginPromptHint: pluginPromptHint.length > 0,
+            pluginRequestHookApplied: withPlugins.applied,
+        },
         stats: { messageCount: rawMessages.length, memoryCount: memories.length },
     };
 }
@@ -326,7 +392,14 @@ export async function buildIMessageCloudRuntimeSnapshot(
 export async function syncIMessageLineRuntimeToCloud(
     lineId: string,
     options?: { cloudConfig?: CloudBackupConfig; messageLimit?: number },
-): Promise<{ path: string; bytes: number; slotFound: boolean }> {
+): Promise<{
+    path: string;
+    bytes: number;
+    slotFound: boolean;
+    worldBookCount: number;
+    pluginPromptHint: boolean;
+    pluginRequestHookApplied: boolean;
+}> {
     const cloudConfig = options?.cloudConfig ?? loadCloudBackupConfig();
     if (!isCloudBackupConfigured(cloudConfig)) {
         throw new Error("Please configure Supabase cloud backup in Data Management first.");
@@ -349,7 +422,14 @@ export async function syncIMessageLineRuntimeToCloud(
         updatedAt: snapshot.createdAt,
     });
 
-    return { path, bytes, slotFound: snapshot.promptTemplate.slotFound !== false };
+    return {
+        path,
+        bytes,
+        slotFound: snapshot.promptTemplate.slotFound !== false,
+        worldBookCount: snapshot.worldBooks.length,
+        pluginPromptHint: snapshot.promptBuild?.pluginPromptHint === true,
+        pluginRequestHookApplied: snapshot.promptBuild?.pluginRequestHookApplied === true,
+    };
 }
 
 async function loadRuntimeIndex(config: CloudBackupConfig): Promise<IMessageCloudRuntimeIndex> {
@@ -780,7 +860,16 @@ export async function mirrorLocalMessageToIMessage(
             recentMirrorTimes: mirrorSendTimes.get(line.id),
             now,
         });
-        if (!decision.send) return { sent: false, reason: decision.reason };
+        // The user's own typing is not a mirror candidate; every other outcome for a chat that
+        // has a line is written down, so "why did it not arrive" has an answer.
+        const log = (sent: boolean, reason: string, detail?: string) => {
+            if (reason === "not_assistant") return;
+            recordIMessageMirror({ lineId: line.id, sent, reason, detail, text: message.content ?? "" });
+        };
+        if (!decision.send) {
+            log(false, decision.reason);
+            return { sent: false, reason: decision.reason };
+        }
 
         mirroredLocalIds.add(message.id);
         const jobId = mirrorJobId(message.id);
@@ -806,10 +895,15 @@ export async function mirrorLocalMessageToIMessage(
             leaseUntil: now + 60_000,
         };
         await writeMediaJob(config, job);
-        const delivery = await requestDelivery(job);
+        const delivery = await requestDelivery(job).catch((err): { ok: boolean; code: string; detail?: string } => ({
+            ok: false,
+            code: "network_error",
+            detail: err instanceof Error ? err.message.slice(0, 120) : undefined,
+        }));
         if (delivery.ok) {
             mirrorSendTimes.set(line.id, [...(mirrorSendTimes.get(line.id) ?? []).filter((t) => t > now - 3600_000), now]);
         }
+        log(delivery.ok, delivery.ok ? decision.reason : delivery.code, delivery.ok ? undefined : delivery.detail);
         return { sent: delivery.ok, reason: delivery.ok ? decision.reason : delivery.code };
     }
     return { sent: false, reason: "no_bound_line" };

@@ -97,6 +97,18 @@ export type IMessageCloudRuntimeSnapshot = {
     currentSchedule: string;
     /** What this line can deliver beyond text, decided when the snapshot was built. */
     capabilities?: { photos: boolean; voice?: boolean };
+    /**
+     * How the prompt template was put together, so the Settings page can say what the
+     * server will and will not do. Absent on snapshots built before this existed.
+     */
+    promptBuild?: {
+        /** Every enabled worldbook entry is in the template (keywords cannot be matched against a message that has not arrived yet). */
+        allWorldBookEntries: boolean;
+        /** Text the user's chat plugins add to the system prompt (the prompt.system hook). */
+        pluginPromptHint: boolean;
+        /** Number of enabled chat plugins whose llm.request hook changed the template. */
+        pluginRequestHookApplied: boolean;
+    };
     stats: { messageCount: number; memoryCount: number };
 };
 
