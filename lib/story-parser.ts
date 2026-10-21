@@ -2,7 +2,7 @@ import type { RegexConfig } from "./settings-types";
 import { applyAllOutputRegex, applyAllReasoningRegex } from "./llm-prompt-assembler";
 import type { MacroEngine } from "./macro-engine";
 
-export const STORY_PARSER_VERSION = 8;
+export const STORY_PARSER_VERSION = 7;
 
 export type ParsedStoryResponse = {
   rawText: string;
@@ -29,14 +29,8 @@ function extractXmlField(rawText: string, preferredTag?: string): string {
 
 /** Convert `<tagname>...</tagname>` into renderer fold markers for each configured fold tag. */
 function applyFoldTags(text: string, foldTags?: string): string {
-  // The status bar and mini theater are story mode's own fixed tail regions: even if the
-  // user has edited their own advanced fold-tags setting, these two kinds of output always
-  // stay foldable.
-  const tags = Array.from(new Set([
-    ...(foldTags || "").split(",").map(t => t.trim()).filter(Boolean),
-    "story_status",
-    "story_theater",
-  ]));
+  if (!foldTags) return text;
+  const tags = Array.from(new Set(foldTags.split(",").map(t => t.trim()).filter(Boolean)));
   if (tags.length === 0) return text;
 
   const placeholders: { placeholder: string; label: string; content: string }[] = [];

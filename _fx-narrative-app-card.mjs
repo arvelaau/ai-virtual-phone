@@ -168,13 +168,13 @@ She handed over the boarding passes.
     ok("C6 StoryMessage carries the card fields",
         fs.readFileSync(path.join(root, "lib/story-storage.ts"), "utf8").includes("appCardLayout?: Record<string, unknown>"));
     const storyApp = fs.readFileSync(path.join(root, "components/story/story-app-base.tsx"), "utf8");
-    // Three call sites as of the momo-sync Story overhaul (stage 3d): handleSend,
-    // handleStoryRetry (both pre-existing), and the auto-start effect (momo's own addition,
-    // ported in that stage) -- each must carry the card fields through its own
+    // Two call sites since the Story mode was restored to its pre-overhaul shape: handleSend and
+    // handleStoryRetry (the momo auto-start effect no longer exists) --
+    // each must carry the card fields through its own
     // pushStoryMessage call, or a directive-triggered card generated on that path would
     // silently vanish.
-    ok("C7 all three generation call sites pass the card fields to pushStoryMessage",
-        (storyApp.match(/appCardLayout: result\.appCardLayout/g) || []).length === 3,
+    ok("C7 both generation call sites pass the card fields to pushStoryMessage",
+        (storyApp.match(/appCardLayout: result\.appCardLayout/g) || []).length === 2,
         (storyApp.match(/appCardLayout: result\.appCardLayout/g) || []).length);
 
     // The parser being ready is not enough -- the model has to be TAUGHT a directive exists,
