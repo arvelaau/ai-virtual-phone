@@ -66,8 +66,10 @@ export function storyTextSurvives(cleanText: string, contextExcludedTags?: strin
  * otherwise tends to follow the persona's language and reach for corner quotes (the Chinese
  * convention), which breaks regex rules and styling written against the quote character.
  */
-export const STORY_QUOTE_RULE =
-  "# Dialogue quotes\nWrite every line of spoken dialogue inside plain straight double quotes (\"like this\"). Never use corner brackets or any other quote style for dialogue.";
+export function buildStoryQuoteRule(summaryTag = "summary"): string {
+  return "# Dialogue quotes\nWrite every line of spoken dialogue inside plain straight double quotes (\"like this\"). Never use corner brackets or any other quote style for dialogue. This only concerns dialogue punctuation: keep following the required output format exactly, including the closing <" + summaryTag + "> block at the end of every reply.";
+}
+export const STORY_QUOTE_RULE = buildStoryQuoteRule();
 
 /**
  * The system message that puts several characters in one scene. Exported so a fixture can drive
@@ -330,7 +332,7 @@ async function buildStoryPromptMessages(
     const roster = buildStoryRosterMessage(participants);
     if (roster) payload.push(roster);
   }
-  payload.push({ role: "system", content: STORY_QUOTE_RULE });
+  payload.push({ role: "system", content: buildStoryQuoteRule(preset?.story_summary_tag?.trim() || "summary") });
   return payload;
 }
 

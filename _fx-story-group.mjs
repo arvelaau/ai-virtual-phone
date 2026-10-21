@@ -147,7 +147,7 @@ await st.hydrateStoryStorage();
     const fnEnd = src.indexOf("\nexport async function previewStoryPromptPayload", fnStart);
     ok("F7 located the prompt builder", fnStart > 0 && fnEnd > fnStart);
     const body = src.slice(fnStart, fnEnd);
-    ok("F8 the quote rule is appended on every story prompt", body.includes("STORY_QUOTE_RULE"));
+    ok("F8 the quote rule is appended on every story prompt", body.includes("buildStoryQuoteRule("));
     ok("F9 the roster is only added for several participants", /participantIds && participantIds\.length > 1/.test(body));
     ok("F10 both generate paths forward participantIds", (src.match(/options\?\.participantIds/g) || []).length >= 2);
     ok("F11 no corner-quote characters in the story engine", !/[「」]/.test(src));
