@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 
+import { VirtualClockBootstrap } from "@/components/virtual-clock-bootstrap";
 import { ChatPluginBootstrap } from "@/components/chat-plugin-bootstrap";
 import { CSSImportEnhancer } from "@/components/css-import-enhancer";
 import { PWARegistrar } from "@/components/pwa-registrar";
@@ -38,6 +39,7 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body>
+        <VirtualClockBootstrap />
         <PWARegistrar />
         <CSSImportEnhancer />
         <ChatPluginBootstrap />

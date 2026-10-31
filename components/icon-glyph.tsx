@@ -39,6 +39,7 @@ import {
   mdiHome,
   mdiCardsOutline,
   mdiStarBoxMultipleOutline,
+  mdiClockEditOutline,
 } from "@mdi/js";
 
 type IconGlyphProps = {
@@ -75,6 +76,7 @@ const MDI_PATHS: Record<IconId, string> = {
   dwelling: mdiHome,
   studio: mdiCardsOutline,
   review: mdiStarBoxMultipleOutline,
+  timecontrol: mdiClockEditOutline,
 };
 
 export function IconGlyph({ id, className }: IconGlyphProps) {

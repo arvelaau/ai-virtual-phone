@@ -28,7 +28,8 @@ export type IconId =
   | "worldbuilder"
   | "mixology"
   | "studio"
-  | "review";
+  | "review"
+  | "timecontrol";
 
 // Desktop folders: an id prefixed with folder: masquerades as an icon occupying one cell for
 // drag/paging purposes; its content (name + member icons) is stored separately in
@@ -65,7 +66,8 @@ export const PAGE_2_DEFAULT: IconId[] = [
   "dwelling",
   "story",
   "vnmode",
-  "mapmode"
+  "mapmode",
+  "timecontrol"
 ];
 
 // Default icons for page three (centred; see createDefaultDesktopIconLayout for placement)
@@ -78,6 +80,7 @@ export const ICONS: Record<IconId, IconMeta> = {
   mixology: { id: "mixology", label: "House Special", tone: "var(--c-icon-violet)", placeholder: false },
   studio: { id: "studio", label: "Studio", tone: "var(--c-icon-amber)", placeholder: false },
   review: { id: "review", label: "Reviews", tone: "var(--c-icon-coral)", placeholder: false },
+  timecontrol: { id: "timecontrol", label: "Time Control", tone: "var(--c-icon-teal)", placeholder: false },
   diary: { id: "diary", label: "Notes", tone: "var(--c-icon-violet)", placeholder: false },
   music: { id: "music", label: "Music", tone: "var(--c-icon-coral)", placeholder: false },
   reading: { id: "reading", label: "Reading", tone: "var(--c-icon-amber)", placeholder: false },
